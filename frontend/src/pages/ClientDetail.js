@@ -1005,57 +1005,7 @@ function PlatformsTab({ client, setClient, clientId }) {
         )}
       </div>
 
-      {/* All platforms grid */}
-      <div>
-        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Platform Settings</div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {PLATFORMS.map(platform => {
-            const config = (client.platform_configs || {})[platform] || {};
-            const isEnabled = config.enabled ?? (client.platforms || []).includes(platform);
-            const isInList = (client.platforms || []).includes(platform);
-            const isIG = platform === "instagram";
-            const isFB = platform === "facebook";
-            return (
-              <div key={platform} className={`bg-zinc-900 border p-4 ${isEnabled ? "border-zinc-700" : "border-zinc-800 opacity-60"}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-white capitalize">{platform}</span>
-                    {isIG && igConnected && (
-                      <span className="text-[8px] font-mono px-1 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400">AUTH</span>
-                    )}
-                    {isFB && fbConnected && (
-                      <span className="text-[8px] font-mono px-1 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400">AUTH</span>
-                    )}
-                  </div>
-                  <button
-                    data-testid={`platform-toggle-${platform}`}
-                    onClick={() => togglePlatformEnabled(platform, !isEnabled)}
-                    className={`w-8 h-4 relative transition-colors duration-200 ${isEnabled ? "bg-white" : "bg-zinc-700"}`}
-                  >
-                    <span className={`absolute top-0.5 w-3 h-3 bg-black transition-transform duration-200 ${isEnabled ? "translate-x-4" : "translate-x-0.5"}`} />
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-zinc-500">Posts/day</span>
-                    <span className="text-zinc-300">{config.posts_per_day || 2}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-zinc-500">Schedule</span>
-                    <span className="text-zinc-300">{(config.posting_times || []).join(", ") || "—"}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-zinc-500">Active</span>
-                    <span className={isInList ? "text-emerald-400" : "text-zinc-600"}>
-                      {isInList ? "Yes" : "No"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* All platforms grid — hidden */}
     </div>
   );
 }
