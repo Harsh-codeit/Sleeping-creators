@@ -1,3 +1,4 @@
+import io
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock, AsyncMock
 import sys, os
@@ -50,6 +51,7 @@ def test_delete_music_track(mock_db, _):
     mock_db.music_tracks.delete_one = AsyncMock(return_value=MagicMock())
     resp = client.delete("/api/music/t1", headers=AUTH)
     assert resp.status_code == 200
+    assert resp.json() == {"status": "deleted"}
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
@@ -77,12 +79,11 @@ def test_update_music_track_empty_body_returns_400(mock_db, _):
     resp = client.put("/api/music/t1", json={}, headers=AUTH)
     assert resp.status_code == 400
 
-import io
-
 @patch("server._check_token", return_value=True)
 @patch("server.db")
 @patch("storage.upload_bytes", return_value="https://r2.example/music/new-id.mp3")
-def test_upload_music_track(mock_upload, mock_db, _):
+@patch("storage.is_enabled", return_value=True)
+def test_upload_music_track(mock_enabled, mock_upload, mock_db, _):
     mock_db.music_tracks.insert_one = AsyncMock(return_value=MagicMock())
     mock_db.music_tracks.find_one = AsyncMock(return_value={
         "_id": "x", "id": "new-id", "name": "My Track", "filename": "beat.mp3",
@@ -95,7 +96,11 @@ def test_upload_music_track(mock_upload, mock_db, _):
         files={"file": ("beat.mp3", io.BytesIO(b"fake-audio"), "audio/mpeg")},
         headers=AUTH,
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 201
     assert resp.json()["name"] == "My Track"
     assert resp.json()["mood_tags"] == ["calm"]
     assert resp.json()["r2_url"] == "https://r2.example/music/new-id.mp3"
+    mock_upload.assert_called_once()
+    call_key = mock_upload.call_args[0][1]
+    assert call_key.startswith("music/")
+    assert call_key.endswith(".mp3")

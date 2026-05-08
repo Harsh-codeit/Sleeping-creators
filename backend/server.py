@@ -3668,23 +3668,32 @@ async def delete_video_template(template_id: str):
 
 # ── Music library routes ───────────────────────────────────────
 
-@api_router.post("/music/upload")
+@api_router.post("/music/upload", status_code=201)
 async def upload_music_track(
     file: UploadFile = File(...),
     name: str = Form(...),
     mood_tags: str = Form("[]"),
 ):
-    import json as _json
     import storage as _storage
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="name must not be blank")
+    name = name.strip()
+
     allowed = {"audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp3", "audio/ogg"}
     if file.content_type not in allowed:
         raise HTTPException(status_code=400, detail="File must be mp3, wav, or ogg")
+
+    if not _storage.is_enabled():
+        raise HTTPException(status_code=503, detail="Storage is not configured")
 
     track_id = str(uuid.uuid4())
     ext = os.path.splitext(file.filename or "track.mp3")[1] or ".mp3"
     r2_key = f"music/{track_id}{ext}"
 
     content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio file must be under 50 MB")
+
     r2_url = _storage.upload_bytes(content, r2_key, content_type=file.content_type or "audio/mpeg")
     if not r2_url:
         raise HTTPException(status_code=500, detail="Failed to upload to storage")
@@ -3698,7 +3707,7 @@ async def upload_music_track(
 
     doc = {
         "id": track_id,
-        "name": name.strip(),
+        "name": name,
         "filename": file.filename or f"track{ext}",
         "r2_url": r2_url,
         "r2_key": r2_key,
