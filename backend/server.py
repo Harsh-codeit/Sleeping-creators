@@ -777,7 +777,8 @@ async def _build_carousel_post_text(carousel_data: dict) -> tuple[str, dict]:
     _cta_footer = f"\n\n{_cta_sub}" if _cta_sub else ""
     if _cta_text and _cta_text not in slides_preview:
         _cta_footer += f" | {_cta_text}" if _cta_sub else f"\n\n{_cta_text}"
-    post_text = f"[CAROUSEL] {carousel_data.get('title', 'Untitled')}\n\n{slides_preview}{_cta_footer}"
+    # Use AI-generated caption if present; fall back to title + slide dump (no [CAROUSEL] prefix)
+    post_text = carousel_data.get("caption") or f"{carousel_data.get('title', 'Untitled')}\n\n{slides_preview}{_cta_footer}"
     return post_text, {"carousel_data": carousel_data}
 
 
@@ -965,7 +966,7 @@ async def execute_pipeline(pipeline: dict, now: datetime) -> int:
                 "content_type": pipeline_content_type,
                 "text": post_text,
                 "image_url": None,
-                "hashtags": client.get("strategy", {}).get("hashtags", []),
+                "hashtags": (carousel_data.get("hashtags") if pipeline_content_type in ("carousel", "mixed") else None) or client.get("strategy", {}).get("hashtags", []),
                 "status": "draft" if needs_approval else "scheduled",
                 "approval_token": approval_token,
                 "scheduled_at": scheduled_time.isoformat(),
@@ -3512,8 +3513,8 @@ async def publish_carousel(carousel_id: str, local_fallback: bool = Query(False)
     _cta_footer = f"\n\n{_cta_sub}" if _cta_sub else ""
     if _cta_text and _cta_text not in slides_text:
         _cta_footer += f" | {_cta_text}" if _cta_sub else f"\n\n{_cta_text}"
-    post_text = f"[CAROUSEL] {carousel.get('title', 'Untitled')}\n\n{slides_text}{_cta_footer}"
-    hashtags = client.get("strategy", {}).get("hashtags", [])
+    post_text = carousel.get("caption") or f"{carousel.get('title', 'Untitled')}\n\n{slides_text}{_cta_footer}"
+    hashtags = carousel.get("hashtags") or client.get("strategy", {}).get("hashtags", [])
     tag_str = " ".join(f"#{t.lstrip('#')}" for t in hashtags)
     caption = f"{post_text}\n\n{tag_str}".strip()
 

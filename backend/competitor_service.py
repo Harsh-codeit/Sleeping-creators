@@ -226,9 +226,9 @@ async def recreate_post(competitor_post: dict, client: dict, db) -> Optional[str
 
     slides = carousel_data.get("slides", [])
     slides_preview = "\n\n".join(s.get("content", "") for s in slides)
-    post_text = f"[CAROUSEL] {carousel_data.get('title', 'Untitled')}\n\n{slides_preview}"
+    post_text = carousel_data.get("caption") or f"{carousel_data.get('title', 'Untitled')}\n\n{slides_preview}"
 
-    hashtags = client.get("strategy", {}).get("hashtags", [])
+    hashtags = carousel_data.get("hashtags") or client.get("strategy", {}).get("hashtags", [])
 
     post_doc = {
         "id": post_id,

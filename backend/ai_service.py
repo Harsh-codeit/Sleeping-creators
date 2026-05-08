@@ -935,6 +935,116 @@ Respond ONLY with valid JSON — same shape as input:
         return draft
 
 
+async def _generate_carousel_caption(
+    ai_client,
+    client: dict,
+    onboarding: dict,
+    carousel_data: dict,
+    platform: str,
+    cta_keyword: str | None,
+    cta_offer: str | None,
+    db=None,
+) -> tuple[str, list[str]]:
+    """Generate a standalone platform caption and topic hashtags for a carousel post."""
+    import json as _json
+
+    name     = client.get("name", "Brand")
+    industry = client.get("industry", "business")
+    tone     = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
+    language = (onboarding.get("language") or "English").strip()
+    brand_hashtags = client.get("strategy", {}).get("hashtags", [])
+
+    title      = carousel_data.get("title", "")
+    hook_slide = (carousel_data.get("slides") or [{}])[0].get("content", "")
+    cta_sub    = carousel_data.get("cta_sub", "")
+
+    _PLATFORM_CAPTION_RULES = {
+        "instagram": (
+            "Instagram caption rules:\n"
+            "- Line 1: Hook — make them stop scrolling (max 125 chars, no hashtags here)\n"
+            "- Lines 2-5: 2-3 short punchy value teaser lines — what they'll learn inside\n"
+            "- Final line: CTA to swipe (e.g. 'Save this.' or 'Swipe to see all 7.')\n"
+            "- Total: 80-200 words. Short paragraphs, line breaks between them."
+        ),
+        "linkedin": (
+            "LinkedIn caption rules:\n"
+            "- Line 1: Bold insight or hard truth (no hashtags)\n"
+            "- Body: 3-4 short paragraphs with the key tension and what the carousel resolves\n"
+            "- End: Soft CTA to read the carousel\n"
+            "- Total: 150-250 words."
+        ),
+        "facebook": (
+            "Facebook caption rules:\n"
+            "- Warm, community tone. 2-3 short paragraphs.\n"
+            "- Ask one question to spark comments.\n"
+            "- End: CTA to swipe.\n"
+            "- Total: 80-180 words."
+        ),
+        "threads": (
+            "Threads caption rules:\n"
+            "- Conversational, direct, like texting a smart friend.\n"
+            "- 2-3 short paragraphs max.\n"
+            "- End with CTA.\n"
+            "- Total: 60-150 words."
+        ),
+    }
+    platform_rules = _PLATFORM_CAPTION_RULES.get(platform, _PLATFORM_CAPTION_RULES["instagram"])
+
+    cta_line = ""
+    if _clean_cta_value(cta_keyword):
+        cta_line = f'\nCTA to weave in naturally: Comment "{_clean_cta_value(cta_keyword)}" to get {_clean_cta_value(cta_offer) or "more details"}.'
+    elif cta_sub:
+        cta_line = f"\nCTA direction: {cta_sub}"
+
+    system_msg = f"""You are a {platform} caption writer for {name} ({industry}).
+Brand voice: {tone} | Language: {language}
+
+You are given a carousel's title and hook slide. Write a caption that stands alone — do NOT paste slide content verbatim. Tease the value, create curiosity, make them want to swipe.
+
+{platform_rules}
+{cta_line}
+
+HUMAN WRITING RULES (mandatory):
+- No em-dashes (—), no en-dashes (–)
+- No AI buzzwords: leverage, utilize, synergy, seamless, robust, comprehensive, innovative, cutting-edge, holistic, empower, actionable, impactful, transformative
+- No filler openers: "In today's world", "It's important to note", "Moving forward", "That being said"
+- Write in {language}. Every word, no exceptions.
+- Plain words. Short sentences. Real person tone.
+
+Also generate 5-8 topic-specific hashtags (different from the brand's standing hashtags — focused on this specific post's topic).
+
+Respond ONLY with valid JSON:
+{{"caption": "the full caption text with \\n for line breaks", "topic_hashtags": ["#tag1", "#tag2", ...]}}"""
+
+    user_msg = (
+        f'Carousel title: "{title}"\n'
+        f'Hook slide content: "{hook_slide[:300]}"\n\n'
+        f"Write the {platform} caption and topic hashtags now."
+    )
+
+    try:
+        resp = ai_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=800,
+            system=system_msg,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
+        data = _json.loads(raw)
+        if db is not None:
+            await record_usage(db, resp, generation_type="carousel_caption",
+                               client_id=client.get("id"), client_name=client.get("name"))
+        caption = _humanize_content(data.get("caption", ""))
+        topic_tags = [t.lstrip("#") for t in data.get("topic_hashtags", [])]
+        # Merge: topic tags first, then brand hashtags, deduplicated, max 30
+        all_tags = list(dict.fromkeys(topic_tags + [t.lstrip("#") for t in brand_hashtags]))[:30]
+        return caption, all_tags
+    except Exception as e:
+        logger.warning(f"Caption generation failed ({e}), using title fallback")
+        return title, [t.lstrip("#") for t in brand_hashtags]
+
+
 async def generate_carousel(
     client: dict,
     platform: str,
@@ -1038,6 +1148,19 @@ async def generate_carousel(
             slide["body"] = _humanize_content(slide["body"])
 
     result = _apply_carousel_cta(result_data, client, topic, cta_keyword, cta_offer)
+
+    # ── Caption + hashtag generation ──────────────────────────────────────────
+    try:
+        generated_caption, generated_hashtags = await _generate_carousel_caption(
+            ai_client, client, onboarding, result,
+            platform, cta_keyword, cta_offer, db=db,
+        )
+        result["caption"] = generated_caption
+        result["hashtags"] = generated_hashtags
+    except Exception as e:
+        logger.warning(f"Caption pass failed ({e})")
+        result.setdefault("caption", result.get("title", ""))
+        result.setdefault("hashtags", client.get("strategy", {}).get("hashtags", []))
 
     # Build design context
     try:
