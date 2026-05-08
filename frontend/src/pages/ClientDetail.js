@@ -763,16 +763,16 @@ function PlatformsTab({ client, setClient, clientId }) {
 
   return (
     <div className="space-y-6">
-      {/* Bundle.social Connect Card */}
+      {/* Social Accounts Connect Card */}
       <div className="border border-emerald-900/50 bg-zinc-900 p-5">
         <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-[10px] font-bold">BSC</span>
+              <Link size={16} className="text-white" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-white">Bundle.social</div>
-              <div className="text-[10px] font-mono text-zinc-500 mt-0.5">Unified publishing to 14 platforms</div>
+              <div className="text-sm font-semibold text-white">Social Accounts</div>
+              <div className="text-[10px] font-mono text-zinc-500 mt-0.5">Connect and manage publishing platforms</div>
             </div>
           </div>
           {bundleTeamId && (
@@ -822,7 +822,7 @@ function PlatformsTab({ client, setClient, clientId }) {
         ) : (
           <div className="space-y-3">
             <div className="text-xs font-mono text-zinc-500">
-              No Bundle team set up yet. Click below to create one and connect your social accounts via Bundle's hosted portal.
+              No social accounts connected yet. Click below to set up publishing for this client.
             </div>
             <button
               onClick={bundleSetup}
@@ -830,7 +830,7 @@ function PlatformsTab({ client, setClient, clientId }) {
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-700 to-teal-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Link size={13} />
-              {bundleSetupLoading ? "Setting up..." : "Setup Bundle Team"}
+              {bundleSetupLoading ? "Setting up..." : "Setup Publishing"}
             </button>
           </div>
         )}

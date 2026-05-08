@@ -108,6 +108,9 @@ async def create_portal_link(
         "socialAccountTypes": bundle_types,
         "redirectUrl": redirect_url,
         "expiresIn": expires_in,
+        "hidePoweredBy": True,
+        "hideGoBackButton": True,
+        "hideLanguageSwitcher": True,
     })
     return result.get("url") or result.get("portalUrl") or result.get("link", "")
 

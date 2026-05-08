@@ -284,7 +284,7 @@ function BundleSettings() {
     <div className="bg-zinc-900 border border-zinc-800 p-5">
       <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
         <Link size={14} className="text-zinc-400" />
-        <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Bundle.social</div>
+        <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Publishing Integration</div>
       </div>
       <div className="space-y-3 mb-4">
         <div>
@@ -296,7 +296,7 @@ function BundleSettings() {
             placeholder="pk_live_..."
             className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
           />
-          <div className="text-[10px] text-zinc-600 font-mono mt-1">From Bundle.social dashboard → API Keys</div>
+          <div className="text-[10px] text-zinc-600 font-mono mt-1">From your publishing dashboard → API Keys</div>
         </div>
         <div>
           <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Webhook Secret</label>
