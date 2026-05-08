@@ -170,9 +170,8 @@ async def create_post(
         "postDate": _to_bundle_date(post_date),
         "socialAccountTypes": bundle_platforms,
         "data": data,
+        "title": (title or text or "")[:100].strip() or "Post",
     }
-    if title:
-        body["title"] = title
 
     logger.info("Bundle create_post: platforms=%s postDate=%s uploadIds=%s", bundle_platforms, body["postDate"], upload_ids)
     return await _post(api_key, "/post", body)
