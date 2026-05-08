@@ -27,7 +27,7 @@ def test_list_music_mood_filter(mock_db, _):
     resp = client.get("/api/music?mood=energy", headers=AUTH)
     assert resp.status_code == 200
     call_args = mock_db.music_tracks.find.call_args[0][0]
-    assert "mood_tags" in call_args
+    assert call_args["mood_tags"] == {"$in": ["energy"]}
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
