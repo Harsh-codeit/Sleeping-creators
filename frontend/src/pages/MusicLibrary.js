@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { MOOD_TAGS } from "../constants/videoStyles";
+import MusicUploadModal from "../components/MusicUploadModal";
+import WaveformEditor from "../components/WaveformEditor";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -118,9 +120,16 @@ export default function MusicLibrary() {
                 onChange={tags => saveTagsInline(track.id, tags)}
               />
               {editingId === track.id && (
-                <p className="mt-3 text-xs text-zinc-500">
-                  Waveform editor — coming in Task 8
-                </p>
+                <div className="mt-4">
+                  <WaveformEditor
+                    url={track.r2_url}
+                    segments={track.segments || []}
+                    onSave={async segs => {
+                      await axios.put(`${API}/music/${track.id}`, { segments: segs });
+                      setTracks(prev => prev.map(t => t.id === track.id ? { ...t, segments: segs } : t));
+                    }}
+                  />
+                </div>
               )}
             </div>
           ))}
@@ -128,12 +137,13 @@ export default function MusicLibrary() {
       )}
 
       {showUpload && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-white">
-            <p className="mb-4 font-medium">Upload — coming in Task 8</p>
-            <button onClick={() => setShowUpload(false)} className="text-sm text-zinc-400 hover:text-white">Close</button>
-          </div>
-        </div>
+        <MusicUploadModal
+          onClose={() => setShowUpload(false)}
+          onUploaded={track => {
+            setTracks(prev => [track, ...prev]);
+            setShowUpload(false);
+          }}
+        />
       )}
     </div>
   );
