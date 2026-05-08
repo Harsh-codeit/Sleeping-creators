@@ -128,6 +128,7 @@ export default function VideoEditor({ clientId, onPublished }) {
     cta_button_shadow: false,
     cta_animation: "slide_up",
     cta_delay: 3.0,
+    cta_button_text: "",
   });
 
   const videoRef = useRef(null);
@@ -162,6 +163,7 @@ export default function VideoEditor({ clientId, onPublished }) {
     setPublishing(true);
     try {
       const payload = {
+        ...styleOverrides,           // spread first — named fields below override
         client_id: clientId,
         clip_id: clip.drive_file_id || clip.id,
         template_id: templateId || null,
@@ -171,7 +173,6 @@ export default function VideoEditor({ clientId, onPublished }) {
         hashtags: hashtags.split(/\s+/).filter(Boolean),
         platforms,
         scheduled_at: scheduleAt || null,
-        ...styleOverrides,
       };
       const r = await axios.post(`${API}/videos/create`, payload);
       toast.success(r.data.message || `Video queued (${r.data.status || "processing"})`);

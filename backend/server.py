@@ -231,6 +231,19 @@ class VideoPostCreate(BaseModel):
     hashtags: List[str] = []
     clip_trim_start: float = 0.0
     clip_trim_end: Optional[float] = None
+    # Style overrides (passed through to video job)
+    font_preset: Optional[str] = None
+    overlay_style: Optional[str] = None
+    overlay_color: Optional[str] = None
+    overlay_opacity: Optional[float] = None
+    mood_tags: Optional[List[str]] = None
+    cta_button_border_radius: Optional[int] = None
+    cta_button_shadow: Optional[bool] = None
+    cta_animation: Optional[str] = None
+    cta_delay: Optional[float] = None
+    cta_button_text: Optional[str] = None
+    cta_button_bg_color: Optional[str] = None
+    cta_button_text_color: Optional[str] = None
 
 class VideoScheduleCreate(BaseModel):
     cron: str           # e.g. "0 9 * * *"
