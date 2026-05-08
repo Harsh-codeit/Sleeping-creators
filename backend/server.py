@@ -5177,6 +5177,10 @@ if _frontend_build.exists():
         name="frontend-static",
     )
 
+    @app.get("/logo.png", include_in_schema=False)
+    async def serve_logo():
+        return _FileResponse(str(_frontend_build / "logo.png"), media_type="image/png")
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         """Catch-all: return React's index.html for any non-API route."""

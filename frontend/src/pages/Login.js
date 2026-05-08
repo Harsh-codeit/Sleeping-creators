@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logo from "../assets/logo.png";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -51,7 +52,7 @@ export default function Login({ onLogin }) {
         {/* Brand */}
         <div className="text-center mb-10">
           <img
-            src="/logo.png"
+            src={logo}
             alt="Sleeping Creators"
             className="w-14 h-14 rounded-2xl mb-5 mx-auto"
           />
