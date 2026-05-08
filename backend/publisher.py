@@ -1081,7 +1081,7 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
     return base
 
 
-async def publish_bundle(post: dict, client: dict) -> dict:
+async def publish_bundle(post: dict, client: dict, publish_now: bool = False) -> dict:
     from server import db
     settings = await db.settings.find_one({"key": "global"}) or {}
     api_key = settings.get("bundle_api_key", "")
@@ -1161,13 +1161,20 @@ async def publish_bundle(post: dict, client: dict) -> dict:
 
     platform_data = _build_platform_data(post, platform, upload_ids)
 
+    from datetime import datetime, timezone
+    effective_date = (
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        if publish_now
+        else post.get("scheduled_at")
+    )
+
     try:
         result = await bundle_service.create_post(
             api_key=api_key,
             team_id=team_id,
             platforms=[platform],
             text=post.get("text", ""),
-            post_date=post.get("scheduled_at"),
+            post_date=effective_date,
             upload_ids=upload_ids,
             platform_overrides={bundle_platform: platform_data},
             title=post.get("title"),
@@ -1185,7 +1192,7 @@ async def publish_bundle(post: dict, client: dict) -> dict:
 
 # ─── Router ───────────────────────────────────────────────────────────────────
 
-async def publish(post: dict, client: dict, local_fallback: bool = False) -> dict:
+async def publish(post: dict, client: dict, local_fallback: bool = False, publish_now: bool = False) -> dict:
     platform = post.get("platform", "")
 
     # Video posts still use the Celery video worker pipeline
@@ -1193,7 +1200,7 @@ async def publish(post: dict, client: dict, local_fallback: bool = False) -> dic
         return await publish_video(post, client)
 
     # All non-video posts go through Bundle
-    return await publish_bundle(post, client)
+    return await publish_bundle(post, client, publish_now=publish_now)
 
 
 # ─── Video publishing ─────────────────────────────────────────────────────────

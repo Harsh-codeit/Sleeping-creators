@@ -2112,7 +2112,7 @@ async def publish_post_now(post_id: str, local_fallback: bool = Query(False)):
 
     client = await db.clients.find_one({"id": post["client_id"]}, {"_id": 0}) or {}
     from publisher import publish
-    result = await publish(post, client, local_fallback=local_fallback)
+    result = await publish(post, client, local_fallback=local_fallback, publish_now=True)
 
     update = {
         "status": result["status"],
@@ -3566,7 +3566,7 @@ async def publish_carousel(carousel_id: str, local_fallback: bool = Query(False)
 
     # Publish immediately
     from publisher import publish
-    result = await publish(post, client)
+    result = await publish(post, client, publish_now=True)
 
     update = {
         "status": result["status"],
@@ -4805,19 +4805,41 @@ async def list_drive_clips(client_id: str):
     return clips
 
 
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+_MAX_DURATION_SEC = 60.0
+
 @api_router.post("/clients/{client_id}/clips/upload", status_code=201)
-async def upload_clip(client_id: str, file: UploadFile = File(...)):
+async def upload_clip(client_id: str, request: Request, file: UploadFile = File(...)):
     import tempfile, os, storage
+    import ffmpeg as _ffmpeg
     client = await db.clients.find_one({"id": client_id})
     if not client:
         raise HTTPException(404, "Client not found")
+
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "Video must be under 100 MB")
+
     clip_id = str(uuid.uuid4())
     content = await file.read()
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "Video must be under 100 MB")
+
     suffix = "." + (file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "mp4")
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
     try:
+        loop = asyncio.get_running_loop()
+        try:
+            probe = await loop.run_in_executor(None, _ffmpeg.probe, tmp_path)
+            duration = float(probe["format"]["duration"])
+        except Exception:
+            duration = 0.0
+
+        if duration > _MAX_DURATION_SEC:
+            raise HTTPException(400, f"Video must be 60 seconds or shorter (this clip is {duration:.0f}s)")
+
         r2_key = f"clips/{client_id}/{clip_id}{suffix}"
         if storage.is_enabled():
             r2_url = storage.upload_file(tmp_path, r2_key, content_type=file.content_type or "video/mp4")
@@ -4830,7 +4852,7 @@ async def upload_clip(client_id: str, file: UploadFile = File(...)):
             "source": "upload",
             "r2_url": r2_url,
             "thumbnail_url": None,
-            "duration": 0,
+            "duration": duration,
             "sequence_number": 9999,
             "synced_at": now_iso(),
         }
