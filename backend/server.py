@@ -3006,6 +3006,19 @@ class VideoTemplateUpdate(BaseModel):
     cta_button_border_radius: Optional[int] = None
     cta_button_shadow: Optional[bool] = None
 
+# ── Music library ──────────────────────────────────────────────
+class MusicSegment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    start: float
+    end: float
+    label: str = ""
+    mood_tags: List[str] = Field(default_factory=list)
+
+class MusicTrackUpdate(BaseModel):
+    name: Optional[str] = None
+    mood_tags: Optional[List[str]] = None
+    segments: Optional[List[MusicSegment]] = None
+
 class CarouselPreviewRequest(BaseModel):
     template: str = "dark_card"
     slides: List[dict] = []
@@ -3651,6 +3664,64 @@ async def delete_video_template(template_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video template not found")
     return {"status": "deleted"}
+
+
+# ── Music library routes ───────────────────────────────────────
+
+@api_router.get("/music")
+def list_music_tracks(mood: Optional[str] = None):
+    query = {}
+    if mood:
+        query["mood_tags"] = {"$in": [mood]}
+    tracks = list(db.music_tracks.find(query))
+    return [clean_doc(t) for t in tracks]
+
+
+@api_router.get("/music/pick")
+def pick_music_track(mood: str = ""):
+    tracks = list(db.music_tracks.find())
+    if not tracks:
+        raise HTTPException(status_code=404, detail="No tracks in library")
+    mood_set = set(m.strip() for m in mood.split(",") if m.strip())
+
+    def score(t):
+        track_score = len(set(t.get("mood_tags", [])) & mood_set)
+        seg_score = max(
+            (len(set(s.get("mood_tags", [])) & mood_set) for s in t.get("segments", [])),
+            default=0,
+        )
+        return track_score + seg_score * 0.5
+
+    best = max(tracks, key=score)
+    best_seg = None
+    best_seg_score = 0
+    for seg in best.get("segments", []):
+        s = len(set(seg.get("mood_tags", [])) & mood_set)
+        if s > best_seg_score:
+            best_seg_score = s
+            best_seg = seg
+
+    return {"track": clean_doc(best), "segment": best_seg}
+
+
+@api_router.put("/music/{track_id}")
+def update_music_track(track_id: str, data: MusicTrackUpdate):
+    track = db.music_tracks.find_one({"id": track_id})
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    update = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
+    if update:
+        db.music_tracks.update_one({"id": track_id}, {"$set": update})
+    return clean_doc(db.music_tracks.find_one({"id": track_id}))
+
+
+@api_router.delete("/music/{track_id}")
+def delete_music_track(track_id: str):
+    track = db.music_tracks.find_one({"id": track_id})
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    db.music_tracks.delete_one({"id": track_id})
+    return {"ok": True}
 
 
 VIDEO_STARTER_PRESETS = [
