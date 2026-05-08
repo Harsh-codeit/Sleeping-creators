@@ -66,17 +66,15 @@ async def _post(api_key: str, path: str, body: dict) -> dict:
 
 
 async def _upload_multipart(
-    api_key: str, path: str, file_bytes: bytes, fields: dict
+    api_key: str, file_bytes: bytes, filename: str, mime_type: str, team_id: str
 ) -> dict:
     headers = {"x-api-key": api_key}
     async with httpx.AsyncClient(timeout=120) as client:
-        files = {"file": (fields.get("filename", "file"), file_bytes, fields.get("mimeType", "application/octet-stream"))}
-        data = {k: v for k, v in fields.items() if k not in ("filename", "mimeType")}
         resp = await client.post(
-            f"{BUNDLE_BASE}{path}",
+            f"{BUNDLE_BASE}/upload/",
             headers=headers,
-            files=files,
-            data=data,
+            files={"file": (filename, file_bytes, mime_type)},
+            data={"teamId": team_id},
         )
         _raise_for_status(resp)
         return resp.json()
@@ -125,12 +123,7 @@ async def upload_file(
     filename: str,
     mime_type: str,
 ) -> str:
-    result = await _upload_multipart(
-        api_key,
-        "/upload/create",
-        file_bytes,
-        {"filename": filename, "mimeType": mime_type, "teamId": team_id},
-    )
+    result = await _upload_multipart(api_key, file_bytes, filename, mime_type, team_id)
     return result.get("id") or result.get("uploadId") or result.get("_id", "")
 
 
