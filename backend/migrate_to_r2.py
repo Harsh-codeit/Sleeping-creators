@@ -38,13 +38,13 @@ DB_NAME    = os.environ["DB_NAME"]
 MINIO_ENDPOINT   = os.environ["MINIO_ENDPOINT"]
 MINIO_ACCESS_KEY = os.environ["MINIO_ACCESS_KEY"]
 MINIO_SECRET_KEY = os.environ["MINIO_SECRET_KEY"]
-MINIO_BUCKET     = os.environ.get("MINIO_BUCKET", "automonk")
+MINIO_BUCKET     = os.environ.get("MINIO_BUCKET", "sleeping-creators")
 MINIO_PUBLIC_URL = os.environ["MINIO_PUBLIC_URL"].rstrip("/")
 
 R2_ACCOUNT_ID  = os.environ["R2_ACCOUNT_ID"]
 R2_ACCESS_KEY  = os.environ["R2_ACCESS_KEY_ID"]
 R2_SECRET_KEY  = os.environ["R2_SECRET_ACCESS_KEY"]
-R2_BUCKET      = os.environ.get("R2_BUCKET_NAME", "automonk")
+R2_BUCKET      = os.environ.get("R2_BUCKET_NAME", "sleeping-creators")
 R2_PUBLIC_URL  = os.environ["R2_PUBLIC_URL"].rstrip("/")
 R2_ENDPOINT    = f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 

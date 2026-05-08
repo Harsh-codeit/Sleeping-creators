@@ -184,8 +184,8 @@ export default function Settings() {
               </div>
               <div className="text-[10px] font-mono text-zinc-600 leading-relaxed max-w-sm">
                 {googleConnected
-                  ? "AutoMonk can create and sync Google Sheets for clients."
-                  : "Authorize AutoMonk to create and manage Google Sheets on your behalf. One-time setup."}
+                  ? "Sleeping Creators can create and sync Google Sheets for clients."
+                  : "Authorize Sleeping Creators to create and manage Google Sheets on your behalf. One-time setup."}
               </div>
             </div>
             <a
@@ -350,7 +350,7 @@ function ChangePassword() {
         current_password: form.current,
         new_password: form.next,
       });
-      localStorage.setItem("automonk_token", data.token);
+      localStorage.setItem("sc_token", data.token);
       axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
       toast.success("Password changed");
       setForm({ current: "", next: "", confirm: "" });

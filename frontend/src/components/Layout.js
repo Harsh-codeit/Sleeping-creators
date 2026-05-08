@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, LayoutTemplate, CalendarRange, BarChart3,
-  Terminal, Settings, Zap, Circle, Layers, LogOut, Star, Coins
+  Terminal, Settings, Circle, Layers, LogOut, Star, Coins
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -48,11 +48,9 @@ export default function Layout({ onLogout }) {
       <aside className="w-56 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex flex-col">
         {/* Logo */}
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-zinc-800">
-          <div className="w-7 h-7 bg-white flex items-center justify-center">
-            <Zap size={14} className="text-black" />
-          </div>
+          <img src="/Sleeping Creators.png" alt="Sleeping Creators" className="w-7 h-7 rounded" />
           <div>
-            <div className="text-sm font-bold tracking-tight text-white">AutoMonk</div>
+            <div className="text-sm font-bold tracking-tight text-white">Sleeping Creators</div>
             <div className="text-[10px] text-zinc-500 font-mono">CONTENT ENGINE</div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 """
-sheets_service.py — Google Sheets integration for AutoMonk.
+sheets_service.py — Google Sheets integration for Sleeping Creators.
 
 Architecture:
 - Uses our own Google account authorized via OAuth2 (Web application credentials).
@@ -62,7 +62,7 @@ def _get_gc(refresh_token: str) -> gspread.Client:
 
 def _create_sheet_sync(refresh_token: str, client_name: str, share_email: str) -> dict:
     gc = _get_gc(refresh_token)
-    sh = gc.create(f"AutoMonk — {client_name}")
+    sh = gc.create(f"Sleeping Creators — {client_name}")
 
     first = True
     for tab_name, headers in TAB_HEADERS.items():

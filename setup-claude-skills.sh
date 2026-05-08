@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# AutoMonk-EM — Claude Skills Setup
+# Sleeping Creators — Claude Skills Setup
 # Run this once on a new machine to install all Claude Code plugins/skills.
 # Usage: bash setup-claude-skills.sh
 # =============================================================================

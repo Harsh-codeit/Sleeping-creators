@@ -2025,7 +2025,7 @@ def _approval_page(icon: str, title: str, message: str, color: str) -> str:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>{title} — AutoMonk</title>
+  <title>{title} — Sleeping Creators</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
     body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;
@@ -2042,7 +2042,7 @@ def _approval_page(icon: str, title: str, message: str, color: str) -> str:
     <div class="icon">{icon}</div>
     <h1>{title}</h1>
     <p>{message}</p>
-    <p class="brand">AUTOMONK · CONTENT ENGINE</p>
+    <p class="brand">SLEEPING CREATORS · CONTENT ENGINE</p>
   </div>
 </body>
 </html>"""
@@ -2450,7 +2450,7 @@ async def test_telegram(data: TelegramTestRequest = Body(default_factory=Telegra
         raise HTTPException(400, "Bot token and chat ID are required. Fill both fields and try again.")
 
     from telegram_service import send_alert
-    ok = await send_alert("AutoMonk test message: Telegram connection is working!", bot_token, chat_id)
+    ok = await send_alert("Sleeping Creators test message: Telegram connection is working!", bot_token, chat_id)
     if ok:
         return {"status": "sent", "message": "Test message sent successfully"}
     raise HTTPException(500, "Failed to send Telegram message. Check: 1) Bot token is valid 2) You have sent /start to the bot 3) Chat ID is correct")
@@ -2628,7 +2628,7 @@ async def trigger_automation():
 
 @api_router.get("/")
 async def root():
-    return {"status": "AutoMonk API running", "version": "1.0.0"}
+    return {"status": "Sleeping Creators API running", "version": "1.0.0"}
 
 # ─── Template Models ─────────────────────────────────────────────────────────
 

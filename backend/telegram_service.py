@@ -20,7 +20,7 @@ async def send_alert(message: str, bot_token: str, chat_id: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            payload = {"chat_id": chat_id, "text": f"🤖 AutoMonk\n\n{message}"}
+            payload = {"chat_id": chat_id, "text": f"🤖 Sleeping Creators\n\n{message}"}
             resp = await client.post(url, json=payload)
             if resp.status_code != 200:
                 logger.error(f"Telegram API error {resp.status_code}: {resp.text}")
@@ -54,7 +54,7 @@ async def send_approval_request(
     )
     preview = content_preview[:300] + ("…" if len(content_preview) > 300 else "")
     text = (
-        f"🤖 AutoMonk — Approval Required\n\n"
+        f"🤖 Sleeping Creators — Approval Required\n\n"
         f"Client: {client_name}\n"
         f"Platform: {platform.capitalize()}\n"
         f"Type: {type_label}\n\n"
@@ -90,7 +90,7 @@ async def send_weekly_report(stats: dict, bot_token: str, chat_id: str) -> bool:
     if not bot_token or not chat_id:
         return False
     msg = (
-        "📊 Weekly AutoMonk Report\n\n"
+        "📊 Weekly Sleeping Creators Report\n\n"
         f"Clients Active: {stats.get('active_clients', 0)}\n"
         f"Posts Published: {stats.get('published', 0)}\n"
         f"Posts Failed: {stats.get('failed', 0)}\n"

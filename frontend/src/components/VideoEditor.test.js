@@ -31,7 +31,7 @@ const clips = [
 
 beforeEach(() => {
   jest.clearAllMocks();
-  localStorage.setItem("automonk_token", "preview-token");
+  localStorage.setItem("sc_token", "preview-token");
   axios.get.mockImplementation((url) => {
     if (url.includes("/video-templates")) {
       return Promise.resolve({ data: templates });

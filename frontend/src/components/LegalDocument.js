@@ -43,7 +43,7 @@ export default function LegalDocument({
                 <ShieldCheck size={18} />
               </div>
               <div>
-                <div className="text-sm font-bold tracking-tight text-white">AutoMonk</div>
+                <div className="text-sm font-bold tracking-tight text-white">Sleeping Creators</div>
                 <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-zinc-500">
                   Content Engine
                 </div>

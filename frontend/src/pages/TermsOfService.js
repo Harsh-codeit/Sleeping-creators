@@ -4,15 +4,15 @@ const sections = [
   {
     heading: "Acceptance of Terms",
     paragraphs: [
-      "By accessing or using the AutoMonk service, you agree to these Terms of Service. If you do not agree, do not use the service.",
-      "This AutoMonk deployment is a private agency-operated application, not a public self-serve SaaS offering. Access is intended only for authorized internal users and permitted client-related workflows.",
+      "By accessing or using the Sleeping Creators service, you agree to these Terms of Service. If you do not agree, do not use the service.",
+      "This Sleeping Creators deployment is a private agency-operated application, not a public self-serve SaaS offering. Access is intended only for authorized internal users and permitted client-related workflows.",
       "If you use the system on behalf of a business or other entity, you represent that you are authorized to bind that entity to these terms.",
     ],
   },
   {
     heading: "Service Description",
     paragraphs: [
-      "AutoMonk is an internal agency content operations system used to manage clients, organize assets, connect social media accounts, schedule content, publish posts, and review related analytics and automation activity.",
+      "Sleeping Creators is an internal agency content operations system used to manage clients, organize assets, connect social media accounts, schedule content, publish posts, and review related analytics and automation activity.",
     ],
   },
   {
@@ -36,13 +36,13 @@ const sections = [
     heading: "User Content and Permissions",
     paragraphs: [
       "You retain responsibility for the text, media, prompts, account information, and other materials you upload or submit through the service.",
-      "You grant the operator of this AutoMonk deployment a limited license to host, process, format, transmit, and display that content solely as needed to carry out agency services and operate or improve this internal system.",
+      "You grant the operator of this Sleeping Creators deployment a limited license to host, process, format, transmit, and display that content solely as needed to carry out agency services and operate or improve this internal system.",
     ],
   },
   {
     heading: "Third-Party Services",
     paragraphs: [
-      "The system may depend on third-party platforms, infrastructure providers, analytics tools, storage systems, and APIs. Availability of those services may affect AutoMonk functionality.",
+      "The system may depend on third-party platforms, infrastructure providers, analytics tools, storage systems, and APIs. Availability of those services may affect Sleeping Creators functionality.",
       "Your use of third-party services, including Meta products, is also governed by the terms and policies of those third parties.",
     ],
   },
@@ -50,7 +50,7 @@ const sections = [
     heading: "Disclaimers and Limitation of Liability",
     paragraphs: [
       "The system is provided on an as-is and as-available basis to the maximum extent permitted by law. We do not guarantee uninterrupted availability, error-free operation, or specific business outcomes from use of the platform.",
-      "To the maximum extent permitted by law, the operator of this AutoMonk deployment is not liable for indirect, incidental, special, consequential, or punitive damages, or for loss of profits, revenues, data, or goodwill arising from use of the service.",
+      "To the maximum extent permitted by law, the operator of this Sleeping Creators deployment is not liable for indirect, incidental, special, consequential, or punitive damages, or for loss of profits, revenues, data, or goodwill arising from use of the service.",
     ],
   },
   {
@@ -64,7 +64,7 @@ const sections = [
     heading: "Changes and Contact",
     paragraphs: [
       "We may update these terms from time to time by posting a revised version on this page. Continued use of the service after an update becomes effective constitutes acceptance of the revised terms.",
-      "For questions about these terms, contact the business operating this AutoMonk deployment using the contact details provided on its website, app listing, or account onboarding materials.",
+      "For questions about these terms, contact the business operating this Sleeping Creators deployment using the contact details provided on its website, app listing, or account onboarding materials.",
     ],
   },
 ];
@@ -74,7 +74,7 @@ export default function TermsOfService() {
     <LegalDocument
       eyebrow="Legal"
       title="Terms of Service"
-      summary="These terms govern access to this private agency-operated AutoMonk system and the use of its dashboard, automations, publishing workflows, and third-party integrations."
+      summary="These terms govern access to this private agency-operated Sleeping Creators system and the use of its dashboard, automations, publishing workflows, and third-party integrations."
       lastUpdated="March 30, 2026"
       sections={sections}
     />

@@ -1,8 +1,8 @@
 # Plan: Full Migration to Bundle.social (All Platforms)
 
-**Goal:** Replace every direct platform publisher (Instagram Graph API, Facebook Graph API, and all stubs) with Bundle.social as the single unified publishing layer. AutoMonk continues to generate carousel images and video; Bundle.social handles all platform delivery. The existing CalendarPage shows all scheduled posts with live status badges updated via webhooks.
+**Goal:** Replace every direct platform publisher (Instagram Graph API, Facebook Graph API, and all stubs) with Bundle.social as the single unified publishing layer. Sleeping Creators continues to generate carousel images and video; Bundle.social handles all platform delivery. The existing CalendarPage shows all scheduled posts with live status badges updated via webhooks.
 
-**Why full migration:** One API key, one connection flow (Bundle's hosted portal), 14 platforms, no per-platform OAuth token management. AutoMonk focuses on content generation + design; Bundle handles distribution.
+**Why full migration:** One API key, one connection flow (Bundle's hosted portal), 14 platforms, no per-platform OAuth token management. Sleeping Creators focuses on content generation + design; Bundle handles distribution.
 
 **Primary platform: Instagram** — all Instagram-specific features (carousels, reels, stories, tagged users) must work correctly through Bundle.
 
@@ -100,7 +100,7 @@ from typing import Optional
 
 BUNDLE_BASE = "https://api.bundle.social/api/v1"
 
-# AutoMonk platform strings → Bundle API enum strings
+# Sleeping Creators platform strings → Bundle API enum strings
 PLATFORM_MAP = {
     "instagram":      "INSTAGRAM",
     "facebook":       "FACEBOOK",
@@ -127,7 +127,7 @@ async def get_team(api_key: str, team_id: str) -> dict: ...
 async def create_portal_link(
     api_key: str,
     team_id: str,
-    platforms: list[str],   # AutoMonk platform strings, mapped internally
+    platforms: list[str],   # Sleeping Creators platform strings, mapped internally
     redirect_url: str,
     expires_in: int = 60,
 ) -> str: ...   # returns the portal URL string
@@ -145,7 +145,7 @@ async def upload_file(
 async def create_post(
     api_key: str,
     team_id: str,
-    platforms: list[str],          # AutoMonk platform strings
+    platforms: list[str],          # Sleeping Creators platform strings
     text: str,
     post_date: str,                # ISO 8601
     upload_ids: list[str] = None,
@@ -179,12 +179,12 @@ def verify_webhook_signature(raw_body: bytes, signature: str, secret: str) -> bo
 
 ## Phase 2: Backend — Client Bundle Team Setup
 
-**What to implement:** Each AutoMonk client maps to one Bundle team. Routes to create/link that team and generate OAuth portal links.
+**What to implement:** Each Sleeping Creators client maps to one Bundle team. Routes to create/link that team and generate OAuth portal links.
 
 **Schema changes** — add to client documents (update the client dict in `server.py` around line 126):
 ```python
 "bundle_team_id":    str | None      # Bundle team UUID
-"bundle_platforms":  list[str]       # AutoMonk strings for connected platforms, e.g. ["instagram","facebook","twitter"]
+"bundle_platforms":  list[str]       # Sleeping Creators strings for connected platforms, e.g. ["instagram","facebook","twitter"]
 "bundle_connected_at": str | None    # ISO timestamp of last successful connection
 ```
 
@@ -395,12 +395,12 @@ async def bundle_webhook(request: Request):
 ```
 GET /api/bundle/post/{bundle_post_id}/sync
   → Calls bundle_service.get_post()
-  → Maps Bundle status → AutoMonk status
+  → Maps Bundle status → Sleeping Creators status
   → Updates MongoDB
   → Returns updated post
 ```
 
-**Bundle status → AutoMonk status mapping:**
+**Bundle status → Sleeping Creators status mapping:**
 ```python
 BUNDLE_STATUS_MAP = {
     "SCHEDULED":   "scheduled",

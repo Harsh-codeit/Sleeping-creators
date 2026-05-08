@@ -8,7 +8,7 @@ Required env vars for R2:
     R2_ACCOUNT_ID        - Cloudflare account ID
     R2_ACCESS_KEY_ID     - R2 API token access key
     R2_SECRET_ACCESS_KEY - R2 API token secret key
-    R2_BUCKET_NAME       - bucket name, e.g. automonk
+    R2_BUCKET_NAME       - bucket name, e.g. sleeping-creators
     R2_PUBLIC_URL        - public CDN base URL, e.g. https://pub-xxx.r2.dev
 
 Required env vars for MinIO (legacy):
@@ -16,7 +16,7 @@ Required env vars for MinIO (legacy):
     MINIO_ENDPOINT   - e.g. http://minio:9000
     MINIO_ACCESS_KEY - S3 access key
     MINIO_SECRET_KEY - S3 secret key
-    MINIO_BUCKET     - bucket name, e.g. automonk-media
+    MINIO_BUCKET     - bucket name, e.g. sleeping-creators-media
     MINIO_PUBLIC_URL - public base URL, e.g. https://storage.yourdomain.com
     MINIO_REGION     - AWS region (default: us-east-1)
 """
@@ -41,7 +41,7 @@ _BACKEND = os.environ.get("STORAGE_BACKEND", "minio").lower()  # "r2" or "minio"
 _MINIO_ENDPOINT   = os.environ.get("MINIO_ENDPOINT", "")
 _MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "")
 _MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "")
-_MINIO_BUCKET     = os.environ.get("MINIO_BUCKET", "automonk-media")
+_MINIO_BUCKET     = os.environ.get("MINIO_BUCKET", "sleeping-creators-media")
 _MINIO_PUBLIC_URL = os.environ.get("MINIO_PUBLIC_URL", "").rstrip("/")
 _MINIO_REGION     = os.environ.get("MINIO_REGION", "us-east-1")
 
@@ -49,7 +49,7 @@ _MINIO_REGION     = os.environ.get("MINIO_REGION", "us-east-1")
 _R2_ACCOUNT_ID  = os.environ.get("R2_ACCOUNT_ID", "")
 _R2_ACCESS_KEY  = os.environ.get("R2_ACCESS_KEY_ID", "")
 _R2_SECRET_KEY  = os.environ.get("R2_SECRET_ACCESS_KEY", "")
-_R2_BUCKET      = os.environ.get("R2_BUCKET_NAME", "automonk")
+_R2_BUCKET      = os.environ.get("R2_BUCKET_NAME", "sleeping-creators")
 _R2_PUBLIC_URL  = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
 _R2_ENDPOINT    = f"https://{_R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if _R2_ACCOUNT_ID else ""
 

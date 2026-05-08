@@ -29,7 +29,7 @@ def process_video_job(self, job_payload: dict):
     from motor.motor_asyncio import AsyncIOMotorClient
 
     mongo_url = os.environ["MONGO_URL"]
-    db_name = os.environ.get("DB_NAME", "automonk")
+    db_name = os.environ.get("DB_NAME", "sleeping-creators")
     db_client = AsyncIOMotorClient(mongo_url)
     db = db_client[db_name]
 

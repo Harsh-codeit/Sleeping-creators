@@ -12,7 +12,7 @@ from google_drive_service import download_clip
 
 logger = logging.getLogger(__name__)
 
-TEMP_DIR = Path("/tmp/automonk")
+TEMP_DIR = Path("/tmp/sleeping-creators")
 DEFAULT_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 # Size presets: (font_size, h_pad, v_pad)

@@ -5,7 +5,7 @@
 
 ## What Is This Feature?
 
-AutoMonk can now watch your competitors for you.
+Sleeping Creators can now watch your competitors for you.
 
 Every week, it automatically looks at the Instagram and LinkedIn pages of brands
 you compete with, finds their best-performing posts, and recreates similar content
@@ -39,11 +39,11 @@ reads their posts, and takes notes — but does it automatically and at scale.
 
 ## How Does Content Get Recreated?
 
-Once the posts are collected, AutoMonk scores them by engagement. Posts with more
+Once the posts are collected, Sleeping Creators scores them by engagement. Posts with more
 comments and shares rank higher than posts with just likes (because comments and
 shares signal stronger audience interest).
 
-The **top 3 highest-performing posts** each week go through AutoMonk's AI.
+The **top 3 highest-performing posts** each week go through Sleeping Creators's AI.
 
 The AI is given:
 - What the competitor posted (the topic, structure, and hook style)
@@ -59,7 +59,7 @@ or edit it, and then it posts like any other piece of content.
 
 ## What Does It Cost?
 
-This feature has a small additional cost on top of your AutoMonk subscription,
+This feature has a small additional cost on top of your Sleeping Creators subscription,
 because Apify charges per scraping job.
 
 **Estimated cost breakdown:**
@@ -73,7 +73,7 @@ because Apify charges per scraping job.
 These are estimates based on Apify's standard pricing. Costs vary slightly
 depending on how active a competitor's profile is and how many posts are scanned.
 
-**This cost is separate from your AutoMonk plan** and will be itemised clearly
+**This cost is separate from your Sleeping Creators plan** and will be itemised clearly
 in your monthly invoice.
 
 If you want to keep costs low, you can:
@@ -89,13 +89,13 @@ If you want to keep costs low, you can:
 - **Nothing posts automatically** — every recreated piece of content goes into
   your draft queue. You approve it before it ever goes live.
 - **You can pause at any time** — competitors can be turned off individually
-  without affecting anything else in AutoMonk.
+  without affecting anything else in Sleeping Creators.
 
 ---
 
 ## In Simple Terms
 
-AutoMonk watches what's working for your competitors, figures out their best
+Sleeping Creators watches what's working for your competitors, figures out their best
 content, and writes a version of it for your brand — every week, automatically.
 You just review and approve. It's like having a content strategist who never
 stops doing competitor research.

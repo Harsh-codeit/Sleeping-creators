@@ -1,9 +1,9 @@
 # Product Requirements Document (PRD)
-# AutoMonk-EM — New & Incomplete Features
+# Sleeping Creators — New & Incomplete Features
 
 **Date:** 2026-03-27
 **Version:** 1.0
-**Author:** AutoMonk-EM Team
+**Author:** Sleeping Creators Team
 
 ---
 

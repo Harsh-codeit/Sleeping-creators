@@ -10,7 +10,7 @@ const PLATFORMS = ["instagram", "facebook", "youtube", "tiktok", "linkedin", "tw
 
 function buildClipPreviewUrl(clip, clientId) {
   if (clip.r2_url) return clip.r2_url;
-  const token = localStorage.getItem("automonk_token");
+  const token = localStorage.getItem("sc_token");
   const baseUrl = `${API}/clients/${clientId}/clips/${clip.drive_file_id}/stream`;
   return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
 }

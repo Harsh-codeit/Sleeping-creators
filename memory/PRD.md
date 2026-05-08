@@ -1,4 +1,4 @@
-# AutoMonk — Content Automation Platform
+# Sleeping Creators — Content Automation Platform
 **PRD Last Updated:** February 2026
 
 ---

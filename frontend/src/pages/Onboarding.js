@@ -681,7 +681,7 @@ export default function Onboarding() {
             <Zap size={14} className="text-black" />
           </div>
           <div>
-            <span className="text-sm font-bold text-white">AutoMonk</span>
+            <span className="text-sm font-bold text-white">Sleeping Creators</span>
             <span className="text-zinc-600 mx-2 text-sm">/</span>
             <span className="text-sm text-zinc-400">Client Onboarding</span>
           </div>

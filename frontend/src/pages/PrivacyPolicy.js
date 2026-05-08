@@ -4,7 +4,7 @@ const sections = [
   {
     heading: "Scope",
     paragraphs: [
-      "This Privacy Policy explains how the agency operating this AutoMonk deployment collects, uses, stores, and discloses information in connection with its internal content operations system and related social media integrations.",
+      "This Privacy Policy explains how the agency operating this Sleeping Creators deployment collects, uses, stores, and discloses information in connection with its internal content operations system and related social media integrations.",
       "It applies to information processed through the dashboard, connected Meta products, scheduling workflows, analytics features, and support or operational interactions tied to this private agency tool.",
     ],
   },
@@ -23,7 +23,7 @@ const sections = [
   {
     heading: "How We Use Information",
     bullets: [
-      "To operate, maintain, and secure the agency's internal AutoMonk workflow system.",
+      "To operate, maintain, and secure the agency's internal Sleeping Creators workflow system.",
       "To connect and manage social media accounts, including Meta pages and Instagram accounts, on behalf of agency-managed clients.",
       "To create, schedule, publish, analyze, and improve client content workflows.",
       "To communicate with authorized users about operational updates, support requests, security notices, and administrative matters.",
@@ -63,7 +63,7 @@ const sections = [
   {
     heading: "Contact",
     paragraphs: [
-      "For questions, privacy requests, or data deletion inquiries, contact the business operating this AutoMonk deployment using the contact details provided on its website, app listing, or account onboarding materials.",
+      "For questions, privacy requests, or data deletion inquiries, contact the business operating this Sleeping Creators deployment using the contact details provided on its website, app listing, or account onboarding materials.",
     ],
   },
 ];
@@ -73,7 +73,7 @@ export default function PrivacyPolicy() {
     <LegalDocument
       eyebrow="Privacy"
       title="Privacy Policy"
-      summary="This page describes how the agency-operated AutoMonk system handles information in connection with internal content operations, client management, and Meta-linked publishing workflows."
+      summary="This page describes how the agency-operated Sleeping Creators system handles information in connection with internal content operations, client management, and Meta-linked publishing workflows."
       lastUpdated="March 30, 2026"
       sections={sections}
     />

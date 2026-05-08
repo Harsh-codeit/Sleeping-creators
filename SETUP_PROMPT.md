@@ -1,4 +1,4 @@
-# AutoMonk-EM — Claude Skills & Agents Setup Prompt
+# Sleeping Creators — Claude Skills & Agents Setup Prompt
 
 Paste the block below into a fresh Claude Code session (or share it with a teammate) to reproduce the exact skills, agents, and hooks this project uses.
 

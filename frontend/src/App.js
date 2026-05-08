@@ -24,7 +24,7 @@ import TermsOfService from "./pages/TermsOfService";
 
 // Set axios auth header synchronously on load so it's ready before any
 // child component fires an API call (useEffect would run too late).
-const savedToken = localStorage.getItem("automonk_token");
+const savedToken = localStorage.getItem("sc_token");
 if (savedToken) {
   axios.defaults.headers.common["Authorization"] = `Bearer ${savedToken}`;
 }
@@ -47,7 +47,7 @@ function App() {
       r => r,
       err => {
         if (err.response?.status === 401 && !err.config?.url?.includes("/auth/")) {
-          localStorage.removeItem("automonk_token");
+          localStorage.removeItem("sc_token");
           setToken(null);
         }
         return Promise.reject(err);
@@ -62,7 +62,7 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("automonk_token");
+    localStorage.removeItem("sc_token");
     setToken(null);
   };
 

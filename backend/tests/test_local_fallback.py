@@ -35,8 +35,8 @@ async def test_publish_instagram_triggers_local_fallback_on_2207052():
         "hashtags": [],
         "carousel_data": {
             "slides": [{"content": "Slide 1"}, {"content": "Slide 2"}],
-            "exported_images": ["https://storage.monkmedia.io/automonk/carousels/abc/slide_1.png",
-                                "https://storage.monkmedia.io/automonk/carousels/abc/slide_2.png"],
+            "exported_images": ["https://storage.monkmedia.io/sleeping-creators/carousels/abc/slide_1.png",
+                                "https://storage.monkmedia.io/sleeping-creators/carousels/abc/slide_2.png"],
         },
     }
     client = {"instagram_access_token": "tok", "instagram_user_id": "uid123"}
@@ -71,8 +71,8 @@ async def test_publish_instagram_does_not_retry_on_media_extract_error():
         "hashtags": [],
         "carousel_data": {
             "slides": [{"content": "S1"}, {"content": "S2"}],
-            "exported_images": ["https://storage.monkmedia.io/automonk/carousels/x/slide_1.png",
-                                "https://storage.monkmedia.io/automonk/carousels/x/slide_2.png"],
+            "exported_images": ["https://storage.monkmedia.io/sleeping-creators/carousels/x/slide_1.png",
+                                "https://storage.monkmedia.io/sleeping-creators/carousels/x/slide_2.png"],
         },
     }
     client = {"instagram_access_token": "tok", "instagram_user_id": "uid"}

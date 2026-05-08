@@ -29,7 +29,7 @@ export default function Login({ onLogin }) {
     try {
       const endpoint = mode === "setup" ? "/auth/setup" : "/auth/login";
       const { data } = await axios.post(`${API}${endpoint}`, { password });
-      localStorage.setItem("automonk_token", data.token);
+      localStorage.setItem("sc_token", data.token);
       onLogin(data.token);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Authentication failed");
@@ -50,10 +50,12 @@ export default function Login({ onLogin }) {
 
         {/* Brand */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-white rounded-2xl mb-5">
-            <span className="text-black font-black text-xl tracking-tight">AM</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">AutoMonk</h1>
+          <img
+            src="/Sleeping Creators.png"
+            alt="Sleeping Creators"
+            className="w-14 h-14 rounded-2xl mb-5 mx-auto"
+          />
+          <h1 className="text-2xl font-bold text-white tracking-tight">Sleeping Creators</h1>
           <p className="text-zinc-500 text-sm mt-1 font-mono">
             {mode === "setup" ? "Set up your admin password to get started" : "Enter your password to continue"}
           </p>
@@ -134,7 +136,7 @@ export default function Login({ onLogin }) {
         </div>
 
         <p className="text-center text-[10px] font-mono text-zinc-700 mt-6 tracking-widest">
-          AUTOMONK · CONTENT ENGINE
+          SLEEPING CREATORS · CONTENT ENGINE
         </p>
       </div>
     </div>

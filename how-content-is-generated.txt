@@ -1,7 +1,7 @@
-HOW CONTENT IS GENERATED IN AUTOMONK
+HOW CONTENT IS GENERATED IN SLEEPING CREATORS
 ======================================
 
-AutoMonk uses AI (Claude by Anthropic) to create social media content
+Sleeping Creators uses AI (Claude by Anthropic) to create social media content
 for brands. Here's how it all works in simple terms.
 
 
@@ -107,7 +107,7 @@ The app sends you updates via Telegram:
 IN SIMPLE TERMS
 -----------------
 
-You tell AutoMonk about your brand once. Then it uses AI to write
+You tell Sleeping Creators about your brand once. Then it uses AI to write
 content that sounds like you, looks professional, and posts it on
 your schedule. You can generate one post at a time, generate in bulk,
 or set it on autopilot with pipelines. You stay in control through
