@@ -3669,17 +3669,17 @@ async def delete_video_template(template_id: str):
 # ── Music library routes ───────────────────────────────────────
 
 @api_router.get("/music")
-def list_music_tracks(mood: Optional[str] = None):
+async def list_music_tracks(mood: Optional[str] = None):
     query = {}
     if mood:
         query["mood_tags"] = {"$in": [mood]}
-    tracks = list(db.music_tracks.find(query))
+    tracks = await db.music_tracks.find(query).to_list(1000)
     return [clean_doc(t) for t in tracks]
 
 
 @api_router.get("/music/pick")
-def pick_music_track(mood: str = ""):
-    tracks = list(db.music_tracks.find())
+async def pick_music_track(mood: str = ""):
+    tracks = await db.music_tracks.find().to_list(1000)
     if not tracks:
         raise HTTPException(status_code=404, detail="No tracks in library")
     mood_set = set(m.strip() for m in mood.split(",") if m.strip())
@@ -3705,23 +3705,25 @@ def pick_music_track(mood: str = ""):
 
 
 @api_router.put("/music/{track_id}")
-def update_music_track(track_id: str, data: MusicTrackUpdate):
-    track = db.music_tracks.find_one({"id": track_id})
+async def update_music_track(track_id: str, data: MusicTrackUpdate):
+    track = await db.music_tracks.find_one({"id": track_id})
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
-    update = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
-    if update:
-        db.music_tracks.update_one({"id": track_id}, {"$set": update})
-    return clean_doc(db.music_tracks.find_one({"id": track_id}))
+    update = data.model_dump(exclude_unset=True)
+    if not update:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    update["updated_at"] = now_iso()
+    await db.music_tracks.update_one({"id": track_id}, {"$set": update})
+    return clean_doc(await db.music_tracks.find_one({"id": track_id}))
 
 
 @api_router.delete("/music/{track_id}")
-def delete_music_track(track_id: str):
-    track = db.music_tracks.find_one({"id": track_id})
+async def delete_music_track(track_id: str):
+    track = await db.music_tracks.find_one({"id": track_id})
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
-    db.music_tracks.delete_one({"id": track_id})
-    return {"ok": True}
+    await db.music_tracks.delete_one({"id": track_id})
+    return {"status": "deleted"}
 
 
 VIDEO_STARTER_PRESETS = [

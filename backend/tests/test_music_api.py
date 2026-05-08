@@ -14,7 +14,9 @@ TRACK = {"id": "t1", "name": "Energy Beat", "filename": "beat.mp3",
 @patch("server._check_token", return_value=True)
 @patch("server.db")
 def test_list_music(mock_db, _):
-    mock_db.music_tracks.find.return_value = [TRACK]
+    mock_cursor = MagicMock()
+    mock_cursor.to_list = AsyncMock(return_value=[TRACK])
+    mock_db.music_tracks.find.return_value = mock_cursor
     resp = client.get("/api/music", headers=AUTH)
     assert resp.status_code == 200
     assert len(resp.json()) == 1
@@ -23,7 +25,9 @@ def test_list_music(mock_db, _):
 @patch("server._check_token", return_value=True)
 @patch("server.db")
 def test_list_music_mood_filter(mock_db, _):
-    mock_db.music_tracks.find.return_value = [TRACK]
+    mock_cursor = MagicMock()
+    mock_cursor.to_list = AsyncMock(return_value=[TRACK])
+    mock_db.music_tracks.find.return_value = mock_cursor
     resp = client.get("/api/music?mood=energy", headers=AUTH)
     assert resp.status_code == 200
     call_args = mock_db.music_tracks.find.call_args[0][0]
@@ -33,8 +37,8 @@ def test_list_music_mood_filter(mock_db, _):
 @patch("server.db")
 def test_update_music_track(mock_db, _):
     updated = {**TRACK, "mood_tags": ["power"]}
-    mock_db.music_tracks.find_one.side_effect = [TRACK, updated]
-    mock_db.music_tracks.update_one.return_value = MagicMock()
+    mock_db.music_tracks.find_one = AsyncMock(side_effect=[TRACK, updated])
+    mock_db.music_tracks.update_one = AsyncMock(return_value=MagicMock())
     resp = client.put("/api/music/t1", json={"mood_tags": ["power"]}, headers=AUTH)
     assert resp.status_code == 200
     assert resp.json()["mood_tags"] == ["power"]
@@ -42,15 +46,17 @@ def test_update_music_track(mock_db, _):
 @patch("server._check_token", return_value=True)
 @patch("server.db")
 def test_delete_music_track(mock_db, _):
-    mock_db.music_tracks.find_one.return_value = TRACK
-    mock_db.music_tracks.delete_one.return_value = MagicMock()
+    mock_db.music_tracks.find_one = AsyncMock(return_value=TRACK)
+    mock_db.music_tracks.delete_one = AsyncMock(return_value=MagicMock())
     resp = client.delete("/api/music/t1", headers=AUTH)
     assert resp.status_code == 200
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
 def test_pick_music_by_mood(mock_db, _):
-    mock_db.music_tracks.find.return_value = [TRACK]
+    mock_cursor = MagicMock()
+    mock_cursor.to_list = AsyncMock(return_value=[TRACK])
+    mock_db.music_tracks.find.return_value = mock_cursor
     resp = client.get("/api/music/pick?mood=energy", headers=AUTH)
     assert resp.status_code == 200
     assert resp.json()["track"]["id"] == "t1"
@@ -58,6 +64,15 @@ def test_pick_music_by_mood(mock_db, _):
 @patch("server._check_token", return_value=True)
 @patch("server.db")
 def test_pick_music_empty_library(mock_db, _):
-    mock_db.music_tracks.find.return_value = []
+    mock_cursor = MagicMock()
+    mock_cursor.to_list = AsyncMock(return_value=[])
+    mock_db.music_tracks.find.return_value = mock_cursor
     resp = client.get("/api/music/pick?mood=energy", headers=AUTH)
     assert resp.status_code == 404
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_update_music_track_empty_body_returns_400(mock_db, _):
+    mock_db.music_tracks.find_one = AsyncMock(return_value=TRACK)
+    resp = client.put("/api/music/t1", json={}, headers=AUTH)
+    assert resp.status_code == 400
