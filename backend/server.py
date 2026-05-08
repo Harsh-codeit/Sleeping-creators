@@ -629,6 +629,7 @@ async def process_scheduled_posts():
         cursor = db.posts.find({"status": "scheduled"}, {"_id": 0})
         async for post in cursor:
             try:
+                published_on_platform = False  # set True the moment the platform accepts the post
                 sched = datetime.fromisoformat(post["scheduled_at"].replace("Z", "+00:00"))
                 if sched <= now:
                     # Atomically claim the post to prevent double-publishing
@@ -655,6 +656,7 @@ async def process_scheduled_posts():
                     result = await publish(post, client)
                     last_publish_at[platform] = datetime.now(timezone.utc)
                     if result["status"] == "published":
+                        published_on_platform = True  # platform accepted — must not revert to scheduled
                         update = {
                             "status": "published",
                             "published_at": now_iso(),
@@ -730,11 +732,21 @@ async def process_scheduled_posts():
                                 await send_alert(f"FAIL (final): {post['client_name']} → {post['platform']}: {result.get('error')}", bot_token, chat_id)
             except Exception as e:
                 logger.error(f"Error processing post {post.get('id')}: {e}")
-                # Revert "publishing" → "scheduled" so the next run can retry
-                await db.posts.update_one(
-                    {"id": post.get("id"), "status": "publishing"},
-                    {"$set": {"status": "scheduled"}}
-                )
+                if published_on_platform:
+                    # Platform already accepted the post — must not revert to scheduled or
+                    # the next scheduler run will re-publish it (double post).
+                    # Force-write published status even though the earlier DB update failed.
+                    await db.posts.update_one(
+                        {"id": post.get("id")},
+                        {"$set": {"status": "published", "published_at": now_iso()}}
+                    )
+                    await add_log("warning", f"Post published but post-publish update failed — marked published to prevent re-publish: {e}", post.get("client_id"), post.get("client_name"), post.get("id"), post.get("platform"))
+                else:
+                    # Publish not confirmed — safe to revert so the next run can retry
+                    await db.posts.update_one(
+                        {"id": post.get("id"), "status": "publishing"},
+                        {"$set": {"status": "scheduled"}}
+                    )
     except Exception as e:
         logger.error(f"Scheduler error: {e}")
 
