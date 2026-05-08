@@ -51,7 +51,7 @@ export default function Login({ onLogin }) {
         {/* Brand */}
         <div className="text-center mb-10">
           <img
-            src="/Sleeping Creators.png"
+            src="/logo.png"
             alt="Sleeping Creators"
             className="w-14 h-14 rounded-2xl mb-5 mx-auto"
           />

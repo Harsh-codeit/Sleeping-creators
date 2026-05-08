@@ -48,7 +48,7 @@ export default function Layout({ onLogout }) {
       <aside className="w-56 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex flex-col">
         {/* Logo */}
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-zinc-800">
-          <img src="/Sleeping Creators.png" alt="Sleeping Creators" className="w-7 h-7 rounded" />
+          <img src="/logo.png" alt="Sleeping Creators" className="w-7 h-7 rounded" />
           <div>
             <div className="text-sm font-bold tracking-tight text-white">Sleeping Creators</div>
             <div className="text-[10px] text-zinc-500 font-mono">CONTENT ENGINE</div>
