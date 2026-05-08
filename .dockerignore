@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+.gitconfig
+
+# Node
+frontend/node_modules
+frontend/.cache
+frontend/build
+
+# Python
+backend/__pycache__
+backend/*.pyc
+backend/.venv
+backend/venv
+
+# Environment files (injected at runtime via Coolify)
+backend/.env
+frontend/.env
+*.env
+
+# Dev/test artifacts
+backend/tests
+tests
+test_reports
+test_result.md
+
+# Misc
+.idea
+.vscode
+README.md
+design_guidelines.json
+memory

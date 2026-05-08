@@ -1,0 +1,108 @@
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from google_drive_service import list_images
+
+
+def test_list_images_filters_to_image_mime_types():
+    mock_service = MagicMock()
+    mock_service.files().list().execute.return_value = {
+        "files": [
+            {"id": "img1", "name": "photo.jpg",  "mimeType": "image/jpeg"},
+            {"id": "vid1", "name": "clip.mp4",   "mimeType": "video/mp4"},
+            {"id": "img2", "name": "banner.png", "mimeType": "image/png"},
+            {"id": "doc1", "name": "doc.pdf",    "mimeType": "application/pdf"},
+            {"id": "img3", "name": "hero.webp",  "mimeType": "image/webp"},
+            {"id": "img4", "name": "anim.gif",   "mimeType": "image/gif"},
+        ]
+    }
+    with patch("google_drive_service._build_service", return_value=mock_service):
+        result = list_images("fake_token", "folder123")
+
+    ids = [f["drive_file_id"] for f in result]
+    assert set(ids) == {"img1", "img2", "img3", "img4"}
+    assert all(f["mime_type"] in {"image/jpeg", "image/png", "image/webp", "image/gif"} for f in result)
+
+
+def test_list_images_returns_empty_for_empty_folder():
+    mock_service = MagicMock()
+    mock_service.files().list().execute.return_value = {"files": []}
+    with patch("google_drive_service._build_service", return_value=mock_service):
+        result = list_images("token", "folder")
+    assert result == []
+
+
+def test_client_update_accepts_drive_images_folder_id():
+    from server import ClientUpdate
+    data = ClientUpdate(drive_images_folder_id="1AbCdEfGhIjKlMnO")
+    dumped = data.model_dump(exclude_none=True)
+    assert dumped["drive_images_folder_id"] == "1AbCdEfGhIjKlMnO"
+
+
+def test_client_update_drive_images_folder_id_is_optional():
+    from server import ClientUpdate
+    data = ClientUpdate(name="TestClient")
+    dumped = data.model_dump(exclude_none=True)
+    assert "drive_images_folder_id" not in dumped
+
+
+def test_pick_drive_image_selects_by_index():
+    from server import _pick_drive_image
+    images = [
+        {"drive_file_id": "a", "name": "a.jpg"},
+        {"drive_file_id": "b", "name": "b.jpg"},
+        {"drive_file_id": "c", "name": "c.jpg"},
+    ]
+    assert _pick_drive_image(images, 0)["drive_file_id"] == "a"
+    assert _pick_drive_image(images, 1)["drive_file_id"] == "b"
+    assert _pick_drive_image(images, 2)["drive_file_id"] == "c"
+
+
+def test_pick_drive_image_wraps_at_end():
+    from server import _pick_drive_image
+    images = [{"drive_file_id": "a", "name": "a.jpg"}, {"drive_file_id": "b", "name": "b.jpg"}]
+    assert _pick_drive_image(images, 2)["drive_file_id"] == "a"
+    assert _pick_drive_image(images, 3)["drive_file_id"] == "b"
+    assert _pick_drive_image(images, 5)["drive_file_id"] == "b"
+
+
+def test_pick_drive_image_raises_on_empty():
+    from server import _pick_drive_image
+    import pytest
+    with pytest.raises(ValueError, match="no images"):
+        _pick_drive_image([], 0)
+
+
+def test_inject_elements_adds_positioned_img_tag():
+    from carousel_renderer import _inject_elements
+    html = "<html><body><div>slide</div></body></html>"
+    elements = [{
+        "type": "image", "drive_source": True,
+        "x": 0.1, "y": 0.2, "width": 0.5, "height": 0.3,
+        "rotation": 0.0, "opacity": 1.0,
+    }]
+    result = _inject_elements(html, elements, "data:image/jpeg;base64,abc123")
+    assert "<img" in result
+    assert "position:absolute" in result
+    assert "108.0px" in result   # 0.1 * 1080
+    assert "270.0px" in result   # 0.2 * 1350
+    assert "540.0px" in result   # 0.5 * 1080
+    assert "405.0px" in result   # 0.3 * 1350
+
+
+def test_inject_elements_returns_html_unchanged_when_no_src():
+    from carousel_renderer import _inject_elements
+    html = "<html><body></body></html>"
+    elements = [{"type": "image", "drive_source": True, "x": 0, "y": 0, "width": 0.5, "height": 0.5}]
+    assert _inject_elements(html, elements, None) == html
+
+
+def test_inject_elements_skips_non_image_type():
+    from carousel_renderer import _inject_elements
+    html = "<html><body></body></html>"
+    elements = [{"type": "text", "x": 0, "y": 0, "width": 0.5, "height": 0.5}]
+    result = _inject_elements(html, elements, "data:image/jpeg;base64,abc")
+    assert "<img" not in result

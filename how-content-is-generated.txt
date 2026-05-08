@@ -1,0 +1,114 @@
+HOW CONTENT IS GENERATED IN AUTOMONK
+======================================
+
+AutoMonk uses AI (Claude by Anthropic) to create social media content
+for brands. Here's how it all works in simple terms.
+
+
+WHAT THE AI KNOWS ABOUT YOUR BRAND
+------------------------------------
+Before generating anything, the AI is given your brand info:
+
+  - Your brand name
+  - Your industry (e.g., fitness, tech, fashion)
+  - Your brand voice/tone (e.g., professional, playful, bold)
+  - Who your target audience is
+  - Your content themes (topics you want to talk about)
+  - Your preferred hashtags
+
+This info comes from the client profile you set up in the app.
+
+
+TYPES OF CONTENT GENERATED
+-----------------------------
+
+2. CAROUSEL POSTS (Instagram Slides)
+
+   The AI creates multi-slide Instagram carousels (typically 5 slides).
+
+   How each slide is structured:
+     - Slide 1:       A powerful hook that makes people want to swipe
+     - Middle slides: Actionable tips or insights (short, punchy text)
+     - Last slide:    A call to action ("Follow @yourhandle for more...")
+
+   Each slide is kept under 250 characters. No fluff, high-impact only.
+
+   The slides are then turned into actual images using one of three
+   visual templates:
+
+     - Dark Card:     Black background, dark card, light text (sleek look)
+     - Floating Card: Cream background, white card (warm, friendly look)
+     - Quote White:   Clean white background (minimal, Twitter-style look)
+
+   All images are sized at 1080x1350 pixels (Instagram's 4:5 ratio)
+   and use the Sora and Inter fonts. The text size automatically adjusts
+   based on how much text is on the slide.
+
+
+3. BULK GENERATION
+
+   You can generate multiple posts at once across different platforms.
+   For example: 2 posts each for LinkedIn, Twitter, and Instagram =
+   6 posts total, automatically spaced 6 hours apart.
+
+
+HOW AUTOMATED PIPELINES WORK
+-------------------------------
+
+You can set up automated content pipelines that run on a schedule:
+
+  1. You configure a pipeline with:
+     - Which platforms to post on
+     - What type of content (text or carousel)
+     - Topics to cover
+     - How often to post (e.g., every 6 hours, or at specific times)
+     - Whether posts need your approval before going live
+
+  2. The system checks every 5 minutes if any pipeline is due to run.
+
+  3. When it's time, the AI generates fresh content using your brand
+     info and the pipeline's topics.
+
+  4. If approval is required:
+     - You get a Telegram message with a preview of the post
+     - You tap Approve or Reject right from Telegram
+
+  5. If no approval is needed, the post is automatically scheduled
+     and published.
+
+
+HOW PUBLISHING WORKS
+----------------------
+
+For Instagram:
+  - Text posts are automatically turned into images (using your
+    preferred template style) and posted
+  - Carousel posts are rendered as multiple slide images and posted
+    as an Instagram carousel
+  - Hashtags are added to the caption automatically
+  - Captions are capped at 2,200 characters (Instagram's limit)
+
+The app uses Instagram's official API to publish everything.
+
+
+TELEGRAM NOTIFICATIONS
+------------------------
+
+The app sends you updates via Telegram:
+
+  - Approval requests with post previews and approve/reject buttons
+  - Weekly reports showing:
+    - How many clients are active
+    - How many posts were published
+    - Success rate
+    - Total impressions
+
+
+IN SIMPLE TERMS
+-----------------
+
+You tell AutoMonk about your brand once. Then it uses AI to write
+content that sounds like you, looks professional, and posts it on
+your schedule. You can generate one post at a time, generate in bulk,
+or set it on autopilot with pipelines. You stay in control through
+Telegram approvals or by reviewing drafts in the app.

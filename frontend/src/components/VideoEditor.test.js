@@ -1,0 +1,109 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import axios from "axios";
+import VideoEditor from "./VideoEditor";
+
+jest.mock("axios");
+jest.mock("sonner", () => ({
+  toast: {
+    error: jest.fn(),
+    success: jest.fn(),
+  },
+}));
+jest.mock("./VideoCanvasPreview", () => function MockVideoCanvasPreview({ clip }) {
+  return (
+    <div data-testid="video-preview">
+      {clip?.url ? `preview-url:${clip.url}` : "No clip selected"}
+    </div>
+  );
+});
+
+const templates = [
+  { id: "tpl-1", name: "Podcast Clip", aspect_ratio: "9:16" },
+];
+
+const clips = [
+  {
+    drive_file_id: "drive-clip-1",
+    name: "50 MB .mp4",
+    duration: 20.086,
+  },
+];
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  localStorage.setItem("automonk_token", "preview-token");
+  axios.get.mockImplementation((url) => {
+    if (url.includes("/video-templates")) {
+      return Promise.resolve({ data: templates });
+    }
+    if (url.includes("/drive-clips")) {
+      return Promise.resolve({ data: clips });
+    }
+    return Promise.resolve({ data: [] });
+  });
+});
+
+afterEach(() => {
+  localStorage.clear();
+});
+
+test("keeps clip picker closed until requested and previews selected Drive clip via stream URL", async () => {
+  render(<VideoEditor clientId="client-1" />);
+
+  expect(screen.queryByRole("button", { name: "Drive" })).not.toBeInTheDocument();
+  expect(screen.getByTestId("video-preview")).toHaveTextContent("No clip selected");
+
+  fireEvent.click(screen.getByRole("button", { name: /Choose clip/ }));
+
+  expect(await screen.findByRole("button", { name: "Drive" })).toBeInTheDocument();
+
+  const clipButton = await screen.findByRole("button", { name: /50 MB \.mp4/ });
+  fireEvent.click(clipButton);
+
+  await waitFor(() => {
+    expect(screen.queryByRole("button", { name: "Drive" })).not.toBeInTheDocument();
+  });
+
+  expect(screen.getByRole("button", { name: "50 MB .mp4" })).toBeInTheDocument();
+  expect(screen.getByTestId("video-preview")).toHaveTextContent(
+    "preview-url:http://localhost:8000/api/clients/client-1/clips/drive-clip-1/stream?token=preview-token"
+  );
+});
+
+test("sends video creation payload using backend create route names", async () => {
+  axios.post.mockResolvedValue({ data: { status: "queued" } });
+
+  render(<VideoEditor clientId="client-1" />);
+
+  fireEvent.click(screen.getByRole("button", { name: /Choose clip/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /50 MB \.mp4/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Podcast Clip" }));
+  fireEvent.change(screen.getByPlaceholderText(/Write your caption/), {
+    target: { value: "Launch caption" },
+  });
+  fireEvent.change(screen.getByPlaceholderText("#marketing #business"), {
+    target: { value: "#launch #video" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "instagram" }));
+  fireEvent.click(screen.getByRole("button", { name: "Publish Now" }));
+
+  await waitFor(() => {
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining("/api/videos/create"),
+      expect.objectContaining({
+        client_id: "client-1",
+        clip_id: "drive-clip-1",
+        template_id: "tpl-1",
+        clip_trim_start: 0,
+        clip_trim_end: 20.086,
+        caption: "Launch caption",
+        hashtags: ["#launch", "#video"],
+        platforms: ["instagram"],
+        scheduled_at: null,
+      })
+    );
+  });
+
+  const modal = screen.queryByRole("button", { name: "Drive" });
+  expect(modal).not.toBeInTheDocument();
+});
