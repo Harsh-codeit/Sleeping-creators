@@ -2974,7 +2974,7 @@ class VideoTemplateCreate(BaseModel):
     overlay_style: str = "gradient_wash" # gradient_wash | color_tint | blur | geometric | lower_thirds | none
     overlay_color: str = "#000000"
     overlay_opacity: float = 0.5         # 0.0–1.0
-    mood_tags: List[str] = []
+    mood_tags: List[str] = Field(default_factory=list)
     # CTA button shape
     cta_button_border_radius: int = 4    # px; 999 = pill
     cta_button_shadow: bool = False
