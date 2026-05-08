@@ -1004,12 +1004,28 @@ async def _download_url(url: str) -> bytes:
         return resp.content
 
 
+_PLATFORM_TEXT_LIMIT = {
+    "instagram": 2000,
+    "facebook": 63206,
+    "twitter": 280,
+    "linkedin": 3000,
+    "tiktok": 2200,
+    "youtube": 5000,
+    "threads": 500,
+    "pinterest": 500,
+}
+
+
 def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> dict:
     text = post.get("text", "")
     hashtags = post.get("hashtags", [])
     if hashtags:
         tag_str = " ".join(f"#{t.lstrip('#')}" for t in hashtags)
         text = f"{text}\n\n{tag_str}".strip()
+
+    limit = _PLATFORM_TEXT_LIMIT.get(platform)
+    if limit and len(text) > limit:
+        text = text[:limit - 1].rsplit(" ", 1)[0] + "…"
 
     base = {"text": text, "uploadIds": upload_ids}
     if platform == "instagram":
