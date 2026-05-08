@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
+import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 import { MOOD_TAGS } from "../constants/videoStyles";
 
 function generateId() { return Math.random().toString(36).slice(2, 9); }
@@ -12,6 +13,7 @@ function fmt(sec) {
 export default function WaveformEditor({ url, segments: initialSegments, onSave }) {
   const containerRef = useRef(null);
   const wsRef = useRef(null);
+  const regionsRef = useRef(null);
   const [segments, setSegments] = useState(initialSegments || []);
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
@@ -20,6 +22,7 @@ export default function WaveformEditor({ url, segments: initialSegments, onSave 
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const wsRegions = RegionsPlugin.create();
     const ws = WaveSurfer.create({
       container: containerRef.current,
       waveColor: "#3f3f46",
@@ -28,12 +31,29 @@ export default function WaveformEditor({ url, segments: initialSegments, onSave 
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
+      plugins: [wsRegions],
     });
     wsRef.current = ws;
+    regionsRef.current = wsRegions;
     ws.load(url);
     ws.on("ready", (dur) => {
       setReady(true);
       setDuration(dur || ws.getDuration());
+      (initialSegments || []).forEach(seg => {
+        wsRegions.addRegion({
+          id: seg.id,
+          start: seg.start,
+          end: seg.end,
+          color: "rgba(99, 102, 241, 0.25)",
+          drag: true,
+          resize: true,
+        });
+      });
+    });
+    wsRegions.on("region-updated", region => {
+      setSegments(prev =>
+        prev.map(s => s.id === region.id ? { ...s, start: region.start, end: region.end } : s)
+      );
     });
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
@@ -47,11 +67,19 @@ export default function WaveformEditor({ url, segments: initialSegments, onSave 
     const id = generateId();
     const start = parseFloat((dur * 0.25).toFixed(1));
     const end = parseFloat((dur * 0.5).toFixed(1));
+    regionsRef.current.addRegion({
+      id, start, end,
+      color: "rgba(99,102,241,0.25)",
+      drag: true,
+      resize: true,
+    });
     setSegments(prev => [...prev, { id, start, end, label: "", mood_tags: [] }]);
     setEditingSegId(id);
   }
 
   function removeSegment(id) {
+    const region = regionsRef.current?.getRegions().find(r => r.id === id);
+    region?.remove();
     setSegments(prev => prev.filter(s => s.id !== id));
     if (editingSegId === id) setEditingSegId(null);
   }
