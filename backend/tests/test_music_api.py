@@ -76,3 +76,26 @@ def test_update_music_track_empty_body_returns_400(mock_db, _):
     mock_db.music_tracks.find_one = AsyncMock(return_value=TRACK)
     resp = client.put("/api/music/t1", json={}, headers=AUTH)
     assert resp.status_code == 400
+
+import io
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+@patch("storage.upload_bytes", return_value="https://r2.example/music/new-id.mp3")
+def test_upload_music_track(mock_upload, mock_db, _):
+    mock_db.music_tracks.insert_one = AsyncMock(return_value=MagicMock())
+    mock_db.music_tracks.find_one = AsyncMock(return_value={
+        "_id": "x", "id": "new-id", "name": "My Track", "filename": "beat.mp3",
+        "r2_url": "https://r2.example/music/new-id.mp3", "r2_key": "music/new-id.mp3",
+        "duration": 0.0, "mood_tags": ["calm"], "segments": [], "uploaded_at": "2026-05-09T00:00:00Z"
+    })
+    resp = client.post(
+        "/api/music/upload",
+        data={"name": "My Track", "mood_tags": '["calm"]'},
+        files={"file": ("beat.mp3", io.BytesIO(b"fake-audio"), "audio/mpeg")},
+        headers=AUTH,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "My Track"
+    assert resp.json()["mood_tags"] == ["calm"]
+    assert resp.json()["r2_url"] == "https://r2.example/music/new-id.mp3"

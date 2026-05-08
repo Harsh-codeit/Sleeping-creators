@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Body, Depends, Request, Query
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Body, Depends, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -3667,6 +3667,49 @@ async def delete_video_template(template_id: str):
 
 
 # ── Music library routes ───────────────────────────────────────
+
+@api_router.post("/music/upload")
+async def upload_music_track(
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    mood_tags: str = Form("[]"),
+):
+    import json as _json
+    import storage as _storage
+    allowed = {"audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp3", "audio/ogg"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="File must be mp3, wav, or ogg")
+
+    track_id = str(uuid.uuid4())
+    ext = os.path.splitext(file.filename or "track.mp3")[1] or ".mp3"
+    r2_key = f"music/{track_id}{ext}"
+
+    content = await file.read()
+    r2_url = _storage.upload_bytes(content, r2_key, content_type=file.content_type or "audio/mpeg")
+    if not r2_url:
+        raise HTTPException(status_code=500, detail="Failed to upload to storage")
+
+    try:
+        parsed_tags = _json.loads(mood_tags)
+        if not isinstance(parsed_tags, list):
+            parsed_tags = []
+    except Exception:
+        parsed_tags = []
+
+    doc = {
+        "id": track_id,
+        "name": name.strip(),
+        "filename": file.filename or f"track{ext}",
+        "r2_url": r2_url,
+        "r2_key": r2_key,
+        "duration": 0.0,
+        "mood_tags": parsed_tags,
+        "segments": [],
+        "uploaded_at": now_iso(),
+    }
+    await db.music_tracks.insert_one(doc)
+    return clean_doc(await db.music_tracks.find_one({"id": track_id}))
+
 
 @api_router.get("/music")
 async def list_music_tracks(mood: Optional[str] = None):
