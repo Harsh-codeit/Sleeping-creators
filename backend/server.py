@@ -2969,6 +2969,15 @@ class VideoTemplateCreate(BaseModel):
     # Animation
     cta_animation: str = "slide_up"   # slide_up | fade | pop | slide_in
     cta_delay: float = 3.0            # seconds before button appears
+    # Style
+    font_preset: str = "bold_sans"       # bold_sans | elegant_serif | handwritten | modern_display
+    overlay_style: str = "gradient_wash" # gradient_wash | color_tint | blur | geometric | lower_thirds | none
+    overlay_color: str = "#000000"
+    overlay_opacity: float = 0.5         # 0.0–1.0
+    mood_tags: List[str] = []
+    # CTA button shape
+    cta_button_border_radius: int = 4    # px; 999 = pill
+    cta_button_shadow: bool = False
 
 class VideoTemplateUpdate(BaseModel):
     name: Optional[str] = None
@@ -2989,6 +2998,13 @@ class VideoTemplateUpdate(BaseModel):
     cta_button_y_ratio: Optional[float] = None
     cta_animation: Optional[str] = None
     cta_delay: Optional[float] = None
+    font_preset: Optional[str] = None
+    overlay_style: Optional[str] = None
+    overlay_color: Optional[str] = None
+    overlay_opacity: Optional[float] = None
+    mood_tags: Optional[List[str]] = None
+    cta_button_border_radius: Optional[int] = None
+    cta_button_shadow: Optional[bool] = None
 
 class CarouselPreviewRequest(BaseModel):
     template: str = "dark_card"
