@@ -1016,16 +1016,55 @@ _PLATFORM_TEXT_LIMIT = {
 }
 
 
+def _fit_to_limit(body: str, hashtags: list[str], limit: int) -> str:
+    """
+    Fit text + hashtags within limit.
+    Priority: keep full body → drop hashtags one by one → trim body at sentence end.
+    Never cuts mid-sentence or mid-word.
+    """
+    tags = [f"#{t.lstrip('#')}" for t in hashtags]
+
+    def assemble(b: str, ts: list[str]) -> str:
+        return (f"{b}\n\n{' '.join(ts)}".strip()) if ts else b.strip()
+
+    # 1. Everything fits — ideal path
+    if len(assemble(body, tags)) <= limit:
+        return assemble(body, tags)
+
+    # 2. Drop hashtags one by one from the end until it fits
+    remaining_tags = tags[:]
+    while remaining_tags:
+        remaining_tags.pop()
+        if len(assemble(body, remaining_tags)) <= limit:
+            return assemble(body, remaining_tags)
+
+    # 3. Body alone still too long — trim at a sentence boundary
+    # (sentences end with . ! ? followed by whitespace or end of string)
+    if len(body) > limit:
+        import re
+        # find the last sentence-ending punctuation within the limit
+        chunk = body[:limit]
+        match = re.search(r'[.!?](?=\s|$)', chunk[::-1])  # search reversed
+        if match:
+            cut = limit - match.start()
+            body = body[:cut].rstrip()
+        else:
+            # no sentence boundary — fall back to last complete word
+            body = body[:limit].rsplit(None, 1)[0].rstrip(",:;- ")
+
+    return body.strip()
+
+
 def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> dict:
-    text = post.get("text", "")
+    body = post.get("text", "")
     hashtags = post.get("hashtags", [])
-    if hashtags:
-        tag_str = " ".join(f"#{t.lstrip('#')}" for t in hashtags)
-        text = f"{text}\n\n{tag_str}".strip()
 
     limit = _PLATFORM_TEXT_LIMIT.get(platform)
-    if limit and len(text) > limit:
-        text = text[:limit - 1].rsplit(" ", 1)[0] + "…"
+    if limit:
+        text = _fit_to_limit(body, hashtags, limit)
+    else:
+        tag_str = " ".join(f"#{t.lstrip('#')}" for t in hashtags)
+        text = f"{body}\n\n{tag_str}".strip() if hashtags else body.strip()
 
     base = {"text": text, "uploadIds": upload_ids}
     if platform == "instagram":
