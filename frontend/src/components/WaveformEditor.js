@@ -50,7 +50,7 @@ export default function WaveformEditor({ url, segments: initialSegments, onSave 
         });
       });
     });
-    wsRegions.on("region-updated", region => {
+    wsRegions.on("region-update-end", region => {
       setSegments(prev =>
         prev.map(s => s.id === region.id ? { ...s, start: region.start, end: region.end } : s)
       );
@@ -58,15 +58,22 @@ export default function WaveformEditor({ url, segments: initialSegments, onSave 
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
     ws.on("finish", () => setPlaying(false));
-    return () => ws.destroy();
+    return () => {
+      ws.destroy();
+      setSegments(initialSegments || []);
+      setReady(false);
+      setPlaying(false);
+      setEditingSegId(null);
+    };
   }, [url]);
 
   function addSegment() {
     if (!wsRef.current) return;
-    const dur = duration || wsRef.current.getDuration();
+    const dur = wsRef.current.getDuration();
+    const currentTime = wsRef.current.getCurrentTime();
     const id = generateId();
-    const start = parseFloat((dur * 0.25).toFixed(1));
-    const end = parseFloat((dur * 0.5).toFixed(1));
+    const start = parseFloat(Math.min(currentTime, dur - 5).toFixed(1));
+    const end = parseFloat(Math.min(start + 5, dur).toFixed(1));
     regionsRef.current.addRegion({
       id, start, end,
       color: "rgba(99,102,241,0.25)",
@@ -86,6 +93,13 @@ export default function WaveformEditor({ url, segments: initialSegments, onSave 
 
   function updateSegment(id, patch) {
     setSegments(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+    const region = regionsRef.current?.getRegions().find(r => r.id === id);
+    if (region && (patch.start !== undefined || patch.end !== undefined)) {
+      region.setOptions({
+        start: patch.start !== undefined ? patch.start : region.start,
+        end: patch.end !== undefined ? patch.end : region.end,
+      });
+    }
   }
 
   function toggleSegTag(segId, tag) {

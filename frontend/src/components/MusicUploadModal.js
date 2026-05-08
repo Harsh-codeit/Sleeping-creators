@@ -33,6 +33,7 @@ export default function MusicUploadModal({ onClose, onUploaded }) {
     if (!name.trim()) { setError("Name is required"); return; }
     setUploading(true);
     setError("");
+    setProgress(0);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -40,9 +41,10 @@ export default function MusicUploadModal({ onClose, onUploaded }) {
       fd.append("mood_tags", JSON.stringify(selectedTags));
       const { data } = await axios.post(`${API}/music/upload`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: e => setProgress(Math.round((e.loaded / e.total) * 100)),
+        onUploadProgress: e => { if (e.total) setProgress(Math.round((e.loaded / e.total) * 100)); },
       });
       onUploaded(data);
+      onClose();
     } catch (e) {
       setError(e.response?.data?.detail || "Upload failed");
     } finally {
@@ -125,7 +127,7 @@ export default function MusicUploadModal({ onClose, onUploaded }) {
         )}
 
         <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancel</button>
+          <button onClick={onClose} disabled={uploading} className="px-4 py-2 text-sm text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
           <button
             onClick={upload}
             disabled={uploading || !file}
