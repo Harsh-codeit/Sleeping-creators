@@ -1,7 +1,10 @@
 import hashlib
 import hmac
 import httpx
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 BUNDLE_BASE = "https://api.bundle.social/api/v1"
 
@@ -25,6 +28,20 @@ def _headers(api_key: str) -> dict:
     return {"x-api-key": api_key, "Content-Type": "application/json"}
 
 
+def _raise_for_status(resp: httpx.Response) -> None:
+    if resp.is_error:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text[:500]
+        logger.error("Bundle API %s %s → %s: %s", resp.request.method, resp.request.url, resp.status_code, detail)
+        raise httpx.HTTPStatusError(
+            f"Bundle API error {resp.status_code}: {detail}",
+            request=resp.request,
+            response=resp,
+        )
+
+
 async def _get(api_key: str, path: str, params: dict = None) -> dict:
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
@@ -32,18 +49,19 @@ async def _get(api_key: str, path: str, params: dict = None) -> dict:
             headers=_headers(api_key),
             params=params,
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
         return resp.json()
 
 
 async def _post(api_key: str, path: str, body: dict) -> dict:
+    logger.debug("Bundle POST %s body=%s", path, body)
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             f"{BUNDLE_BASE}{path}",
             headers=_headers(api_key),
             json=body,
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
         return resp.json()
 
 
@@ -60,7 +78,7 @@ async def _upload_multipart(
             files=files,
             data=data,
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
         return resp.json()
 
 
@@ -116,6 +134,23 @@ async def upload_file(
     return result.get("id") or result.get("uploadId") or result.get("_id", "")
 
 
+def _to_bundle_date(iso_str: str) -> str:
+    """Normalize any ISO 8601 string to the UTC format Bundle expects: 2026-05-09T14:00:00.000Z"""
+    if not iso_str:
+        return iso_str
+    from datetime import datetime, timezone
+    iso_str = iso_str.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    except Exception:
+        return iso_str
+
+
 async def create_post(
     api_key: str,
     team_id: str,
@@ -139,13 +174,14 @@ async def create_post(
     body = {
         "teamId": team_id,
         "status": "SCHEDULED",
-        "postDate": post_date,
+        "postDate": _to_bundle_date(post_date),
         "socialAccountTypes": bundle_platforms,
         "data": data,
     }
     if title:
         body["title"] = title
 
+    logger.info("Bundle create_post: platforms=%s postDate=%s uploadIds=%s", bundle_platforms, body["postDate"], upload_ids)
     return await _post(api_key, "/post", body)
 
 
