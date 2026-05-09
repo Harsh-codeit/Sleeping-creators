@@ -532,27 +532,34 @@ export default function VideoStudio({ clientId }) {
           )}
         </div>
 
-        <div className="p-4">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Clip</p>
+        <div className="px-3 py-3">
+          <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest px-1 mb-2">Clip</p>
           {activeTemplate && activeTemplate.video_overridable === false ? (
-            <p className="text-[10px] font-mono text-zinc-600">Clip locked to template</p>
-          ) : (
-            <>
-              <button
-                onClick={() => setClipOpen(true)}
-                className="w-full border border-zinc-800 px-3 py-2 text-[10px] font-mono text-left text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
-              >
-                {clip ? (clip.name || clip.filename || clip.id) : "Choose clip…"}
-              </button>
-              {clip && (
+            <p className="text-[10px] font-mono text-zinc-700 px-1">Locked to template</p>
+          ) : clip ? (
+            <div className="border border-zinc-700 overflow-hidden">
+              {clip.thumbnail_url && (
+                <img src={clip.thumbnail_url} alt={clip.name} className="w-full aspect-video object-cover" />
+              )}
+              <div className="px-2 py-1.5 flex items-center justify-between bg-zinc-900">
+                <p className="text-[10px] font-mono text-zinc-300 truncate flex-1 min-w-0">
+                  {clip.name || clip.filename || clip.id}
+                </p>
                 <button
                   onClick={() => setClip(null)}
-                  className="mt-1 text-[9px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+                  className="text-zinc-600 hover:text-zinc-400 transition-colors ml-2 shrink-0 text-[10px] font-mono"
                 >
-                  Clear
+                  ✕
                 </button>
-              )}
-            </>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setClipOpen(true)}
+              className="w-full border border-zinc-800 px-3 py-2.5 text-[10px] font-mono text-left text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors"
+            >
+              Choose clip…
+            </button>
           )}
         </div>
       </aside>
@@ -650,24 +657,28 @@ export default function VideoStudio({ clientId }) {
 
       {/* ── Right: content + publish ─────────────────────────────── */}
       <aside className="w-72 shrink-0 border-l border-zinc-800 overflow-y-auto">
-        <div className="p-4 space-y-5">
+        <div className="flex flex-col gap-0 divide-y divide-zinc-800">
 
-          {/* Dynamic overrides */}
+          {/* Overrides */}
           {(() => {
             const overridableEls = activeTemplate?.elements?.filter(e => e.overridable && e.override_key) || [];
             if (!overridableEls.length) return null;
             return (
-              <div className="space-y-3">
+              <div className="p-4 flex flex-col gap-3">
+                <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Overrides</p>
                 {overridableEls.map(el => (
-                  <div key={el.id}>
-                    <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
+                  <div key={el.id} className="flex flex-col gap-1">
+                    <label className="text-[10px] font-mono text-zinc-500 flex items-center gap-1.5">
+                      <span className="text-[8px] font-mono text-zinc-700 border border-zinc-800 px-1 py-0.5">
+                        {el.type.replace(/_/g, " ")}
+                      </span>
                       {el.override_key.replace(/_/g, " ")}
                     </label>
                     <input
                       value={overrides[el.override_key] ?? ""}
                       onChange={e => setOverrides(prev => ({ ...prev, [el.override_key]: e.target.value }))}
                       placeholder={el.props?.text || el.override_key}
-                      className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+                      className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-zinc-500"
                     />
                   </div>
                 ))}
@@ -675,36 +686,32 @@ export default function VideoStudio({ clientId }) {
             );
           })()}
 
-          {activeTemplate?.elements?.some(e => e.overridable && e.override_key) && (
-            <div className="border-t border-zinc-800" />
-          )}
-
           {/* Caption */}
-          <div>
-            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Caption</label>
+          <div className="p-4 flex flex-col gap-2">
+            <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Caption</label>
             <textarea
-              rows={3}
+              rows={4}
               value={caption}
               onChange={e => setCaption(e.target.value)}
               placeholder="Write your caption…"
-              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
             />
           </div>
 
           {/* Hashtags */}
-          <div>
-            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Hashtags</label>
+          <div className="p-4 flex flex-col gap-2">
+            <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Hashtags</label>
             <input
               value={hashtags}
               onChange={e => setHashtags(e.target.value)}
-              placeholder="#marketing #business"
-              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+              placeholder="#marketing #brand"
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-zinc-500"
             />
           </div>
 
           {/* Platforms */}
-          <div>
-            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Platforms</label>
+          <div className="p-4 flex flex-col gap-2">
+            <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Platforms</label>
             <div className="flex flex-wrap gap-1.5">
               {PLATFORMS.map(p => (
                 <button
@@ -713,7 +720,7 @@ export default function VideoStudio({ clientId }) {
                   className={`px-2.5 py-1 text-[10px] font-mono border transition-colors ${
                     platforms.includes(p)
                       ? "bg-white text-black border-white"
-                      : "border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                      : "border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600"
                   }`}
                 >
                   {p}
@@ -723,33 +730,38 @@ export default function VideoStudio({ clientId }) {
           </div>
 
           {/* Schedule */}
-          <div>
-            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
-              Schedule <span className="normal-case text-zinc-600">(optional)</span>
+          <div className="p-4 flex flex-col gap-2">
+            <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">
+              Schedule <span className="normal-case text-zinc-700">(optional)</span>
             </label>
             <input
               type="datetime-local"
               value={scheduleAt}
               onChange={e => setScheduleAt(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-zinc-500"
             />
           </div>
 
-          <button
-            onClick={handleRender}
-            disabled={rendering || (!clip && !(activeTemplate && activeTemplate.video_overridable === false))}
-            className="w-full py-2.5 bg-zinc-800 text-white text-sm font-mono font-semibold border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
-          >
-            {rendering ? "Rendering…" : "Render & Download"}
-          </button>
+          {/* Actions */}
+          <div className="p-4 flex flex-col gap-2">
+            <button
+              onClick={handleRender}
+              disabled={rendering || (!clip && !(activeTemplate && activeTemplate.video_overridable === false))}
+              data-testid="studio-render-btn"
+              className="w-full py-2 border border-zinc-700 text-white text-xs font-mono font-semibold hover:bg-zinc-800 disabled:opacity-30 transition-colors"
+            >
+              {rendering ? "Rendering…" : "Render & Download"}
+            </button>
+            <button
+              onClick={handlePublish}
+              disabled={publishing}
+              data-testid="studio-publish-btn"
+              className="w-full py-2.5 bg-white text-black text-xs font-mono font-bold hover:bg-zinc-200 disabled:opacity-30 transition-colors"
+            >
+              {publishing ? "Publishing…" : scheduleAt ? "Schedule Video" : "Publish Now"}
+            </button>
+          </div>
 
-          <button
-            onClick={handlePublish}
-            disabled={publishing}
-            className="w-full py-2.5 bg-white text-black text-sm font-mono font-bold hover:bg-zinc-200 disabled:opacity-40 transition-colors"
-          >
-            {publishing ? "Publishing…" : scheduleAt ? "Schedule Video" : "Publish Now"}
-          </button>
         </div>
       </aside>
 
