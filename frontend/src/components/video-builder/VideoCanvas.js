@@ -55,7 +55,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     const onMove = (ev) => {
       const dx = ev.clientX - startX;
       const newWidth = Math.max(0.08 * containerW, initWidthPx + dx);
-      onUpdateProps(el.id, { width_ratio: newWidth / containerW });
+      onUpdateProps(el.id, { width_ratio: Math.round((newWidth / containerW) * 100) / 100 });
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
@@ -83,6 +83,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     outline: selected ? "2px solid #ffffff" : "1px dashed rgba(255,255,255,0.15)",
     userSelect: "none",
     zIndex: el.z_index + 1,
+    opacity: p.opacity ?? 1,
   };
 
   const textBaseStyle = {
@@ -90,6 +91,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     wordBreak: "break-word",
     lineHeight: p.line_height || 1.4,
     letterSpacing: p.letter_spacing ? `${p.letter_spacing}px` : "normal",
+    textTransform: p.text_transform || "none",
     font: fontFamily,
     fontSize,
   };

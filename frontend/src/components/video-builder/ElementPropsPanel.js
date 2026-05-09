@@ -3,6 +3,7 @@ const ANIMS_IN = ["none", "fade", "slide_up", "slide_in", "pop"];
 const ANIMS_OUT = ["none", "fade"];
 const BG_SHAPES = ["none", "pill", "box"];
 const ALIGNS = ["left", "center", "right"];
+const TRANSFORMS = ["none", "uppercase", "capitalize", "lowercase"];
 
 function Field({ label, children }) {
   return (
@@ -11,6 +12,10 @@ function Field({ label, children }) {
       {children}
     </div>
   );
+}
+
+function Row({ children }) {
+  return <div className="grid grid-cols-2 gap-2">{children}</div>;
 }
 
 function Input({ value, onChange, type = "text", min, max, step, placeholder, className = "" }) {
@@ -66,27 +71,63 @@ function ColorInput({ label, value, onChange }) {
   );
 }
 
+function SectionLabel({ children }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span className="text-[9px] font-semibold text-zinc-600 tracking-widest uppercase whitespace-nowrap">{children}</span>
+      <div className="flex-1 h-px bg-zinc-800" />
+    </div>
+  );
+}
+
 function TextTypeProps({ props, onChange }) {
   return (
     <>
-      <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
-      <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
-      <div className="flex gap-2">
+      <Field label="Text">
+        <Input value={props.text} onChange={v => onChange({ text: v })} />
+      </Field>
+
+      <Row>
+        <Field label="Font">
+          <Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} />
+        </Field>
+        <Field label="Align">
+          <Select value={props.align} onChange={v => onChange({ align: v })} options={ALIGNS} />
+        </Field>
+      </Row>
+
+      <Row>
         <Field label="Size (px)">
           <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={6} max={200} step={1} />
         </Field>
         <Field label="Line Height">
           <Input type="number" value={props.line_height} onChange={v => onChange({ line_height: v })} min={0.5} max={4} step={0.1} />
         </Field>
-      </div>
-      <Field label="Letter Spacing (px)">
-        <Input type="number" value={props.letter_spacing} onChange={v => onChange({ letter_spacing: v })} min={-10} max={40} step={0.5} />
+      </Row>
+
+      <Row>
+        <Field label="Letter Spacing">
+          <Input type="number" value={props.letter_spacing} onChange={v => onChange({ letter_spacing: v })} min={-10} max={40} step={0.5} />
+        </Field>
+        <Field label="Transform">
+          <Select value={props.text_transform || "none"} onChange={v => onChange({ text_transform: v })} options={TRANSFORMS} />
+        </Field>
+      </Row>
+
+      <Row>
+        <Field label="Width Ratio">
+          <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.05} max={1} step={0.01} />
+        </Field>
+        <Field label="Opacity">
+          <Input type="number" value={props.opacity ?? 1} onChange={v => onChange({ opacity: v })} min={0} max={1} step={0.05} />
+        </Field>
+      </Row>
+
+      <ColorInput label="Text Color" value={props.color} onChange={v => onChange({ color: v })} />
+
+      <Field label="Background">
+        <Select value={props.bg_shape} onChange={v => onChange({ bg_shape: v })} options={BG_SHAPES} />
       </Field>
-      <Field label="Width Ratio">
-        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.05} max={1} step={0.01} />
-      </Field>
-      <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
-      <Field label="Background"><Select value={props.bg_shape} onChange={v => onChange({ bg_shape: v })} options={BG_SHAPES} /></Field>
       {props.bg_shape !== "none" && (
         <>
           <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
@@ -95,7 +136,7 @@ function TextTypeProps({ props, onChange }) {
           </Field>
         </>
       )}
-      <Field label="Align"><Select value={props.align} onChange={v => onChange({ align: v })} options={ALIGNS} /></Field>
+
       <Toggle label="Shadow" checked={props.shadow} onChange={v => onChange({ shadow: v })} />
     </>
   );
@@ -104,21 +145,35 @@ function TextTypeProps({ props, onChange }) {
 function CtaButtonProps({ props, onChange }) {
   return (
     <>
-      <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
-      <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
-      <Field label="Size (px)">
-        <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={6} max={120} step={1} />
+      <Field label="Text">
+        <Input value={props.text} onChange={v => onChange({ text: v })} />
       </Field>
-      <Field label="Width Ratio">
-        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.05} max={1} step={0.01} />
-      </Field>
+
+      <Row>
+        <Field label="Font">
+          <Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} />
+        </Field>
+        <Field label="Size (px)">
+          <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={6} max={120} step={1} />
+        </Field>
+      </Row>
+
+      <Row>
+        <Field label="Width Ratio">
+          <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.05} max={1} step={0.01} />
+        </Field>
+        <Field label="Border Radius">
+          <Input type="number" value={props.border_radius} onChange={v => onChange({ border_radius: v })} min={0} max={999} />
+        </Field>
+      </Row>
+
       <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
       <ColorInput label="Text Color" value={props.text_color} onChange={v => onChange({ text_color: v })} />
-      <Field label="Border Radius">
-        <Input type="number" value={props.border_radius} onChange={v => onChange({ border_radius: v })} min={0} max={999} />
-      </Field>
-      <Toggle label="Arrow →" checked={props.arrow} onChange={v => onChange({ arrow: v })} />
-      <Toggle label="Gradient" checked={props.gradient} onChange={v => onChange({ gradient: v })} />
+
+      <div className="flex gap-4">
+        <Toggle label="Arrow →" checked={props.arrow} onChange={v => onChange({ arrow: v })} />
+        <Toggle label="Gradient" checked={props.gradient} onChange={v => onChange({ gradient: v })} />
+      </div>
       {props.gradient && (
         <>
           <ColorInput label="Gradient From" value={props.gradient_from} onChange={v => onChange({ gradient_from: v })} />
@@ -132,8 +187,10 @@ function CtaButtonProps({ props, onChange }) {
 function LinkInBioProps({ props, onChange }) {
   return (
     <>
-      <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
-      <Field label="Handle"><Input value={props.handle} onChange={v => onChange({ handle: v })} /></Field>
+      <Row>
+        <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
+        <Field label="Handle"><Input value={props.handle} onChange={v => onChange({ handle: v })} /></Field>
+      </Row>
       <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
       <ColorInput label="Text Color" value={props.text_color} onChange={v => onChange({ text_color: v })} />
     </>
@@ -143,14 +200,20 @@ function LinkInBioProps({ props, onChange }) {
 function CountdownProps({ props, onChange }) {
   return (
     <>
-      <Field label="End At (seconds)">
-        <Input type="number" value={props.end_at} onChange={v => onChange({ end_at: v })} min={0} step={1} />
-      </Field>
-      <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
-      <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
-      <Field label="Size (px)">
-        <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={12} max={200} step={2} />
-      </Field>
+      <Row>
+        <Field label="End At (s)">
+          <Input type="number" value={props.end_at} onChange={v => onChange({ end_at: v })} min={0} step={1} />
+        </Field>
+        <Field label="Size (px)">
+          <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={12} max={200} step={2} />
+        </Field>
+      </Row>
+      <Row>
+        <Field label="Font">
+          <Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} />
+        </Field>
+        <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
+      </Row>
     </>
   );
 }
@@ -159,14 +222,16 @@ function MediaProps({ props, onChange }) {
   return (
     <>
       <Field label="R2 URL"><Input value={props.r2_url} onChange={v => onChange({ r2_url: v })} placeholder="https://..." /></Field>
+      <Row>
+        <Field label="Width Ratio">
+          <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
+        </Field>
+        <Field label="Height Ratio">
+          <Input type="number" value={props.height_ratio} onChange={v => onChange({ height_ratio: v })} min={0.01} max={1} step={0.01} />
+        </Field>
+      </Row>
       <Field label="Opacity">
         <Input type="number" value={props.opacity} onChange={v => onChange({ opacity: v })} min={0} max={1} step={0.05} />
-      </Field>
-      <Field label="Width Ratio">
-        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
-      </Field>
-      <Field label="Height Ratio">
-        <Input type="number" value={props.height_ratio} onChange={v => onChange({ height_ratio: v })} min={0.01} max={1} step={0.01} />
       </Field>
     </>
   );
@@ -176,21 +241,25 @@ function RectCircleProps({ props, onChange }) {
   return (
     <>
       <ColorInput label="Fill Color" value={props.fill_color} onChange={v => onChange({ fill_color: v })} />
-      <Field label="Fill Opacity">
-        <Input type="number" value={props.fill_opacity} onChange={v => onChange({ fill_opacity: v })} min={0} max={1} step={0.05} />
-      </Field>
-      <Field label="Border Width">
-        <Input type="number" value={props.border_width} onChange={v => onChange({ border_width: v })} min={0} max={20} />
-      </Field>
+      <Row>
+        <Field label="Fill Opacity">
+          <Input type="number" value={props.fill_opacity} onChange={v => onChange({ fill_opacity: v })} min={0} max={1} step={0.05} />
+        </Field>
+        <Field label="Border Width">
+          <Input type="number" value={props.border_width} onChange={v => onChange({ border_width: v })} min={0} max={20} />
+        </Field>
+      </Row>
       {props.border_width > 0 && (
         <ColorInput label="Border Color" value={props.border_color} onChange={v => onChange({ border_color: v })} />
       )}
-      <Field label="Width Ratio">
-        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
-      </Field>
-      <Field label="Height Ratio">
-        <Input type="number" value={props.height_ratio} onChange={v => onChange({ height_ratio: v })} min={0.01} max={1} step={0.01} />
-      </Field>
+      <Row>
+        <Field label="Width Ratio">
+          <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
+        </Field>
+        <Field label="Height Ratio">
+          <Input type="number" value={props.height_ratio} onChange={v => onChange({ height_ratio: v })} min={0.01} max={1} step={0.01} />
+        </Field>
+      </Row>
     </>
   );
 }
@@ -199,12 +268,14 @@ function LineProps({ props, onChange }) {
   return (
     <>
       <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
-      <Field label="Thickness">
-        <Input type="number" value={props.thickness} onChange={v => onChange({ thickness: v })} min={1} max={20} />
-      </Field>
-      <Field label="Width Ratio">
-        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
-      </Field>
+      <Row>
+        <Field label="Thickness">
+          <Input type="number" value={props.thickness} onChange={v => onChange({ thickness: v })} min={1} max={20} />
+        </Field>
+        <Field label="Width Ratio">
+          <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
+        </Field>
+      </Row>
     </>
   );
 }
@@ -235,10 +306,10 @@ export default function ElementPropsPanel({ element, onUpdateElement, onUpdateEl
   const update = (patch) => onUpdateElement(element.id, patch);
 
   return (
-    <div className="w-64 shrink-0 border-l border-zinc-800 bg-zinc-950 overflow-y-auto p-3 flex flex-col gap-3">
-      <p className="text-[10px] font-semibold text-zinc-500 tracking-widest uppercase">Properties</p>
+    <div className="w-64 shrink-0 border-l border-zinc-800 bg-zinc-950 overflow-y-auto p-3 flex flex-col gap-2.5">
 
-      <div className="flex gap-2">
+      <SectionLabel>Position</SectionLabel>
+      <Row>
         <Field label="X">
           <Input type="number" value={element.x_ratio ?? ''} step={0.01} min={0} max={1}
             onChange={v => update({ x_ratio: v })} />
@@ -247,9 +318,10 @@ export default function ElementPropsPanel({ element, onUpdateElement, onUpdateEl
           <Input type="number" value={element.y_ratio ?? ''} step={0.01} min={0} max={1}
             onChange={v => update({ y_ratio: v })} />
         </Field>
-      </div>
+      </Row>
 
-      <div className="flex gap-2">
+      <SectionLabel>Timing</SectionLabel>
+      <Row>
         <Field label="Start (s)">
           <Input type="number" value={element.start_at} step={0.5} min={0}
             onChange={v => update({ start_at: v })} />
@@ -260,29 +332,30 @@ export default function ElementPropsPanel({ element, onUpdateElement, onUpdateEl
             placeholder="∞" step={0.5} min={0.1}
             onChange={v => update({ duration: v === "" || isNaN(v) ? null : v })} />
         </Field>
-      </div>
+      </Row>
 
-      <Field label="Anim In">
-        <Select value={element.animation_in} onChange={v => update({ animation_in: v })} options={ANIMS_IN} />
-      </Field>
-      <Field label="Anim Out">
-        <Select value={element.animation_out} onChange={v => update({ animation_out: v })} options={ANIMS_OUT} />
-      </Field>
+      <SectionLabel>Animation</SectionLabel>
+      <Row>
+        <Field label="In">
+          <Select value={element.animation_in} onChange={v => update({ animation_in: v })} options={ANIMS_IN} />
+        </Field>
+        <Field label="Out">
+          <Select value={element.animation_out} onChange={v => update({ animation_out: v })} options={ANIMS_OUT} />
+        </Field>
+      </Row>
 
-      <div className="border-t border-zinc-800 pt-3 flex flex-col gap-2">
-        <Toggle label="Overridable per post"
-          checked={element.overridable}
-          onChange={v => update({ overridable: v })} />
-        {element.overridable && (
-          <Field label="Override Key">
-            <Input value={element.override_key || ""} onChange={v => update({ override_key: v || null })} />
-          </Field>
-        )}
-      </div>
+      <SectionLabel>Behavior</SectionLabel>
+      <Toggle label="Overridable per post"
+        checked={element.overridable}
+        onChange={v => update({ overridable: v })} />
+      {element.overridable && (
+        <Field label="Override Key">
+          <Input value={element.override_key || ""} onChange={v => update({ override_key: v || null })} />
+        </Field>
+      )}
 
-      <div className="border-t border-zinc-800 pt-3 flex flex-col gap-3">
-        <TypePropsSection el={element} onPropsChange={onUpdateElementProps} />
-      </div>
+      <SectionLabel>Style</SectionLabel>
+      <TypePropsSection el={element} onPropsChange={onUpdateElementProps} />
     </div>
   );
 }
