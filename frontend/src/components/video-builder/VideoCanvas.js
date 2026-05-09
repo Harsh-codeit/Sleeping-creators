@@ -1,0 +1,224 @@
+import { useRef, useCallback } from "react";
+import { Shuffle, Trash2, Copy, ChevronUp, ChevronDown } from "lucide-react";
+
+const ASPECT_DIMS = { "9:16": [9, 16], "1:1": [1, 1], "16:9": [16, 9], "4:5": [4, 5] };
+const SIZE_PX = { S: 12, M: 15, L: 20, XL: 28 };
+
+function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag }) {
+  const handleMouseDown = useCallback((e) => {
+    e.stopPropagation();
+    onSelect(el.id);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startXR = el.x_ratio;
+    const startYR = el.y_ratio;
+    const onMove = (ev) => {
+      const dx = (ev.clientX - startX) / containerW;
+      const dy = (ev.clientY - startY) / containerH;
+      onDrag(el.id, {
+        x_ratio: Math.min(Math.max(startXR + dx, 0), 1),
+        y_ratio: Math.min(Math.max(startYR + dy, 0), 1),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [el, containerW, containerH, onSelect, onDrag]);
+
+  const px = el.x_ratio * containerW;
+  const py = el.y_ratio * containerH;
+  const p = el.props || {};
+  const fontSize = SIZE_PX[p.size] || 15;
+
+  const style = {
+    position: "absolute",
+    left: px,
+    top: py,
+    transform: "translate(-50%, -50%)",
+    cursor: "grab",
+    outline: selected ? "2px solid #f59e0b" : "1px dashed transparent",
+    borderRadius: 4,
+    userSelect: "none",
+    zIndex: el.z_index + 1,
+  };
+
+  let content = null;
+
+  if (["text_overlay", "lower_third", "cta_text"].includes(el.type)) {
+    const hasBg = p.bg_shape && p.bg_shape !== "none";
+    const bg = hasBg
+      ? {
+          background: `${p.bg_color || "#000"}${Math.round((p.bg_opacity ?? 0.5) * 255).toString(16).padStart(2, "0")}`,
+          borderRadius: p.bg_shape === "pill" ? 999 : 4,
+          padding: "3px 8px",
+        }
+      : {};
+    content = (
+      <span style={{ color: p.color || "#fff", fontSize, fontWeight: "bold", ...bg }}>
+        {p.text || el.type}
+      </span>
+    );
+  } else if (el.type === "cta_button") {
+    content = (
+      <span style={{
+        background: p.bg_color || "#fff",
+        color: p.text_color || "#000",
+        borderRadius: p.border_radius ?? 999,
+        padding: "4px 14px",
+        fontSize,
+        fontWeight: "bold",
+        display: "inline-block",
+      }}>
+        {p.text || "Button"}{p.arrow ? " →" : ""}
+      </span>
+    );
+  } else if (el.type === "link_in_bio") {
+    content = (
+      <span style={{
+        background: p.bg_color || "#000",
+        color: p.text_color || "#fff",
+        borderRadius: 6,
+        padding: "3px 10px",
+        fontSize: SIZE_PX.S,
+        fontWeight: "bold",
+      }}>
+        {p.text || "Link in bio"} ↗ {p.handle || ""}
+      </span>
+    );
+  } else if (el.type === "countdown") {
+    const val = p.end_at || 10;
+    const m = String(Math.floor(val / 60)).padStart(2, "0");
+    const s = String(Math.floor(val % 60)).padStart(2, "0");
+    content = (
+      <span style={{ color: p.color || "#fff", fontSize: SIZE_PX[p.size] || 28, fontWeight: "bold" }}>
+        {m}:{s}
+      </span>
+    );
+  } else if (["logo", "watermark"].includes(el.type)) {
+    const w = (p.width_ratio || 0.15) * containerW;
+    const h = (p.height_ratio || 0.08) * containerH;
+    content = p.r2_url
+      ? <img src={p.r2_url} style={{ width: w, height: h, objectFit: "contain", opacity: p.opacity ?? 1 }} alt="" />
+      : (
+        <div style={{ width: w, height: h, border: "1px dashed #666", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: "#666", fontSize: 10 }}>{el.type}</span>
+        </div>
+      );
+  } else if (el.type === "rectangle") {
+    const w = (p.width_ratio || 0.8) * containerW;
+    const h = (p.height_ratio || 0.1) * containerH;
+    content = (
+      <div style={{
+        width: w,
+        height: h,
+        background: `${p.fill_color || "#000"}${Math.round((p.fill_opacity ?? 0.5) * 255).toString(16).padStart(2, "0")}`,
+        border: p.border_width ? `${p.border_width}px solid ${p.border_color || "#fff"}` : "none",
+      }} />
+    );
+  } else if (el.type === "circle") {
+    const w = (p.width_ratio || 0.1) * containerW;
+    const h = (p.height_ratio || 0.1) * containerH;
+    content = (
+      <div style={{
+        width: w,
+        height: h,
+        borderRadius: "50%",
+        background: `${p.fill_color || "#fff"}${Math.round((p.fill_opacity ?? 0.8) * 255).toString(16).padStart(2, "0")}`,
+        border: p.border_width ? `${p.border_width}px solid ${p.border_color || "#fff"}` : "none",
+      }} />
+    );
+  } else if (el.type === "line") {
+    const w = (p.width_ratio || 0.8) * containerW;
+    content = (
+      <div style={{ width: w, height: Math.max(p.thickness || 2, 1), background: p.color || "#fff" }} />
+    );
+  }
+
+  return (
+    <div style={style} onMouseDown={handleMouseDown}>
+      {content}
+    </div>
+  );
+}
+
+export default function VideoCanvas({
+  elements, selectedElementId, aspectRatio, picsumSeed,
+  onSelectElement, onUpdateElement, onDuplicateElement, onDeleteElement,
+  onMoveElementZ, onShuffle,
+}) {
+  const containerRef = useRef(null);
+  const [aw, ah] = ASPECT_DIMS[aspectRatio] || [9, 16];
+  const CANVAS_H = 520;
+  const CANVAS_W = Math.round((CANVAS_H * aw) / ah);
+
+  const handleDrag = useCallback((id, patch) => {
+    onUpdateElement(id, patch);
+  }, [onUpdateElement]);
+
+  const selectedEl = elements.find(e => e.id === selectedElementId);
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-start bg-zinc-900 overflow-auto p-4 gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onShuffle}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
+        >
+          <Shuffle size={12} /> Shuffle
+        </button>
+        {selectedEl && (
+          <>
+            <button onClick={() => onDuplicateElement(selectedEl.id)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs">
+              <Copy size={12} />
+            </button>
+            <button onClick={() => onMoveElementZ(selectedEl.id, 1)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs" title="Bring forward">
+              <ChevronUp size={12} />
+            </button>
+            <button onClick={() => onMoveElementZ(selectedEl.id, -1)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs" title="Send back">
+              <ChevronDown size={12} />
+            </button>
+            <button onClick={() => onDeleteElement(selectedEl.id)}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-red-800 bg-red-950 hover:bg-red-900 text-red-400 text-xs">
+              <Trash2 size={12} />
+            </button>
+          </>
+        )}
+      </div>
+
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden rounded-lg shadow-2xl shrink-0"
+        style={{ width: CANVAS_W, height: CANVAS_H }}
+        onClick={() => onSelectElement(null)}
+      >
+        <img
+          src={`https://picsum.photos/seed/${picsumSeed}/${CANVAS_W * 2}/${CANVAS_H * 2}`}
+          className="absolute inset-0 w-full h-full object-cover"
+          alt="preview background"
+          draggable={false}
+        />
+        {[...elements]
+          .sort((a, b) => a.z_index - b.z_index)
+          .map(el => (
+            <ElementOverlay
+              key={el.id}
+              el={el}
+              selected={el.id === selectedElementId}
+              containerW={CANVAS_W}
+              containerH={CANVAS_H}
+              onSelect={onSelectElement}
+              onDrag={handleDrag}
+            />
+          ))}
+      </div>
+
+      <p className="text-[10px] text-zinc-600">Click element to select · Drag to reposition</p>
+    </div>
+  );
+}

@@ -1,0 +1,260 @@
+const FONTS = ["bold_sans", "elegant_serif", "handwritten", "modern_display"];
+const SIZES = ["S", "M", "L", "XL"];
+const ANIMS_IN = ["none", "fade", "slide_up", "slide_in", "pop"];
+const ANIMS_OUT = ["none", "fade"];
+const BG_SHAPES = ["none", "pill", "box"];
+const ALIGNS = ["left", "center", "right"];
+
+function Field({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Input({ value, onChange, type = "text", min, max, step, placeholder, className = "" }) {
+  return (
+    <input
+      type={type} value={value ?? ""} min={min} max={max} step={step} placeholder={placeholder}
+      onChange={e => onChange(type === "number" ? parseFloat(e.target.value) : e.target.value)}
+      className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white w-full focus:outline-none focus:border-zinc-500 ${className}`}
+    />
+  );
+}
+
+function Select({ value, onChange, options }) {
+  return (
+    <select
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value)}
+      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white w-full focus:outline-none"
+    >
+      {options.map(o => (
+        <option key={o} value={o}>{o}</option>
+      ))}
+    </select>
+  );
+}
+
+function Toggle({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)}
+        className="w-3.5 h-3.5 accent-amber-400" />
+      <span className="text-xs text-zinc-400">{label}</span>
+    </label>
+  );
+}
+
+function ColorInput({ label, value, onChange }) {
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <input type="color" value={value || "#ffffff"} onChange={e => onChange(e.target.value)}
+          className="w-8 h-7 rounded border border-zinc-700 bg-zinc-800 cursor-pointer p-0" />
+        <Input value={value} onChange={onChange} />
+      </div>
+    </Field>
+  );
+}
+
+function TextTypeProps({ props, onChange }) {
+  return (
+    <>
+      <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
+      <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
+      <Field label="Size"><Select value={props.size} onChange={v => onChange({ size: v })} options={SIZES} /></Field>
+      <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
+      <Field label="Background"><Select value={props.bg_shape} onChange={v => onChange({ bg_shape: v })} options={BG_SHAPES} /></Field>
+      {props.bg_shape !== "none" && (
+        <>
+          <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
+          <Field label="BG Opacity">
+            <Input type="number" value={props.bg_opacity} onChange={v => onChange({ bg_opacity: v })} min={0} max={1} step={0.1} />
+          </Field>
+        </>
+      )}
+      <Field label="Align"><Select value={props.align} onChange={v => onChange({ align: v })} options={ALIGNS} /></Field>
+      <Toggle label="Shadow" checked={props.shadow} onChange={v => onChange({ shadow: v })} />
+    </>
+  );
+}
+
+function CtaButtonProps({ props, onChange }) {
+  return (
+    <>
+      <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
+      <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
+      <ColorInput label="Text Color" value={props.text_color} onChange={v => onChange({ text_color: v })} />
+      <Field label="Border Radius">
+        <Input type="number" value={props.border_radius} onChange={v => onChange({ border_radius: v })} min={0} max={999} />
+      </Field>
+      <Toggle label="Arrow →" checked={props.arrow} onChange={v => onChange({ arrow: v })} />
+      <Toggle label="Gradient" checked={props.gradient} onChange={v => onChange({ gradient: v })} />
+      {props.gradient && (
+        <>
+          <ColorInput label="Gradient From" value={props.gradient_from} onChange={v => onChange({ gradient_from: v })} />
+          <ColorInput label="Gradient To" value={props.gradient_to} onChange={v => onChange({ gradient_to: v })} />
+        </>
+      )}
+    </>
+  );
+}
+
+function LinkInBioProps({ props, onChange }) {
+  return (
+    <>
+      <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
+      <Field label="Handle"><Input value={props.handle} onChange={v => onChange({ handle: v })} /></Field>
+      <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
+      <ColorInput label="Text Color" value={props.text_color} onChange={v => onChange({ text_color: v })} />
+    </>
+  );
+}
+
+function CountdownProps({ props, onChange }) {
+  return (
+    <>
+      <Field label="End At (seconds)">
+        <Input type="number" value={props.end_at} onChange={v => onChange({ end_at: v })} min={0} step={1} />
+      </Field>
+      <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
+      <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
+      <Field label="Size"><Select value={props.size} onChange={v => onChange({ size: v })} options={SIZES} /></Field>
+    </>
+  );
+}
+
+function MediaProps({ props, onChange }) {
+  return (
+    <>
+      <Field label="R2 URL"><Input value={props.r2_url} onChange={v => onChange({ r2_url: v })} placeholder="https://..." /></Field>
+      <Field label="Opacity">
+        <Input type="number" value={props.opacity} onChange={v => onChange({ opacity: v })} min={0} max={1} step={0.05} />
+      </Field>
+      <Field label="Width Ratio">
+        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
+      </Field>
+      <Field label="Height Ratio">
+        <Input type="number" value={props.height_ratio} onChange={v => onChange({ height_ratio: v })} min={0.01} max={1} step={0.01} />
+      </Field>
+    </>
+  );
+}
+
+function RectCircleProps({ props, onChange }) {
+  return (
+    <>
+      <ColorInput label="Fill Color" value={props.fill_color} onChange={v => onChange({ fill_color: v })} />
+      <Field label="Fill Opacity">
+        <Input type="number" value={props.fill_opacity} onChange={v => onChange({ fill_opacity: v })} min={0} max={1} step={0.05} />
+      </Field>
+      <Field label="Border Width">
+        <Input type="number" value={props.border_width} onChange={v => onChange({ border_width: v })} min={0} max={20} />
+      </Field>
+      {props.border_width > 0 && (
+        <ColorInput label="Border Color" value={props.border_color} onChange={v => onChange({ border_color: v })} />
+      )}
+      <Field label="Width Ratio">
+        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
+      </Field>
+      <Field label="Height Ratio">
+        <Input type="number" value={props.height_ratio} onChange={v => onChange({ height_ratio: v })} min={0.01} max={1} step={0.01} />
+      </Field>
+    </>
+  );
+}
+
+function LineProps({ props, onChange }) {
+  return (
+    <>
+      <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
+      <Field label="Thickness">
+        <Input type="number" value={props.thickness} onChange={v => onChange({ thickness: v })} min={1} max={20} />
+      </Field>
+      <Field label="Width Ratio">
+        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.01} max={1} step={0.01} />
+      </Field>
+    </>
+  );
+}
+
+function TypePropsSection({ el, onPropsChange }) {
+  const p = el.props || {};
+  const onChange = (patch) => onPropsChange(el.id, patch);
+  if (["text_overlay", "lower_third", "cta_text"].includes(el.type))
+    return <TextTypeProps props={p} onChange={onChange} />;
+  if (el.type === "cta_button") return <CtaButtonProps props={p} onChange={onChange} />;
+  if (el.type === "link_in_bio") return <LinkInBioProps props={p} onChange={onChange} />;
+  if (el.type === "countdown") return <CountdownProps props={p} onChange={onChange} />;
+  if (["logo", "watermark"].includes(el.type)) return <MediaProps props={p} onChange={onChange} />;
+  if (["rectangle", "circle"].includes(el.type)) return <RectCircleProps props={p} onChange={onChange} />;
+  if (el.type === "line") return <LineProps props={p} onChange={onChange} />;
+  return null;
+}
+
+export default function ElementPropsPanel({ element, onUpdateElement, onUpdateElementProps }) {
+  if (!element) {
+    return (
+      <div className="w-64 shrink-0 border-l border-zinc-800 bg-zinc-950 flex items-center justify-center">
+        <p className="text-xs text-zinc-600 text-center px-4">Click an element<br />to edit its properties</p>
+      </div>
+    );
+  }
+
+  const update = (patch) => onUpdateElement(element.id, patch);
+
+  return (
+    <div className="w-64 shrink-0 border-l border-zinc-800 bg-zinc-950 overflow-y-auto p-3 flex flex-col gap-3">
+      <p className="text-[10px] font-semibold text-zinc-500 tracking-widest uppercase">Properties</p>
+
+      <div className="flex gap-2">
+        <Field label="X">
+          <Input type="number" value={element.x_ratio?.toFixed(2)} step={0.01} min={0} max={1}
+            onChange={v => update({ x_ratio: v })} />
+        </Field>
+        <Field label="Y">
+          <Input type="number" value={element.y_ratio?.toFixed(2)} step={0.01} min={0} max={1}
+            onChange={v => update({ y_ratio: v })} />
+        </Field>
+      </div>
+
+      <div className="flex gap-2">
+        <Field label="Start (s)">
+          <Input type="number" value={element.start_at} step={0.5} min={0}
+            onChange={v => update({ start_at: v })} />
+        </Field>
+        <Field label="Duration">
+          <Input type="number"
+            value={element.duration === null || element.duration === undefined ? "" : element.duration}
+            placeholder="∞" step={0.5} min={0.1}
+            onChange={v => update({ duration: v === "" || isNaN(v) ? null : v })} />
+        </Field>
+      </div>
+
+      <Field label="Anim In">
+        <Select value={element.animation_in} onChange={v => update({ animation_in: v })} options={ANIMS_IN} />
+      </Field>
+      <Field label="Anim Out">
+        <Select value={element.animation_out} onChange={v => update({ animation_out: v })} options={ANIMS_OUT} />
+      </Field>
+
+      <div className="border-t border-zinc-800 pt-3 flex flex-col gap-2">
+        <Toggle label="Overridable per post"
+          checked={element.overridable}
+          onChange={v => update({ overridable: v })} />
+        {element.overridable && (
+          <Field label="Override Key">
+            <Input value={element.override_key || ""} onChange={v => update({ override_key: v || null })} />
+          </Field>
+        )}
+      </div>
+
+      <div className="border-t border-zinc-800 pt-3 flex flex-col gap-3">
+        <TypePropsSection el={element} onPropsChange={onUpdateElementProps} />
+      </div>
+    </div>
+  );
+}
