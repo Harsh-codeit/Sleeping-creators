@@ -4,7 +4,7 @@ const STYLES = [
   { value: "color_tint",    label: "Tint",         preview: { background: "rgba(0,0,0,0.50)" } },
   { value: "lower_thirds",  label: "Lower Thirds", preview: { background: "linear-gradient(to top, rgba(0,0,0,0.80) 35%, transparent 35%)" } },
   { value: "geometric",     label: "Geometric",    preview: { background: "repeating-linear-gradient(45deg, rgba(0,0,0,0.25) 0px, rgba(0,0,0,0.25) 8px, transparent 8px, transparent 16px)" } },
-  { value: "blur",          label: "Blur",         preview: { background: "rgba(255,255,255,0.08)", backdropFilter: "blur(4px)" } },
+  { value: "blur",          label: "Blur",         preview: { background: "rgba(200,200,200,0.18)", filter: "blur(3px)" } },
 ];
 
 export function OverlayPicker({ value, onChange }) {
