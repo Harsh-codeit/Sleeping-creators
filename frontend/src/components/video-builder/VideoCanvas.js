@@ -1,32 +1,43 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { Shuffle, Trash2, Copy, ChevronUp, ChevronDown } from "lucide-react";
 
 const ASPECT_DIMS = { "9:16": [9, 16], "1:1": [1, 1], "16:9": [16, 9], "4:5": [4, 5] };
 const SIZE_PX = { S: 12, M: 15, L: 20, XL: 28 };
 
-function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag }) {
+function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag, getContainerRect }) {
+  const cleanupListeners = useRef(null);
+
+  useEffect(() => {
+    return () => { if (cleanupListeners.current) cleanupListeners.current(); };
+  }, []);
+
   const handleMouseDown = useCallback((e) => {
     e.stopPropagation();
     onSelect(el.id);
     const startX = e.clientX;
     const startY = e.clientY;
-    const startXR = el.x_ratio;
-    const startYR = el.y_ratio;
+    const initX = el.x_ratio;
+    const initY = el.y_ratio;
     const onMove = (ev) => {
-      const dx = (ev.clientX - startX) / containerW;
-      const dy = (ev.clientY - startY) / containerH;
+      const rect = getContainerRect?.();
+      const w = rect?.width || containerW;
+      const h = rect?.height || containerH;
+      const dx = (ev.clientX - startX) / w;
+      const dy = (ev.clientY - startY) / h;
       onDrag(el.id, {
-        x_ratio: Math.min(Math.max(startXR + dx, 0), 1),
-        y_ratio: Math.min(Math.max(startYR + dy, 0), 1),
+        x_ratio: Math.max(0, Math.min(1, initX + dx)),
+        y_ratio: Math.max(0, Math.min(1, initY + dy)),
       });
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      cleanupListeners.current = null;
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [el, containerW, containerH, onSelect, onDrag]);
+    cleanupListeners.current = onUp;
+  }, [el, containerW, containerH, onSelect, onDrag, getContainerRect]);
 
   const px = el.x_ratio * containerW;
   const py = el.y_ratio * containerH;
@@ -150,6 +161,7 @@ export default function VideoCanvas({
   onMoveElementZ, onShuffle,
 }) {
   const containerRef = useRef(null);
+  const canvasRef = useRef(null);
   const [aw, ah] = ASPECT_DIMS[aspectRatio] || [9, 16];
   const CANVAS_H = 520;
   const CANVAS_W = Math.round((CANVAS_H * aw) / ah);
@@ -192,7 +204,7 @@ export default function VideoCanvas({
       </div>
 
       <div
-        ref={containerRef}
+        ref={canvasRef}
         className="relative overflow-hidden rounded-lg shadow-2xl shrink-0"
         style={{ width: CANVAS_W, height: CANVAS_H }}
         onClick={() => onSelectElement(null)}
@@ -214,6 +226,7 @@ export default function VideoCanvas({
               containerH={CANVAS_H}
               onSelect={onSelectElement}
               onDrag={handleDrag}
+              getContainerRect={() => canvasRef.current?.getBoundingClientRect()}
             />
           ))}
       </div>

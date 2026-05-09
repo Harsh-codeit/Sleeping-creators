@@ -18,7 +18,14 @@ function Input({ value, onChange, type = "text", min, max, step, placeholder, cl
   return (
     <input
       type={type} value={value ?? ""} min={min} max={max} step={step} placeholder={placeholder}
-      onChange={e => onChange(type === "number" ? parseFloat(e.target.value) : e.target.value)}
+      onChange={e => {
+        if (type === 'number') {
+          const n = parseFloat(e.target.value);
+          onChange(isNaN(n) ? null : n);
+        } else {
+          onChange(e.target.value);
+        }
+      }}
       className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white w-full focus:outline-none focus:border-zinc-500 ${className}`}
     />
   );
@@ -212,11 +219,11 @@ export default function ElementPropsPanel({ element, onUpdateElement, onUpdateEl
 
       <div className="flex gap-2">
         <Field label="X">
-          <Input type="number" value={element.x_ratio?.toFixed(2)} step={0.01} min={0} max={1}
+          <Input type="number" value={element.x_ratio ?? ''} step={0.01} min={0} max={1}
             onChange={v => update({ x_ratio: v })} />
         </Field>
         <Field label="Y">
-          <Input type="number" value={element.y_ratio?.toFixed(2)} step={0.01} min={0} max={1}
+          <Input type="number" value={element.y_ratio ?? ''} step={0.01} min={0} max={1}
             onChange={v => update({ y_ratio: v })} />
         </Field>
       </div>

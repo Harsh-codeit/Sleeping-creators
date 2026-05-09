@@ -95,9 +95,12 @@ export function useVideoBuilderState(initial = {}) {
   const addElement = useCallback((type) => {
     const defaults = ELEMENT_DEFAULTS[type];
     if (!defaults) return;
-    const el = { ...defaults, props: { ...defaults.props }, id: uuid() };
-    setElements(prev => { el.z_index = prev.length; return [...prev, el]; });
-    setSelectedElementId(el.id);
+    const id = uuid();
+    setElements(prev => {
+      const el = { ...defaults, props: { ...defaults.props }, id, z_index: prev.length };
+      return [...prev, el];
+    });
+    setSelectedElementId(id);
     setDirty(true);
   }, []);
 
@@ -120,16 +123,21 @@ export function useVideoBuilderState(initial = {}) {
   }, []);
 
   const duplicateElement = useCallback((id) => {
+    const newId = uuid();
     setElements(prev => {
       const src = prev.find(el => el.id === id);
       if (!src) return prev;
-      const clone = { ...src, props: { ...src.props }, id: uuid(),
-                      x_ratio: Math.min(src.x_ratio + 0.02, 1),
-                      y_ratio: Math.min(src.y_ratio + 0.02, 1),
-                      z_index: prev.length };
-      setSelectedElementId(clone.id);
+      const clone = {
+        ...src,
+        props: { ...src.props },
+        id: newId,
+        x_ratio: Math.min(src.x_ratio + 0.02, 1),
+        y_ratio: Math.min(src.y_ratio + 0.02, 1),
+        z_index: prev.length,
+      };
       return [...prev, clone];
     });
+    setSelectedElementId(newId);
     setDirty(true);
   }, []);
 
