@@ -16,8 +16,47 @@ const FONT_MAP = {
   modern_display: { fontFamily: "'Liberation Sans', Arial, sans-serif", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" },
 };
 
+const ICON_MAP = {
+  none: null,
+  arrow: "→",
+  play: "▶",
+  plus: "+",
+  star: "★",
+  chevron: "›",
+};
+
 function easeOut(t) {
   return 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
+}
+
+function hexAlpha(hex, alpha) {
+  if (!hex || !hex.startsWith("#") || hex.length < 7) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function computeGlow(glow, color, shadow) {
+  const shadows = [];
+  if (shadow) shadows.push("3px 3px 0 rgba(0,0,0,0.4)");
+  if (glow === "soft") shadows.push(`0 0 12px ${color}88`);
+  if (glow === "hard") shadows.push(`0 0 4px ${color}, 0 0 8px ${color}`);
+  if (glow === "neon") shadows.push(`0 0 6px ${color}, 0 0 20px ${color}88, 0 0 40px ${color}44`);
+  return shadows.length ? shadows.join(", ") : "none";
+}
+
+function buildTextBgStyle(shape, color, opacity) {
+  if (!shape || shape === "none") return {};
+  const rgba = hexAlpha(color || "#000000", opacity ?? 0.5);
+  switch (shape) {
+    case "pill":      return { background: rgba, padding: "4px 12px", borderRadius: 999 };
+    case "box":       return { background: rgba, padding: "4px 8px", borderRadius: 4 };
+    case "blur":      return { background: rgba, padding: "4px 12px", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderRadius: 8 };
+    case "underline": return { borderBottom: `3px solid ${rgba}`, paddingBottom: 2 };
+    case "highlight": return { background: rgba, padding: "2px 6px", borderRadius: 2 };
+    default:          return {};
+  }
 }
 
 function useDrag(xRatio, yRatio, containerW, containerH, enabled, onDrag) {
@@ -63,29 +102,42 @@ function CTATextOverlay({ template, containerW, containerH, editable, onDrag }) 
 
   if (!t?.cta_text) return null;
 
-  const fontSize = SIZE_PX[t.cta_text_size] ?? 16;
+  const fontSize = SIZE_PX[t.cta_text_size] ?? 18;
   const x = (t.cta_text_x_ratio ?? 0.5) * containerW;
   const y = (t.cta_text_y_ratio ?? 0.78) * containerH;
 
-  const style = {
+  // Migrate legacy cta_text_bg boolean → cta_text_bg_shape
+  const bgShape = t.cta_text_bg_shape ?? (t.cta_text_bg ? "pill" : "none");
+  const bgStyle = buildTextBgStyle(bgShape, t.cta_text_bg_color, t.cta_text_bg_opacity);
+
+  const textStyle = {
     position: "absolute",
     left: x,
     top: y,
     transform: "translate(-50%, -50%)",
     fontSize,
     color: t.cta_text_color || "#ffffff",
-    ...FONT_MAP[template?.font_preset] || FONT_MAP.bold_sans,
-    whiteSpace: "nowrap",
+    ...FONT_MAP[t?.font_preset] ?? FONT_MAP.bold_sans,
+    // User overrides (only apply if explicitly non-default)
+    ...(t.cta_text_transform && t.cta_text_transform !== "none" && { textTransform: t.cta_text_transform }),
+    ...(t.cta_text_letter_spacing && { letterSpacing: `${t.cta_text_letter_spacing}px` }),
+    ...(t.cta_text_font_weight && t.cta_text_font_weight !== "inherit" && { fontWeight: t.cta_text_font_weight }),
+    textAlign: t.cta_text_align || "center",
+    maxWidth: `${t.cta_text_max_width ?? 80}%`,
+    whiteSpace: t.cta_text_multiline ? "pre-wrap" : "nowrap",
+    wordBreak: t.cta_text_multiline ? "break-word" : "normal",
+    textShadow: t.cta_text_shadow_enabled
+      ? `${t.cta_text_shadow_x ?? 2}px ${t.cta_text_shadow_y ?? 2}px ${t.cta_text_shadow_blur ?? 4}px ${t.cta_text_shadow_color || "#000000"}`
+      : "none",
+    WebkitTextStroke: t.cta_text_stroke_enabled
+      ? `${t.cta_text_stroke_width ?? 1}px ${t.cta_text_stroke_color || "#000000"}`
+      : "0px transparent",
     cursor: editable ? "grab" : "default",
     userSelect: "none",
-    padding: t.cta_text_bg ? "4px 12px" : 0,
-    background: t.cta_text_bg
-      ? hexAlpha(t.cta_text_bg_color || "#000000", t.cta_text_bg_opacity ?? 0.5)
-      : "transparent",
-    borderRadius: t.cta_text_bg ? 999 : 0,
+    ...bgStyle,
   };
 
-  return <div style={style} {...drag}>{t.cta_text}</div>;
+  return <div style={textStyle} {...drag}>{t.cta_text}</div>;
 }
 
 function CTAButtonOverlay({ template, containerW, containerH, editable, onDrag, currentTime }) {
@@ -105,7 +157,7 @@ function CTAButtonOverlay({ template, containerW, containerH, editable, onDrag, 
   const duration = 0.4;
   const progress = easeOut(elapsed / duration);
 
-  const fontSize = SIZE_PX[t.cta_button_size] ?? 16;
+  const fontSize = SIZE_PX[t.cta_button_size] ?? 18;
   const x = (t.cta_button_x_ratio ?? 0.5) * containerW;
   const y = (t.cta_button_y_ratio ?? 0.88) * containerH;
 
@@ -130,6 +182,24 @@ function CTAButtonOverlay({ template, containerW, containerH, editable, onDrag, 
     }
   }
 
+  // Migrate legacy cta_button_arrow boolean → cta_button_icon
+  const iconKey = t.cta_button_icon ?? (t.cta_button_arrow ? "arrow" : "none");
+  const icon = ICON_MAP[iconKey] ?? null;
+
+  // Background: gradient or solid (with opacity)
+  const bgOpacity = t.cta_button_bg_opacity ?? 1.0;
+  const useGradient = t.cta_button_gradient && t.cta_button_gradient_from && t.cta_button_gradient_to;
+  const background = useGradient
+    ? `linear-gradient(${t.cta_button_gradient_dir || "90deg"}, ${t.cta_button_gradient_from}, ${t.cta_button_gradient_to})`
+    : hexAlpha(t.cta_button_bg_color || "#ffffff", bgOpacity);
+
+  // Border
+  const border = t.cta_button_border_enabled
+    ? `${t.cta_button_border_width ?? 2}px ${t.cta_button_border_style || "solid"} ${
+        t.cta_button_glass ? hexAlpha(t.cta_button_border_color || "#ffffff", 0.3) : (t.cta_button_border_color || "#ffffff")
+      }`
+    : "none";
+
   const style = {
     position: "absolute",
     left: x,
@@ -138,14 +208,19 @@ function CTAButtonOverlay({ template, containerW, containerH, editable, onDrag, 
     opacity,
     fontSize,
     color: t.cta_button_text_color || "#000000",
-    background: t.cta_button_bg_color || "#ffffff",
-    ...FONT_MAP[t?.font_preset] || FONT_MAP.bold_sans,
+    background,
+    ...FONT_MAP[t?.font_preset] ?? FONT_MAP.bold_sans,
+    ...(t.cta_button_text_transform && t.cta_button_text_transform !== "none" && { textTransform: t.cta_button_text_transform }),
+    ...(t.cta_button_letter_spacing && { letterSpacing: `${t.cta_button_letter_spacing}px` }),
     whiteSpace: "nowrap",
     cursor: editable ? "grab" : "default",
     userSelect: "none",
-    padding: "8px 20px",
-    borderRadius: `${t.cta_button_border_radius ?? 999}px`,
-    boxShadow: t.cta_button_shadow ? "3px 3px 0 rgba(0,0,0,0.4)" : "none",
+    padding: `${t.cta_button_padding_y ?? 8}px ${t.cta_button_padding_x ?? 20}px`,
+    borderRadius: `${t.cta_button_border_radius ?? 4}px`,
+    border,
+    boxShadow: computeGlow(t.cta_button_glow || "none", t.cta_button_glow_color || "#ffffff", t.cta_button_shadow),
+    backdropFilter: t.cta_button_glass ? "blur(8px)" : undefined,
+    WebkitBackdropFilter: t.cta_button_glass ? "blur(8px)" : undefined,
     display: "flex",
     alignItems: "center",
     gap: 6,
@@ -154,23 +229,16 @@ function CTAButtonOverlay({ template, containerW, containerH, editable, onDrag, 
   return (
     <div style={style} {...drag}>
       {t.cta_button_text}
-      {t.cta_button_arrow && <span style={{ fontSize: fontSize * 0.8 }}>→</span>}
+      {icon && <span style={{ fontSize: fontSize * 0.8 }}>{icon}</span>}
     </div>
   );
 }
 
-function hexAlpha(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 function buildOverlayStyle(style, color, opacity) {
   if (!style || style === "none") return null;
-  const r = parseInt(color.slice(1,3), 16);
-  const g = parseInt(color.slice(3,5), 16);
-  const b = parseInt(color.slice(5,7), 16);
+  const r = parseInt(color.slice(1, 3), 16);
+  const g = parseInt(color.slice(3, 5), 16);
+  const b = parseInt(color.slice(5, 7), 16);
   const a = opacity;
   if (style === "color_tint")    return { background: `rgba(${r},${g},${b},${a})` };
   if (style === "gradient_wash") return { background: `linear-gradient(to top, rgba(${r},${g},${b},${a}) 0%, transparent 60%)` };
@@ -180,7 +248,7 @@ function buildOverlayStyle(style, color, opacity) {
   return null;
 }
 
-function OverlayLayer({ template, w, h }) {
+function OverlayLayer({ template }) {
   const s = buildOverlayStyle(
     template?.overlay_style || "none",
     template?.overlay_color || "#000000",
@@ -190,7 +258,7 @@ function OverlayLayer({ template, w, h }) {
   return (
     <div
       data-overlay
-      style={{ position: "absolute", inset: 0, width: w, height: h, pointerEvents: "none", ...s }}
+      style={{ position: "absolute", inset: 0, pointerEvents: "none", ...s }}
     />
   );
 }
@@ -224,6 +292,15 @@ export default function VideoCanvasPreview({
     return () => obs.disconnect();
   }, [ar.w, ar.h]);
 
+  // Fallback: force measure on mount in case ResizeObserver fires before layout
+  useEffect(() => {
+    if (containerRef.current && dims.w === 0) {
+      const { width } = containerRef.current.getBoundingClientRect();
+      if (width > 0) setDims({ w: width, h: (width * ar.h) / ar.w });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     setCurrentTime(0);
     setPlaying(false);
@@ -247,99 +324,112 @@ export default function VideoCanvasPreview({
   };
 
   return (
-    <div ref={containerRef} style={{ width: "100%", position: "relative" }}>
-      <div
-        style={{
-          width: dims.w,
-          height: dims.h,
-          position: "relative",
-          background: "#111",
-          overflow: "hidden",
-        }}
-      >
-        {clip?.url ? (
-          <video
-            ref={videoRef}
-            src={clip.url}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            onTimeUpdate={(e) => {
-              const t = e.target.currentTime;
-              setCurrentTime(t);
-              onPlaybackChange?.({ currentTime: t, duration: e.target.duration || 0, playing });
-            }}
-            onEnded={() => {
-              setPlaying(false);
-              onPlaybackChange?.({ currentTime, duration: videoRef.current?.duration || 0, playing: false });
-            }}
-            onLoadedMetadata={(e) => {
-              if (videoRef.current) videoRef.current.currentTime = 0.01;
-              onPlaybackChange?.({ currentTime: 0, duration: e.target.duration || 0, playing: false });
-            }}
-            playsInline
-            muted
-            preload="metadata"
-          />
-        ) : (
+    <div
+      ref={containerRef}
+      style={{
+        width: "100%",
+        position: "relative",
+        aspectRatio: `${ar.w} / ${ar.h}`,
+        background: "#111",
+        overflow: "hidden",
+      }}
+    >
+      {clip?.url ? (
+        <video
+          ref={videoRef}
+          src={clip.url}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          onTimeUpdate={(e) => {
+            const t = e.target.currentTime;
+            setCurrentTime(t);
+            onPlaybackChange?.({ currentTime: t, duration: e.target.duration || 0, playing });
+          }}
+          onEnded={() => {
+            setPlaying(false);
+            onPlaybackChange?.({ currentTime, duration: videoRef.current?.duration || 0, playing: false });
+          }}
+          onLoadedMetadata={(e) => {
+            if (videoRef.current) videoRef.current.currentTime = 0.01;
+            onPlaybackChange?.({ currentTime: 0, duration: e.target.duration || 0, playing: false });
+          }}
+          playsInline
+          muted
+          preload="metadata"
+        />
+      ) : (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+          }}
+        >
           <div
             style={{
-              width: "100%",
-              height: "100%",
+              position: "absolute",
+              inset: 0,
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              color: "#555",
-              fontSize: 13,
-              fontFamily: "monospace",
+              gap: 8,
+              opacity: 0.3,
             }}
           >
-            No clip selected
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="2.5" />
+              <path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5" />
+            </svg>
+            <span style={{ fontSize: 10, color: "#fff", fontFamily: "monospace", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              No clip
+            </span>
           </div>
-        )}
+        </div>
+      )}
 
-        <OverlayLayer template={template} w={dims.w} h={dims.h} />
+      <OverlayLayer template={template} />
 
-        {dims.w > 0 && (
-          <>
-            <CTATextOverlay
-              template={template}
-              containerW={dims.w}
-              containerH={dims.h}
-              editable={editable}
-              onDrag={handleDrag}
-            />
-            <CTAButtonOverlay
-              template={template}
-              containerW={dims.w}
-              containerH={dims.h}
-              editable={editable}
-              onDrag={handleDrag}
-              currentTime={currentTime}
-            />
-          </>
-        )}
+      {dims.w > 0 && (
+        <>
+          <CTATextOverlay
+            template={template}
+            containerW={dims.w}
+            containerH={dims.h}
+            editable={editable}
+            onDrag={handleDrag}
+          />
+          <CTAButtonOverlay
+            template={template}
+            containerW={dims.w}
+            containerH={dims.h}
+            editable={editable}
+            onDrag={handleDrag}
+            currentTime={currentTime}
+          />
+        </>
+      )}
 
-        {clip?.url && !hideBuiltInControls && (
-          <button
-            onClick={togglePlay}
-            style={{
-              position: "absolute",
-              bottom: 10,
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "rgba(0,0,0,0.55)",
-              border: "none",
-              borderRadius: 999,
-              color: "#fff",
-              padding: "6px 16px",
-              fontSize: 11,
-              cursor: "pointer",
-              fontFamily: "monospace",
-            }}
-          >
-            {playing ? "Pause" : "Play"}
-          </button>
-        )}
-      </div>
+      {clip?.url && !hideBuiltInControls && (
+        <button
+          onClick={togglePlay}
+          style={{
+            position: "absolute",
+            bottom: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0,0,0,0.55)",
+            border: "none",
+            borderRadius: 999,
+            color: "#fff",
+            padding: "6px 16px",
+            fontSize: 11,
+            cursor: "pointer",
+            fontFamily: "monospace",
+          }}
+        >
+          {playing ? "Pause" : "Play"}
+        </button>
+      )}
     </div>
   );
 }

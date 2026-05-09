@@ -8,7 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from passlib.context import CryptContext
@@ -2972,6 +2972,7 @@ class CarouselCreate(BaseModel):
     post_type: Optional[str] = None              # "carousel" | "single_image"; auto-derived if None
 
 class VideoTemplateCreate(BaseModel):
+    model_config = ConfigDict(extra="allow")
     name: str
     client_id: Optional[str] = None
     # CTA text (static overlay)
@@ -3005,6 +3006,7 @@ class VideoTemplateCreate(BaseModel):
     cta_button_shadow: bool = False
 
 class VideoTemplateUpdate(BaseModel):
+    model_config = ConfigDict(extra="allow")
     name: Optional[str] = None
     cta_text: Optional[str] = None
     cta_text_color: Optional[str] = None
