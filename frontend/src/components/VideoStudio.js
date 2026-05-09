@@ -214,7 +214,7 @@ export default function VideoStudio({ clientId }) {
   };
 
   return (
-    <div className="flex gap-0 h-full min-h-0" style={{ minHeight: 0 }}>
+    <div className="flex flex-1 min-h-0 overflow-hidden">
 
       {/* ── Left: template + clip ────────────────────────────────── */}
       <aside className="w-64 shrink-0 flex flex-col border-r border-zinc-800 overflow-y-auto">

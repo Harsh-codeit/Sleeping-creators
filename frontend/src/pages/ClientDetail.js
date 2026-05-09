@@ -2004,7 +2004,7 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "Video" && (
-        <div className="p-6">
+        <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)" }}>
           <VideoStudio clientId={client.id} />
         </div>
       )}
