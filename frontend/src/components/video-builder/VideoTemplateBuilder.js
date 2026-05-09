@@ -116,6 +116,7 @@ export default function VideoTemplateBuilder({ initial = {}, onSaved, onBack }) 
           picsumSeed={picsumSeed}
           onSelectElement={setSelectedElementId}
           onUpdateElement={updateElement}
+          onUpdateElementProps={updateElementProps}
           onDuplicateElement={duplicateElement}
           onDeleteElement={deleteElement}
           onMoveElementZ={moveElementZ}

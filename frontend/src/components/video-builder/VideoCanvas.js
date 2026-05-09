@@ -10,7 +10,9 @@ const FONT_CSS = {
   helvetica:      "400 normal Helvetica, 'Helvetica Neue', Arial, sans-serif",
 };
 
-function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag, getContainerRect }) {
+const TEXT_TYPES = ["text_overlay", "lower_third", "cta_text", "cta_button", "link_in_bio"];
+
+function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag, onUpdateProps, getContainerRect }) {
   const cleanupListeners = useRef(null);
 
   useEffect(() => {
@@ -45,26 +47,47 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     cleanupListeners.current = onUp;
   }, [el, containerW, containerH, onSelect, onDrag, getContainerRect]);
 
+  const handleResizeMouseDown = useCallback((e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX;
+    const initWidthPx = (el.props?.width_ratio || 0.65) * containerW;
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const newWidth = Math.max(0.08 * containerW, initWidthPx + dx);
+      onUpdateProps(el.id, { width_ratio: newWidth / containerW });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [el.id, el.props?.width_ratio, containerW, onUpdateProps]);
+
   const px = el.x_ratio * containerW;
   const py = el.y_ratio * containerH;
   const p = el.props || {};
   const fontSize = p.size_px || 15;
   const fontFamily = FONT_CSS[p.font] || FONT_CSS.bold_sans;
+  const isTextType = TEXT_TYPES.includes(el.type);
+  const elWidth = isTextType ? (p.width_ratio || 0.65) * containerW : undefined;
 
   const style = {
     position: "absolute",
     left: px,
     top: py,
-    width: "max-content",
+    ...(isTextType ? { width: elWidth } : { width: "max-content" }),
     transform: "translate(-50%, -50%)",
     cursor: "grab",
-    outline: selected ? "2px solid #ffffff" : "1px dashed transparent",
-    borderRadius: 0,
+    outline: selected ? "2px solid #ffffff" : "1px dashed rgba(255,255,255,0.15)",
     userSelect: "none",
     zIndex: el.z_index + 1,
   };
 
   const textBaseStyle = {
+    display: "block",
+    wordBreak: "break-word",
     lineHeight: p.line_height || 1.4,
     letterSpacing: p.letter_spacing ? `${p.letter_spacing}px` : "normal",
     font: fontFamily,
@@ -90,11 +113,13 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
   } else if (el.type === "cta_button") {
     content = (
       <span style={{
+        display: "block",
         background: p.bg_color || "#fff",
         color: p.text_color || "#000",
         borderRadius: p.border_radius ?? 999,
         padding: "4px 14px",
-        display: "inline-block",
+        textAlign: "center",
+        wordBreak: "break-word",
         font: fontFamily,
         fontSize,
       }}>
@@ -104,11 +129,14 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
   } else if (el.type === "link_in_bio") {
     content = (
       <span style={{
+        display: "block",
         background: p.bg_color || "#000",
         color: p.text_color || "#fff",
         borderRadius: 6,
         padding: "3px 10px",
         fontWeight: "bold",
+        textAlign: "center",
+        wordBreak: "break-word",
         fontSize: 12,
       }}>
         {p.text || "Link in bio"} ↗ {p.handle || ""}
@@ -119,7 +147,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     const m = String(Math.floor(val / 60)).padStart(2, "0");
     const s = String(Math.floor(val % 60)).padStart(2, "0");
     content = (
-      <span style={{ color: p.color || "#fff", fontSize: p.size_px || 32, fontWeight: "bold", font: fontFamily }}>
+      <span style={{ color: p.color || "#fff", fontSize: p.size_px || 32, fontWeight: "bold", font: fontFamily, whiteSpace: "nowrap" }}>
         {m}:{s}
       </span>
     );
@@ -166,13 +194,30 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
   return (
     <div style={style} onMouseDown={handleMouseDown} onClick={e => e.stopPropagation()}>
       {content}
+      {selected && isTextType && (
+        <div
+          style={{
+            position: "absolute",
+            right: -5,
+            top: "15%",
+            bottom: "15%",
+            width: 6,
+            cursor: "ew-resize",
+            background: "rgba(255,255,255,0.9)",
+            borderRadius: 3,
+            zIndex: 10,
+          }}
+          onMouseDown={handleResizeMouseDown}
+          onClick={e => e.stopPropagation()}
+        />
+      )}
     </div>
   );
 }
 
 export default function VideoCanvas({
   elements, selectedElementId, aspectRatio, picsumSeed,
-  onSelectElement, onUpdateElement, onDuplicateElement, onDeleteElement,
+  onSelectElement, onUpdateElement, onUpdateElementProps, onDuplicateElement, onDeleteElement,
   onMoveElementZ, onShuffle,
 }) {
   const containerRef = useRef(null);
@@ -241,6 +286,7 @@ export default function VideoCanvas({
               containerH={CANVAS_H}
               onSelect={onSelectElement}
               onDrag={handleDrag}
+              onUpdateProps={onUpdateElementProps}
               getContainerRect={() => canvasRef.current?.getBoundingClientRect()}
             />
           ))}

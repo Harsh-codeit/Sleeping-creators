@@ -82,6 +82,9 @@ function TextTypeProps({ props, onChange }) {
       <Field label="Letter Spacing (px)">
         <Input type="number" value={props.letter_spacing} onChange={v => onChange({ letter_spacing: v })} min={-10} max={40} step={0.5} />
       </Field>
+      <Field label="Width Ratio">
+        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.05} max={1} step={0.01} />
+      </Field>
       <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
       <Field label="Background"><Select value={props.bg_shape} onChange={v => onChange({ bg_shape: v })} options={BG_SHAPES} /></Field>
       {props.bg_shape !== "none" && (
@@ -105,6 +108,9 @@ function CtaButtonProps({ props, onChange }) {
       <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
       <Field label="Size (px)">
         <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={6} max={120} step={1} />
+      </Field>
+      <Field label="Width Ratio">
+        <Input type="number" value={props.width_ratio} onChange={v => onChange({ width_ratio: v })} min={0.05} max={1} step={0.01} />
       </Field>
       <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
       <ColorInput label="Text Color" value={props.text_color} onChange={v => onChange({ text_color: v })} />
