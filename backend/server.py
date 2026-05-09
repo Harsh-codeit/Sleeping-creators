@@ -3054,6 +3054,7 @@ class VideoTemplateCreate(BaseModel):
 class VideoTemplateUpdate(BaseModel):
     name: Optional[str] = None
     aspect_ratio: Optional[str] = None
+    client_id: Optional[str] = None
     video_clip_id: Optional[str] = None
     video_overridable: Optional[bool] = None
     elements: Optional[List[VideoElement]] = None
@@ -5239,8 +5240,7 @@ async def render_video_preview(data: VideoPostCreate):
         hashtags=[],
         clip_trim_start=data.clip_trim_start,
         clip_trim_end=data.clip_trim_end,
-        cta_text_override=data.cta_text_override,
-        cta_button_text_override=data.cta_button_text_override,
+        overrides=data.overrides,
         _preview_only=True,
     )
     return {"video_url": result.get("video_url", "")}
