@@ -55,6 +55,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     position: "absolute",
     left: px,
     top: py,
+    width: "max-content",
     transform: "translate(-50%, -50%)",
     cursor: "grab",
     outline: selected ? "2px solid #ffffff" : "1px dashed transparent",
@@ -64,7 +65,6 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
   };
 
   const textBaseStyle = {
-    whiteSpace: "nowrap",
     lineHeight: p.line_height || 1.4,
     letterSpacing: p.letter_spacing ? `${p.letter_spacing}px` : "normal",
     font: fontFamily,
@@ -95,7 +95,6 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
         borderRadius: p.border_radius ?? 999,
         padding: "4px 14px",
         display: "inline-block",
-        whiteSpace: "nowrap",
         font: fontFamily,
         fontSize,
       }}>
@@ -110,7 +109,6 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
         borderRadius: 6,
         padding: "3px 10px",
         fontWeight: "bold",
-        whiteSpace: "nowrap",
         fontSize: 12,
       }}>
         {p.text || "Link in bio"} ↗ {p.handle || ""}
@@ -121,7 +119,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     const m = String(Math.floor(val / 60)).padStart(2, "0");
     const s = String(Math.floor(val % 60)).padStart(2, "0");
     content = (
-      <span style={{ color: p.color || "#fff", fontSize: p.size_px || 32, fontWeight: "bold", font: fontFamily, whiteSpace: "nowrap" }}>
+      <span style={{ color: p.color || "#fff", fontSize: p.size_px || 32, fontWeight: "bold", font: fontFamily }}>
         {m}:{s}
       </span>
     );
