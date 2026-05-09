@@ -5,10 +5,11 @@ import { toast } from "sonner";
 import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
+import VideoStudio from "../components/VideoStudio";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
-const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Profile"];
+const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Video", "Profile"];
 
 const STATUS_DOT = { active: "text-emerald-400", paused: "text-amber-400", error: "text-red-400" };
 const STATUS_BADGE = {
@@ -2002,6 +2003,11 @@ export default function ClientDetail() {
         <AppsTab clientId={id} client={client} />
       )}
 
+      {activeTab === "Video" && (
+        <div className="p-6">
+          <VideoStudio clientId={client.id} />
+        </div>
+      )}
 
       {activeTab === "Profile" && editForm && (
         <EditProfileTab

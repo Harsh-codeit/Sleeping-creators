@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Body, Depends, Request, Query
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Body, Depends, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -231,6 +231,19 @@ class VideoPostCreate(BaseModel):
     hashtags: List[str] = []
     clip_trim_start: float = 0.0
     clip_trim_end: Optional[float] = None
+    # Style overrides (passed through to video job)
+    font_preset: Optional[str] = None
+    overlay_style: Optional[str] = None
+    overlay_color: Optional[str] = None
+    overlay_opacity: Optional[float] = None
+    mood_tags: Optional[List[str]] = None
+    cta_button_border_radius: Optional[int] = None
+    cta_button_shadow: Optional[bool] = None
+    cta_animation: Optional[str] = None
+    cta_delay: Optional[float] = None
+    cta_button_text: Optional[str] = None
+    cta_button_bg_color: Optional[str] = None
+    cta_button_text_color: Optional[str] = None
 
 class VideoScheduleCreate(BaseModel):
     cron: str           # e.g. "0 9 * * *"
@@ -2090,8 +2103,6 @@ async def publish_post_now(post_id: str, local_fallback: bool = Query(False)):
     post = await db.posts.find_one({"id": post_id}, {"_id": 0})
     if not post:
         raise HTTPException(404, "Post not found")
-    if post.get("status") == "published":
-        return post  # idempotent — already published
 
     if local_fallback:
         # Phase 2: post was set to failed+retrying_local by phase 1 — re-claim it
@@ -2102,13 +2113,27 @@ async def publish_post_now(post_id: str, local_fallback: bool = Query(False)):
         if claimed.modified_count == 0:
             raise HTTPException(409, "Post is not in retrying_local state")
     else:
-        # Phase 1: atomically claim the post to prevent double-publishing
+        # Claim the post atomically. Allow re-publishing "published" posts so the
+        # user can push updated content to Bundle after editing.
         claimed = await db.posts.update_one(
-            {"id": post_id, "status": {"$in": ["draft", "scheduled", "failed"]}},
+            {"id": post_id, "status": {"$in": ["draft", "scheduled", "failed", "published"]}},
             {"$set": {"status": "publishing"}}
         )
         if claimed.modified_count == 0:
             raise HTTPException(409, "Post is already being published")
+
+    # If this post was previously sent to Bundle, delete the old post first so
+    # the re-publish creates a fresh one with the current content and timing.
+    old_platform_post_id = post.get("platform_post_id")
+    if old_platform_post_id:
+        try:
+            settings = await get_settings()
+            api_key = settings.get("bundle_api_key", "")
+            if api_key:
+                await bundle_service.delete_post(api_key, old_platform_post_id)
+                logger.info(f"Deleted old Bundle post {old_platform_post_id} before re-publish of post {post_id[:8]}")
+        except Exception as _e:
+            logger.warning(f"Could not delete old Bundle post {old_platform_post_id}: {_e}")
 
     client = await db.clients.find_one({"id": post["client_id"]}, {"_id": 0}) or {}
     from publisher import publish
@@ -2969,6 +2994,15 @@ class VideoTemplateCreate(BaseModel):
     # Animation
     cta_animation: str = "slide_up"   # slide_up | fade | pop | slide_in
     cta_delay: float = 3.0            # seconds before button appears
+    # Style
+    font_preset: str = "bold_sans"       # bold_sans | elegant_serif | handwritten | modern_display
+    overlay_style: str = "gradient_wash" # gradient_wash | color_tint | blur | geometric | lower_thirds | none
+    overlay_color: str = "#000000"
+    overlay_opacity: float = 0.5         # 0.0–1.0
+    mood_tags: List[str] = Field(default_factory=list)
+    # CTA button shape
+    cta_button_border_radius: int = 4    # px; 999 = pill
+    cta_button_shadow: bool = False
 
 class VideoTemplateUpdate(BaseModel):
     name: Optional[str] = None
@@ -2989,6 +3023,26 @@ class VideoTemplateUpdate(BaseModel):
     cta_button_y_ratio: Optional[float] = None
     cta_animation: Optional[str] = None
     cta_delay: Optional[float] = None
+    font_preset: Optional[str] = None
+    overlay_style: Optional[str] = None
+    overlay_color: Optional[str] = None
+    overlay_opacity: Optional[float] = None
+    mood_tags: Optional[List[str]] = None
+    cta_button_border_radius: Optional[int] = None
+    cta_button_shadow: Optional[bool] = None
+
+# ── Music library ──────────────────────────────────────────────
+class MusicSegment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    start: float
+    end: float
+    label: str = ""
+    mood_tags: List[str] = Field(default_factory=list)
+
+class MusicTrackUpdate(BaseModel):
+    name: Optional[str] = None
+    mood_tags: Optional[List[str]] = None
+    segments: Optional[List[MusicSegment]] = None
 
 class CarouselPreviewRequest(BaseModel):
     template: str = "dark_card"
@@ -3634,6 +3688,118 @@ async def delete_video_template(template_id: str):
     result = await db.video_templates.delete_one({"id": template_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Video template not found")
+    return {"status": "deleted"}
+
+
+# ── Music library routes ───────────────────────────────────────
+
+@api_router.post("/music/upload", status_code=201)
+async def upload_music_track(
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    mood_tags: str = Form("[]"),
+):
+    import storage as _storage
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="name must not be blank")
+    name = name.strip()
+
+    allowed = {"audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp3", "audio/ogg"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="File must be mp3, wav, or ogg")
+
+    if not _storage.is_enabled():
+        raise HTTPException(status_code=503, detail="Storage is not configured")
+
+    track_id = str(uuid.uuid4())
+    ext = os.path.splitext(file.filename or "track.mp3")[1] or ".mp3"
+    r2_key = f"music/{track_id}{ext}"
+
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio file must be under 50 MB")
+
+    r2_url = _storage.upload_bytes(content, r2_key, content_type=file.content_type or "audio/mpeg")
+    if not r2_url:
+        raise HTTPException(status_code=500, detail="Failed to upload to storage")
+
+    try:
+        parsed_tags = _json.loads(mood_tags)
+        if not isinstance(parsed_tags, list):
+            parsed_tags = []
+    except Exception:
+        parsed_tags = []
+
+    doc = {
+        "id": track_id,
+        "name": name,
+        "filename": file.filename or f"track{ext}",
+        "r2_url": r2_url,
+        "r2_key": r2_key,
+        "duration": 0.0,
+        "mood_tags": parsed_tags,
+        "segments": [],
+        "uploaded_at": now_iso(),
+    }
+    await db.music_tracks.insert_one(doc)
+    return clean_doc(await db.music_tracks.find_one({"id": track_id}))
+
+
+@api_router.get("/music")
+async def list_music_tracks(mood: Optional[str] = None):
+    query = {}
+    if mood:
+        query["mood_tags"] = {"$in": [mood]}
+    tracks = await db.music_tracks.find(query).to_list(1000)
+    return [clean_doc(t) for t in tracks]
+
+
+@api_router.get("/music/pick")
+async def pick_music_track(mood: str = ""):
+    tracks = await db.music_tracks.find().to_list(1000)
+    if not tracks:
+        raise HTTPException(status_code=404, detail="No tracks in library")
+    mood_set = set(m.strip() for m in mood.split(",") if m.strip())
+
+    def score(t):
+        track_score = len(set(t.get("mood_tags", [])) & mood_set)
+        seg_score = max(
+            (len(set(s.get("mood_tags", [])) & mood_set) for s in t.get("segments", [])),
+            default=0,
+        )
+        return track_score + seg_score * 0.5
+
+    best = max(tracks, key=score)
+    best_seg = None
+    best_seg_score = 0
+    for seg in best.get("segments", []):
+        s = len(set(seg.get("mood_tags", [])) & mood_set)
+        if s > best_seg_score:
+            best_seg_score = s
+            best_seg = seg
+
+    return {"track": clean_doc(best), "segment": best_seg}
+
+
+@api_router.put("/music/{track_id}")
+async def update_music_track(track_id: str, data: MusicTrackUpdate):
+    track = await db.music_tracks.find_one({"id": track_id})
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    update = data.model_dump(exclude_unset=True)
+    if not update:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    update["updated_at"] = now_iso()
+    await db.music_tracks.update_one({"id": track_id}, {"$set": update})
+    return clean_doc(await db.music_tracks.find_one({"id": track_id}))
+
+
+@api_router.delete("/music/{track_id}")
+async def delete_music_track(track_id: str):
+    track = await db.music_tracks.find_one({"id": track_id})
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    await db.music_tracks.delete_one({"id": track_id})
     return {"status": "deleted"}
 
 

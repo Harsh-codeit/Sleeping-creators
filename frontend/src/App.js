@@ -18,6 +18,7 @@ import InstagramCallback from "./pages/InstagramCallback";
 import FacebookCallback from "./pages/FacebookCallback";
 import GlobalLibrary from "./pages/GlobalLibrary";
 import UsagePage from "./pages/UsagePage";
+import MusicLibrary from "./pages/MusicLibrary";
 import Login from "./pages/Login";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -91,6 +92,7 @@ function App() {
               <Route path="logs" element={<Logs />} />
               <Route path="usage" element={<UsagePage />} />
               <Route path="carousel" element={<Carousel />} />
+              <Route path="music" element={<MusicLibrary />} />
               <Route path="onboarding" element={<Onboarding />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

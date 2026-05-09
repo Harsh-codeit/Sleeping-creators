@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Play, Pause } from "lucide-react";
 import ClipPickerModal from "./ClipPickerModal";
 import VideoCanvasPreview from "./VideoCanvasPreview";
+import VideoStylePicker from "./VideoStylePicker";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "tiktok", "linkedin", "twitter"];
@@ -115,6 +116,21 @@ export default function VideoEditor({ clientId, onPublished }) {
 
   const [publishing, setPublishing] = useState(false);
 
+  const [styleTab, setStyleTab] = useState("templates"); // "templates" | "style"
+  const [styleOverrides, setStyleOverrides] = useState({
+    font_preset: "bold_sans",
+    overlay_style: "gradient_wash",
+    overlay_color: "#000000",
+    overlay_opacity: 0.5,
+    cta_button_bg_color: "#ffffff",
+    cta_button_text_color: "#000000",
+    cta_button_border_radius: 4,
+    cta_button_shadow: false,
+    cta_animation: "slide_up",
+    cta_delay: 3.0,
+    cta_button_text: "",
+  });
+
   const videoRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -147,6 +163,7 @@ export default function VideoEditor({ clientId, onPublished }) {
     setPublishing(true);
     try {
       const payload = {
+        ...styleOverrides,           // spread first — named fields below override
         client_id: clientId,
         clip_id: clip.drive_file_id || clip.id,
         template_id: templateId || null,
@@ -195,46 +212,81 @@ export default function VideoEditor({ clientId, onPublished }) {
     <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-6 items-start">
 
       {/* ── Left: template sidebar ─────────────────────────────── */}
-      <aside className="space-y-2">
-        <span className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Templates</span>
-        {templates.length === 0 ? (
-          <p className="text-xs font-mono text-zinc-600">No templates yet — create one in the Templates tab.</p>
-        ) : (
-          <div className="space-y-1.5">
-            <button
-              onClick={() => setTemplateId(null)}
-              className={`w-full text-left px-3 py-2 text-xs font-mono border transition-colors ${
-                templateId === null
-                  ? "bg-white text-black border-white"
-                  : "border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
-              }`}
-            >
-              None
-            </button>
-            {templates.map((t) => (
-              <button
-                key={t.id}
-                aria-label={t.name}
-                onClick={() => setTemplateId(t.id)}
-                className={`w-full text-left px-3 py-2.5 border transition-colors ${
-                  templateId === t.id
-                    ? "bg-white text-black border-white"
-                    : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
-                }`}
-              >
-                <div className={`text-xs font-mono font-semibold ${templateId === t.id ? "text-black" : "text-zinc-300"}`}>
-                  {t.name}
+      <aside className="flex flex-col">
+        {/* Tab switcher */}
+        <div className="flex border-b border-zinc-800">
+          <button
+            onClick={() => setStyleTab("templates")}
+            className={`flex-1 py-2 text-xs font-medium transition-colors ${
+              styleTab === "templates"
+                ? "text-white border-b-2 border-indigo-500"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Templates
+          </button>
+          <button
+            onClick={() => setStyleTab("style")}
+            className={`flex-1 py-2 text-xs font-medium transition-colors ${
+              styleTab === "style"
+                ? "text-white border-b-2 border-indigo-500"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Style
+          </button>
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto pt-2">
+          {styleTab === "templates" ? (
+            <div className="space-y-2">
+              {templates.length === 0 ? (
+                <p className="text-xs font-mono text-zinc-600">No templates yet — create one in the Templates tab.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => setTemplateId(null)}
+                    className={`w-full text-left px-3 py-2 text-xs font-mono border transition-colors ${
+                      templateId === null
+                        ? "bg-white text-black border-white"
+                        : "border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                    }`}
+                  >
+                    None
+                  </button>
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      aria-label={t.name}
+                      onClick={() => setTemplateId(t.id)}
+                      className={`w-full text-left px-3 py-2.5 border transition-colors ${
+                        templateId === t.id
+                          ? "bg-white text-black border-white"
+                          : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+                      }`}
+                    >
+                      <div className={`text-xs font-mono font-semibold ${templateId === t.id ? "text-black" : "text-zinc-300"}`}>
+                        {t.name}
+                      </div>
+                      <div
+                        className={`text-[10px] font-mono mt-0.5 ${templateId === t.id ? "text-zinc-600" : "text-zinc-600"}`}
+                        aria-hidden="true"
+                      >
+                        {t.aspect_ratio || "9:16"}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <div
-                  className={`text-[10px] font-mono mt-0.5 ${templateId === t.id ? "text-zinc-600" : "text-zinc-600"}`}
-                  aria-hidden="true"
-                >
-                  {t.aspect_ratio || "9:16"}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+              )}
+            </div>
+          ) : (
+            <VideoStylePicker
+              template={styleOverrides}
+              onChange={patch => setStyleOverrides(prev => ({ ...prev, ...patch }))}
+            />
+          )}
+        </div>
       </aside>
 
       {/* ── Middle: preview + transport ───────────────────────── */}

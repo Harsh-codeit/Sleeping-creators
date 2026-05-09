@@ -669,7 +669,7 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
   const [form, setForm] = useState({
     text: post.text || "",
     platform: post.platform || "instagram",
-    scheduled_at: post.scheduled_at ? post.scheduled_at.slice(0, 16) : "",
+    scheduled_at: post.scheduled_at ? format(parseISO(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : "",
     slideCount: totalSlides,
   });
   const [saving, setSaving] = useState(false);
@@ -683,7 +683,7 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
     setForm({
       text: post.text || "",
       platform: post.platform || "instagram",
-      scheduled_at: post.scheduled_at ? post.scheduled_at.slice(0, 16) : "",
+      scheduled_at: post.scheduled_at ? format(parseISO(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : "",
       slideCount: sc,
     });
   }, [post]);
@@ -946,14 +946,14 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
           </div>
         )}
         <div className="flex gap-2">
-          {post.status !== "published" && (
+          {post.status !== "publishing" && (
             <button
               onClick={publishPost}
               disabled={publishing}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs border border-blue-800 text-blue-400 hover:bg-blue-950 transition-colors disabled:opacity-50"
             >
               <Send size={11} className={publishing ? "animate-pulse" : ""} />
-              {publishing ? "Publishing..." : post.status === "failed" ? "Retry" : "Publish"}
+              {publishing ? "Publishing..." : post.status === "failed" ? "Retry" : post.status === "published" ? "Re-publish" : "Publish"}
             </button>
           )}
           <button
