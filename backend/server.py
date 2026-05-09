@@ -5148,47 +5148,6 @@ async def generate_cta_text(req: CTAGenerateRequest):
     }
 
 
-@api_router.post("/video-ai/suggest-overlays")
-async def suggest_video_overlays(req: dict = Body(...), user=Depends(require_auth)):
-    """Generate AI hook text + CTA for video overlays. Returns text with *word* highlight syntax."""
-    topic = (req.get("topic") or "").strip()
-    niche = (req.get("niche") or "brand").strip()
-    platform = req.get("platform") or "instagram"
-    if not topic:
-        raise HTTPException(400, "topic is required")
-
-    import anthropic as _anthropic, json as _json, re as _re
-    _ac = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    prompt = (
-        f"You are writing video overlay text for a {niche} {platform} video.\n"
-        f"Topic / hook idea: {topic}\n\n"
-        f"Return a JSON object with exactly these keys:\n"
-        f"- hook: 2-3 line hook text. Wrap 1-3 high-impact words/phrases in *asterisks* for color emphasis "
-        f"(e.g. 'if you want to stop *losing clients* to *AI-powered* competitors...'). Max 120 chars.\n"
-        f"- cta: Short CTA text for the button, 4-8 words, add a relevant emoji at the end. "
-        f"e.g. 'Fix these 3 things in your positioning first 👇'\n"
-        f"- highlight_color: A vivid hex color for the *highlighted* words (e.g. '#FFB800' for yellow-gold, "
-        f"'#FF6B35' for orange, '#00D4FF' for cyan). Pick one that fits the topic mood.\n"
-        f"Return ONLY valid JSON, no explanation."
-    )
-    msg = _ac.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = msg.content[0].text.strip()
-    try:
-        data_out = _json.loads(raw)
-    except Exception:
-        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
-        data_out = _json.loads(m.group()) if m else {}
-    return {
-        "hook": data_out.get("hook", topic),
-        "cta": data_out.get("cta", "Learn more 👇"),
-        "highlight_color": data_out.get("highlight_color", "#FFB800"),
-    }
-
-
 @api_router.post("/videos/create", status_code=201)
 async def create_video_post_route(data: VideoPostCreate):
     from video_worker import enqueue_video_job

@@ -12,15 +12,6 @@ const FONT_CSS = {
 
 const TEXT_TYPES = ["text_overlay", "lower_third", "cta_text", "cta_button", "link_in_bio"];
 
-function renderHighlighted(text, highlightColor) {
-  if (!highlightColor || !text || !text.includes("*")) return text;
-  return text.split(/(\*[^*]+\*)/).map((part, i) =>
-    part.startsWith("*") && part.endsWith("*")
-      ? <span key={i} style={{ color: highlightColor }}>{part.slice(1, -1)}</span>
-      : part
-  );
-}
-
 function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag, onUpdateProps, getContainerRect }) {
   const cleanupListeners = useRef(null);
 
@@ -118,7 +109,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
       : {};
     content = (
       <span style={{ color: p.color || "#fff", ...textBaseStyle, ...bg }}>
-        {renderHighlighted(p.text || el.type, p.highlight_color)}
+        {p.text || el.type}
       </span>
     );
   } else if (el.type === "cta_button") {
