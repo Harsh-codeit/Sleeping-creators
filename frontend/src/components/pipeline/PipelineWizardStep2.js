@@ -4,6 +4,7 @@ import { API, BUILT_IN_TEMPLATES, TYPE_SETTINGS, SLIDE_FORMATS, buildCtaButtonTe
 
 export default function PipelineWizardStep2({ form, onChange, clientId }) {
   const [customTemplates, setCustomTemplates] = useState([]);
+  const [videoTemplates, setVideoTemplates] = useState([]);
 
   useEffect(() => {
     axios.get(`${API}/templates`).then(r => {
@@ -16,9 +17,83 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (form.pipeline_type === "video") {
+      axios.get(`${API}/video-templates`)
+        .then(r => setVideoTemplates(r.data || []))
+        .catch(() => {});
+    }
+  }, [form.pipeline_type]);
+
   const allTemplates = [...BUILT_IN_TEMPLATES, ...customTemplates];
   const settings = TYPE_SETTINGS[form.pipeline_type] || TYPE_SETTINGS.standard;
   const ctaPreview = buildCtaButtonText(form.cta_keyword, form.cta_offer);
+
+  if (settings.showVideoConfig) {
+    return (
+      <div className="space-y-5">
+        {/* Video template */}
+        <div>
+          <label className="label-xs">Video Template</label>
+          <select
+            value={form.video_template_id}
+            onChange={e => onChange("video_template_id", e.target.value)}
+            className="field font-mono"
+          >
+            <option value="">Select a template…</option>
+            {videoTemplates.map(t => (
+              <option key={t.id} value={t.id}>{t.name} ({t.aspect_ratio || "9:16"})</option>
+            ))}
+          </select>
+          {videoTemplates.length === 0 && (
+            <p className="text-[10px] font-mono text-zinc-600 mt-1">
+              No video templates yet — create one in Templates → Video tab.
+            </p>
+          )}
+        </div>
+
+        {/* Drive folder */}
+        <div>
+          <label className="label-xs">Google Drive Folder URL or ID</label>
+          <input
+            value={form.drive_folder_id}
+            onChange={e => onChange("drive_folder_id", e.target.value)}
+            placeholder="https://drive.google.com/drive/folders/…"
+            className="field"
+          />
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">
+            A random clip from this folder will be picked each run.
+          </p>
+        </div>
+
+        {/* Overlay text */}
+        <div>
+          <label className="label-xs">Overlay Text</label>
+          <textarea
+            rows={2}
+            value={form.overlay_text}
+            onChange={e => onChange("overlay_text", e.target.value)}
+            placeholder="Follow for daily tips"
+            className="field resize-none"
+          />
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">
+            Shown as text overlay on every video in this pipeline.
+          </p>
+        </div>
+
+        {/* CTA button text */}
+        <div>
+          <label className="label-xs">CTA Button Text</label>
+          <input
+            value={form.video_cta_text}
+            onChange={e => onChange("video_cta_text", e.target.value)}
+            placeholder="Book a call →"
+            className="field"
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

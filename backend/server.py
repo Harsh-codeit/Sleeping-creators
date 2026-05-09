@@ -231,19 +231,8 @@ class VideoPostCreate(BaseModel):
     hashtags: List[str] = []
     clip_trim_start: float = 0.0
     clip_trim_end: Optional[float] = None
-    # Style overrides (passed through to video job)
-    font_preset: Optional[str] = None
-    overlay_style: Optional[str] = None
-    overlay_color: Optional[str] = None
-    overlay_opacity: Optional[float] = None
-    mood_tags: Optional[List[str]] = None
-    cta_button_border_radius: Optional[int] = None
-    cta_button_shadow: Optional[bool] = None
-    cta_animation: Optional[str] = None
-    cta_delay: Optional[float] = None
-    cta_button_text: Optional[str] = None
-    cta_button_bg_color: Optional[str] = None
-    cta_button_text_color: Optional[str] = None
+    cta_text_override: Optional[str] = None
+    cta_button_text_override: Optional[str] = None
 
 class VideoScheduleCreate(BaseModel):
     cron: str           # e.g. "0 9 * * *"
@@ -253,7 +242,7 @@ class VideoScheduleCreate(BaseModel):
 
 class PipelineCreate(BaseModel):
     name: str
-    pipeline_type: str = "standard"  # standard | trend | competitor | strategy | experimental
+    pipeline_type: str = "standard"  # standard | trend | competitor | strategy | experimental | video
     content_type: str = "carousel"
     carousel_template: Optional[str] = None   # None = AI decides
     carousel_slide_count: Optional[int] = None # None = AI decides
@@ -268,6 +257,11 @@ class PipelineCreate(BaseModel):
     interval_hours: int = 6
     specific_times: List[str] = ["09:00"]
     require_approval: bool = False
+    # Video pipeline fields
+    video_template_id: Optional[str] = None
+    drive_folder_id: Optional[str] = None
+    overlay_text: Optional[str] = None
+    video_cta_text: Optional[str] = None
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -933,6 +927,65 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         pipeline_content_type = "carousel"
         # Experimental always rotates format regardless of pipeline config
         slide_format = None
+
+    elif pipeline_type == "video":
+        # Video pipeline: pick random clip → render with template → queue
+        video_template_id = pipeline.get("video_template_id")
+        if not video_template_id:
+            await add_log("warning", f"Pipeline '{pipeline['name']}': no video template configured", pipeline["client_id"], client["name"])
+            return 0
+
+        clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
+        if not clips and pipeline.get("drive_folder_id"):
+            setting = await db.settings.find_one({"key": "google_refresh_token"})
+            refresh_token_val = (setting or {}).get("value", "")
+            if refresh_token_val:
+                try:
+                    from google_drive_service import list_clips as _list_clips
+                    import asyncio as _asyncio
+                    clips = await _asyncio.get_event_loop().run_in_executor(
+                        None, _list_clips, refresh_token_val, pipeline["drive_folder_id"]
+                    )
+                except Exception as _e:
+                    logger.error(f"Video pipeline {pipeline_id}: Drive folder list failed: {_e}")
+
+        if not clips:
+            await add_log("warning", f"Pipeline '{pipeline['name']}': no clips available", pipeline["client_id"], client["name"])
+            return 0
+
+        picked_clip = _random.choice(clips)
+        clip_id_picked = picked_clip.get("drive_file_id") or picked_clip.get("id")
+
+        try:
+            from video_service import create_video_post as _create_video_post
+            result = await _create_video_post(
+                db=db,
+                client_id=pipeline["client_id"],
+                clip_id=clip_id_picked,
+                platforms=pipeline.get("platforms", []),
+                scheduled_at=scheduled_time.isoformat(),
+                template_id=video_template_id,
+                caption=None,
+                hashtags=[],
+                cta_text_override=pipeline.get("overlay_text") or None,
+                cta_button_text_override=pipeline.get("video_cta_text") or None,
+            )
+            video_posts_created = result.get("post_ids", [])
+        except Exception as _ve:
+            logger.error(f"Video pipeline {pipeline_id} failed: {_ve}")
+            video_posts_created = []
+
+        pipeline_updates_v: dict = {
+            "last_run_at": now.isoformat(),
+            "next_run_at": calculate_next_run(pipeline, scheduled_time),
+            "total_runs": pipeline.get("total_runs", 0) + 1,
+            "successful_runs": pipeline.get("successful_runs", 0) + (1 if video_posts_created else 0),
+            "status": "active",
+        }
+        await db.pipelines.update_one({"id": pipeline_id}, {"$set": pipeline_updates_v})
+        level = "success" if video_posts_created else "warning"
+        await add_log(level, f"Pipeline '{pipeline['name']}' [video]: {len(video_posts_created)} video post(s) created", pipeline["client_id"], client["name"])
+        return len(video_posts_created)
 
     # When the pipeline has no locked format (user picked "Auto"), walk a deterministic
     # round-robin so every format appears once before repeating.  Each pipeline stores its
@@ -3943,6 +3996,10 @@ async def create_pipeline(client_id: str, data: PipelineCreate):
         "interval_hours": data.interval_hours,
         "specific_times": data.specific_times,
         "require_approval": data.require_approval,
+        "video_template_id": data.video_template_id,
+        "drive_folder_id": data.drive_folder_id,
+        "overlay_text": data.overlay_text,
+        "video_cta_text": data.video_cta_text,
         "strategy_pillar_index": 0,
         "format_rotation_index": 0,
         "format_rotation_order": random.sample(

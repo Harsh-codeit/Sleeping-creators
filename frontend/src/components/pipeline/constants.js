@@ -1,4 +1,4 @@
-import { Zap, TrendingUp, Eye, Target, Layers } from "lucide-react";
+import { Zap, TrendingUp, Eye, Target, Layers, Film } from "lucide-react";
 
 export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -48,6 +48,14 @@ export const PIPELINE_TYPES = [
     color: "amber",
     badgeClass: "border-amber-700 text-amber-400 bg-amber-950/40",
   },
+  {
+    value: "video",
+    label: "Video",
+    desc: "Pick a random clip from Drive, apply a video template, publish automatically",
+    icon: Film,
+    color: "cyan",
+    badgeClass: "border-cyan-800 text-cyan-400 bg-cyan-950/40",
+  },
 ];
 
 export const PIPELINE_TYPE_MAP = Object.fromEntries(PIPELINE_TYPES.map(t => [t.value, t]));
@@ -88,15 +96,21 @@ export const EMPTY_FORM = {
   interval_hours: 6,
   specific_times: ["09:00"],
   require_approval: false,
+  // Video pipeline
+  video_template_id: "",
+  drive_folder_id: "",
+  overlay_text: "",
+  video_cta_text: "",
 };
 
 // Which content fields are shown per pipeline type
 export const TYPE_SETTINGS = {
-  standard:     { showTemplate: true, showSlideCount: true,  showFormat: true,  showTopics: true  },
-  trend:        { showTemplate: true, showSlideCount: true,  showFormat: false, showTopics: false },
-  competitor:   { showTemplate: true, showSlideCount: false, showFormat: false, showTopics: false },
-  strategy:     { showTemplate: true, showSlideCount: true,  showFormat: true,  showTopics: false },
-  experimental: { showTemplate: true, showSlideCount: false, showFormat: false, showTopics: false },
+  standard:     { showTemplate: true,  showSlideCount: true,  showFormat: true,  showTopics: true,  showVideoConfig: false },
+  trend:        { showTemplate: true,  showSlideCount: true,  showFormat: false, showTopics: false, showVideoConfig: false },
+  competitor:   { showTemplate: true,  showSlideCount: false, showFormat: false, showTopics: false, showVideoConfig: false },
+  strategy:     { showTemplate: true,  showSlideCount: true,  showFormat: true,  showTopics: false, showVideoConfig: false },
+  experimental: { showTemplate: true,  showSlideCount: false, showFormat: false, showTopics: false, showVideoConfig: false },
+  video:        { showTemplate: false, showSlideCount: false, showFormat: false, showTopics: false, showVideoConfig: true  },
 };
 
 

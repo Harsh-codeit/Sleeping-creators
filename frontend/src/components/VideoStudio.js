@@ -1,329 +1,423 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Play, Film, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { ChipGroup } from "./video/ChipGroup";
-import { VideoField } from "./video/VideoField";
+import { Play, Pause } from "lucide-react";
+import VideoCanvasPreview from "./VideoCanvasPreview";
+import ClipPickerModal from "./ClipPickerModal";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const PLATFORMS = ["instagram", "facebook", "youtube", "tiktok", "linkedin", "twitter"];
 
-const PLATFORMS = ["instagram", "facebook", "linkedin", "twitter", "threads"];
-const PRIORITIES = ["low", "normal", "high"];
+function buildClipUrl(clip, clientId) {
+  if (clip.r2_url) return clip.r2_url;
+  const token = localStorage.getItem("sc_token");
+  const base = `${API}/clients/${clientId}/clips/${clip.drive_file_id}/stream`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
 
-const STATUS_CONFIG = {
-  queued:     { color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20", icon: Loader2, label: "Queued" },
-  processing: { color: "bg-blue-500/10 text-blue-400 border-blue-500/20",   icon: Loader2, label: "Processing" },
-  success:    { color: "bg-green-500/10 text-green-400 border-green-500/20", icon: CheckCircle2, label: "Done" },
-  failure:    { color: "bg-red-500/10  text-red-400   border-red-500/20",   icon: XCircle, label: "Failed" },
-};
+function fmt(s) {
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrimChange, disabled }) {
+  const barRef = useRef(null);
+  const dur = duration || 1;
+  const pct = (t) => `${Math.min(Math.max((t / dur) * 100, 0), 100)}%`;
+
+  const posFromEvent = useCallback((e) => {
+    if (!barRef.current) return 0;
+    const rect = barRef.current.getBoundingClientRect();
+    return Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1) * dur;
+  }, [dur]);
+
+  const startDrag = useCallback((e, type) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const trimEndVal = trimEnd ?? dur;
+    const onMove = (ev) => {
+      const t = posFromEvent(ev);
+      if (type === "in") onTrimChange({ trimStart: Math.min(t, trimEndVal - 0.1) });
+      else if (type === "out") onTrimChange({ trimEnd: Math.max(t, trimStart + 0.1) });
+      else onSeek(t);
+    };
+    const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [posFromEvent, trimStart, trimEnd, dur, onSeek, onTrimChange]);
+
+  const trimEndVal = trimEnd ?? dur;
+
+  return (
+    <div ref={barRef} className={`relative h-8 flex items-center ${disabled ? "opacity-40 pointer-events-none" : "cursor-pointer"}`}
+      onClick={e => { if (!disabled) onSeek(posFromEvent(e)); }}>
+      <div className="absolute inset-0 flex items-center pointer-events-none">
+        <div className="w-full h-1 bg-zinc-800 rounded-full" />
+      </div>
+      <div className="absolute h-1 bg-zinc-600 rounded-full pointer-events-none"
+        style={{ left: pct(trimStart), width: pct(trimEndVal - trimStart) }} />
+      <div className="absolute w-2.5 h-5 bg-amber-400 rounded-sm cursor-ew-resize z-20"
+        style={{ left: pct(trimStart), transform: "translateX(-50%)" }}
+        onMouseDown={e => startDrag(e, "in")} onClick={e => e.stopPropagation()} />
+      <div className="absolute w-2.5 h-5 bg-amber-400 rounded-sm cursor-ew-resize z-20"
+        style={{ left: pct(trimEndVal), transform: "translateX(-50%)" }}
+        onMouseDown={e => startDrag(e, "out")} onClick={e => e.stopPropagation()} />
+      <div className="absolute w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow cursor-grab z-30"
+        style={{ left: pct(currentTime), transform: "translateX(-50%)" }}
+        onMouseDown={e => startDrag(e, "playhead")} onClick={e => e.stopPropagation()} />
+    </div>
+  );
+}
 
 export default function VideoStudio({ clientId }) {
-  const [clips, setClips] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [selectedClip, setSelectedClip] = useState(null);
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [platforms, setPlatforms] = useState(["instagram"]);
-  const [caption, setCaption] = useState("");
-  const [hashtag, setHashtag] = useState("");
-  const [hashtags, setHashtags] = useState([]);
+  const [templateId, setTemplateId] = useState(null);
+  const [activeTemplate, setActiveTemplate] = useState(null);
+
+  const [clip, setClip] = useState(null);
+  const [clipOpen, setClipOpen] = useState(false);
   const [trimStart, setTrimStart] = useState(0);
-  const [trimEnd, setTrimEnd] = useState("");
-  const [priority, setPriority] = useState("normal");
-  const [submitting, setSubmitting] = useState(false);
-  const [job, setJob] = useState(null);
-  const pollRef = useRef(null);
+  const [trimEnd, setTrimEnd] = useState(null);
+
+  const [overlayText, setOverlayText] = useState("");
+  const [ctaText, setCtaText] = useState("");
+  const [caption, setCaption] = useState("");
+  const [hashtags, setHashtags] = useState("");
+  const [platforms, setPlatforms] = useState([]);
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [publishing, setPublishing] = useState(false);
+
+  const videoRef = useRef(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    axios.get(`${API}/clients/${clientId}/drive-clips`)
-      .then(r => setClips(r.data || []))
-      .catch(() => {});
-    axios.get(`${API}/video-templates`, { params: { client_id: clientId } })
+    axios.get(`${API}/video-templates?client_id=${clientId}`)
       .then(r => setTemplates(r.data || []))
       .catch(() => {});
   }, [clientId]);
 
   useEffect(() => {
-    if (!job?.taskId) return;
-    if (job.status === "success" || job.status === "failure") return;
-    pollRef.current = setInterval(async () => {
-      try {
-        const r = await axios.get(`${API}/videos/job/${job.taskId}`);
-        const { status, result, error } = r.data;
-        setJob((j) => ({ ...j, status, result, error }));
-        if (status === "success" || status === "failure") {
-          clearInterval(pollRef.current);
-        }
-      } catch {
-        clearInterval(pollRef.current);
+    const t = templates.find(t => t.id === templateId) || null;
+    setActiveTemplate(t);
+  }, [templateId, templates]);
+
+  useEffect(() => {
+    setCurrentTime(0);
+    setDuration(0);
+    setPlaying(false);
+  }, [clip]);
+
+  const previewTemplate = activeTemplate
+    ? {
+        ...activeTemplate,
+        cta_text: overlayText || activeTemplate.cta_text,
+        cta_button_text: ctaText || activeTemplate.cta_button_text,
       }
-    }, 3000);
-    return () => clearInterval(pollRef.current);
-  }, [job?.taskId, job?.status]);
+    : null;
 
-  const togglePlatform = (p) => {
-    setPlatforms((prev) =>
-      prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
-    );
-  };
+  const togglePlatform = (p) =>
+    setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
 
-  const addHashtag = (e) => {
-    if (e.key === "Enter" && hashtag.trim()) {
-      e.preventDefault();
-      const tag = hashtag.trim().replace(/^#?/, "#");
-      if (!hashtags.includes(tag)) setHashtags((h) => [...h, tag]);
-      setHashtag("");
-    }
-  };
-
-  const submit = async () => {
-    if (platforms.length === 0) return toast.error("Select at least one platform");
-    setSubmitting(true);
+  const handlePublish = async () => {
+    if (!clip) return toast.error("Select a clip first");
+    if (!platforms.length) return toast.error("Select at least one platform");
+    setPublishing(true);
     try {
-      const body = {
+      const r = await axios.post(`${API}/videos/create`, {
         client_id: clientId,
-        clip_id: selectedClip?.drive_file_id || null,
-        template_id: selectedTemplate?.id || null,
-        platforms,
+        clip_id: clip.drive_file_id || clip.id,
+        template_id: templateId || null,
+        clip_trim_start: trimStart,
+        clip_trim_end: trimEnd,
         caption,
-        hashtags,
-        priority,
-        clip_trim_start: parseFloat(trimStart) || 0,
-        clip_trim_end: trimEnd !== "" ? parseFloat(trimEnd) : null,
-      };
-      const r = await axios.post(`${API}/videos/create`, body);
-      const taskId = r.data.task_id;
-      setJob({ taskId, status: "queued", result: null, error: null });
-      toast.success("Video job queued");
+        hashtags: hashtags.split(/\s+/).filter(Boolean),
+        platforms,
+        scheduled_at: scheduleAt || null,
+        cta_text_override: overlayText || null,
+        cta_button_text_override: ctaText || null,
+      });
+      toast.success(r.data.message || `Video queued (${r.data.status || "processing"})`);
+      setClip(null);
+      setOverlayText("");
+      setCtaText("");
+      setCaption("");
+      setHashtags("");
+      setPlatforms([]);
+      setScheduleAt("");
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to submit");
+      toast.error(e.response?.data?.detail || "Publish failed");
     } finally {
-      setSubmitting(false);
+      setPublishing(false);
     }
   };
 
-  const statusCfg = job ? STATUS_CONFIG[job.status] || STATUS_CONFIG.queued : null;
-  const StatusIcon = statusCfg?.icon;
+  const clipDuration = duration || clip?.duration || 0;
+
+  const handlePlaybackChange = useCallback(({ currentTime: t, duration: d, playing: p }) => {
+    setCurrentTime(t);
+    if (d) setDuration(d);
+    setPlaying(p);
+  }, []);
+
+  const handleSeek = useCallback((t) => {
+    if (videoRef.current) videoRef.current.currentTime = t;
+    setCurrentTime(t);
+  }, []);
+
+  const handleTrimChange = useCallback(({ trimStart: s, trimEnd: e }) => {
+    if (s !== undefined) setTrimStart(s);
+    if (e !== undefined) setTrimEnd(e);
+  }, []);
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (playing) videoRef.current.pause();
+    else videoRef.current.play();
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Template picker */}
-      <div>
-        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide mb-3">
-          Template <span className="text-zinc-700">— optional</span>
-        </p>
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          <button
-            type="button"
-            onClick={() => setSelectedTemplate(null)}
-            className={`flex-shrink-0 flex flex-col items-center gap-1 p-2 border transition-colors w-20 ${
-              !selectedTemplate ? "border-white" : "border-zinc-800 hover:border-zinc-600"
-            }`}
-          >
-            <div
-              className="w-full bg-zinc-800 flex items-center justify-center text-zinc-600 text-[9px] font-mono"
-              style={{ aspectRatio: "9 / 16" }}
-            >
-              Auto
-            </div>
-            <span className="text-[9px] font-mono text-zinc-500">None</span>
-          </button>
+    <div className="flex gap-0 h-full min-h-0" style={{ minHeight: 0 }}>
 
-          {templates.map((tpl) => (
-            <button
-              key={tpl.id}
-              type="button"
-              onClick={() => setSelectedTemplate(tpl)}
-              className={`flex-shrink-0 flex flex-col items-center gap-1 p-2 border transition-colors w-20 ${
-                selectedTemplate?.id === tpl.id ? "border-white" : "border-zinc-800 hover:border-zinc-600"
-              }`}
-            >
-              <div
-                className="w-full bg-gradient-to-br from-zinc-700 to-zinc-900 relative overflow-hidden"
-                style={{ aspectRatio: "9 / 16" }}
-              >
-                {tpl.cta_button_text && (
-                  <div
-                    className="absolute font-bold"
-                    style={{
-                      left: `${(tpl.cta_button_x_ratio ?? 0.5) * 100}%`,
-                      top: `${(tpl.cta_button_y_ratio ?? 0.88) * 100}%`,
-                      transform: "translate(-50%, -50%)",
-                      fontSize: 6,
-                      background: tpl.cta_button_bg_color || "#fff",
-                      color: tpl.cta_button_text_color || "#000",
-                      borderRadius: 999,
-                      padding: "2px 6px",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {tpl.cta_button_text}
-                  </div>
-                )}
-              </div>
-              <span className="text-[9px] font-mono text-zinc-400 truncate w-full text-center">
-                {tpl.name}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Clip picker */}
-      <div>
-        <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide mb-3">
-          Clip <span className="text-zinc-700">— optional, auto-picks if not set</span>
-        </p>
-        {clips.length === 0 ? (
-          <p className="text-xs font-mono text-zinc-600">No clips found. Sync Drive clips from the Profile tab.</p>
-        ) : (
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            <button
-              type="button"
-              onClick={() => setSelectedClip(null)}
-              className={`flex-shrink-0 px-3 py-1.5 text-xs font-mono border transition-colors ${
-                !selectedClip ? "border-white text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500"
-              }`}
-            >
-              Auto-pick
-            </button>
-            {clips.map((clip) => (
+      {/* ── Left: template + clip ────────────────────────────────── */}
+      <aside className="w-64 shrink-0 flex flex-col border-r border-zinc-800 overflow-y-auto">
+        <div className="p-4 border-b border-zinc-800">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Template</p>
+          {templates.length === 0 ? (
+            <p className="text-[10px] font-mono text-zinc-600">
+              No templates yet — create one in Templates → Video.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
               <button
-                key={clip.drive_file_id}
-                type="button"
-                onClick={() => setSelectedClip(clip)}
-                className={`flex-shrink-0 px-3 py-1.5 text-xs font-mono border truncate max-w-[140px] transition-colors ${
-                  selectedClip?.drive_file_id === clip.drive_file_id
-                    ? "border-white text-white"
-                    : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+                onClick={() => setTemplateId(null)}
+                className={`w-full text-left px-3 py-2 text-[10px] font-mono border transition-colors ${
+                  templateId === null
+                    ? "bg-white text-black border-white"
+                    : "border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-600"
                 }`}
               >
-                <Film size={11} className="inline mr-1" />
-                {clip.name || clip.drive_file_id}
+                None
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Post settings */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <VideoField label="Caption">
-          <textarea
-            rows={3}
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            placeholder="Write a caption…"
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
-          />
-        </VideoField>
-
-        <VideoField label="Hashtags — press Enter to add">
-          <input
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
-            value={hashtag}
-            onChange={(e) => setHashtag(e.target.value)}
-            onKeyDown={addHashtag}
-            placeholder="#brand"
-          />
-          {hashtags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {hashtags.map((h) => (
-                <span
-                  key={h}
-                  className="text-[10px] font-mono px-2 py-0.5 border border-zinc-700 text-zinc-400 cursor-pointer hover:border-red-700 hover:text-red-400 transition-colors"
-                  onClick={() => setHashtags((hs) => hs.filter((x) => x !== h))}
+              {templates.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTemplateId(t.id)}
+                  className={`w-full text-left border transition-colors overflow-hidden ${
+                    templateId === t.id
+                      ? "border-white"
+                      : "border-zinc-800 hover:border-zinc-700"
+                  }`}
                 >
-                  {h} ×
-                </span>
+                  {/* Mini CSS preview */}
+                  <div className="relative bg-gradient-to-br from-zinc-800 to-zinc-950 overflow-hidden"
+                    style={{ aspectRatio: (t.aspect_ratio || "9:16").replace(":", " / ") }}>
+                    {t.cta_text && (
+                      <div className="absolute inset-x-0 text-center px-2"
+                        style={{ top: `${(t.cta_text_y_ratio ?? 0.78) * 100}%`, transform: "translateY(-50%)",
+                          fontSize: 9, color: t.cta_text_color || "#fff", fontWeight: 700,
+                          background: t.cta_text_bg ? `rgba(0,0,0,${t.cta_text_bg_opacity ?? 0.5})` : "transparent",
+                          padding: t.cta_text_bg ? "1px 4px" : 0 }}>
+                        {t.cta_text}
+                      </div>
+                    )}
+                    {t.cta_button_text && (
+                      <div className="absolute inset-x-0 text-center px-2"
+                        style={{ top: `${(t.cta_button_y_ratio ?? 0.88) * 100}%`, transform: "translateY(-50%)",
+                          fontSize: 8, color: t.cta_button_text_color || "#000",
+                          background: t.cta_button_bg_color || "#fff",
+                          borderRadius: t.cta_button_border_radius ?? 4, padding: "2px 8px",
+                          display: "inline-block", margin: "0 auto" }}>
+                        {t.cta_button_text}
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-2 py-1.5">
+                    <p className={`text-[10px] font-mono truncate ${templateId === t.id ? "text-white" : "text-zinc-400"}`}>
+                      {t.name}
+                    </p>
+                    <p className="text-[9px] font-mono text-zinc-600">{t.aspect_ratio || "9:16"}</p>
+                  </div>
+                </button>
               ))}
             </div>
           )}
-        </VideoField>
+        </div>
 
-        <VideoField label="Platforms">
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {PLATFORMS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => togglePlatform(p)}
-                className={`px-2.5 py-1 text-[10px] font-mono border transition-colors ${
-                  platforms.includes(p)
-                    ? "bg-white text-black border-white"
-                    : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </VideoField>
+        <div className="p-4">
+          <p className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Clip</p>
+          <button
+            onClick={() => setClipOpen(true)}
+            className="w-full border border-zinc-800 px-3 py-2 text-[10px] font-mono text-left text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+          >
+            {clip ? (clip.name || clip.filename || clip.id) : "Choose clip…"}
+          </button>
+          {clip && (
+            <button
+              onClick={() => setClip(null)}
+              className="mt-1 text-[9px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </aside>
 
-        <VideoField label="Priority">
-          <ChipGroup options={PRIORITIES} value={priority} onChange={setPriority} />
-        </VideoField>
+      {/* ── Center: preview + transport ──────────────────────────── */}
+      <main className="flex-1 min-w-0 flex flex-col p-4 gap-3 overflow-hidden">
+        <VideoCanvasPreview
+          clip={clip}
+          template={previewTemplate}
+          aspectRatio={activeTemplate?.aspect_ratio || "9:16"}
+          videoRef={videoRef}
+          hideBuiltInControls
+          onPlaybackChange={handlePlaybackChange}
+        />
 
-        <VideoField label="Trim Start (seconds)">
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={trimStart}
-            onChange={(e) => setTrimStart(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
-          />
-        </VideoField>
-
-        <VideoField label="Trim End (seconds, optional)">
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={trimEnd}
-            onChange={(e) => setTrimEnd(e.target.value)}
-            placeholder="Leave blank = full clip"
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 placeholder-zinc-700"
-          />
-        </VideoField>
-      </div>
-
-      {/* Submit + status */}
-      <div className="flex items-center gap-4 pt-2 border-t border-zinc-800">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={submitting || platforms.length === 0}
-          className="flex items-center gap-2 px-5 py-2 bg-white text-black text-xs font-mono font-semibold hover:bg-zinc-200 disabled:opacity-40 transition-colors"
-        >
-          {submitting ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-          Create Video
-        </button>
-
-        {job && statusCfg && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-mono ${statusCfg.color}`}>
-            <StatusIcon
-              size={13}
-              className={job.status === "queued" || job.status === "processing" ? "animate-spin" : ""}
+        <div className="space-y-1.5 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={togglePlay}
+              disabled={!clip}
+              className="w-8 h-8 flex items-center justify-center border border-zinc-700 text-white hover:bg-zinc-800 disabled:opacity-30 transition-colors shrink-0"
+            >
+              {playing ? <Pause size={13} /> : <Play size={13} />}
+            </button>
+            <TimelineBar
+              currentTime={currentTime}
+              duration={clipDuration}
+              trimStart={trimStart}
+              trimEnd={trimEnd}
+              onSeek={handleSeek}
+              onTrimChange={handleTrimChange}
+              disabled={!clip}
             />
-            {statusCfg.label}
-            {job.result?.video_url && (
-              <a
-                href={job.result.video_url}
-                target="_blank"
-                rel="noreferrer"
-                className="underline ml-2 text-green-400"
-              >
-                View
-              </a>
-            )}
-            {job.error && (
-              <span className="ml-2 text-red-400 truncate max-w-xs" title={job.error}>
-                {job.error}
-              </span>
-            )}
+            <span className="font-mono text-xs text-zinc-500 tabular-nums shrink-0 min-w-[64px] text-right">
+              {fmt(currentTime)} / {fmt(clipDuration)}
+            </span>
           </div>
-        )}
-      </div>
+          {clip && (
+            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-600 px-0.5">
+              <span>In: {trimStart.toFixed(1)}s</span>
+              <span>drag amber handles to trim</span>
+              <span>Out: {(trimEnd ?? clipDuration).toFixed(1)}s</span>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ── Right: content + publish ─────────────────────────────── */}
+      <aside className="w-72 shrink-0 border-l border-zinc-800 overflow-y-auto">
+        <div className="p-4 space-y-5">
+
+          {/* Overlay text */}
+          <div>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
+              Overlay Text
+            </label>
+            <textarea
+              rows={2}
+              value={overlayText}
+              onChange={e => setOverlayText(e.target.value)}
+              placeholder={activeTemplate?.cta_text || "Text shown on screen…"}
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
+            />
+          </div>
+
+          {/* CTA button text */}
+          <div>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
+              CTA Button Text
+            </label>
+            <input
+              value={ctaText}
+              onChange={e => setCtaText(e.target.value)}
+              placeholder={activeTemplate?.cta_button_text || "Book a call →"}
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          <div className="border-t border-zinc-800" />
+
+          {/* Caption */}
+          <div>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Caption</label>
+            <textarea
+              rows={3}
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              placeholder="Write your caption…"
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
+            />
+          </div>
+
+          {/* Hashtags */}
+          <div>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Hashtags</label>
+            <input
+              value={hashtags}
+              onChange={e => setHashtags(e.target.value)}
+              placeholder="#marketing #business"
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          {/* Platforms */}
+          <div>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Platforms</label>
+            <div className="flex flex-wrap gap-1.5">
+              {PLATFORMS.map(p => (
+                <button
+                  key={p}
+                  onClick={() => togglePlatform(p)}
+                  className={`px-2.5 py-1 text-[10px] font-mono border transition-colors ${
+                    platforms.includes(p)
+                      ? "bg-white text-black border-white"
+                      : "border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Schedule */}
+          <div>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
+              Schedule <span className="normal-case text-zinc-600">(optional)</span>
+            </label>
+            <input
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={e => setScheduleAt(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+
+          <button
+            onClick={handlePublish}
+            disabled={publishing}
+            className="w-full py-2.5 bg-white text-black text-sm font-mono font-bold hover:bg-zinc-200 disabled:opacity-40 transition-colors"
+          >
+            {publishing ? "Publishing…" : scheduleAt ? "Schedule Video" : "Publish Now"}
+          </button>
+        </div>
+      </aside>
+
+      {clipOpen && (
+        <ClipPickerModal
+          clientId={clientId}
+          onClose={() => setClipOpen(false)}
+          onSelect={c => {
+            setClip({ ...c, url: buildClipUrl(c, clientId) });
+            setTrimStart(0);
+            setTrimEnd(c.duration || null);
+            setClipOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

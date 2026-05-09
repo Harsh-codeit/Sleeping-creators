@@ -428,6 +428,14 @@ async def create_video_post(
             if tmpl_doc:
                 template = {k: v for k, v in tmpl_doc.items() if k != "_id"}
 
+        # Apply per-post text overrides (overlay text and CTA button text)
+        cta_text_override = kwargs.get("cta_text_override")
+        cta_button_text_override = kwargs.get("cta_button_text_override")
+        if cta_text_override is not None:
+            template["cta_text"] = cta_text_override
+        if cta_button_text_override is not None:
+            template["cta_button_text"] = cta_button_text_override
+
         # 6. Assemble with FFmpeg
         await asyncio.get_running_loop().run_in_executor(
             None, assemble_video,
