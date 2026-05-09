@@ -19,6 +19,120 @@ function fmt(s) {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
+function MiniElement({ el }) {
+  const p = el.props || {};
+  const base = {
+    position: "absolute",
+    left: `${el.x_ratio * 100}%`,
+    top: `${el.y_ratio * 100}%`,
+    transform: "translate(-50%, -50%)",
+    pointerEvents: "none",
+  };
+
+  if (el.type === "cta_button") {
+    return (
+      <div style={{
+        ...base,
+        background: p.bg_color || "#fff",
+        color: p.text_color || "#000",
+        borderRadius: p.border_radius ?? 999,
+        padding: "1px 5px",
+        fontSize: 5.5,
+        fontWeight: "bold",
+        whiteSpace: "nowrap",
+        maxWidth: "75%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}>
+        {p.text || "CTA"}{p.arrow ? " →" : ""}
+      </div>
+    );
+  }
+
+  if (["text_overlay", "lower_third", "cta_text"].includes(el.type)) {
+    const hasBg = p.bg_shape && p.bg_shape !== "none";
+    return (
+      <div style={{
+        ...base,
+        color: p.color || "#fff",
+        fontSize: 5.5,
+        fontWeight: "700",
+        textAlign: "center",
+        whiteSpace: "nowrap",
+        maxWidth: "80%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        background: hasBg ? `${p.bg_color || "#000"}99` : "transparent",
+        borderRadius: hasBg ? (p.bg_shape === "pill" ? 999 : 1) : 0,
+        padding: hasBg ? "1px 3px" : 0,
+      }}>
+        {p.text || el.type}
+      </div>
+    );
+  }
+
+  if (el.type === "link_in_bio") {
+    return (
+      <div style={{
+        ...base,
+        background: p.bg_color || "#000",
+        color: p.text_color || "#fff",
+        borderRadius: 2,
+        padding: "1px 4px",
+        fontSize: 5,
+        fontWeight: "bold",
+        whiteSpace: "nowrap",
+      }}>
+        {p.text || "link in bio"} ↗
+      </div>
+    );
+  }
+
+  if (el.type === "countdown") {
+    return <div style={{ ...base, color: p.color || "#fff", fontSize: 9, fontWeight: "bold" }}>00:10</div>;
+  }
+
+  if (el.type === "rectangle") {
+    return (
+      <div style={{
+        ...base,
+        width: `${(p.width_ratio || 0.8) * 100}%`,
+        height: `${(p.height_ratio || 0.1) * 100}%`,
+        background: `${p.fill_color || "#000"}80`,
+      }} />
+    );
+  }
+
+  if (el.type === "circle") {
+    const pct = `${(p.width_ratio || 0.1) * 100}%`;
+    return <div style={{ ...base, width: pct, paddingBottom: pct, borderRadius: "50%", background: `${p.fill_color || "#fff"}60` }} />;
+  }
+
+  if (el.type === "line") {
+    return <div style={{ ...base, width: `${(p.width_ratio || 0.8) * 100}%`, height: 1, background: p.color || "rgba(255,255,255,0.5)" }} />;
+  }
+
+  if (["logo", "watermark"].includes(el.type)) {
+    return (
+      <div style={{
+        ...base,
+        width: `${(p.width_ratio || 0.15) * 100}%`,
+        height: `${(p.height_ratio || 0.08) * 100}%`,
+        border: "1px dashed rgba(255,255,255,0.2)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        <span style={{ fontSize: 4.5, color: "rgba(255,255,255,0.3)" }}>
+          {el.type === "logo" ? "LOGO" : "WM"}
+        </span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrimChange, disabled }) {
   const barRef = useRef(null);
   const dur = duration || 1;
@@ -205,51 +319,85 @@ export default function VideoStudio({ clientId }) {
 
       {/* ── Left: template + clip ────────────────────────────────── */}
       <aside className="w-64 shrink-0 flex flex-col border-r border-zinc-800 overflow-y-auto">
-        <div className="p-4 border-b border-zinc-800">
-          <p className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Template</p>
+        <div className="border-b border-zinc-800">
+          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+            <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Template</p>
+            {templateId && (
+              <button
+                onClick={() => setTemplateId(null)}
+                className="text-[9px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                clear
+              </button>
+            )}
+          </div>
+
           {templates.length === 0 ? (
-            <p className="text-[10px] font-mono text-zinc-600">
-              No templates yet — create one in Templates → Video.
+            <p className="text-[10px] font-mono text-zinc-600 px-4 pb-4">
+              No templates — create one in Templates → Video.
             </p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="px-3 pb-3 flex flex-col gap-1.5">
               <button
                 onClick={() => setTemplateId(null)}
                 className={`w-full text-left px-3 py-2 text-[10px] font-mono border transition-colors ${
                   templateId === null
                     ? "bg-white text-black border-white"
-                    : "border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-600"
+                    : "border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600"
                 }`}
               >
-                None
+                No template
               </button>
-              {templates.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setTemplateId(t.id)}
-                  className={`w-full text-left border transition-colors overflow-hidden ${
-                    templateId === t.id
-                      ? "border-white"
-                      : "border-zinc-800 hover:border-zinc-700"
-                  }`}
-                >
-                  {/* Mini CSS preview */}
-                  <div className="relative bg-gradient-to-br from-zinc-800 to-zinc-950 overflow-hidden"
-                    style={{ aspectRatio: (t.aspect_ratio || "9:16").replace(":", " / ") }}>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 opacity-40">
-                      <span className="text-[10px] font-mono text-white">
-                        {(t.elements || []).length} elements
-                      </span>
+
+              {templates.map(t => {
+                const els = t.elements || [];
+                const ar = t.aspect_ratio || "9:16";
+                const isSelected = templateId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTemplateId(t.id)}
+                    className={`w-full text-left border transition-colors duration-150 overflow-hidden group ${
+                      isSelected ? "border-white" : "border-zinc-800 hover:border-zinc-600"
+                    }`}
+                  >
+                    {/* Mini element map */}
+                    <div
+                      className="relative overflow-hidden"
+                      style={{
+                        height: 72,
+                        background: "#09090B",
+                        backgroundImage:
+                          "linear-gradient(rgba(39,39,42,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(39,39,42,0.6) 1px, transparent 1px)",
+                        backgroundSize: "25% 25%",
+                      }}
+                    >
+                      {els.length === 0 ? (
+                        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-mono text-zinc-700">empty</span>
+                      ) : (
+                        <div className="absolute inset-0">
+                          {[...els]
+                            .sort((a, b) => (a.z_index || 0) - (b.z_index || 0))
+                            .map(el => <MiniElement key={el.id} el={el} />)}
+                        </div>
+                      )}
+                      <div className="absolute top-1 right-1 text-[8px] font-mono text-zinc-600 bg-black/60 px-1 py-0.5 border border-zinc-800">
+                        {ar}
+                      </div>
                     </div>
-                  </div>
-                  <div className="px-2 py-1.5">
-                    <p className={`text-[10px] font-mono truncate ${templateId === t.id ? "text-white" : "text-zinc-400"}`}>
-                      {t.name}
-                    </p>
-                    <p className="text-[9px] font-mono text-zinc-600">{t.aspect_ratio || "9:16"}</p>
-                  </div>
-                </button>
-              ))}
+
+                    {/* Info row */}
+                    <div className="px-2 py-1.5 flex items-center justify-between bg-zinc-900 border-t border-zinc-800">
+                      <p className={`text-[10px] font-mono truncate ${isSelected ? "text-white" : "text-zinc-400"}`}>
+                        {t.name}
+                      </p>
+                      <p className="text-[9px] font-mono text-zinc-600 shrink-0 ml-2">
+                        {els.length}el
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
