@@ -15,12 +15,20 @@ logger = logging.getLogger(__name__)
 TEMP_DIR = Path("/tmp/sleeping-creators")
 DEFAULT_FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
-# Size presets: (font_size, h_pad, v_pad)
+# Size presets kept for backward compat with old templates that still use size: "M"
 SIZE_PRESETS = {
     "S": (22, 18, 8),
     "M": (30, 24, 12),
     "L": (40, 32, 16),
     "XL": (56, 40, 20),
+}
+
+FONT_PATHS = {
+    "bold_sans":      "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "elegant_serif":  "/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf",
+    "handwritten":    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "modern_display": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "helvetica":      "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
 }
 
 
@@ -40,25 +48,35 @@ def _hex_to_rgba(hex_color: str, opacity: float = 1.0) -> tuple:
     return (r, g, b, int(opacity * 255))
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
-    try:
-        return ImageFont.truetype(DEFAULT_FONT, size)
-    except Exception:
-        return ImageFont.load_default()
+def _load_font(size: int, font_name: str = "bold_sans") -> ImageFont.FreeTypeFont:
+    path = FONT_PATHS.get(font_name, DEFAULT_FONT)
+    for candidate in [path, DEFAULT_FONT]:
+        try:
+            return ImageFont.truetype(candidate, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 
 
 def render_cta_text_png(
     text: str,
     color: str = "#ffffff",
     size: str = "M",
+    size_px: Optional[int] = None,
+    font_name: str = "bold_sans",
     bg: bool = True,
     bg_color: str = "#000000",
     bg_opacity: float = 0.5,
     max_width_px: int = 800,
 ) -> str:
     """Render CTA text label as a transparent PNG. Returns temp file path."""
-    font_size, h_pad, v_pad = SIZE_PRESETS.get(size, SIZE_PRESETS["M"])
-    font = _load_font(font_size)
+    if size_px:
+        font_size = size_px
+        h_pad = max(int(size_px * 0.6), 10)
+        v_pad = max(int(size_px * 0.3), 6)
+    else:
+        font_size, h_pad, v_pad = SIZE_PRESETS.get(size, SIZE_PRESETS["M"])
+    font = _load_font(font_size, font_name)
 
     # Measure
     dummy = Image.new("RGBA", (1, 1))
@@ -87,12 +105,19 @@ def render_cta_button_png(
     bg_color: str = "#ffffff",
     text_color: str = "#000000",
     size: str = "M",
+    size_px: Optional[int] = None,
+    font_name: str = "bold_sans",
     arrow: bool = True,
 ) -> str:
     """Render CTA button as a transparent PNG. Returns temp file path."""
     label = f"{text}  →" if arrow else text
-    font_size, h_pad, v_pad = SIZE_PRESETS.get(size, SIZE_PRESETS["M"])
-    font = _load_font(font_size)
+    if size_px:
+        font_size = size_px
+        h_pad = max(int(size_px * 0.8), 14)
+        v_pad = max(int(size_px * 0.4), 8)
+    else:
+        font_size, h_pad, v_pad = SIZE_PRESETS.get(size, SIZE_PRESETS["M"])
+    font = _load_font(font_size, font_name)
 
     dummy = Image.new("RGBA", (1, 1))
     d = ImageDraw.Draw(dummy)
@@ -194,6 +219,8 @@ def render_element_png(element: dict, frame_w: int = 1080, frame_h: int = 1920) 
             text=props.get("text", ""),
             color=props.get("color", "#ffffff"),
             size=props.get("size", "M"),
+            size_px=props.get("size_px"),
+            font_name=props.get("font", "bold_sans"),
             bg=props.get("bg_shape", "none") != "none",
             bg_color=props.get("bg_color", "#000000"),
             bg_opacity=props.get("bg_opacity", 0.5),
@@ -204,7 +231,9 @@ def render_element_png(element: dict, frame_w: int = 1080, frame_h: int = 1920) 
             text=props.get("text", ""),
             bg_color=props.get("bg_color", "#ffffff"),
             text_color=props.get("text_color", "#000000"),
-            size="M",
+            size=props.get("size", "M"),
+            size_px=props.get("size_px"),
+            font_name=props.get("font", "bold_sans"),
             arrow=props.get("arrow", True),
         )
 
@@ -215,6 +244,8 @@ def render_element_png(element: dict, frame_w: int = 1080, frame_h: int = 1920) 
             bg_color=props.get("bg_color", "#000000"),
             text_color=props.get("text_color", "#ffffff"),
             size="S",
+            size_px=props.get("size_px"),
+            font_name=props.get("font", "bold_sans"),
             arrow=False,
         )
 
@@ -226,6 +257,8 @@ def render_element_png(element: dict, frame_w: int = 1080, frame_h: int = 1920) 
             text=f"{mins:02d}:{secs:02d}",
             color=props.get("color", "#ffffff"),
             size=props.get("size", "L"),
+            size_px=props.get("size_px"),
+            font_name=props.get("font", "bold_sans"),
             bg=False,
         )
 

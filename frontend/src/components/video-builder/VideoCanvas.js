@@ -2,7 +2,13 @@ import { useRef, useCallback, useEffect } from "react";
 import { Shuffle, Trash2, Copy, ChevronUp, ChevronDown } from "lucide-react";
 
 const ASPECT_DIMS = { "9:16": [9, 16], "1:1": [1, 1], "16:9": [16, 9], "4:5": [4, 5] };
-const SIZE_PX = { S: 12, M: 15, L: 20, XL: 28 };
+const FONT_CSS = {
+  bold_sans:      "700 normal 'Liberation Sans', Arial, sans-serif",
+  elegant_serif:  "italic normal Georgia, 'DejaVu Serif', serif",
+  handwritten:    "600 normal cursive",
+  modern_display: "900 normal 'Liberation Sans', Arial, sans-serif",
+  helvetica:      "400 normal Helvetica, 'Helvetica Neue', Arial, sans-serif",
+};
 
 function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag, getContainerRect }) {
   const cleanupListeners = useRef(null);
@@ -25,8 +31,8 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
       const dx = (ev.clientX - startX) / w;
       const dy = (ev.clientY - startY) / h;
       onDrag(el.id, {
-        x_ratio: Math.max(0, Math.min(1, initX + dx)),
-        y_ratio: Math.max(0, Math.min(1, initY + dy)),
+        x_ratio: Math.max(-0.2, Math.min(1.2, initX + dx)),
+        y_ratio: Math.max(-0.2, Math.min(1.2, initY + dy)),
       });
     };
     const onUp = () => {
@@ -42,7 +48,8 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
   const px = el.x_ratio * containerW;
   const py = el.y_ratio * containerH;
   const p = el.props || {};
-  const fontSize = SIZE_PX[p.size] || 15;
+  const fontSize = p.size_px || 15;
+  const fontFamily = FONT_CSS[p.font] || FONT_CSS.bold_sans;
 
   const style = {
     position: "absolute",
@@ -54,6 +61,14 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     borderRadius: 0,
     userSelect: "none",
     zIndex: el.z_index + 1,
+  };
+
+  const textBaseStyle = {
+    whiteSpace: "nowrap",
+    lineHeight: p.line_height || 1.4,
+    letterSpacing: p.letter_spacing ? `${p.letter_spacing}px` : "normal",
+    font: fontFamily,
+    fontSize,
   };
 
   let content = null;
@@ -68,7 +83,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
         }
       : {};
     content = (
-      <span style={{ color: p.color || "#fff", fontSize, fontWeight: "bold", ...bg }}>
+      <span style={{ color: p.color || "#fff", ...textBaseStyle, ...bg }}>
         {p.text || el.type}
       </span>
     );
@@ -79,9 +94,10 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
         color: p.text_color || "#000",
         borderRadius: p.border_radius ?? 999,
         padding: "4px 14px",
-        fontSize,
-        fontWeight: "bold",
         display: "inline-block",
+        whiteSpace: "nowrap",
+        font: fontFamily,
+        fontSize,
       }}>
         {p.text || "Button"}{p.arrow ? " →" : ""}
       </span>
@@ -93,8 +109,9 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
         color: p.text_color || "#fff",
         borderRadius: 6,
         padding: "3px 10px",
-        fontSize: SIZE_PX.S,
         fontWeight: "bold",
+        whiteSpace: "nowrap",
+        fontSize: 12,
       }}>
         {p.text || "Link in bio"} ↗ {p.handle || ""}
       </span>
@@ -104,7 +121,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     const m = String(Math.floor(val / 60)).padStart(2, "0");
     const s = String(Math.floor(val % 60)).padStart(2, "0");
     content = (
-      <span style={{ color: p.color || "#fff", fontSize: SIZE_PX[p.size] || 28, fontWeight: "bold" }}>
+      <span style={{ color: p.color || "#fff", fontSize: p.size_px || 32, fontWeight: "bold", font: fontFamily, whiteSpace: "nowrap" }}>
         {m}:{s}
       </span>
     );

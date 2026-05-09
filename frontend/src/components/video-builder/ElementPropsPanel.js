@@ -1,5 +1,4 @@
-const FONTS = ["bold_sans", "elegant_serif", "handwritten", "modern_display"];
-const SIZES = ["S", "M", "L", "XL"];
+const FONTS = ["bold_sans", "elegant_serif", "handwritten", "modern_display", "helvetica"];
 const ANIMS_IN = ["none", "fade", "slide_up", "slide_in", "pop"];
 const ANIMS_OUT = ["none", "fade"];
 const BG_SHAPES = ["none", "pill", "box"];
@@ -72,7 +71,17 @@ function TextTypeProps({ props, onChange }) {
     <>
       <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
       <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
-      <Field label="Size"><Select value={props.size} onChange={v => onChange({ size: v })} options={SIZES} /></Field>
+      <div className="flex gap-2">
+        <Field label="Size (px)">
+          <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={6} max={200} step={1} />
+        </Field>
+        <Field label="Line Height">
+          <Input type="number" value={props.line_height} onChange={v => onChange({ line_height: v })} min={0.5} max={4} step={0.1} />
+        </Field>
+      </div>
+      <Field label="Letter Spacing (px)">
+        <Input type="number" value={props.letter_spacing} onChange={v => onChange({ letter_spacing: v })} min={-10} max={40} step={0.5} />
+      </Field>
       <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
       <Field label="Background"><Select value={props.bg_shape} onChange={v => onChange({ bg_shape: v })} options={BG_SHAPES} /></Field>
       {props.bg_shape !== "none" && (
@@ -93,6 +102,10 @@ function CtaButtonProps({ props, onChange }) {
   return (
     <>
       <Field label="Text"><Input value={props.text} onChange={v => onChange({ text: v })} /></Field>
+      <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
+      <Field label="Size (px)">
+        <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={6} max={120} step={1} />
+      </Field>
       <ColorInput label="BG Color" value={props.bg_color} onChange={v => onChange({ bg_color: v })} />
       <ColorInput label="Text Color" value={props.text_color} onChange={v => onChange({ text_color: v })} />
       <Field label="Border Radius">
@@ -129,7 +142,9 @@ function CountdownProps({ props, onChange }) {
       </Field>
       <ColorInput label="Color" value={props.color} onChange={v => onChange({ color: v })} />
       <Field label="Font"><Select value={props.font} onChange={v => onChange({ font: v })} options={FONTS} /></Field>
-      <Field label="Size"><Select value={props.size} onChange={v => onChange({ size: v })} options={SIZES} /></Field>
+      <Field label="Size (px)">
+        <Input type="number" value={props.size_px} onChange={v => onChange({ size_px: v })} min={12} max={200} step={2} />
+      </Field>
     </>
   );
 }
