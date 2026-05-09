@@ -3,7 +3,10 @@ import { MoodTagPicker } from "./MoodTagPicker";
 
 test("renders all mood tags", () => {
   render(<MoodTagPicker value={[]} onChange={() => {}} />);
-  ["energy", "calm", "power", "inspiring"].forEach((tag) => {
+  [
+    "energy", "power", "authority", "calm",
+    "inspiring", "urgent", "celebratory", "mysterious", "playful",
+  ].forEach((tag) => {
     expect(screen.getByText(tag)).toBeInTheDocument();
   });
 });

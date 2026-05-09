@@ -14,3 +14,8 @@ test("calls onChange with preset key", () => {
   fireEvent.click(screen.getByText("Serif"));
   expect(onChange).toHaveBeenCalledWith("elegant_serif");
 });
+
+test("selected preset has border-white class", () => {
+  render(<FontPicker value="elegant_serif" onChange={() => {}} />);
+  expect(screen.getByText("Serif").closest("button").className).toMatch(/border-white/);
+});

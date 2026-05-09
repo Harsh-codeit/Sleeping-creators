@@ -5,7 +5,7 @@ const FONTS = [
   { value: "modern_display", label: "Display",     sample: "Aa", style: "font-black tracking-widest text-white uppercase" },
 ];
 
-export function FontPicker({ value, onChange }) {
+export function FontPicker({ value = "bold_sans", onChange }) {
   return (
     <div className="grid grid-cols-2 gap-2">
       {FONTS.map((f) => {
