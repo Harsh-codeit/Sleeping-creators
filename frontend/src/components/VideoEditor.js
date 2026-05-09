@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Play, Pause } from "lucide-react";
 import ClipPickerModal from "./ClipPickerModal";
 import VideoCanvasPreview from "./VideoCanvasPreview";
-import VideoStylePicker from "./VideoStylePicker";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "tiktok", "linkedin", "twitter"];
@@ -63,16 +62,13 @@ function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrim
       className={`relative h-8 flex items-center ${disabled ? "opacity-40 pointer-events-none" : "cursor-pointer"}`}
       onClick={handleBarClick}
     >
-      {/* Track */}
       <div className="absolute inset-0 flex items-center pointer-events-none">
         <div className="w-full h-1 bg-zinc-800 rounded-full" />
       </div>
-      {/* Trim region highlight */}
       <div
         className="absolute h-1 bg-zinc-600 rounded-full pointer-events-none"
         style={{ left: toPercent(trimStart), width: toPercent(trimEndVal - trimStart) }}
       />
-      {/* In-handle */}
       <div
         className="absolute w-2.5 h-5 bg-amber-400 rounded-sm cursor-ew-resize z-20"
         style={{ left: toPercent(trimStart), transform: "translateX(-50%)" }}
@@ -80,7 +76,6 @@ function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrim
         onClick={(e) => e.stopPropagation()}
         title="Trim start"
       />
-      {/* Out-handle */}
       <div
         className="absolute w-2.5 h-5 bg-amber-400 rounded-sm cursor-ew-resize z-20"
         style={{ left: toPercent(trimEndVal), transform: "translateX(-50%)" }}
@@ -88,7 +83,6 @@ function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrim
         onClick={(e) => e.stopPropagation()}
         title="Trim end"
       />
-      {/* Playhead */}
       <div
         className="absolute w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow cursor-grab z-30"
         style={{ left: toPercent(currentTime), transform: "translateX(-50%)" }}
@@ -106,30 +100,14 @@ export default function VideoEditor({ clientId, onPublished }) {
   const [trimEnd, setTrimEnd] = useState(null);
 
   const [templates, setTemplates] = useState([]);
-  const [templateId, setTemplateId] = useState(null);
+  const [templateId, setTemplateId] = useState("");
   const [activeTemplate, setActiveTemplate] = useState(null);
 
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [platforms, setPlatforms] = useState([]);
   const [scheduleAt, setScheduleAt] = useState("");
-
   const [publishing, setPublishing] = useState(false);
-
-  const [styleTab, setStyleTab] = useState("templates"); // "templates" | "style"
-  const [styleOverrides, setStyleOverrides] = useState({
-    font_preset: "bold_sans",
-    overlay_style: "gradient_wash",
-    overlay_color: "#000000",
-    overlay_opacity: 0.5,
-    cta_button_bg_color: "#ffffff",
-    cta_button_text_color: "#000000",
-    cta_button_border_radius: 4,
-    cta_button_shadow: false,
-    cta_animation: "slide_up",
-    cta_delay: 3.0,
-    cta_button_text: "",
-  });
 
   const videoRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -143,7 +121,6 @@ export default function VideoEditor({ clientId, onPublished }) {
   }, [clientId]);
 
   useEffect(() => {
-    if (!templateId) { setActiveTemplate(null); return; }
     const t = templates.find((t) => t.id === templateId);
     setActiveTemplate(t || null);
   }, [templateId, templates]);
@@ -163,7 +140,6 @@ export default function VideoEditor({ clientId, onPublished }) {
     setPublishing(true);
     try {
       const payload = {
-        ...styleOverrides,           // spread first — named fields below override
         client_id: clientId,
         clip_id: clip.drive_file_id || clip.id,
         template_id: templateId || null,
@@ -209,89 +185,10 @@ export default function VideoEditor({ clientId, onPublished }) {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-6 items-start">
+    <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-      {/* ── Left: template sidebar ─────────────────────────────── */}
-      <aside className="flex flex-col">
-        {/* Tab switcher */}
-        <div className="flex border-b border-zinc-800">
-          <button
-            onClick={() => setStyleTab("templates")}
-            className={`flex-1 py-2 text-xs font-medium transition-colors ${
-              styleTab === "templates"
-                ? "text-white border-b-2 border-indigo-500"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            Templates
-          </button>
-          <button
-            onClick={() => setStyleTab("style")}
-            className={`flex-1 py-2 text-xs font-medium transition-colors ${
-              styleTab === "style"
-                ? "text-white border-b-2 border-indigo-500"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            Style
-          </button>
-        </div>
-
-        {/* Tab content */}
-        <div className="flex-1 overflow-y-auto pt-2">
-          {styleTab === "templates" ? (
-            <div className="space-y-2">
-              {templates.length === 0 ? (
-                <p className="text-xs font-mono text-zinc-600">No templates yet — create one in the Templates tab.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => setTemplateId(null)}
-                    className={`w-full text-left px-3 py-2 text-xs font-mono border transition-colors ${
-                      templateId === null
-                        ? "bg-white text-black border-white"
-                        : "border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                    }`}
-                  >
-                    None
-                  </button>
-                  {templates.map((t) => (
-                    <button
-                      key={t.id}
-                      aria-label={t.name}
-                      onClick={() => setTemplateId(t.id)}
-                      className={`w-full text-left px-3 py-2.5 border transition-colors ${
-                        templateId === t.id
-                          ? "bg-white text-black border-white"
-                          : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
-                      }`}
-                    >
-                      <div className={`text-xs font-mono font-semibold ${templateId === t.id ? "text-black" : "text-zinc-300"}`}>
-                        {t.name}
-                      </div>
-                      <div
-                        className={`text-[10px] font-mono mt-0.5 ${templateId === t.id ? "text-zinc-600" : "text-zinc-600"}`}
-                        aria-hidden="true"
-                      >
-                        {t.aspect_ratio || "9:16"}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <VideoStylePicker
-              template={styleOverrides}
-              onChange={patch => setStyleOverrides(prev => ({ ...prev, ...patch }))}
-            />
-          )}
-        </div>
-      </aside>
-
-      {/* ── Middle: preview + transport ───────────────────────── */}
-      <main className="space-y-3 min-w-0">
-        {/* Clip trigger */}
+      {/* ── Left: preview + transport ──────────────────────────── */}
+      <div className="flex-1 min-w-0 space-y-3">
         <button
           onClick={() => setClipOpen(true)}
           className="w-full border border-zinc-800 px-3 py-2 text-sm text-left font-mono text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
@@ -299,7 +196,6 @@ export default function VideoEditor({ clientId, onPublished }) {
           {clip ? clip.filename || clip.name || clip.id : "Choose clip…"}
         </button>
 
-        {/* Video preview */}
         <VideoCanvasPreview
           clip={clip}
           template={activeTemplate}
@@ -309,7 +205,6 @@ export default function VideoEditor({ clientId, onPublished }) {
           onPlaybackChange={handlePlaybackChange}
         />
 
-        {/* Transport bar */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-3">
             <button
@@ -340,10 +235,26 @@ export default function VideoEditor({ clientId, onPublished }) {
             </div>
           )}
         </div>
-      </main>
+      </div>
 
-      {/* ── Right: publish settings ────────────────────────────── */}
-      <aside className="space-y-5 lg:sticky lg:top-6">
+      {/* ── Right: settings ────────────────────────────────────── */}
+      <aside className="w-full lg:w-72 lg:shrink-0 lg:sticky lg:top-6 space-y-5">
+
+        {/* Template */}
+        <div>
+          <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Template</label>
+          <select
+            value={templateId}
+            onChange={(e) => setTemplateId(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+          >
+            <option value="">None</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Caption */}
         <div>
           <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">Caption</label>
@@ -351,7 +262,7 @@ export default function VideoEditor({ clientId, onPublished }) {
             rows={3}
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
+            className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
             placeholder="Write your caption…"
           />
         </div>
@@ -362,7 +273,7 @@ export default function VideoEditor({ clientId, onPublished }) {
           <input
             value={hashtags}
             onChange={(e) => setHashtags(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+            className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
             placeholder="#marketing #business"
           />
         </div>
@@ -390,13 +301,13 @@ export default function VideoEditor({ clientId, onPublished }) {
         {/* Schedule */}
         <div>
           <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
-            Schedule (optional — leave blank to publish now)
+            Schedule <span className="normal-case text-zinc-600">(optional)</span>
           </label>
           <input
             type="datetime-local"
             value={scheduleAt}
             onChange={(e) => setScheduleAt(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+            className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
           />
         </div>
 
