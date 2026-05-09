@@ -133,6 +133,131 @@ function MiniElement({ el }) {
   return null;
 }
 
+function TemplateOverlay({ elements }) {
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {[...elements]
+        .sort((a, b) => (a.z_index || 0) - (b.z_index || 0))
+        .map((el, i) => {
+          const p = el.props || {};
+          const base = {
+            position: "absolute",
+            left: `${(el.x_ratio ?? 0.5) * 100}%`,
+            top: `${(el.y_ratio ?? 0.5) * 100}%`,
+            transform: "translate(-50%, -50%)",
+          };
+
+          if (el.type === "cta_button") {
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                background: p.bg_color || "#fff",
+                color: p.text_color || "#000",
+                borderRadius: p.border_radius ?? 999,
+                padding: "3px 12px",
+                fontSize: 11,
+                fontWeight: "bold",
+                whiteSpace: "nowrap",
+              }}>
+                {p.text || "CTA"}{p.arrow ? " →" : ""}
+              </div>
+            );
+          }
+
+          if (["text_overlay", "lower_third", "cta_text"].includes(el.type)) {
+            const hasBg = p.bg_shape && p.bg_shape !== "none";
+            const width = p.width_ratio ? `${p.width_ratio * 100}%` : "70%";
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                color: p.color || "#fff",
+                fontSize: p.size_px ? p.size_px * 0.45 : 12,
+                fontWeight: "700",
+                textAlign: p.align || "center",
+                width,
+                wordBreak: "break-word",
+                background: hasBg ? `${p.bg_color || "#000"}99` : "transparent",
+                borderRadius: hasBg ? (p.bg_shape === "pill" ? 999 : 3) : 0,
+                padding: hasBg ? "2px 8px" : 0,
+                opacity: p.opacity ?? 1,
+              }}>
+                {p.text || el.type}
+              </div>
+            );
+          }
+
+          if (el.type === "link_in_bio") {
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                background: p.bg_color || "#000",
+                color: p.text_color || "#fff",
+                borderRadius: 4,
+                padding: "2px 8px",
+                fontSize: 9,
+                fontWeight: "bold",
+                whiteSpace: "nowrap",
+              }}>
+                {p.text || "link in bio"} ↗ {p.handle || ""}
+              </div>
+            );
+          }
+
+          if (el.type === "countdown") {
+            return (
+              <div key={el.id ?? i} style={{ ...base, color: p.color || "#fff", fontSize: p.size_px ? p.size_px * 0.45 : 20, fontWeight: "bold" }}>
+                00:10
+              </div>
+            );
+          }
+
+          if (el.type === "rectangle") {
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                width: `${(p.width_ratio || 0.8) * 100}%`,
+                height: `${(p.height_ratio || 0.1) * 100}%`,
+                background: `${p.fill_color || "#000"}80`,
+                border: p.border_width ? `${p.border_width * 0.5}px solid ${p.border_color || "#fff"}` : "none",
+              }} />
+            );
+          }
+
+          if (el.type === "line") {
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                width: `${(p.width_ratio || 0.8) * 100}%`,
+                height: Math.max((p.thickness || 2) * 0.5, 1),
+                background: p.color || "#fff",
+              }} />
+            );
+          }
+
+          if (["logo", "watermark"].includes(el.type)) {
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                width: `${(p.width_ratio || 0.15) * 100}%`,
+                height: `${(p.height_ratio || 0.08) * 100}%`,
+                border: "1px dashed rgba(255,255,255,0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+                <span style={{ fontSize: 8, color: "rgba(255,255,255,0.4)" }}>
+                  {el.type === "logo" ? "LOGO" : "WM"}
+                </span>
+              </div>
+            );
+          }
+
+          return null;
+        })}
+    </div>
+  );
+}
+
 function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrimChange, disabled }) {
   const barRef = useRef(null);
   const dur = duration || 1;
@@ -425,7 +550,21 @@ export default function VideoStudio({ clientId }) {
           className="relative bg-black flex-1 min-h-0 overflow-hidden"
           style={{ aspectRatio: (activeTemplate?.aspect_ratio || "9:16").replace(":", " / ") }}
         >
-          {clip?.url ? (
+          {/* Blueprint grid shown when no clip */}
+          {!clip?.url && (
+            <div
+              className="absolute inset-0"
+              style={{
+                background: "#09090B",
+                backgroundImage:
+                  "linear-gradient(rgba(39,39,42,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(39,39,42,0.5) 1px, transparent 1px)",
+                backgroundSize: "10% 10%",
+              }}
+            />
+          )}
+
+          {/* Video player */}
+          {clip?.url && (
             <video
               ref={videoRef}
               src={clip.url}
@@ -445,13 +584,21 @@ export default function VideoStudio({ clientId }) {
               muted
               preload="metadata"
             />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-30">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+          )}
+
+          {/* Template element overlay — shown when template selected */}
+          {activeTemplate?.elements?.length > 0 && (
+            <TemplateOverlay elements={activeTemplate.elements} />
+          )}
+
+          {/* No template + no clip empty state */}
+          {!clip?.url && !activeTemplate && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5">
                 <rect x="2" y="2" width="20" height="20" rx="2.5" />
                 <path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5" />
               </svg>
-              <span className="text-xs text-white font-mono tracking-widest uppercase">No clip</span>
+              <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Select a template</span>
             </div>
           )}
         </div>
