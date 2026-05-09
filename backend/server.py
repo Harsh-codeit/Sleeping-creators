@@ -807,7 +807,7 @@ async def _build_carousel_post_text(carousel_data: dict) -> tuple[str, dict]:
     return post_text, {"carousel_data": carousel_data}
 
 
-async def execute_pipeline(pipeline: dict, now: datetime) -> int:
+async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int = 0) -> int:
     import random as _random
 
     # Determine the intended publish time.
@@ -823,6 +823,9 @@ async def execute_pipeline(pipeline: dict, now: datetime) -> int:
             scheduled_time = now
     else:
         scheduled_time = now
+
+    if stagger_minutes:
+        scheduled_time = scheduled_time + timedelta(minutes=stagger_minutes)
 
     client = await db.clients.find_one({"id": pipeline["client_id"]}, {"_id": 0})
     if not client or client.get("status") != "active":
@@ -1080,10 +1083,13 @@ async def run_pipelines():
                 {"next_run_at": ""}
             ]
         }, {"_id": 0})
+        # Collect first so we can stagger posts across clients by 3 min each,
+        # preventing all clients from landing at the exact same scheduled_at time.
+        due_pipelines = await cursor.to_list(length=None)
         total = 0
-        async for pipeline in cursor:
+        for idx, pipeline in enumerate(due_pipelines):
             try:
-                total += await execute_pipeline(pipeline, now)
+                total += await execute_pipeline(pipeline, now, stagger_minutes=idx * 3)
             except Exception as e:
                 logger.error(f"Pipeline error {pipeline.get('id')}: {e}")
                 await db.pipelines.update_one(
