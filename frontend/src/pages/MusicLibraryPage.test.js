@@ -16,12 +16,12 @@ beforeEach(() => {
 
 test("renders page heading", async () => {
   render(<MusicLibraryPage />);
-  expect(screen.getByText("Music Library")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("Music Library")).toBeInTheDocument());
 });
 
 test("renders Upload Track button", async () => {
   render(<MusicLibraryPage />);
-  expect(screen.getByText("Upload Track")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("Upload Track")).toBeInTheDocument());
 });
 
 test("shows empty state when no tracks", async () => {
