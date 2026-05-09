@@ -3836,6 +3836,13 @@ async def seed_video_templates():
     return {"message": "Seeded 0 starter video templates", "seeded": 0}
 
 
+@api_router.delete("/video-templates/_all")
+async def drop_all_video_templates():
+    """Dev utility: drop all video templates to start fresh with new schema."""
+    result = await db.video_templates.delete_many({})
+    return {"deleted": result.deleted_count}
+
+
 # ─── Pipeline Routes ──────────────────────────────────────────────────────────
 
 @api_router.get("/clients/{client_id}/pipelines")
