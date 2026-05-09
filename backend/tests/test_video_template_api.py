@@ -1,63 +1,79 @@
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from server import app
 
 client = TestClient(app)
-AUTH = {"Authorization": "Bearer test-token"}
 
-TEMPLATE = {
-    "id": "t1", "name": "Glow Up", "client_id": None,
-    "cta_text": "Book Now", "cta_text_color": "#ffffff",
-    "cta_text_size": "M", "cta_text_bg": True,
-    "cta_text_bg_color": "#000000", "cta_text_bg_opacity": 0.5,
-    "cta_text_x_ratio": 0.5, "cta_text_y_ratio": 0.78,
-    "cta_button_text": "Get Started", "cta_button_bg_color": "#ffffff",
-    "cta_button_text_color": "#000000", "cta_button_size": "M",
-    "cta_button_arrow": True, "cta_button_x_ratio": 0.5,
-    "cta_button_y_ratio": 0.88, "cta_button_border_radius": 8,
-    "cta_button_shadow": True, "cta_animation": "slide_up", "cta_delay": 3.0,
-    "overlay_style": "gradient_wash", "overlay_color": "#000000",
-    "overlay_opacity": 0.5, "font_preset": "bold_sans", "mood_tags": ["energy"],
-    "created_at": "2026-05-09T00:00:00Z",
-}
+def _auth():
+    return {"Authorization": "Bearer test-token"}
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
-def test_create_template_with_style_fields(mock_db, _):
+def test_create_video_template_with_elements(mock_db, _):
     mock_db.video_templates.insert_one = AsyncMock(return_value=MagicMock())
     mock_db.logs.insert_one = AsyncMock(return_value=MagicMock())
-    body = {
-        "name": "Glow Up",
-        "overlay_style": "gradient_wash",
-        "overlay_color": "#000000",
-        "overlay_opacity": 0.5,
-        "font_preset": "bold_sans",
-        "mood_tags": ["energy"],
-        "cta_button_border_radius": 8,
-        "cta_button_shadow": True,
-    }
-    resp = client.post("/api/video-templates", json=body, headers=AUTH)
+
+    resp = client.post("/api/video-templates", json={
+        "name": "Test Template",
+        "aspect_ratio": "9:16",
+        "video_overridable": True,
+        "elements": [
+            {
+                "type": "cta_button",
+                "x_ratio": 0.5, "y_ratio": 0.88, "z_index": 1,
+                "start_at": 3.0, "duration": None,
+                "animation_in": "slide_up", "animation_out": "none",
+                "overridable": True, "override_key": "cta",
+                "props": {"text": "Shop Now", "bg_color": "#ffffff",
+                          "text_color": "#000000", "border_radius": 999,
+                          "arrow": True, "gradient": False},
+            }
+        ],
+    }, headers=_auth())
     assert resp.status_code == 201
-    call_doc = mock_db.video_templates.insert_one.call_args[0][0]
-    assert call_doc["overlay_style"] == "gradient_wash"
-    assert call_doc["font_preset"] == "bold_sans"
-    assert call_doc["mood_tags"] == ["energy"]
-    assert call_doc["cta_button_border_radius"] == 8
-    assert call_doc["cta_button_shadow"] is True
+    body = resp.json()
+    assert body["name"] == "Test Template"
+    assert body["aspect_ratio"] == "9:16"
+    assert len(body["elements"]) == 1
+    assert body["elements"][0]["type"] == "cta_button"
+    assert body["elements"][0]["override_key"] == "cta"
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
-def test_update_template_style_fields(mock_db, _):
-    updated = {**TEMPLATE, "overlay_style": "blur", "mood_tags": ["calm"]}
-    update_result = MagicMock()
-    update_result.matched_count = 1
-    mock_db.video_templates.update_one = AsyncMock(return_value=update_result)
+def test_create_video_template_empty_elements(mock_db, _):
+    mock_db.video_templates.insert_one = AsyncMock(return_value=MagicMock())
+    mock_db.logs.insert_one = AsyncMock(return_value=MagicMock())
+
+    resp = client.post("/api/video-templates", json={"name": "Empty"}, headers=_auth())
+    assert resp.status_code == 201
+    assert resp.json()["elements"] == []
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_update_video_template_elements(mock_db, _):
+    existing = {
+        "_id": "x", "id": "tpl-1", "name": "T",
+        "aspect_ratio": "9:16", "video_overridable": True, "elements": [],
+    }
+    updated = {k: v for k, v in existing.items() if k != "_id"}
+    updated["name"] = "Renamed"
+    mock_db.video_templates.update_one = AsyncMock(return_value=MagicMock(matched_count=1))
     mock_db.video_templates.find_one = AsyncMock(return_value=updated)
-    resp = client.put("/api/video-templates/t1",
-                      json={"overlay_style": "blur", "mood_tags": ["calm"]},
-                      headers=AUTH)
+    resp = client.put("/api/video-templates/tpl-1", json={"name": "Renamed"}, headers=_auth())
     assert resp.status_code == 200
-    assert resp.json()["overlay_style"] == "blur"
-    assert resp.json()["mood_tags"] == ["calm"]
+    assert resp.json()["name"] == "Renamed"
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_video_post_create_accepts_overrides(mock_db, _):
+    with patch("video_worker.enqueue_video_job", return_value="task-123"), \
+         patch("server.add_log", new_callable=AsyncMock):
+        resp = client.post("/api/videos/create", json={
+            "client_id": "c1",
+            "platforms": ["instagram"],
+            "overrides": {"cta": "Buy Now"},
+        }, headers=_auth())
+    assert resp.status_code == 201
+    assert resp.json()["task_id"] == "task-123"
