@@ -2103,8 +2103,6 @@ async def publish_post_now(post_id: str, local_fallback: bool = Query(False)):
     post = await db.posts.find_one({"id": post_id}, {"_id": 0})
     if not post:
         raise HTTPException(404, "Post not found")
-    if post.get("status") == "published":
-        return post  # idempotent — already published
 
     if local_fallback:
         # Phase 2: post was set to failed+retrying_local by phase 1 — re-claim it
@@ -2115,13 +2113,27 @@ async def publish_post_now(post_id: str, local_fallback: bool = Query(False)):
         if claimed.modified_count == 0:
             raise HTTPException(409, "Post is not in retrying_local state")
     else:
-        # Phase 1: atomically claim the post to prevent double-publishing
+        # Claim the post atomically. Allow re-publishing "published" posts so the
+        # user can push updated content to Bundle after editing.
         claimed = await db.posts.update_one(
-            {"id": post_id, "status": {"$in": ["draft", "scheduled", "failed"]}},
+            {"id": post_id, "status": {"$in": ["draft", "scheduled", "failed", "published"]}},
             {"$set": {"status": "publishing"}}
         )
         if claimed.modified_count == 0:
             raise HTTPException(409, "Post is already being published")
+
+    # If this post was previously sent to Bundle, delete the old post first so
+    # the re-publish creates a fresh one with the current content and timing.
+    old_platform_post_id = post.get("platform_post_id")
+    if old_platform_post_id:
+        try:
+            settings = await get_settings()
+            api_key = settings.get("bundle_api_key", "")
+            if api_key:
+                await bundle_service.delete_post(api_key, old_platform_post_id)
+                logger.info(f"Deleted old Bundle post {old_platform_post_id} before re-publish of post {post_id[:8]}")
+        except Exception as _e:
+            logger.warning(f"Could not delete old Bundle post {old_platform_post_id}: {_e}")
 
     client = await db.clients.find_one({"id": post["client_id"]}, {"_id": 0}) or {}
     from publisher import publish

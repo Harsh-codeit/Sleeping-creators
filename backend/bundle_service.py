@@ -184,6 +184,14 @@ async def get_post(api_key: str, post_id: str) -> dict:
     return await _get(api_key, f"/post/{post_id}")
 
 
+async def delete_post(api_key: str, post_id: str) -> None:
+    headers = {"x-api-key": api_key}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.delete(f"{BUNDLE_BASE}/post/{post_id}", headers=headers)
+        if resp.status_code not in (200, 204, 404):
+            _raise_for_status(resp)
+
+
 async def list_posts(api_key: str, team_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
     data = await _get(api_key, "/post/", {"teamId": team_id, "limit": limit, "offset": offset})
     return data if isinstance(data, list) else data.get("data", data.get("posts", []))
