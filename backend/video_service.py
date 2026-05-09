@@ -382,66 +382,18 @@ def build_filter_chain(elements: list, video_duration: Optional[float] = None) -
 def assemble_video(
     input_path: str,
     output_path: str,
-    template: dict,
+    elements: list,
     trim_start: float = 0.0,
     trim_end: Optional[float] = None,
     clip_duration: Optional[float] = None,
 ) -> str:
-    """
-    Overlay CTA text + animated CTA button onto clip using FFmpeg + Pillow PNGs.
-    Returns output_path.
-    """
-    text_png = None
-    btn_png = None
+    """Overlay all template elements onto clip using FFmpeg. Returns output_path."""
+    effective_end = trim_end if trim_end else clip_duration
+    effective_dur = (effective_end - trim_start) if effective_end else None
+
+    chain = build_filter_chain(elements, effective_dur)
+    png_paths = [c["png_path"] for c in chain]
     try:
-        has_cta_text = bool(template.get("cta_text", "").strip())
-        has_cta_btn = bool(template.get("cta_button_text", "").strip())
-
-        # Render text overlay PNG
-        if has_cta_text:
-            text_png = render_cta_text_png(
-                text=template["cta_text"],
-                color=template.get("cta_text_color", "#ffffff"),
-                size=template.get("cta_text_size", "M"),
-                bg=template.get("cta_text_bg", True),
-                bg_color=template.get("cta_text_bg_color", "#000000"),
-                bg_opacity=template.get("cta_text_bg_opacity", 0.5),
-            )
-
-        # Render button PNG
-        if has_cta_btn:
-            btn_png = render_cta_button_png(
-                text=template["cta_button_text"],
-                bg_color=template.get("cta_button_bg_color", "#ffffff"),
-                text_color=template.get("cta_button_text_color", "#000000"),
-                size=template.get("cta_button_size", "M"),
-                arrow=template.get("cta_button_arrow", True),
-            )
-
-        # Positions (ratio-based)
-        tx = template.get("cta_text_x_ratio", 0.5)
-        ty = template.get("cta_text_y_ratio", 0.78)
-        bx = template.get("cta_button_x_ratio", 0.5)
-        by = template.get("cta_button_y_ratio", 0.88)
-
-        text_x_expr = f"(W*{tx:.4f})-(w/2)"
-        text_y_expr = f"(H*{ty:.4f})-(h/2)"
-        btn_x_expr  = f"(W*{bx:.4f})-(w/2)"
-        btn_y_expr  = f"(H*{by:.4f})-(h/2)"
-
-        # Clamp delay so button always appears for at least 0.5s
-        delay = float(template.get("cta_delay", 3.0))
-        if clip_duration:
-            effective_end = trim_end if trim_end else clip_duration
-            effective_dur = effective_end - trim_start
-            delay = min(delay, max(0.0, effective_dur - 0.5))
-
-        anim = template.get("cta_animation", "slide_up")
-        y_expr, alpha_expr = animation_exprs(anim, delay, btn_y_expr)
-        slide_in = alpha_expr.startswith("x:")
-        x_expr = alpha_expr[2:] if slide_in else btn_x_expr
-
-        # Build FFmpeg graph
         input_kwargs: dict = {}
         if trim_start > 0:
             input_kwargs["ss"] = trim_start
@@ -452,53 +404,22 @@ def assemble_video(
         video = clip_in.video
         audio = clip_in.audio
 
-        # Overlay CTA text (static, always on)
-        if text_png:
-            text_in = ffmpeg.input(text_png)
-            video = ffmpeg.overlay(
-                video, text_in,
-                x=text_x_expr,
-                y=text_y_expr,
-            )
-
-        # Overlay CTA button (animated)
-        if btn_png:
-            btn_in = ffmpeg.input(btn_png)
-            if slide_in:
-                video = ffmpeg.overlay(video, btn_in, x=x_expr, y=y_expr)
-            elif alpha_expr == "1":
-                video = ffmpeg.overlay(video, btn_in, x=btn_x_expr, y=y_expr)
-            else:
-                # alpha fade / pop: use enable + alpha expression via format+colorchannelmixer
-                video = ffmpeg.overlay(
-                    video, btn_in,
-                    x=btn_x_expr,
-                    y=y_expr,
-                    enable=f"gte(t,{delay})",
-                    # fade handled via format chain below
+        for c in chain:
+            ov_in = ffmpeg.input(c["png_path"])
+            alpha = c["alpha_expr"]
+            if alpha not in ("1", ""):
+                ov_rgba = ov_in.filter("format", "rgba")
+                ov_in = ov_rgba.filter(
+                    "geq",
+                    r="r(X,Y)", g="g(X,Y)", b="b(X,Y)",
+                    a=f"alpha(X,Y)*({alpha})",
                 )
-                # For fade/pop, apply alpha via overlay with format
-                # Re-do using proper filter chain for alpha support
-                video = _apply_alpha_overlay(clip_in, text_png, btn_png,
-                                             text_x_expr, text_y_expr,
-                                             btn_x_expr, y_expr,
-                                             alpha_expr, input_kwargs)
-                audio = clip_in.audio  # reset audio ref after re-input
-
-                try:
-                    (
-                        ffmpeg
-                        .output(video, audio, output_path,
-                                vcodec="libx264", acodec="aac",
-                                preset="ultrafast", loglevel="error")
-                        .overwrite_output()
-                        .run()
-                    )
-                except ffmpeg.Error as e:
-                    logger.error(f"FFmpeg error: {e.stderr.decode() if e.stderr else str(e)}")
-                    raise
-                logger.info(f"FFmpeg assembled video: {output_path}")
-                return output_path
+            video = ffmpeg.overlay(
+                video, ov_in,
+                x=c["x_expr"],
+                y=c["y_expr"],
+                enable=c["enable_expr"],
+            )
 
         try:
             (
@@ -513,45 +434,14 @@ def assemble_video(
             logger.error(f"FFmpeg error: {e.stderr.decode() if e.stderr else str(e)}")
             raise
 
-        logger.info(f"FFmpeg assembled video: {output_path}")
+        logger.info(f"FFmpeg assembled {len(chain)}-overlay video: {output_path}")
         return output_path
-
     finally:
-        for p in [text_png, btn_png]:
-            if p:
-                try:
-                    Path(p).unlink(missing_ok=True)
-                except Exception:
-                    pass
-
-
-def _apply_alpha_overlay(
-    clip_in, text_png, btn_png,
-    text_x_expr, text_y_expr,
-    btn_x_expr, btn_y_expr,
-    alpha_expr, input_kwargs,
-):
-    """Handle fade/pop animations using FFmpeg alpha expression on overlay."""
-    video = clip_in.video
-
-    if text_png:
-        text_in = ffmpeg.input(text_png)
-        video = ffmpeg.overlay(video, text_in, x=text_x_expr, y=text_y_expr)
-
-    if btn_png:
-        btn_in = ffmpeg.input(btn_png)
-        # Use format=rgba + colorchannelmixer to modulate alpha over time
-        btn_rgba = btn_in.filter("format", "rgba")
-        # The alpha_expr is a video-time expression; use geq to modulate each pixel's alpha
-        # alpha_expr uses 't' (time). We apply it via geq's a() channel.
-        btn_modulated = btn_rgba.filter(
-            "geq",
-            r="r(X,Y)", g="g(X,Y)", b="b(X,Y)",
-            a=f"alpha(X,Y)*({alpha_expr})",
-        )
-        video = ffmpeg.overlay(video, btn_modulated, x=btn_x_expr, y=btn_y_expr)
-
-    return video
+        for p in png_paths:
+            try:
+                Path(p).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def pick_clip(clips: list, sequence_mode: str, sequence_index: int) -> dict:
@@ -579,7 +469,7 @@ async def create_video_post(
     clip_trim_start: float = 0.0,
     clip_trim_end: Optional[float] = None,
     _preview_only: bool = False,
-    **kwargs,
+    overrides: dict = {},
 ) -> dict:
     """Full pipeline: pick clip → download → assemble → upload → create Post."""
     _ensure_temp()
@@ -634,18 +524,12 @@ async def create_video_post(
             if tmpl_doc:
                 template = {k: v for k, v in tmpl_doc.items() if k != "_id"}
 
-        # Apply per-post text overrides (overlay text and CTA button text)
-        cta_text_override = kwargs.get("cta_text_override")
-        cta_button_text_override = kwargs.get("cta_button_text_override")
-        if cta_text_override is not None:
-            template["cta_text"] = cta_text_override
-        if cta_button_text_override is not None:
-            template["cta_button_text"] = cta_button_text_override
+        elements = resolve_overrides(template.get("elements", []), overrides)
 
         # 6. Assemble with FFmpeg
         await asyncio.get_running_loop().run_in_executor(
             None, assemble_video,
-            input_path, output_path, template,
+            input_path, output_path, elements,
             clip_trim_start, clip_trim_end, clip.get("duration"),
         )
 
