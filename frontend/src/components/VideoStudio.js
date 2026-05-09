@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Play, Pause } from "lucide-react";
-import VideoCanvasPreview from "./VideoCanvasPreview";
 import ClipPickerModal from "./ClipPickerModal";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -79,8 +78,7 @@ export default function VideoStudio({ clientId }) {
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(null);
 
-  const [overlayText, setOverlayText] = useState("");
-  const [ctaText, setCtaText] = useState("");
+  const [overrides, setOverrides] = useState({});
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [platforms, setPlatforms] = useState([]);
@@ -110,30 +108,25 @@ export default function VideoStudio({ clientId }) {
     setPlaying(false);
   }, [clip]);
 
-  const previewTemplate = activeTemplate
-    ? {
-        ...activeTemplate,
-        cta_text: overlayText || activeTemplate.cta_text,
-        cta_button_text: ctaText || activeTemplate.cta_button_text,
-      }
-    : null;
+  useEffect(() => { setOverrides({}); }, [templateId]);
 
   const togglePlatform = (p) =>
     setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
 
   const handleRender = async () => {
-    if (!clip) return toast.error("Select a clip first");
+    if (!clip && !(activeTemplate && activeTemplate.video_overridable === false)) {
+      return toast.error("Select a clip first");
+    }
     setRendering(true);
     try {
       const r = await axios.post(`${API}/videos/render`, {
         client_id: clientId,
-        clip_id: clip.drive_file_id || clip.id,
+        clip_id: clip ? (clip.drive_file_id || clip.id) : null,
         template_id: templateId || null,
         clip_trim_start: trimStart,
         clip_trim_end: trimEnd,
         platforms: ["_preview"],
-        cta_text_override: overlayText || null,
-        cta_button_text_override: ctaText || null,
+        overrides,
       });
       const url = r.data.video_url;
       if (url) {
@@ -157,13 +150,15 @@ export default function VideoStudio({ clientId }) {
   };
 
   const handlePublish = async () => {
-    if (!clip) return toast.error("Select a clip first");
+    if (!clip && !(activeTemplate && activeTemplate.video_overridable === false)) {
+      return toast.error("Select a clip first");
+    }
     if (!platforms.length) return toast.error("Select at least one platform");
     setPublishing(true);
     try {
       const r = await axios.post(`${API}/videos/create`, {
         client_id: clientId,
-        clip_id: clip.drive_file_id || clip.id,
+        clip_id: clip ? (clip.drive_file_id || clip.id) : null,
         template_id: templateId || null,
         clip_trim_start: trimStart,
         clip_trim_end: trimEnd,
@@ -171,13 +166,11 @@ export default function VideoStudio({ clientId }) {
         hashtags: hashtags.split(/\s+/).filter(Boolean),
         platforms,
         scheduled_at: scheduleAt || null,
-        cta_text_override: overlayText || null,
-        cta_button_text_override: ctaText || null,
+        overrides,
       });
       toast.success(r.data.message || `Video queued (${r.data.status || "processing"})`);
       setClip(null);
-      setOverlayText("");
-      setCtaText("");
+      setOverrides({});
       setCaption("");
       setHashtags("");
       setPlatforms([]);
@@ -190,12 +183,6 @@ export default function VideoStudio({ clientId }) {
   };
 
   const clipDuration = duration || clip?.duration || 0;
-
-  const handlePlaybackChange = useCallback(({ currentTime: t, duration: d, playing: p }) => {
-    setCurrentTime(t);
-    if (d) setDuration(d);
-    setPlaying(p);
-  }, []);
 
   const handleSeek = useCallback((t) => {
     if (videoRef.current) videoRef.current.currentTime = t;
@@ -249,25 +236,11 @@ export default function VideoStudio({ clientId }) {
                   {/* Mini CSS preview */}
                   <div className="relative bg-gradient-to-br from-zinc-800 to-zinc-950 overflow-hidden"
                     style={{ aspectRatio: (t.aspect_ratio || "9:16").replace(":", " / ") }}>
-                    {t.cta_text && (
-                      <div className="absolute inset-x-0 text-center px-2"
-                        style={{ top: `${(t.cta_text_y_ratio ?? 0.78) * 100}%`, transform: "translateY(-50%)",
-                          fontSize: 9, color: t.cta_text_color || "#fff", fontWeight: 700,
-                          background: t.cta_text_bg ? `rgba(0,0,0,${t.cta_text_bg_opacity ?? 0.5})` : "transparent",
-                          padding: t.cta_text_bg ? "1px 4px" : 0 }}>
-                        {t.cta_text}
-                      </div>
-                    )}
-                    {t.cta_button_text && (
-                      <div className="absolute inset-x-0 text-center px-2"
-                        style={{ top: `${(t.cta_button_y_ratio ?? 0.88) * 100}%`, transform: "translateY(-50%)",
-                          fontSize: 8, color: t.cta_button_text_color || "#000",
-                          background: t.cta_button_bg_color || "#fff",
-                          borderRadius: t.cta_button_border_radius ?? 4, padding: "2px 8px",
-                          display: "inline-block", margin: "0 auto" }}>
-                        {t.cta_button_text}
-                      </div>
-                    )}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 opacity-40">
+                      <span className="text-[10px] font-mono text-white">
+                        {(t.elements || []).length} elements
+                      </span>
+                    </div>
                   </div>
                   <div className="px-2 py-1.5">
                     <p className={`text-[10px] font-mono truncate ${templateId === t.id ? "text-white" : "text-zinc-400"}`}>
@@ -283,33 +256,63 @@ export default function VideoStudio({ clientId }) {
 
         <div className="p-4">
           <p className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Clip</p>
-          <button
-            onClick={() => setClipOpen(true)}
-            className="w-full border border-zinc-800 px-3 py-2 text-[10px] font-mono text-left text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
-          >
-            {clip ? (clip.name || clip.filename || clip.id) : "Choose clip…"}
-          </button>
-          {clip && (
-            <button
-              onClick={() => setClip(null)}
-              className="mt-1 text-[9px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-              Clear
-            </button>
+          {activeTemplate && activeTemplate.video_overridable === false ? (
+            <p className="text-[10px] font-mono text-zinc-600">Clip locked to template</p>
+          ) : (
+            <>
+              <button
+                onClick={() => setClipOpen(true)}
+                className="w-full border border-zinc-800 px-3 py-2 text-[10px] font-mono text-left text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+              >
+                {clip ? (clip.name || clip.filename || clip.id) : "Choose clip…"}
+              </button>
+              {clip && (
+                <button
+                  onClick={() => setClip(null)}
+                  className="mt-1 text-[9px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </>
           )}
         </div>
       </aside>
 
       {/* ── Center: preview + transport ──────────────────────────── */}
       <main className="flex-1 min-w-0 flex flex-col p-4 gap-3 overflow-hidden">
-        <VideoCanvasPreview
-          clip={clip}
-          template={previewTemplate}
-          aspectRatio={activeTemplate?.aspect_ratio || "9:16"}
-          videoRef={videoRef}
-          hideBuiltInControls
-          onPlaybackChange={handlePlaybackChange}
-        />
+        <div
+          className="relative bg-black flex-1 min-h-0 overflow-hidden"
+          style={{ aspectRatio: (activeTemplate?.aspect_ratio || "9:16").replace(":", " / ") }}
+        >
+          {clip?.url ? (
+            <video
+              ref={videoRef}
+              src={clip.url}
+              className="absolute inset-0 w-full h-full object-cover"
+              onTimeUpdate={e => {
+                const t = e.target.currentTime;
+                setCurrentTime(t);
+              }}
+              onEnded={() => setPlaying(false)}
+              onLoadedMetadata={e => {
+                if (videoRef.current) videoRef.current.currentTime = 0.01;
+                setDuration(e.target.duration || 0);
+              }}
+              playsInline
+              muted
+              preload="metadata"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-30">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+                <rect x="2" y="2" width="20" height="20" rx="2.5" />
+                <path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5" />
+              </svg>
+              <span className="text-xs text-white font-mono tracking-widest uppercase">No clip</span>
+            </div>
+          )}
+        </div>
 
         <div className="space-y-1.5 shrink-0">
           <div className="flex items-center gap-3">
@@ -347,32 +350,26 @@ export default function VideoStudio({ clientId }) {
       <aside className="w-72 shrink-0 border-l border-zinc-800 overflow-y-auto">
         <div className="p-4 space-y-5">
 
-          {/* Overlay text */}
-          <div>
-            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
-              Overlay Text
-            </label>
-            <textarea
-              rows={2}
-              value={overlayText}
-              onChange={e => setOverlayText(e.target.value)}
-              placeholder={activeTemplate?.cta_text || "Text shown on screen…"}
-              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500 resize-none"
-            />
-          </div>
-
-          {/* CTA button text */}
-          <div>
-            <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
-              CTA Button Text
-            </label>
-            <input
-              value={ctaText}
-              onChange={e => setCtaText(e.target.value)}
-              placeholder={activeTemplate?.cta_button_text || "Book a call →"}
-              className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
-            />
-          </div>
+          {/* Dynamic overrides */}
+          {activeTemplate?.elements?.filter(e => e.overridable && e.override_key) && (
+            <div className="space-y-3">
+              {activeTemplate.elements
+                .filter(e => e.overridable && e.override_key)
+                .map(el => (
+                  <div key={el.id}>
+                    <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
+                      {el.override_key.replace(/_/g, " ")}
+                    </label>
+                    <input
+                      value={overrides[el.override_key] ?? ""}
+                      onChange={e => setOverrides(prev => ({ ...prev, [el.override_key]: e.target.value }))}
+                      placeholder={el.props?.text || el.override_key}
+                      className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
+                    />
+                  </div>
+                ))}
+            </div>
+          )}
 
           <div className="border-t border-zinc-800" />
 
@@ -434,7 +431,7 @@ export default function VideoStudio({ clientId }) {
 
           <button
             onClick={handleRender}
-            disabled={rendering || !clip}
+            disabled={rendering || (!clip && !(activeTemplate && activeTemplate.video_overridable === false))}
             className="w-full py-2.5 bg-zinc-800 text-white text-sm font-mono font-semibold border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
           >
             {rendering ? "Rendering…" : "Render & Download"}
