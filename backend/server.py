@@ -9,7 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Dict
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -226,13 +226,12 @@ class VideoPostCreate(BaseModel):
     platforms: List[str]
     scheduled_at: Optional[str] = None
     template_id: Optional[str] = None
-    priority: str = "normal"          # "high" | "normal" | "low"
+    priority: str = "normal"
     caption: Optional[str] = None
     hashtags: List[str] = []
     clip_trim_start: float = 0.0
     clip_trim_end: Optional[float] = None
-    cta_text_override: Optional[str] = None
-    cta_button_text_override: Optional[str] = None
+    overrides: Dict[str, str] = Field(default_factory=dict)
 
 class VideoScheduleCreate(BaseModel):
     cron: str           # e.g. "0 9 * * *"
@@ -3030,67 +3029,34 @@ class CarouselCreate(BaseModel):
     drive_image_index: Optional[int] = None      # pre-assigned at generate time
     post_type: Optional[str] = None              # "carousel" | "single_image"; auto-derived if None
 
+class VideoElement(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    type: str
+    x_ratio: float = 0.5
+    y_ratio: float = 0.5
+    z_index: int = 0
+    start_at: float = 0.0
+    duration: Optional[float] = None
+    animation_in: str = "none"
+    animation_out: str = "none"
+    overridable: bool = False
+    override_key: Optional[str] = None
+    props: dict = Field(default_factory=dict)
+
 class VideoTemplateCreate(BaseModel):
-    model_config = ConfigDict(extra="allow")
     name: str
     client_id: Optional[str] = None
-    # CTA text (static overlay)
-    cta_text: str = ""
-    cta_text_color: str = "#ffffff"
-    cta_text_size: str = "M"          # S | M | L
-    cta_text_bg: bool = True
-    cta_text_bg_color: str = "#000000"
-    cta_text_bg_opacity: float = 0.5
-    cta_text_x_ratio: float = 0.5
-    cta_text_y_ratio: float = 0.78
-    # CTA button (animated overlay)
-    cta_button_text: str = ""
-    cta_button_bg_color: str = "#ffffff"
-    cta_button_text_color: str = "#000000"
-    cta_button_size: str = "M"        # S | M | L
-    cta_button_arrow: bool = True
-    cta_button_x_ratio: float = 0.5
-    cta_button_y_ratio: float = 0.88
-    # Animation
-    cta_animation: str = "slide_up"   # slide_up | fade | pop | slide_in
-    cta_delay: float = 3.0            # seconds before button appears
-    # Style
-    font_preset: str = "bold_sans"       # bold_sans | elegant_serif | handwritten | modern_display
-    overlay_style: str = "gradient_wash" # gradient_wash | color_tint | blur | geometric | lower_thirds | none
-    overlay_color: str = "#000000"
-    overlay_opacity: float = 0.5         # 0.0–1.0
-    mood_tags: List[str] = Field(default_factory=list)
-    # CTA button shape
-    cta_button_border_radius: int = 4    # px; 999 = pill
-    cta_button_shadow: bool = False
+    aspect_ratio: str = "9:16"
+    video_clip_id: Optional[str] = None
+    video_overridable: bool = True
+    elements: List[VideoElement] = Field(default_factory=list)
 
 class VideoTemplateUpdate(BaseModel):
-    model_config = ConfigDict(extra="allow")
     name: Optional[str] = None
-    cta_text: Optional[str] = None
-    cta_text_color: Optional[str] = None
-    cta_text_size: Optional[str] = None
-    cta_text_bg: Optional[bool] = None
-    cta_text_bg_color: Optional[str] = None
-    cta_text_bg_opacity: Optional[float] = None
-    cta_text_x_ratio: Optional[float] = None
-    cta_text_y_ratio: Optional[float] = None
-    cta_button_text: Optional[str] = None
-    cta_button_bg_color: Optional[str] = None
-    cta_button_text_color: Optional[str] = None
-    cta_button_size: Optional[str] = None
-    cta_button_arrow: Optional[bool] = None
-    cta_button_x_ratio: Optional[float] = None
-    cta_button_y_ratio: Optional[float] = None
-    cta_animation: Optional[str] = None
-    cta_delay: Optional[float] = None
-    font_preset: Optional[str] = None
-    overlay_style: Optional[str] = None
-    overlay_color: Optional[str] = None
-    overlay_opacity: Optional[float] = None
-    mood_tags: Optional[List[str]] = None
-    cta_button_border_radius: Optional[int] = None
-    cta_button_shadow: Optional[bool] = None
+    aspect_ratio: Optional[str] = None
+    video_clip_id: Optional[str] = None
+    video_overridable: Optional[bool] = None
+    elements: Optional[List[VideoElement]] = None
 
 # ── Music library ──────────────────────────────────────────────
 class MusicSegment(BaseModel):
@@ -3942,24 +3908,7 @@ VIDEO_STARTER_PRESETS = [
 
 @api_router.post("/video-templates/seed")
 async def seed_video_templates():
-    """Seed built-in starter video templates (idempotent, matches on name + starter flag)."""
-    seeded = 0
-    for preset in VIDEO_STARTER_PRESETS:
-        exists = await db.video_templates.find_one({
-            "name": preset["name"], "is_starter": True, "client_id": None,
-        })
-        if exists:
-            continue
-        doc = {
-            "id": str(uuid.uuid4()),
-            "client_id": None,
-            "is_starter": True,
-            "created_at": now_iso(),
-            **preset,
-        }
-        await db.video_templates.insert_one(doc)
-        seeded += 1
-    return {"message": f"Seeded {seeded} starter video templates", "seeded": seeded}
+    return {"message": "Seeded 0 starter video templates", "seeded": 0}
 
 
 # ─── Pipeline Routes ──────────────────────────────────────────────────────────
