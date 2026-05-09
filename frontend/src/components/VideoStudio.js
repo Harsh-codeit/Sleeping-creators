@@ -51,17 +51,17 @@ function TimelineBar({ currentTime, duration, trimStart, trimEnd, onSeek, onTrim
     <div ref={barRef} className={`relative h-8 flex items-center ${disabled ? "opacity-40 pointer-events-none" : "cursor-pointer"}`}
       onClick={e => { if (!disabled) onSeek(posFromEvent(e)); }}>
       <div className="absolute inset-0 flex items-center pointer-events-none">
-        <div className="w-full h-1 bg-zinc-800 rounded-full" />
+        <div className="w-full h-px bg-zinc-800" />
       </div>
-      <div className="absolute h-1 bg-zinc-600 rounded-full pointer-events-none"
+      <div className="absolute h-px bg-zinc-400 pointer-events-none"
         style={{ left: pct(trimStart), width: pct(trimEndVal - trimStart) }} />
-      <div className="absolute w-2.5 h-5 bg-amber-400 rounded-sm cursor-ew-resize z-20"
+      <div className="absolute w-2 h-6 bg-white cursor-ew-resize z-20"
         style={{ left: pct(trimStart), transform: "translateX(-50%)" }}
         onMouseDown={e => startDrag(e, "in")} onClick={e => e.stopPropagation()} />
-      <div className="absolute w-2.5 h-5 bg-amber-400 rounded-sm cursor-ew-resize z-20"
+      <div className="absolute w-2 h-6 bg-white cursor-ew-resize z-20"
         style={{ left: pct(trimEndVal), transform: "translateX(-50%)" }}
         onMouseDown={e => startDrag(e, "out")} onClick={e => e.stopPropagation()} />
-      <div className="absolute w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow cursor-grab z-30"
+      <div className="absolute w-2 h-4 bg-white cursor-grab z-30"
         style={{ left: pct(currentTime), transform: "translateX(-50%)" }}
         onMouseDown={e => startDrag(e, "playhead")} onClick={e => e.stopPropagation()} />
     </div>
