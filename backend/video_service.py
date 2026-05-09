@@ -20,6 +20,7 @@ SIZE_PRESETS = {
     "S": (22, 18, 8),
     "M": (30, 24, 12),
     "L": (40, 32, 16),
+    "XL": (56, 40, 20),
 }
 
 
@@ -108,6 +109,132 @@ def render_cta_button_png(
     path = str(TEMP_DIR / f"{uuid.uuid4()}_cta_btn.png")
     img.save(path)
     return path
+
+
+def render_shape_png(el_type: str, props: dict, frame_w: int, frame_h: int) -> str:
+    """Render rectangle, circle, or line as a transparent PNG. Returns temp file path."""
+    _ensure_temp()
+    if el_type == "line":
+        w = max(int(props.get("width_ratio", 0.8) * frame_w), 1)
+        h = max(int(props.get("thickness", 2)), 1)
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle((0, 0, w - 1, h - 1), fill=_hex_to_rgba(props.get("color", "#ffffff")))
+
+    elif el_type == "rectangle":
+        w = max(int(props.get("width_ratio", 0.8) * frame_w), 1)
+        h = max(int(props.get("height_ratio", 0.1) * frame_h), 1)
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        fill = _hex_to_rgba(props.get("fill_color", "#000000"), props.get("fill_opacity", 0.5))
+        draw.rectangle((0, 0, w - 1, h - 1), fill=fill)
+        bw = int(props.get("border_width", 0))
+        if bw > 0:
+            bc = _hex_to_rgba(props.get("border_color", "#ffffff"))
+            for i in range(bw):
+                draw.rectangle((i, i, w - 1 - i, h - 1 - i), outline=bc)
+
+    elif el_type == "circle":
+        w = max(int(props.get("width_ratio", 0.1) * frame_w), 1)
+        h = max(int(props.get("height_ratio", 0.1) * frame_h), 1)
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        fill = _hex_to_rgba(props.get("fill_color", "#ffffff"), props.get("fill_opacity", 0.8))
+        draw.ellipse((0, 0, w - 1, h - 1), fill=fill)
+        bw = int(props.get("border_width", 0))
+        if bw > 0:
+            bc = _hex_to_rgba(props.get("border_color", "#ffffff"))
+            for i in range(bw):
+                draw.ellipse((i, i, w - 1 - i, h - 1 - i), outline=bc)
+
+    else:
+        raise ValueError(f"Unknown shape type: {el_type}")
+
+    path = str(TEMP_DIR / f"{uuid.uuid4()}_{el_type}.png")
+    img.save(path)
+    return path
+
+
+def _render_media_png(props: dict, frame_w: int, frame_h: int) -> str:
+    """Download logo/watermark from R2 and resize. Returns temp file path."""
+    import urllib.request
+    _ensure_temp()
+    r2_url = props.get("r2_url")
+    if not r2_url:
+        raise ValueError("Media element has no r2_url")
+    target_w = max(int(props.get("width_ratio", 0.15) * frame_w), 1)
+    target_h = max(int(props.get("height_ratio", 0.08) * frame_h), 1)
+    opacity = float(props.get("opacity", 1.0))
+    tmp_src = str(TEMP_DIR / f"{uuid.uuid4()}_media_src")
+    urllib.request.urlretrieve(r2_url, tmp_src)
+    try:
+        with Image.open(tmp_src) as src:
+            img = src.convert("RGBA").resize((target_w, target_h), Image.LANCZOS)
+    finally:
+        Path(tmp_src).unlink(missing_ok=True)
+    if opacity < 1.0:
+        r, g, b, a = img.split()
+        a = a.point(lambda x: int(x * opacity))
+        img = Image.merge("RGBA", (r, g, b, a))
+    path = str(TEMP_DIR / f"{uuid.uuid4()}_media.png")
+    img.save(path)
+    return path
+
+
+def render_element_png(element: dict, frame_w: int = 1080, frame_h: int = 1920) -> str:
+    """Dispatch element rendering by type. Returns temp PNG path."""
+    _ensure_temp()
+    el_type = element["type"]
+    props = element.get("props", {})
+
+    if el_type in ("text_overlay", "lower_third", "cta_text"):
+        return render_cta_text_png(
+            text=props.get("text", ""),
+            color=props.get("color", "#ffffff"),
+            size=props.get("size", "M"),
+            bg=props.get("bg_shape", "none") != "none",
+            bg_color=props.get("bg_color", "#000000"),
+            bg_opacity=props.get("bg_opacity", 0.5),
+        )
+
+    elif el_type == "cta_button":
+        return render_cta_button_png(
+            text=props.get("text", ""),
+            bg_color=props.get("bg_color", "#ffffff"),
+            text_color=props.get("text_color", "#000000"),
+            size="M",
+            arrow=props.get("arrow", True),
+        )
+
+    elif el_type == "link_in_bio":
+        label = f"{props.get('text', 'Link in bio')}  ↗  {props.get('handle', '')}"
+        return render_cta_button_png(
+            text=label,
+            bg_color=props.get("bg_color", "#000000"),
+            text_color=props.get("text_color", "#ffffff"),
+            size="S",
+            arrow=False,
+        )
+
+    elif el_type == "countdown":
+        val = float(props.get("end_at", 10.0))
+        mins = int(val // 60)
+        secs = int(val % 60)
+        return render_cta_text_png(
+            text=f"{mins:02d}:{secs:02d}",
+            color=props.get("color", "#ffffff"),
+            size=props.get("size", "L"),
+            bg=False,
+        )
+
+    elif el_type in ("logo", "watermark"):
+        return _render_media_png(props, frame_w, frame_h)
+
+    elif el_type in ("rectangle", "circle", "line"):
+        return render_shape_png(el_type, props, frame_w, frame_h)
+
+    else:
+        raise ValueError(f"Unknown element type: {el_type}")
 
 
 def animation_exprs(animation: str, delay: float, final_y_expr: str) -> tuple[str, str]:
