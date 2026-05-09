@@ -192,14 +192,11 @@ export default function VideoTemplateEditor({ clientId, initial, onSaved, onCanc
     if (!form.name.trim()) return toast.error("Template name required");
     setSaving(true);
     try {
-      if (initial?.id) {
-        await axios.put(`${API}/video-templates/${initial.id}`, form);
-        toast.success("Template updated");
-      } else {
-        await axios.post(`${API}/video-templates`, form);
-        toast.success("Template created");
-      }
-      onSaved?.();
+      const r = initial?.id
+        ? await axios.put(`${API}/video-templates/${initial.id}`, form)
+        : await axios.post(`${API}/video-templates`, form);
+      toast.success(initial?.id ? "Template updated" : "Template created");
+      onSaved?.(r.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save template");
     } finally {
