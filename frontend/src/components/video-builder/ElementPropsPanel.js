@@ -125,6 +125,15 @@ function TextTypeProps({ props, onChange }) {
 
       <ColorInput label="Text Color" value={props.color} onChange={v => onChange({ color: v })} />
 
+      <Field label="Highlight Color">
+        <div className="flex items-center gap-2">
+          <input type="color" value={props.highlight_color || "#FFB800"} onChange={e => onChange({ highlight_color: e.target.value })}
+            className="w-8 h-7 border border-zinc-700 bg-zinc-900 cursor-pointer p-0" />
+          <Input value={props.highlight_color || ""} onChange={v => onChange({ highlight_color: v || null })} placeholder="none" />
+        </div>
+        <span className="text-[10px] text-zinc-600 mt-0.5">Wrap words in *asterisks* to highlight</span>
+      </Field>
+
       <Field label="Background">
         <Select value={props.bg_shape} onChange={v => onChange({ bg_shape: v })} options={BG_SHAPES} />
       </Field>
