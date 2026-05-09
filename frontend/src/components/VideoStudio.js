@@ -23,8 +23,8 @@ function MiniElement({ el }) {
   const p = el.props || {};
   const base = {
     position: "absolute",
-    left: `${el.x_ratio * 100}%`,
-    top: `${el.y_ratio * 100}%`,
+    left: `${(el.x_ratio ?? 0.5) * 100}%`,
+    top: `${(el.y_ratio ?? 0.5) * 100}%`,
     transform: "translate(-50%, -50%)",
     pointerEvents: "none",
   };
@@ -105,7 +105,7 @@ function MiniElement({ el }) {
 
   if (el.type === "circle") {
     const pct = `${(p.width_ratio || 0.1) * 100}%`;
-    return <div style={{ ...base, width: pct, paddingBottom: pct, borderRadius: "50%", background: `${p.fill_color || "#fff"}60` }} />;
+    return <div style={{ ...base, width: pct, height: pct, borderRadius: "50%", background: `${p.fill_color || "#fff"}60` }} />;
   }
 
   if (el.type === "line") {
@@ -320,16 +320,8 @@ export default function VideoStudio({ clientId }) {
       {/* ── Left: template + clip ────────────────────────────────── */}
       <aside className="w-64 shrink-0 flex flex-col border-r border-zinc-800 overflow-y-auto">
         <div className="border-b border-zinc-800">
-          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <div className="px-4 pt-4 pb-2">
             <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Template</p>
-            {templateId && (
-              <button
-                onClick={() => setTemplateId(null)}
-                className="text-[9px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
-              >
-                clear
-              </button>
-            )}
           </div>
 
           {templates.length === 0 ? (
@@ -378,7 +370,7 @@ export default function VideoStudio({ clientId }) {
                         <div className="absolute inset-0">
                           {[...els]
                             .sort((a, b) => (a.z_index || 0) - (b.z_index || 0))
-                            .map(el => <MiniElement key={el.id} el={el} />)}
+                            .map((el, i) => <MiniElement key={el.id ?? i} el={el} />)}
                         </div>
                       )}
                       <div className="absolute top-1 right-1 text-[8px] font-mono text-zinc-600 bg-black/60 px-1 py-0.5 border border-zinc-800">
