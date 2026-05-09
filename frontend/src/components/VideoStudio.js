@@ -86,6 +86,7 @@ export default function VideoStudio({ clientId }) {
   const [platforms, setPlatforms] = useState([]);
   const [scheduleAt, setScheduleAt] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [rendering, setRendering] = useState(false);
 
   const videoRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -119,6 +120,41 @@ export default function VideoStudio({ clientId }) {
 
   const togglePlatform = (p) =>
     setPlatforms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
+  const handleRender = async () => {
+    if (!clip) return toast.error("Select a clip first");
+    setRendering(true);
+    try {
+      const r = await axios.post(`${API}/videos/render`, {
+        client_id: clientId,
+        clip_id: clip.drive_file_id || clip.id,
+        template_id: templateId || null,
+        clip_trim_start: trimStart,
+        clip_trim_end: trimEnd,
+        platforms: ["_preview"],
+        cta_text_override: overlayText || null,
+        cta_button_text_override: ctaText || null,
+      });
+      const url = r.data.video_url;
+      if (url) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "preview.mp4";
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success("Render complete — downloading…");
+      } else {
+        toast.error("Render succeeded but no URL returned");
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Render failed");
+    } finally {
+      setRendering(false);
+    }
+  };
 
   const handlePublish = async () => {
     if (!clip) return toast.error("Select a clip first");
@@ -395,6 +431,14 @@ export default function VideoStudio({ clientId }) {
               className="w-full bg-zinc-900 border border-zinc-800 px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-zinc-500"
             />
           </div>
+
+          <button
+            onClick={handleRender}
+            disabled={rendering || !clip}
+            className="w-full py-2.5 bg-zinc-800 text-white text-sm font-mono font-semibold border border-zinc-700 hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+          >
+            {rendering ? "Rendering…" : "Render & Download"}
+          </button>
 
           <button
             onClick={handlePublish}

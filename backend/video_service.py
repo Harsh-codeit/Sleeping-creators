@@ -373,6 +373,7 @@ async def create_video_post(
     hashtags: list = [],
     clip_trim_start: float = 0.0,
     clip_trim_end: Optional[float] = None,
+    _preview_only: bool = False,
     **kwargs,
 ) -> dict:
     """Full pipeline: pick clip → download → assemble → upload → create Post."""
@@ -447,36 +448,37 @@ async def create_video_post(
         r2_key    = f"videos/{client_id}/{job_id}.mp4"
         video_url = storage.upload_file(output_path, r2_key, content_type="video/mp4")
 
-        # 8. Create Post records
+        # 8. Create Post records (skipped for preview renders)
         post_ids = []
-        for platform in platforms:
-            post = {
-                "id": str(uuid.uuid4()),
-                "client_id": client_id,
-                "platform": platform,
-                "content_type": "video",
-                "caption": caption or "",
-                "hashtags": hashtags,
-                "video_url": video_url,
-                "video_clip_id": clip_id,
-                "video_template_id": template_id,
-                "job_priority": priority,
-                "status": "scheduled" if scheduled_at else "draft",
-                "scheduled_at": scheduled_at,
-                "created_at": _now_iso(),
-            }
-            await db.posts.insert_one(post)
-            post_ids.append(post["id"])
+        if not _preview_only:
+            for platform in platforms:
+                post = {
+                    "id": str(uuid.uuid4()),
+                    "client_id": client_id,
+                    "platform": platform,
+                    "content_type": "video",
+                    "caption": caption or "",
+                    "hashtags": hashtags,
+                    "video_url": video_url,
+                    "video_clip_id": clip_id,
+                    "video_template_id": template_id,
+                    "job_priority": priority,
+                    "status": "scheduled" if scheduled_at else "draft",
+                    "scheduled_at": scheduled_at,
+                    "created_at": _now_iso(),
+                }
+                await db.posts.insert_one(post)
+                post_ids.append(post["id"])
 
-        # 9. Update sequence index
-        if client.get("video_sequence_mode", "sequential") == "sequential":
-            clips_count = await db.drive_clips.count_documents({"client_id": client_id})
-            new_idx = (client.get("video_sequence_index", 0) + 1) % max(clips_count, 1)
-            await db.clients.update_one(
-                {"id": client_id}, {"$set": {"video_sequence_index": new_idx}}
-            )
+            # 9. Update sequence index
+            if client.get("video_sequence_mode", "sequential") == "sequential":
+                clips_count = await db.drive_clips.count_documents({"client_id": client_id})
+                new_idx = (client.get("video_sequence_index", 0) + 1) % max(clips_count, 1)
+                await db.clients.update_one(
+                    {"id": client_id}, {"$set": {"video_sequence_index": new_idx}}
+                )
 
-        logger.info(f"Video posts created: {post_ids}")
+        logger.info(f"Video posts created: {post_ids}, video_url: {video_url}")
         return {"post_ids": post_ids, "video_url": video_url}
 
     finally:

@@ -5275,6 +5275,28 @@ async def create_video_post_route(data: VideoPostCreate):
     return {"task_id": task_id, "status": "queued"}
 
 
+@api_router.post("/videos/render")
+async def render_video_preview(data: VideoPostCreate):
+    """Render a video synchronously and return its URL — no post records created."""
+    from video_service import create_video_post as _cvp
+    result = await _cvp(
+        db=db,
+        client_id=data.client_id,
+        clip_id=data.clip_id,
+        platforms=["_preview"],
+        scheduled_at=None,
+        template_id=data.template_id,
+        caption=None,
+        hashtags=[],
+        clip_trim_start=data.clip_trim_start,
+        clip_trim_end=data.clip_trim_end,
+        cta_text_override=data.cta_text_override,
+        cta_button_text_override=data.cta_button_text_override,
+        _preview_only=True,
+    )
+    return {"video_url": result.get("video_url", "")}
+
+
 @api_router.get("/videos/job/{task_id}")
 async def get_video_job_status(task_id: str):
     """Check Celery task status."""
