@@ -76,3 +76,62 @@ def test_render_line(tmp_path, monkeypatch):
 def test_render_element_unknown_type():
     with pytest.raises(ValueError, match="Unknown element type"):
         render_element_png({"type": "flying_saucer", "props": {}})
+
+from video_service import build_filter_chain, animation_out_exprs, resolve_overrides
+
+def test_animation_out_fade_produces_decreasing_alpha():
+    _, alpha = animation_out_exprs("fade", end_t=5.0)
+    assert "lt(t" in alpha
+    assert "4.7" in alpha or "4.70" in alpha  # start_t = 5.0 - 0.3
+
+def test_animation_out_none_returns_one():
+    _, alpha = animation_out_exprs("none", end_t=5.0)
+    assert alpha == "1"
+
+def test_resolve_overrides_updates_matching_elements():
+    elements = [
+        {"type": "cta_button", "overridable": True, "override_key": "cta",
+         "props": {"text": "Shop Now"}},
+        {"type": "text_overlay", "overridable": False, "override_key": None,
+         "props": {"text": "Static text"}},
+    ]
+    result = resolve_overrides(elements, {"cta": "Buy Now"})
+    assert result[0]["props"]["text"] == "Buy Now"
+    assert result[1]["props"]["text"] == "Static text"
+
+def test_resolve_overrides_does_not_mutate_original():
+    elements = [
+        {"type": "cta_button", "overridable": True, "override_key": "cta",
+         "props": {"text": "Shop Now"}},
+    ]
+    resolve_overrides(elements, {"cta": "Buy Now"})
+    assert elements[0]["props"]["text"] == "Shop Now"
+
+def test_build_filter_chain_returns_one_entry_per_element(tmp_path, monkeypatch):
+    monkeypatch.setattr("video_service.TEMP_DIR", tmp_path)
+    elements = [
+        {"type": "text_overlay", "x_ratio": 0.5, "y_ratio": 0.5, "z_index": 0,
+         "start_at": 0, "duration": None, "animation_in": "none", "animation_out": "none",
+         "props": {"text": "Hi", "color": "#fff", "size": "M", "bg_shape": "none",
+                   "bg_color": "#000", "bg_opacity": 0.5}},
+    ]
+    chain = build_filter_chain(elements, video_duration=10.0)
+    assert len(chain) == 1
+    assert "png_path" in chain[0]
+    assert "x_expr" in chain[0]
+    assert "enable_expr" in chain[0]
+
+def test_build_filter_chain_sorted_by_z_index(tmp_path, monkeypatch):
+    monkeypatch.setattr("video_service.TEMP_DIR", tmp_path)
+    props = {"text": "Hi", "color": "#fff", "size": "M", "bg_shape": "none",
+             "bg_color": "#000", "bg_opacity": 0.5}
+    elements = [
+        {"type": "text_overlay", "x_ratio": 0.5, "y_ratio": 0.5, "z_index": 5,
+         "start_at": 0, "duration": None, "animation_in": "none", "animation_out": "none",
+         "props": {**props, "text": "Z5"}},
+        {"type": "text_overlay", "x_ratio": 0.5, "y_ratio": 0.5, "z_index": 1,
+         "start_at": 0, "duration": None, "animation_in": "none", "animation_out": "none",
+         "props": {**props, "text": "Z1"}},
+    ]
+    chain = build_filter_chain(elements, video_duration=10.0)
+    assert len(chain) == 2

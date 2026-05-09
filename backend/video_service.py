@@ -34,6 +34,8 @@ def _ensure_temp():
 
 def _hex_to_rgba(hex_color: str, opacity: float = 1.0) -> tuple:
     h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = h[0]*2 + h[1]*2 + h[2]*2
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return (r, g, b, int(opacity * 255))
 
@@ -299,6 +301,82 @@ def animation_exprs(animation: str, delay: float, final_y_expr: str) -> tuple[st
         alpha = "1"
 
     return (y, alpha)
+
+
+def animation_out_exprs(animation: str, end_t: float) -> tuple[str, str]:
+    """
+    Returns ("", alpha_expr) for element exit animation.
+    end_t: time in seconds when element should be fully gone.
+    """
+    dur = 0.3
+    start_t = end_t - dur
+    if animation == "fade":
+        alpha = (
+            f"if(lt(t,{start_t:.4f}), 1,"
+            f" if(lt(t,{end_t:.4f}),"
+            f"  1-((t-{start_t:.4f})/{dur:.4f}),"
+            f"  0))"
+        )
+        return ("", alpha)
+    return ("", "1")
+
+
+def resolve_overrides(elements: list, overrides: dict) -> list:
+    """Return a deep copy of elements with overrides applied by override_key."""
+    import copy
+    result = copy.deepcopy(elements)
+    for el in result:
+        key = el.get("override_key")
+        if el.get("overridable") and key and key in overrides:
+            el["props"]["text"] = overrides[key]
+    return result
+
+
+def build_filter_chain(elements: list, video_duration: Optional[float] = None) -> list:
+    """
+    Render each element to a PNG and compute FFmpeg overlay parameters.
+    Returns list of dicts: {png_path, x_expr, y_expr, alpha_expr, enable_expr}
+    sorted by z_index ascending (lowest z rendered first = behind).
+    """
+    _ensure_temp()
+    sorted_els = sorted(elements, key=lambda e: e.get("z_index", 0))
+    chain = []
+    for el in sorted_els:
+        start_at = float(el.get("start_at", 0))
+        duration = el.get("duration")
+        end_t = (start_at + float(duration)) if duration is not None else (video_duration or 9999.0)
+
+        png_path = render_element_png(el)
+
+        x_ratio = float(el.get("x_ratio", 0.5))
+        y_ratio = float(el.get("y_ratio", 0.5))
+        x_expr = f"(W*{x_ratio:.4f})-(w/2)"
+        y_final = f"(H*{y_ratio:.4f})-(h/2)"
+
+        anim_in = el.get("animation_in", "none")
+        anim_out = el.get("animation_out", "none")
+
+        y_expr, alpha_expr = animation_exprs(anim_in, start_at, y_final)
+
+        slide_in = isinstance(alpha_expr, str) and alpha_expr.startswith("x:")
+        if slide_in:
+            x_expr = alpha_expr[2:]
+            alpha_expr = "1"
+
+        if anim_out != "none" and duration is not None:
+            _, out_alpha = animation_out_exprs(anim_out, end_t)
+            alpha_expr = f"min({alpha_expr}, {out_alpha})" if alpha_expr != "1" else out_alpha
+
+        enable_expr = f"between(t,{start_at:.4f},{end_t:.4f})"
+
+        chain.append({
+            "png_path": png_path,
+            "x_expr": x_expr,
+            "y_expr": y_expr,
+            "alpha_expr": alpha_expr,
+            "enable_expr": enable_expr,
+        })
+    return chain
 
 
 def assemble_video(
