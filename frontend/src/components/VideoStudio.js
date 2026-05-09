@@ -234,6 +234,19 @@ function TemplateOverlay({ elements }) {
             );
           }
 
+          if (el.type === "circle") {
+            const pct = `${(p.width_ratio || 0.1) * 100}%`;
+            return (
+              <div key={el.id ?? i} style={{
+                ...base,
+                width: pct,
+                height: pct,
+                borderRadius: "50%",
+                background: `${p.fill_color || "#fff"}60`,
+              }} />
+            );
+          }
+
           if (["logo", "watermark"].includes(el.type)) {
             return (
               <div key={el.id ?? i} style={{
