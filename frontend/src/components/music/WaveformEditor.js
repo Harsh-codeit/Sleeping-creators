@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Plus, Play, Pause, Trash2 } from "lucide-react";
-import { MoodTagPicker } from "../video/MoodTagPicker";
-import { VideoField } from "../video/VideoField";
+import { MoodTagPicker } from "./MoodTagPicker";
+import { VideoField } from "./VideoField";
 
 const SEG_COLOR = "rgba(255,255,255,0.15)";
 

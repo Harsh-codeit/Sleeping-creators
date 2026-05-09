@@ -3,7 +3,6 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Play, Pause } from "lucide-react";
 import ClipPickerModal from "./ClipPickerModal";
-import VideoCanvasPreview from "./VideoCanvasPreview";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "tiktok", "linkedin", "twitter"];
@@ -162,12 +161,6 @@ export default function VideoEditor({ clientId, onPublished }) {
 
   const clipDuration = duration || clip?.duration || 0;
 
-  const handlePlaybackChange = useCallback(({ currentTime: t, duration: d, playing: p }) => {
-    setCurrentTime(t);
-    if (d) setDuration(d);
-    setPlaying(p);
-  }, []);
-
   const handleSeek = useCallback((t) => {
     if (videoRef.current) videoRef.current.currentTime = t;
     setCurrentTime(t);
@@ -196,14 +189,40 @@ export default function VideoEditor({ clientId, onPublished }) {
           {clip ? clip.filename || clip.name || clip.id : "Choose clip…"}
         </button>
 
-        <VideoCanvasPreview
-          clip={clip}
-          template={activeTemplate}
-          aspectRatio={activeTemplate?.aspect_ratio || "9:16"}
-          videoRef={videoRef}
-          hideBuiltInControls
-          onPlaybackChange={handlePlaybackChange}
-        />
+        <div
+          className="relative bg-black overflow-hidden"
+          style={{ aspectRatio: (activeTemplate?.aspect_ratio || "9:16").replace(":", " / ") }}
+        >
+          {clip?.url ? (
+            <video
+              ref={videoRef}
+              src={clip.url}
+              className="absolute inset-0 w-full h-full object-cover"
+              onTimeUpdate={e => {
+                const t = e.target.currentTime;
+                setCurrentTime(t);
+              }}
+              onEnded={() => setPlaying(false)}
+              onLoadedMetadata={e => {
+                if (videoRef.current) videoRef.current.currentTime = 0.01;
+                setDuration(e.target.duration || 0);
+              }}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              playsInline
+              muted
+              preload="metadata"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-30">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+                <rect x="2" y="2" width="20" height="20" rx="2.5" />
+                <path d="M7 2v20M17 2v20M2 12h20M2 7h5M17 7h5M2 17h5M17 17h5" />
+              </svg>
+              <span className="text-xs text-white font-mono tracking-widest uppercase">No clip</span>
+            </div>
+          )}
+        </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-3">

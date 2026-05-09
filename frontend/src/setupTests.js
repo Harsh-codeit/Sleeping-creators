@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 
-// Polyfill ResizeObserver for components that use it (e.g. VideoCanvasPreview)
+// Polyfill ResizeObserver for components that use it
 global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}

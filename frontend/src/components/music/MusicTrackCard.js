@@ -3,8 +3,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Pencil, Trash2, Music } from "lucide-react";
 import WaveformEditor from "./WaveformEditor";
-import { MoodTagPicker } from "../video/MoodTagPicker";
-import { VideoField } from "../video/VideoField";
+import { MoodTagPicker } from "./MoodTagPicker";
+import { VideoField } from "./VideoField";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 

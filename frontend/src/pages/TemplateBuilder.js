@@ -8,7 +8,7 @@ import ElementsPanel from "../components/builder/ElementsPanel";
 import Canvas from "../components/builder/Canvas";
 import PropertiesPanel from "../components/builder/PropertiesPanel";
 import Filmstrip from "../components/builder/Filmstrip";
-import VideoTemplateEditor from "../components/VideoTemplateEditor";
+import VideoTemplateBuilder from "../components/video-builder/VideoTemplateBuilder";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -325,14 +325,12 @@ export default function TemplateBuilder() {
         )}
 
         {builderTab === "video" && (
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-              <VideoTemplateEditor
-                initial={videoTemplate}
-                onSaved={(t) => { setVideoTemplate(t); toast.success("Video template saved"); }}
-                onCancel={() => setBuilderTab("carousel")}
-              />
-            </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <VideoTemplateBuilder
+              initial={videoTemplate}
+              onSaved={() => { toast.success("Video template saved"); setBuilderTab("carousel"); }}
+              onBack={() => setBuilderTab("carousel")}
+            />
           </div>
         )}
       </div>

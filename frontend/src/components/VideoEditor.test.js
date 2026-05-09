@@ -9,14 +9,6 @@ jest.mock("sonner", () => ({
     success: jest.fn(),
   },
 }));
-jest.mock("./VideoCanvasPreview", () => function MockVideoCanvasPreview({ clip }) {
-  return (
-    <div data-testid="video-preview">
-      {clip?.url ? `preview-url:${clip.url}` : "No clip selected"}
-    </div>
-  );
-});
-
 const templates = [
   { id: "tpl-1", name: "Podcast Clip", aspect_ratio: "9:16" },
 ];
@@ -47,11 +39,10 @@ afterEach(() => {
   localStorage.clear();
 });
 
-test("keeps clip picker closed until requested and previews selected Drive clip via stream URL", async () => {
+test("keeps clip picker closed until requested and shows selected Drive clip", async () => {
   render(<VideoEditor clientId="client-1" />);
 
   expect(screen.queryByRole("button", { name: "Drive" })).not.toBeInTheDocument();
-  expect(screen.getByTestId("video-preview")).toHaveTextContent("No clip selected");
 
   fireEvent.click(screen.getByRole("button", { name: /Choose clip/ }));
 
@@ -65,9 +56,9 @@ test("keeps clip picker closed until requested and previews selected Drive clip 
   });
 
   expect(screen.getByRole("button", { name: "50 MB .mp4" })).toBeInTheDocument();
-  expect(screen.getByTestId("video-preview")).toHaveTextContent(
-    "preview-url:http://localhost:8000/api/clients/client-1/clips/drive-clip-1/stream?token=preview-token"
-  );
+  const videoEl = document.querySelector("video");
+  expect(videoEl).not.toBeNull();
+  expect(videoEl.src).toContain("clients/client-1/clips/drive-clip-1/stream");
 });
 
 test("sends video creation payload using backend create route names", async () => {
