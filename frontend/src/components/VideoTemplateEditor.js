@@ -45,10 +45,13 @@ const DEFAULTS = {
   cta_delay: 3,
 };
 
-function Section({ title, children }) {
+function Section({ title, headerRight, children }) {
   return (
     <div className="border border-zinc-800 p-4 space-y-4">
-      <span className="text-xs font-semibold text-white block">{title}</span>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-white">{title}</span>
+        {headerRight}
+      </div>
       {children}
     </div>
   );
@@ -160,18 +163,19 @@ export default function VideoTemplateEditor({ clientId, initial, onSaved, onCanc
         </Section>
 
         {/* CTA Text */}
-        <Section title="CTA Text">
-          <div className="flex items-center justify-between -mt-2 mb-1">
-            <span />
+        <Section
+          title="CTA Text"
+          headerRight={
             <button
               type="button"
               onClick={generateCTA}
-              disabled={generating}
+              disabled={generating || !clientId}
               className="text-[10px] font-mono text-zinc-400 hover:text-white border border-zinc-700 px-2 py-1 transition-colors disabled:opacity-40"
             >
               {generating ? "Generating…" : "AI Generate"}
             </button>
-          </div>
+          }
+        >
 
           <VideoField label="Text">
             <input
