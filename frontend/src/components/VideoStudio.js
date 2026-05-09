@@ -294,6 +294,8 @@ export default function VideoStudio({ clientId }) {
                 const t = e.target.currentTime;
                 setCurrentTime(t);
               }}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
               onEnded={() => setPlaying(false)}
               onLoadedMetadata={e => {
                 if (videoRef.current) videoRef.current.currentTime = 0.01;
@@ -351,11 +353,12 @@ export default function VideoStudio({ clientId }) {
         <div className="p-4 space-y-5">
 
           {/* Dynamic overrides */}
-          {activeTemplate?.elements?.filter(e => e.overridable && e.override_key) && (
-            <div className="space-y-3">
-              {activeTemplate.elements
-                .filter(e => e.overridable && e.override_key)
-                .map(el => (
+          {(() => {
+            const overridableEls = activeTemplate?.elements?.filter(e => e.overridable && e.override_key) || [];
+            if (!overridableEls.length) return null;
+            return (
+              <div className="space-y-3">
+                {overridableEls.map(el => (
                   <div key={el.id}>
                     <label className="text-[10px] font-mono text-zinc-500 uppercase mb-1.5 block">
                       {el.override_key.replace(/_/g, " ")}
@@ -368,10 +371,13 @@ export default function VideoStudio({ clientId }) {
                     />
                   </div>
                 ))}
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
-          <div className="border-t border-zinc-800" />
+          {activeTemplate?.elements?.some(e => e.overridable && e.override_key) && (
+            <div className="border-t border-zinc-800" />
+          )}
 
           {/* Caption */}
           <div>
