@@ -26,7 +26,7 @@ function Input({ value, onChange, type = "text", min, max, step, placeholder, cl
           onChange(e.target.value);
         }
       }}
-      className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white w-full focus:outline-none focus:border-zinc-500 ${className}`}
+      className={`bg-zinc-900 border border-zinc-800 px-2 py-1 text-xs text-white w-full focus:outline-none focus:border-zinc-500 font-mono ${className}`}
     />
   );
 }
@@ -36,7 +36,7 @@ function Select({ value, onChange, options }) {
     <select
       value={value ?? ""}
       onChange={e => onChange(e.target.value)}
-      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-white w-full focus:outline-none"
+      className="bg-zinc-900 border border-zinc-800 px-2 py-1 text-xs text-white w-full focus:outline-none focus:border-zinc-500 font-mono"
     >
       {options.map(o => (
         <option key={o} value={o}>{o}</option>
@@ -49,7 +49,7 @@ function Toggle({ label, checked, onChange }) {
   return (
     <label className="flex items-center gap-2 cursor-pointer">
       <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)}
-        className="w-3.5 h-3.5 accent-amber-400" />
+        className="w-3.5 h-3.5" />
       <span className="text-xs text-zinc-400">{label}</span>
     </label>
   );
@@ -60,7 +60,7 @@ function ColorInput({ label, value, onChange }) {
     <Field label={label}>
       <div className="flex items-center gap-2">
         <input type="color" value={value || "#ffffff"} onChange={e => onChange(e.target.value)}
-          className="w-8 h-7 rounded border border-zinc-700 bg-zinc-800 cursor-pointer p-0" />
+          className="w-8 h-7 border border-zinc-700 bg-zinc-900 cursor-pointer p-0" />
         <Input value={value} onChange={onChange} />
       </div>
     </Field>

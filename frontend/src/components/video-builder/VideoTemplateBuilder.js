@@ -69,7 +69,7 @@ export default function VideoTemplateBuilder({ initial = {}, onSaved, onBack }) 
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="Template name…"
-          className="bg-transparent border-b border-zinc-700 focus:border-amber-400 text-white text-sm font-semibold outline-none px-1 py-0.5 w-48 transition-colors"
+          className="bg-transparent border-b border-zinc-700 focus:border-zinc-400 text-white text-sm font-semibold outline-none px-1 py-0.5 w-48 transition-colors"
         />
 
         <div className="flex items-center gap-1 ml-2">
@@ -77,10 +77,10 @@ export default function VideoTemplateBuilder({ initial = {}, onSaved, onBack }) 
             <button
               key={r}
               onClick={() => setAspectRatio(r)}
-              className={`px-2 py-0.5 rounded text-xs transition-colors ${
+              className={`px-2 py-0.5 text-xs transition-colors ${
                 aspectRatio === r
-                  ? "bg-amber-400 text-black font-bold"
-                  : "text-zinc-400 hover:text-white border border-zinc-700"
+                  ? "bg-white text-black font-bold"
+                  : "text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500"
               }`}
             >
               {r}
@@ -90,16 +90,16 @@ export default function VideoTemplateBuilder({ initial = {}, onSaved, onBack }) 
 
         <label className="flex items-center gap-1.5 ml-2 cursor-pointer">
           <input type="checkbox" checked={videoOverridable} onChange={e => setVideoOverridable(e.target.checked)}
-            className="w-3.5 h-3.5 accent-amber-400" />
-          <span className="text-xs text-zinc-400">Clip overridable</span>
+            className="w-3.5 h-3.5" />
+          <span className="text-xs text-zinc-500 font-mono">Clip overridable</span>
         </label>
 
         <div className="ml-auto flex items-center gap-2">
-          {dirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+          {dirty && <span className="text-[10px] text-zinc-500 font-mono">unsaved</span>}
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-400 hover:bg-amber-300 text-black text-xs font-bold transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-colors disabled:opacity-40"
           >
             <Save size={13} />
             {saving ? "Saving…" : isEdit ? "Save" : "Create"}

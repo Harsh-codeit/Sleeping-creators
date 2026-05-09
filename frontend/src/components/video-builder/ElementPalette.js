@@ -46,7 +46,7 @@ export default function ElementPalette({ onAdd }) {
               <button
                 key={type}
                 onClick={() => onAdd(type)}
-                className="flex flex-col items-center gap-1 p-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="flex flex-col items-center gap-1 p-2 border border-zinc-800 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800 transition-colors cursor-pointer"
               >
                 <Icon size={18} className="text-zinc-400" />
                 <span className="text-[10px] text-zinc-400 text-center leading-tight">{label}</span>

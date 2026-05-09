@@ -50,8 +50,8 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
     top: py,
     transform: "translate(-50%, -50%)",
     cursor: "grab",
-    outline: selected ? "2px solid #f59e0b" : "1px dashed transparent",
-    borderRadius: 4,
+    outline: selected ? "2px solid #ffffff" : "1px dashed transparent",
+    borderRadius: 0,
     userSelect: "none",
     zIndex: el.z_index + 1,
   };
@@ -149,7 +149,7 @@ function ElementOverlay({ el, selected, containerW, containerH, onSelect, onDrag
   }
 
   return (
-    <div style={style} onMouseDown={handleMouseDown}>
+    <div style={style} onMouseDown={handleMouseDown} onClick={e => e.stopPropagation()}>
       {content}
     </div>
   );
@@ -177,26 +177,26 @@ export default function VideoCanvas({
       <div className="flex items-center gap-2">
         <button
           onClick={onShuffle}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-600 text-zinc-400 hover:text-white text-xs transition-colors"
         >
           <Shuffle size={12} /> Shuffle
         </button>
         {selectedEl && (
           <>
             <button onClick={() => onDuplicateElement(selectedEl.id)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs">
+              className="flex items-center gap-1 px-2 py-1.5 border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-600 text-zinc-400 hover:text-white text-xs transition-colors" title="Duplicate">
               <Copy size={12} />
             </button>
             <button onClick={() => onMoveElementZ(selectedEl.id, 1)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs" title="Bring forward">
+              className="flex items-center gap-1 px-2 py-1.5 border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-600 text-zinc-400 hover:text-white text-xs transition-colors" title="Bring forward">
               <ChevronUp size={12} />
             </button>
             <button onClick={() => onMoveElementZ(selectedEl.id, -1)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 text-xs" title="Send back">
+              className="flex items-center gap-1 px-2 py-1.5 border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 hover:border-zinc-600 text-zinc-400 hover:text-white text-xs transition-colors" title="Send back">
               <ChevronDown size={12} />
             </button>
             <button onClick={() => onDeleteElement(selectedEl.id)}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-md border border-red-800 bg-red-950 hover:bg-red-900 text-red-400 text-xs">
+              className="flex items-center gap-1 px-2 py-1.5 border border-zinc-700 bg-zinc-900 hover:bg-red-950 hover:border-red-800 text-zinc-400 hover:text-red-400 text-xs transition-colors" title="Delete">
               <Trash2 size={12} />
             </button>
           </>
@@ -205,7 +205,7 @@ export default function VideoCanvas({
 
       <div
         ref={canvasRef}
-        className="relative overflow-hidden rounded-lg shadow-2xl shrink-0"
+        className="relative overflow-hidden shrink-0 border border-zinc-700"
         style={{ width: CANVAS_W, height: CANVAS_H }}
         onClick={() => onSelectElement(null)}
       >
