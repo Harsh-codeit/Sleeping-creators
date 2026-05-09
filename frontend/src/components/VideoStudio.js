@@ -341,7 +341,7 @@ export default function VideoStudio({ clientId }) {
           {clip && (
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-600 px-0.5">
               <span>In: {trimStart.toFixed(1)}s</span>
-              <span>drag amber handles to trim</span>
+              <span>drag handles to trim</span>
               <span>Out: {(trimEnd ?? clipDuration).toFixed(1)}s</span>
             </div>
           )}
