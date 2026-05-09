@@ -9,6 +9,13 @@ const ASPECT_RATIOS = [
 
 const SIZE_PX = { S: 14, M: 18, L: 24 };
 
+const FONT_MAP = {
+  bold_sans:      { fontFamily: "'Liberation Sans', Arial, sans-serif", fontWeight: 700 },
+  elegant_serif:  { fontFamily: "Georgia, 'DejaVu Serif', serif", fontStyle: "italic" },
+  handwritten:    { fontFamily: "cursive", fontWeight: 600 },
+  modern_display: { fontFamily: "'Liberation Sans', Arial, sans-serif", fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" },
+};
+
 function easeOut(t) {
   return 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
 }
@@ -67,8 +74,7 @@ function CTATextOverlay({ template, containerW, containerH, editable, onDrag }) 
     transform: "translate(-50%, -50%)",
     fontSize,
     color: t.cta_text_color || "#ffffff",
-    fontWeight: 700,
-    fontFamily: "sans-serif",
+    ...FONT_MAP[template?.font_preset] || FONT_MAP.bold_sans,
     whiteSpace: "nowrap",
     cursor: editable ? "grab" : "default",
     userSelect: "none",
@@ -133,13 +139,13 @@ function CTAButtonOverlay({ template, containerW, containerH, editable, onDrag, 
     fontSize,
     color: t.cta_button_text_color || "#000000",
     background: t.cta_button_bg_color || "#ffffff",
-    fontWeight: 700,
-    fontFamily: "sans-serif",
+    ...FONT_MAP[t?.font_preset] || FONT_MAP.bold_sans,
     whiteSpace: "nowrap",
     cursor: editable ? "grab" : "default",
     userSelect: "none",
     padding: "8px 20px",
-    borderRadius: 999,
+    borderRadius: `${t.cta_button_border_radius ?? 999}px`,
+    boxShadow: t.cta_button_shadow ? "3px 3px 0 rgba(0,0,0,0.4)" : "none",
     display: "flex",
     alignItems: "center",
     gap: 6,
@@ -158,6 +164,35 @@ function hexAlpha(hex, alpha) {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function buildOverlayStyle(style, color, opacity) {
+  if (!style || style === "none") return null;
+  const r = parseInt(color.slice(1,3), 16);
+  const g = parseInt(color.slice(3,5), 16);
+  const b = parseInt(color.slice(5,7), 16);
+  const a = opacity;
+  if (style === "color_tint")    return { background: `rgba(${r},${g},${b},${a})` };
+  if (style === "gradient_wash") return { background: `linear-gradient(to top, rgba(${r},${g},${b},${a}) 0%, transparent 60%)` };
+  if (style === "lower_thirds")  return { background: `linear-gradient(to top, rgba(${r},${g},${b},0.8) 35%, transparent 35%)` };
+  if (style === "geometric")     return { background: `repeating-linear-gradient(45deg, rgba(0,0,0,0.24) 0, rgba(0,0,0,0.24) 8px, transparent 8px, transparent 16px)` };
+  if (style === "blur")          return { backdropFilter: "blur(8px)", filter: "brightness(0.9)", background: "rgba(255,255,255,0.04)" };
+  return null;
+}
+
+function OverlayLayer({ template, w, h }) {
+  const s = buildOverlayStyle(
+    template?.overlay_style || "none",
+    template?.overlay_color || "#000000",
+    template?.overlay_opacity ?? 0.5,
+  );
+  if (!s) return null;
+  return (
+    <div
+      data-overlay
+      style={{ position: "absolute", inset: 0, width: w, height: h, pointerEvents: "none", ...s }}
+    />
+  );
 }
 
 export default function VideoCanvasPreview({
@@ -260,6 +295,8 @@ export default function VideoCanvasPreview({
             No clip selected
           </div>
         )}
+
+        <OverlayLayer template={template} w={dims.w} h={dims.h} />
 
         {dims.w > 0 && (
           <>
