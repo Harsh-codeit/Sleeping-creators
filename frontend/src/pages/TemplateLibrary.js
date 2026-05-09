@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Copy, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Copy, Trash2, Layers } from "lucide-react";
 import VideoTemplateBuilder from "../components/video-builder/VideoTemplateBuilder";
 import VideoTemplateCard from "../components/VideoTemplateCard";
 
@@ -204,22 +204,36 @@ export default function TemplateLibrary() {
           {/* ── Video tab ── */}
           {contentTab === "video" && (
             filteredVideo.length === 0 ? (
-              <div className="text-center py-16">
-                <p className="text-zinc-400 text-sm">No video templates yet.</p>
-                <p className="text-zinc-600 text-xs mt-1">Create one to get started.</p>
+              <div className="border border-zinc-800 flex flex-col items-center justify-center py-16 gap-3">
+                <Layers size={28} className="text-zinc-700" />
+                <div className="text-center">
+                  <p className="text-zinc-400 text-sm font-semibold">No video templates yet</p>
+                  <p className="text-zinc-600 text-xs font-mono mt-1">Define overlay layouts — text, CTAs, shapes — applied to video posts</p>
+                </div>
+                <button
+                  onClick={() => { setEditingVideoTemplate(null); setShowVideoEditor(true); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors mt-1"
+                >
+                  <Plus size={12} /> New Video Template
+                </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {filteredVideo.map(t => (
-                  <VideoTemplateCard
-                    key={t.id}
-                    template={t}
-                    clients={clients}
-                    onDeleted={id => setVideoTemplates(prev => prev.filter(x => x.id !== id))}
-                    onEdit={tmpl => { setEditingVideoTemplate(tmpl); setShowVideoEditor(true); }}
-                  />
-                ))}
-              </div>
+              <>
+                <p className="text-[10px] font-mono text-zinc-600 tracking-widest uppercase mb-4">
+                  {filteredVideo.length} template{filteredVideo.length !== 1 ? "s" : ""}
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {filteredVideo.map(t => (
+                    <VideoTemplateCard
+                      key={t.id}
+                      template={t}
+                      clients={clients}
+                      onDeleted={id => setVideoTemplates(prev => prev.filter(x => x.id !== id))}
+                      onEdit={tmpl => { setEditingVideoTemplate(tmpl); setShowVideoEditor(true); }}
+                    />
+                  ))}
+                </div>
+              </>
             )
           )}
         </div>
