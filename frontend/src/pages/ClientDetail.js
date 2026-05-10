@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
-import VideoStudio from "../components/VideoStudio";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
@@ -2004,8 +2003,8 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "Video" && (
-        <div className="flex flex-col overflow-hidden" style={{ height: "calc(100vh - 140px)" }}>
-          <VideoStudio clientId={client.id} />
+        <div className="p-6 text-sm text-muted-foreground">
+          Video tab — coming soon.
         </div>
       )}
 

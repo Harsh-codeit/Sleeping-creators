@@ -6,7 +6,6 @@ import {
   ImageDown, Download, ExternalLink, ChevronDown,
   Sparkles, X, PenLine, Copy, Send
 } from "lucide-react";
-import VideoEditor from "../components/VideoEditor";
 import ImageElementOverlay from "../components/ImageElementOverlay";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -1308,8 +1307,8 @@ export default function Carousel() {
           {/* Editor or prompt */}
           <div className="flex-1 overflow-auto">
             {selectedClientId ? (
-              <div className="p-6">
-                <VideoEditor clientId={selectedClientId} />
+              <div className="p-6 text-sm text-muted-foreground">
+                Video tab — coming soon.
               </div>
             ) : (
               <div className="flex items-center justify-center h-full text-zinc-600 text-sm font-mono">
