@@ -18,9 +18,7 @@ const STATUS_RENDER = {
   succeeded:        "text-emerald-400",
   pending_approval: "text-yellow-400",
   bundle_scheduled: "text-green-400",
-  published:        "text-emerald-400",
   failed_render:    "text-red-400",
-  failed:           "text-red-400",
   cancelled:        "text-zinc-500",
 };
 
