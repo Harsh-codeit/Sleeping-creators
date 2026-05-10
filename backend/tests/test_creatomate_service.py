@@ -69,3 +69,15 @@ async def test_get_template_source_returns_full_definition(monkeypatch):
     with patch.object(httpx.AsyncClient, "get", new=fake_get):
         r = await creatomate_service.get_template_source("t1")
     assert "source" in r
+
+
+@pytest.mark.asyncio
+async def test_submit_render_raises_with_retry_after_on_429(monkeypatch):
+    monkeypatch.setenv("CREATOMATE_API_KEY", "k")
+    async def fake_post(self, url, headers=None, json=None, **kw):
+        return httpx.Response(429, headers={"Retry-After": "7"}, json={"error": "rate"},
+                              request=httpx.Request("POST", url))
+    with patch.object(httpx.AsyncClient, "post", new=fake_post):
+        with pytest.raises(creatomate_service.CreatomateRateLimited) as exc:
+            await creatomate_service.submit_render("t", {})
+    assert exc.value.retry_after == 7

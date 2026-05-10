@@ -7,6 +7,12 @@ logger = logging.getLogger(__name__)
 CREATOMATE_BASE = "https://api.creatomate.com/v2"
 
 
+class CreatomateRateLimited(Exception):
+    def __init__(self, retry_after: int):
+        super().__init__(f"Rate limited; retry after {retry_after}s")
+        self.retry_after = retry_after
+
+
 def _headers() -> dict:
     api_key = os.environ.get("CREATOMATE_API_KEY", "")
     if not api_key:
@@ -25,6 +31,9 @@ async def submit_render(template_id: str, modifications: dict, webhook_url: str 
             headers=_headers(),
             json=body,
         )
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", "1"))
+            raise CreatomateRateLimited(retry_after)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list) and data:
