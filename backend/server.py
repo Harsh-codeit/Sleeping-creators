@@ -212,7 +212,7 @@ class CreatomateTemplate(BaseModel):
     thumbnail_url: Optional[str] = None
     duration_seconds: Optional[float] = None
     aspect_ratio: Optional[str] = None
-    field_schema: list[CreatomateFieldSchema] = []
+    field_schema: List[CreatomateFieldSchema] = []
     defaults: dict = {}
     imported_at: Optional[str] = None
     last_synced_at: Optional[str] = None
@@ -220,7 +220,7 @@ class CreatomateTemplate(BaseModel):
 
 class CreatomateTemplatePatch(BaseModel):
     status: Optional[str] = None
-    field_schema: Optional[list[CreatomateFieldSchema]] = None
+    field_schema: Optional[List[CreatomateFieldSchema]] = None
 
 class BrandOverrides(BaseModel):
     color: Optional[str] = None
@@ -230,18 +230,18 @@ class BrandOverrides(BaseModel):
 
 class RenderJobStatus(BaseModel):
     id: str
-    post_id: Optional[str]
+    post_id: Optional[str] = None
     client_id: str
     template_id: str
-    creatomate_render_id: Optional[str]
+    creatomate_render_id: Optional[str] = None
     status: str  # submitted|succeeded|failed|cancelled
-    submitted_at: Optional[str]
-    completed_at: Optional[str]
-    output_url: Optional[str]
-    snapshot_url: Optional[str]
-    r2_video_url: Optional[str]
-    r2_snapshot_url: Optional[str]
-    error: Optional[str]
+    submitted_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    output_url: Optional[str] = None
+    snapshot_url: Optional[str] = None
+    r2_video_url: Optional[str] = None
+    r2_snapshot_url: Optional[str] = None
+    error: Optional[str] = None
     retry_count: int = 0
 
 class VideoCreateRequest(BaseModel):
@@ -250,7 +250,7 @@ class VideoCreateRequest(BaseModel):
     template_id: str  # creatomate_templates.id (NOT creatomate_template_id)
     scheduled_at: Optional[str] = None
     music_url: Optional[str] = None
-    clip_drive_ids: Optional[list[str]] = None
+    clip_drive_ids: Optional[List[str]] = None
 
 class TelegramTestRequest(BaseModel):
     bot_token: str = ""
