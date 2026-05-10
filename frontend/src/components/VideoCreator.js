@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { RefreshCw, Wand2, Film, Download, X, Upload, HardDrive, Play } from "lucide-react";
+import { RefreshCw, Wand2, Film, Download, X, Upload, HardDrive, Play, Pause, Music2, Check } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
@@ -35,6 +35,11 @@ export function VideoCreator({ clientId }) {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [selectedTrack, setSelectedTrack] = useState(null);
+  const [playingId, setPlayingId] = useState(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     axios.get(`${API}/creatomate-templates?status=active`)
@@ -152,6 +157,41 @@ export function VideoCreator({ clientId }) {
     const clipCount = selectedTemplate?.field_schema?.filter(f => f.role === "clip").length || 0;
     if (isSelected) setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
     else if (selectedClips.length < clipCount) setSelectedClips(prev => [...prev, clip]);
+  };
+
+  const openMusicPicker = async () => {
+    setShowMusicPicker(true);
+    try {
+      const r = await axios.get(`${API}/music`);
+      setMusicTracks(r.data);
+    } catch { toast.error("Failed to load music library"); }
+  };
+
+  const handleTogglePlay = (track) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playingId === track.id) {
+      audio.pause();
+      setPlayingId(null);
+    } else {
+      audio.src = track.r2_url;
+      audio.play().catch(() => {});
+      setPlayingId(track.id);
+    }
+  };
+
+  const handleSelectTrack = (track) => {
+    if (audioRef.current) { audioRef.current.pause(); }
+    setPlayingId(null);
+    setSelectedTrack(track);
+    setMusicUrl(track.r2_url);
+    setShowMusicPicker(false);
+  };
+
+  const closeMusicPicker = () => {
+    if (audioRef.current) { audioRef.current.pause(); }
+    setPlayingId(null);
+    setShowMusicPicker(false);
   };
 
   const isFailed = post && ["failed_render", "failed", "cancelled"].includes(post.status);
@@ -358,15 +398,26 @@ export function VideoCreator({ clientId }) {
               {/* Audio field */}
               {hasAudio && (
                 <div>
-                  <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Music URL</div>
-                  <input
-                    data-testid="music-url-input"
-                    type="text"
-                    className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-                    placeholder="leave blank for template default"
-                    value={musicUrl}
-                    onChange={e => setMusicUrl(e.target.value)}
-                  />
+                  <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Music</div>
+                  <button
+                    data-testid="choose-music-btn"
+                    onClick={openMusicPicker}
+                    className="w-full border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-1.5"><Music2 size={11} /> Choose music</span>
+                    {selectedTrack && <span className="font-mono text-[10px] text-zinc-500">1 selected</span>}
+                  </button>
+                  {selectedTrack && (
+                    <div className="mt-1.5 flex items-center justify-between bg-zinc-900 border border-zinc-800 px-2 py-1">
+                      <span className="font-mono text-[10px] text-zinc-300 truncate max-w-[200px]">{selectedTrack.name}</span>
+                      <button
+                        onClick={() => { setSelectedTrack(null); setMusicUrl(""); }}
+                        className="text-zinc-600 hover:text-white transition-colors duration-200 ml-2"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -555,6 +606,95 @@ export function VideoCreator({ clientId }) {
           </div>
         </div>
       )}
+      {/* ── Music picker modal ── */}
+      {showMusicPicker && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={closeMusicPicker}>
+          <div className="bg-zinc-950 border border-zinc-800 w-[520px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="h-11 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-white">Music Library</span>
+              <button onClick={closeMusicPicker} className="text-zinc-500 hover:text-white transition-colors duration-200"><X size={14} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {musicTracks.length === 0 ? (
+                <div className="py-12 text-center font-mono text-xs text-zinc-600">
+                  No tracks in library.<br />Upload music from the Music page.
+                </div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="w-10 px-3 py-2" />
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Track</th>
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-16">Dur</th>
+                      <th className="w-10 px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {musicTracks.map(track => {
+                      const isPlaying = playingId === track.id;
+                      const isSelected = selectedTrack?.id === track.id;
+                      return (
+                        <tr
+                          key={track.id}
+                          data-testid={`music-row-${track.id}`}
+                          onClick={() => handleSelectTrack(track)}
+                          className={`border-b border-zinc-800/50 cursor-pointer transition-colors duration-200 hover:bg-zinc-900 ${isSelected ? "bg-zinc-900" : ""}`}
+                        >
+                          <td className="px-3 py-2">
+                            <button
+                              data-testid={`music-play-${track.id}`}
+                              onClick={e => { e.stopPropagation(); handleTogglePlay(track); }}
+                              className="w-7 h-7 flex items-center justify-center border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors duration-200"
+                            >
+                              {isPlaying ? <Pause size={11} /> : <Play size={11} />}
+                            </button>
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="font-mono text-zinc-300 text-[11px] truncate max-w-[220px]">{track.name}</div>
+                            {track.mood_tags?.length > 0 && (
+                              <div className="flex gap-1 mt-0.5 flex-wrap">
+                                {track.mood_tags.slice(0, 3).map(tag => (
+                                  <span key={tag} className="font-mono text-[9px] text-zinc-600 bg-zinc-800 px-1 py-0.5">{tag}</span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-2 py-2 font-mono text-zinc-500 text-[10px]">
+                            {track.duration ? `${Math.round(track.duration)}s` : "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {isSelected && <Check size={12} className="text-white" />}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="border-t border-zinc-800 px-4 py-2.5 flex justify-between items-center flex-shrink-0">
+              <button
+                onClick={() => { setSelectedTrack(null); setMusicUrl(""); closeMusicPicker(); }}
+                className="border border-zinc-700 text-zinc-500 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5"
+              >
+                Clear
+              </button>
+              <button
+                onClick={closeMusicPicker}
+                className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-4 py-1.5"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden audio element for preview playback */}
+      <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
+
     </div>
   );
 }

@@ -155,18 +155,30 @@ async def sync_templates(db) -> dict:
             continue
         seen_creatomate_ids.add(cm_id)
         full = await creatomate_service.get_template_source(cm_id)
-        elements = (full.get("source") or {}).get("elements") or []
+        source_obj = full.get("source") or {}
+        elements = source_obj.get("elements") or []
         field_schema = classify(elements)
         defaults = _extract_defaults(elements)
+
+        # width/height/duration live inside source, not at the top level
+        width = full.get("width") or source_obj.get("width")
+        height = full.get("height") or source_obj.get("height")
+        duration = full.get("duration") or source_obj.get("duration")
+        thumbnail_url = (
+            full.get("snapshot_url")
+            or full.get("preview_url")
+            or tpl.get("snapshot_url")
+            or tpl.get("preview_url")
+        )
 
         existing = await db.creatomate_templates.find_one({"creatomate_template_id": cm_id})
         now = _now_iso()
         common = {
             "creatomate_template_id": cm_id,
             "name": full.get("name", tpl.get("name", "Untitled")),
-            "thumbnail_url": full.get("snapshot_url"),
-            "duration_seconds": full.get("duration"),
-            "aspect_ratio": _aspect_ratio(full.get("width"), full.get("height")),
+            "thumbnail_url": thumbnail_url,
+            "duration_seconds": duration,
+            "aspect_ratio": _aspect_ratio(width, height),
             "field_schema": field_schema,
             "defaults": defaults,
             "last_synced_at": now,
