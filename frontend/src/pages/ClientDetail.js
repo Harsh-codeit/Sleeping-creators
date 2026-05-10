@@ -1451,42 +1451,43 @@ function VideoTab({ client, clientId, onSaved }) {
     <div className="space-y-6 p-4">
       {/* Brand overrides */}
       <div>
-        <h3 className="font-semibold mb-2">Brand overrides</h3>
+        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Brand overrides</div>
         <BrandOverridesForm client={client} onSaved={onSaved} />
       </div>
 
       {/* Create video */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold">Video posts</h3>
+        <div className="flex items-center justify-between mb-3 border-b border-zinc-800 pb-2">
+          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Video posts</div>
           <button
+            data-testid="create-video-btn"
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200"
           >
-            <Plus size={13} /> Create video
+            <Plus size={12} /> Create video
           </button>
         </div>
 
         {/* Recent video posts table */}
         {recentPosts.length === 0 ? (
-          <div className="text-xs text-zinc-500 py-4">No video posts yet.</div>
+          <div className="font-mono text-xs text-zinc-600 py-4">No video posts yet.</div>
         ) : (
           <table className="w-full text-xs">
-            <thead className="text-left text-zinc-500 border-b border-zinc-800">
-              <tr>
-                <th className="pb-1">Post ID</th>
-                <th>Status</th>
-                <th>Scheduled</th>
-                <th>Created</th>
+            <thead>
+              <tr className="border-b border-zinc-800">
+                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Post ID</th>
+                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Status</th>
+                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Scheduled</th>
+                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Created</th>
               </tr>
             </thead>
             <tbody>
               {recentPosts.map(p => (
-                <tr key={p.id} className="border-b border-zinc-900">
-                  <td className="py-1.5 font-mono">{p.id?.slice(0, 8)}</td>
-                  <td className={`font-mono ${STATUS_COLOR[p.status] || "text-zinc-400"}`}>{p.status}</td>
-                  <td>{p.scheduled_at?.slice(0, 16)?.replace("T", " ") || "—"}</td>
-                  <td>{p.created_at?.slice(0, 16)?.replace("T", " ") || "—"}</td>
+                <tr key={p.id} className="border-b border-zinc-800/50">
+                  <td className="py-1.5 font-mono text-zinc-300">{p.id?.slice(0, 8)}</td>
+                  <td className={`py-1.5 font-mono ${STATUS_COLOR[p.status] || "text-zinc-400"}`}>{p.status}</td>
+                  <td className="py-1.5 font-mono text-zinc-400">{p.scheduled_at?.slice(0, 16)?.replace("T", " ") || "—"}</td>
+                  <td className="py-1.5 font-mono text-zinc-400">{p.created_at?.slice(0, 16)?.replace("T", " ") || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -1496,35 +1497,54 @@ function VideoTab({ client, clientId, onSaved }) {
 
       {/* Create video modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onClick={() => setShowCreate(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 p-6 w-[540px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold">Create video</h2>
-              <button onClick={() => setShowCreate(false)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={() => setShowCreate(false)}>
+          <div className="bg-zinc-950 border border-zinc-800 w-[540px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800">
+              <div className="text-sm font-semibold text-white">Create video</div>
+              <button
+                data-testid="close-create-video-modal-btn"
+                onClick={() => setShowCreate(false)}
+                className="text-zinc-500 hover:text-white transition-colors duration-200"
+              >
+                <X size={15} />
+              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="p-5 space-y-4">
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Template <span className="text-red-400">*</span></label>
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
+                  Template <span className="text-red-400">*</span>
+                </div>
                 <VideoTemplatePicker value={templateId} onChange={setTemplateId} />
               </div>
 
               <div>
-                <label className="text-xs text-zinc-400 mb-1 block">Schedule at (optional — defaults to 5 min from now)</label>
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
+                  Schedule at (optional)
+                </div>
                 <input
                   type="datetime-local"
+                  data-testid="schedule-at-input"
                   value={scheduledAt}
                   onChange={e => setScheduledAt(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 px-2 py-1.5 text-xs text-white"
+                  className="w-full bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-zinc-500 transition-colors duration-200"
                 />
+                <div className="text-[10px] font-mono text-zinc-600 mt-1">defaults to 5 min from now</div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 text-xs text-zinc-400 hover:text-white">Cancel</button>
+              <div className="flex justify-end gap-2 pt-1 border-t border-zinc-800">
                 <button
+                  data-testid="cancel-create-video-btn"
+                  onClick={() => setShowCreate(false)}
+                  className="px-4 py-1.5 text-xs font-mono text-zinc-400 hover:text-white transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  data-testid="queue-render-btn"
                   onClick={createVideo}
                   disabled={submitting || !templateId}
-                  className="px-4 py-1.5 bg-white text-black text-xs font-semibold disabled:opacity-40 hover:bg-zinc-100"
+                  className="px-4 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
                 >
                   {submitting ? "Queuing…" : "Queue render"}
                 </button>
