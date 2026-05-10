@@ -60,7 +60,7 @@ async def creatomate_webhook(request: Request):
         return {"ok": True, "ignored": "terminal"}
 
     if status == "succeeded":
-        from video_render_service import mirror_to_r2
+        from video_render_service import mirror_to_r2, _log_phase
         r2_video, r2_snap = await mirror_to_r2(
             payload.get("url"), payload.get("snapshot_url"), rj["client_id"], render_id,
         )
@@ -75,6 +75,20 @@ async def creatomate_webhook(request: Request):
                 "r2_snapshot_url": r2_snap,
             }},
         )
+        await _log_phase(db, rj["id"], "webhook_received", status="succeeded")
+
+        try:
+            await db.usage_logs.insert_one({
+                "service": "creatomate",
+                "client_id": rj["client_id"],
+                "template_id": rj.get("template_id"),
+                "creatomate_render_id": render_id,
+                "billable_seconds": payload.get("duration") or 0,
+                "estimated_cost_usd": (payload.get("duration") or 0) * 0.0011,
+                "ts": _now_iso(),
+            })
+        except Exception as e:
+            logger.warning("usage_logs insert failed: %s", e)
 
         post = await db.posts.find_one({"id": rj["post_id"]})
         if not post:

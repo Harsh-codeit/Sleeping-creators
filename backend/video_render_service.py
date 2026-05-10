@@ -130,6 +130,20 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+async def _log_phase(db, render_job_id: str, phase: str, **fields):
+    """Append a structured render-phase log entry to db.logs."""
+    try:
+        await db.logs.insert_one({
+            "kind": "creatomate_render",
+            "render_job_id": render_job_id,
+            "phase": phase,
+            "ts": _now_iso(),
+            **fields,
+        })
+    except Exception as e:
+        logger.warning("phase log insert failed (%s): %s", phase, e)
+
+
 async def submit_render_for_post(
     db,
     post: dict,
@@ -197,6 +211,7 @@ async def submit_render_for_post(
     }
     await db.render_jobs.insert_one(job)
     await db.posts.update_one({"id": post["id"]}, {"$set": {"render_job_id": job["id"]}})
+    await _log_phase(db, job["id"], "submitted", post_id=post["id"])
     return job
 
 
@@ -320,4 +335,5 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
         {"id": post["id"]},
         {"$set": {"status": "bundle_scheduled", "bundle_post_id": bundle_post_id}},
     )
+    logger.info("bundle_scheduled post_id=%s bundle_post_id=%s", post["id"], bundle_post_id)
     return bundle_post_id
