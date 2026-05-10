@@ -7,6 +7,7 @@ import {
   Sparkles, X, PenLine, Copy, Send
 } from "lucide-react";
 import ImageElementOverlay from "../components/ImageElementOverlay";
+import { VideoCreator } from "../components/VideoCreator";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "linkedin", "twitter", "threads"];
@@ -1307,9 +1308,7 @@ export default function Carousel() {
           {/* Editor or prompt */}
           <div className="flex-1 overflow-auto">
             {selectedClientId ? (
-              <div className="p-6 text-sm text-muted-foreground">
-                Video tab — coming soon.
-              </div>
+              <VideoCreator clientId={selectedClientId} />
             ) : (
               <div className="flex items-center justify-center h-full text-zinc-600 text-sm font-mono">
                 Select a client to get started.
