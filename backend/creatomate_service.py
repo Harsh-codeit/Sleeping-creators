@@ -4,7 +4,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-CREATOMATE_BASE = "https://api.creatomate.com/v2"
+CREATOMATE_BASE = "https://api.creatomate.com/v1"
 
 
 class CreatomateRateLimited(Exception):
