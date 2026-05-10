@@ -35,3 +35,4 @@ google-auth-httplib2==0.2.0
 celery==5.3.6
 redis==5.0.1
 ffmpeg-python==0.2.0
+fakeredis>=2.20.0
