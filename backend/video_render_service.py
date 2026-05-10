@@ -6,6 +6,28 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _anthropic_client():
+    import anthropic
+    return anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+
+_AI_TEXT_PROMPT = """You write short text for a social media video.
+
+Brand context:
+- Name: {client_name}
+- Niche: {niche}
+- Voice: {brand_voice}
+
+Topic: {topic}
+
+Generate text for these fields. Match each field's hint and max_chars exactly.
+Return ONLY valid JSON: {{"<field_key>": "<text>", ...}} — no explanation.
+
+Fields:
+{fields}
+"""
+
+
 async def build_modifications(
     db,
     template: dict,
@@ -67,3 +89,35 @@ async def build_modifications(
                 mods[key] = v
         # static_text and decorative: skip
     return mods
+
+
+async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str) -> dict:
+    """Call Claude once to fill all ai_text fields. Returns {key: text}."""
+    if not ai_text_fields:
+        return {}
+
+    client_name = client.get("name", "the brand")
+    niche = client.get("niche") or client.get("industry") or "general"
+    brand_voice = client.get("brand_voice", "neutral")
+    fields_for_prompt = [{
+        "key": f["key"],
+        "hint": f.get("ai_hint") or "short caption",
+        "max_chars": f.get("max_chars") or 80,
+    } for f in ai_text_fields]
+
+    prompt = _AI_TEXT_PROMPT.format(
+        client_name=client_name, niche=niche, brand_voice=brand_voice,
+        topic=topic, fields=json.dumps(fields_for_prompt, indent=2),
+    )
+    msg = _anthropic_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
+    return json.loads(raw)

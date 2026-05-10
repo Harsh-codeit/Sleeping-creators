@@ -106,3 +106,22 @@ async def test_audio_pipeline_wins_over_client_when_no_request():
         ai_text_overrides=None, music_url=None, clip_drive_ids=None,
     )
     assert mods["bg"] == "https://x/pipeline.mp3"
+
+
+@pytest.mark.asyncio
+async def test_generate_ai_text_returns_per_field_dict(monkeypatch):
+    fields = [
+        {"key": "Headline", "role": "ai_text", "kind": "text", "ai_hint": "punchy hook ≤60 chars", "max_chars": 60, "inferred": True},
+        {"key": "CTA", "role": "ai_text", "kind": "text", "ai_hint": "call to action ≤24 chars", "max_chars": 24, "inferred": True},
+    ]
+    client = {"id": "c1", "name": "Acme", "niche": "fitness", "brand_voice": "energetic"}
+    topic = "Summer sale"
+
+    fake_resp = MagicMock()
+    fake_resp.content = [MagicMock(text='{"Headline": "Crush summer in style", "CTA": "SHOP NOW"}')]
+    fake_anthropic = MagicMock()
+    fake_anthropic.messages.create.return_value = fake_resp
+
+    with patch.object(video_render_service, "_anthropic_client", return_value=fake_anthropic):
+        out = await video_render_service.generate_ai_text(fields, client, topic)
+    assert out == {"Headline": "Crush summer in style", "CTA": "SHOP NOW"}
