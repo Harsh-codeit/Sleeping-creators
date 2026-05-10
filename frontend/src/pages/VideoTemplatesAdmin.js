@@ -10,7 +10,7 @@ const STATUS_COLOR = {
   submitted: "text-blue-400",
   succeeded: "text-emerald-400",
   pending_approval: "text-yellow-400",
-  bundle_scheduled: "text-green-400",
+  bundle_scheduled: "text-emerald-400",
   published: "text-emerald-400",
   failed_render: "text-red-400",
   failed: "text-red-400",
@@ -427,7 +427,6 @@ export default function VideoTemplatesAdmin() {
             onClose={() => setSelectedTemplate(null)}
             onCreated={() => {
               loadPosts();
-              setSelectedTemplate(null);
             }}
           />
         </div>
