@@ -1,7 +1,9 @@
 import os
 import json
 import logging
+import uuid
 from typing import Optional
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -113,3 +115,92 @@ def classify(elements: list[dict]) -> list[dict]:
     except Exception as e:
         logger.warning("Claude classification failed, falling back to type-only: %s", e)
         return classify_by_type_only(elements)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _aspect_ratio(width: int | None, height: int | None) -> str | None:
+    if not width or not height:
+        return None
+    from math import gcd
+    g = gcd(width, height)
+    return f"{width // g}:{height // g}"
+
+
+def _extract_defaults(elements: list[dict]) -> dict:
+    out = {}
+    for el in elements:
+        name = el.get("name")
+        if not name:
+            continue
+        val = el.get("text") or el.get("source") or el.get("fill_color") or el.get("color")
+        if val is not None:
+            out[name] = val
+    return out
+
+
+async def sync_templates(db) -> dict:
+    """Sync templates from Creatomate to db.creatomate_templates. Returns summary."""
+    import creatomate_service
+
+    templates = await creatomate_service.list_templates()
+    added, updated = [], []
+    seen_creatomate_ids = set()
+
+    for tpl in templates:
+        cm_id = tpl.get("id")
+        if not cm_id:
+            continue
+        seen_creatomate_ids.add(cm_id)
+        full = await creatomate_service.get_template_source(cm_id)
+        elements = (full.get("source") or {}).get("elements") or []
+        field_schema = classify(elements)
+        defaults = _extract_defaults(elements)
+
+        existing = await db.creatomate_templates.find_one({"creatomate_template_id": cm_id})
+        now = _now_iso()
+        common = {
+            "creatomate_template_id": cm_id,
+            "name": full.get("name", tpl.get("name", "Untitled")),
+            "thumbnail_url": full.get("snapshot_url"),
+            "duration_seconds": full.get("duration"),
+            "aspect_ratio": _aspect_ratio(full.get("width"), full.get("height")),
+            "field_schema": field_schema,
+            "defaults": defaults,
+            "last_synced_at": now,
+        }
+
+        if existing:
+            # Preserve admin overrides on existing rows: don't overwrite roles already
+            # marked inferred=False. Replace only inferred=True rows.
+            preserved = {f["key"]: f for f in existing.get("field_schema", []) if not f.get("inferred", True)}
+            common["field_schema"] = [preserved.get(f["key"], f) for f in field_schema]
+            await db.creatomate_templates.update_one(
+                {"id": existing["id"]},
+                {"$set": common},
+            )
+            updated.append({"id": existing["id"], "creatomate_template_id": cm_id, "name": common["name"]})
+        else:
+            doc = {
+                "id": str(uuid.uuid4()),
+                "imported_at": now,
+                "status": "draft",
+                **common,
+            }
+            await db.creatomate_templates.update_one(
+                {"creatomate_template_id": cm_id},
+                {"$setOnInsert": doc},
+                upsert=True,
+            )
+            added.append({"id": doc["id"], "creatomate_template_id": cm_id, "name": common["name"]})
+
+    # Soft-deactivate any DB row whose creatomate_template_id is no longer in the workspace
+    deactivated = []
+    async for row in db.creatomate_templates.find({"creatomate_template_id": {"$nin": list(seen_creatomate_ids)}}):
+        if row.get("status") != "inactive":
+            await db.creatomate_templates.update_one({"id": row["id"]}, {"$set": {"status": "inactive"}})
+            deactivated.append({"id": row["id"], "creatomate_template_id": row["creatomate_template_id"]})
+
+    return {"added": added, "updated": updated, "deactivated": deactivated}

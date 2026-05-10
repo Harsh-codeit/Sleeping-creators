@@ -78,3 +78,54 @@ def test_classify_falls_back_when_claude_raises():
         schema = cti.classify(elements)
     assert schema[0]["role"] == "ai_text"  # fallback path used
     assert schema[0]["inferred"] is True
+
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+@pytest.mark.asyncio
+async def test_sync_inserts_new_templates_and_updates_existing(monkeypatch):
+    import creatomate_template_importer as cti
+
+    list_resp = [
+        {"id": "t1", "name": "Promo A"},
+        {"id": "t2", "name": "Promo B"},
+    ]
+    source_t1 = {"id": "t1", "name": "Promo A", "duration": 15, "width": 1080, "height": 1920,
+                 "snapshot_url": "https://x/t1.jpg",
+                 "source": {"elements": [{"name": "Title", "type": "text", "text": "Hi"}]}}
+    source_t2 = {"id": "t2", "name": "Promo B", "duration": 10, "width": 1080, "height": 1080,
+                 "snapshot_url": "https://x/t2.jpg",
+                 "source": {"elements": [{"name": "v1", "type": "video"}]}}
+
+    import creatomate_service
+    monkeypatch.setattr(creatomate_service, "list_templates", AsyncMock(return_value=list_resp))
+    monkeypatch.setattr(creatomate_service, "get_template_source",
+                        AsyncMock(side_effect=lambda tid: source_t1 if tid == "t1" else source_t2))
+    monkeypatch.setattr(cti, "classify", lambda elements: [
+        {"key": e["name"], "role": "ai_text" if e["type"]=="text" else "clip",
+         "kind": e["type"], "ai_hint": None, "max_chars": None, "inferred": True}
+        for e in elements])
+
+    db = MagicMock()
+    # simulate t1 already in DB (will be UPDATED), t2 is new (INSERTED)
+    db.creatomate_templates.find_one = AsyncMock(side_effect=lambda q: {
+        "id": "existing-t1-uuid", "creatomate_template_id": "t1", "status": "active",
+    } if q.get("creatomate_template_id") == "t1" else None)
+    db.creatomate_templates.update_one = AsyncMock()
+
+    class _AsyncCursor:
+        def __init__(self, items): self._items = list(items)
+        def __aiter__(self): return self
+        async def __anext__(self):
+            if not self._items: raise StopAsyncIteration
+            return self._items.pop(0)
+
+    db.creatomate_templates.find = MagicMock(return_value=_AsyncCursor([]))  # nothing to deactivate
+
+    summary = await cti.sync_templates(db)
+    assert "t1" in [u["creatomate_template_id"] for u in summary["updated"]]
+    assert "t2" in [u["creatomate_template_id"] for u in summary["added"]]
+    assert summary["deactivated"] == []
+    assert db.creatomate_templates.update_one.await_count >= 2
