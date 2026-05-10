@@ -257,11 +257,6 @@ class VideoCreateRequest(BaseModel):
     clip_drive_ids: Optional[List[str]] = None
     ai_text_overrides: Optional[dict] = None  # {field_key: text} — skips Claude generation
 
-class VideoGenerateTextRequest(BaseModel):
-    template_id: str
-    client_id: str
-    topic: Optional[str] = None
-
 class TelegramTestRequest(BaseModel):
     bot_token: str = ""
     chat_id: str = ""
@@ -2075,7 +2070,7 @@ async def calendar_posts(start: str, end: str, client_id: Optional[str] = None, 
     return {"posts": posts}
 
 @api_router.get("/posts")
-async def list_posts(status: Optional[str] = None, client_id: Optional[str] = None, platform: Optional[str] = None, limit: int = 100, kind: Optional[str] = None):
+async def list_posts(status: Optional[str] = None, client_id: Optional[str] = None, platform: Optional[str] = None, limit: int = 100):
     query = {}
     if status:
         query["status"] = status
@@ -2083,8 +2078,6 @@ async def list_posts(status: Optional[str] = None, client_id: Optional[str] = No
         query["client_id"] = client_id
     if platform:
         query["platform"] = platform
-    if kind:
-        query["kind"] = kind
     posts = await db.posts.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return posts
 
@@ -5253,23 +5246,6 @@ async def create_video_post_route(req: VideoCreateRequest):
     from video_worker import enqueue_video_job
     task_id = enqueue_video_job(post_doc["id"])
     return {"task_id": task_id, "post_id": post_doc["id"], "status": "rendering"}
-
-
-@api_router.post("/videos/generate-text")
-async def generate_video_text_route(req: VideoGenerateTextRequest):
-    template = await db.creatomate_templates.find_one({"id": req.template_id}, {"_id": 0})
-    if not template:
-        raise HTTPException(404, "Template not found")
-    client = await db.clients.find_one({"id": req.client_id}, {"_id": 0})
-    if not client:
-        raise HTTPException(404, "Client not found")
-    from video_render_service import generate_ai_text
-    ai_text_fields = [f for f in template.get("field_schema", []) if f.get("role") == "ai_text"]
-    if not ai_text_fields:
-        return {}
-    topic = req.topic or client.get("name", "")
-    result = await generate_ai_text(ai_text_fields, client, topic)
-    return result
 
 
 @api_router.get("/videos/job/{task_id}")
