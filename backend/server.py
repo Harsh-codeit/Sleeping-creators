@@ -2156,6 +2156,18 @@ async def approve_post_manual(post_id: str):
     if not post:
         raise HTTPException(404, "Post not found")
     await db.posts.update_one({"id": post_id}, {"$set": {"status": "scheduled"}})
+    # Video handoff on approval
+    if post.get("kind") == "video" and post.get("status") == "pending_approval":
+        try:
+            rj = await db.render_jobs.find_one({"id": post.get("render_job_id")}) if post.get("render_job_id") else None
+            if rj and rj.get("r2_video_url"):
+                from video_render_service import handoff_to_bundle
+                await handoff_to_bundle(db, post, rj["r2_video_url"], rj.get("r2_snapshot_url"))
+            elif post.get("video_url"):
+                from video_render_service import handoff_to_bundle
+                await handoff_to_bundle(db, post, post["video_url"], post.get("snapshot_url"))
+        except Exception as _e:
+            logger.warning(f"handoff_to_bundle failed on approval: {_e}")
     return {"status": "scheduled"}
 
 
