@@ -31,3 +31,13 @@ def test_tokens_refill_over_time(monkeypatch):
     assert bucket.try_acquire() > 0  # empty
     _time.sleep(0.15)
     assert bucket.try_acquire() == 0  # one token refilled
+
+
+def test_get_default_bucket_uses_env(monkeypatch):
+    import creatomate_rate_limiter as crl
+    crl._DEFAULT_BUCKET = None
+    monkeypatch.setenv("CREATOMATE_RATE_LIMIT_PER_10S", "60")
+    monkeypatch.setattr(crl._redis, "from_url", lambda url, decode_responses: fakeredis.FakeRedis(decode_responses=True))
+    b = crl.get_default_bucket()
+    assert b.capacity == 60
+    assert abs(b.refill - 6.0) < 0.01

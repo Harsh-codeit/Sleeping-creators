@@ -60,3 +60,20 @@ class TokenBucket:
                 return True
             time.sleep(min(wait, deadline - time.time()))
         return False
+
+
+import os
+import redis as _redis
+
+_DEFAULT_BUCKET: Optional[TokenBucket] = None
+
+
+def get_default_bucket() -> TokenBucket:
+    global _DEFAULT_BUCKET
+    if _DEFAULT_BUCKET is None:
+        url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        client = _redis.from_url(url, decode_responses=True)
+        capacity = int(os.environ.get("CREATOMATE_RATE_LIMIT_PER_10S", "30"))
+        refill = capacity / 10.0
+        _DEFAULT_BUCKET = TokenBucket(client, "cm:rate_bucket", capacity, refill)
+    return _DEFAULT_BUCKET
