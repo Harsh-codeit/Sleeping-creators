@@ -52,3 +52,24 @@ async def test_stage_clip_uploads_when_cache_miss(monkeypatch, tmp_path):
     assert upload_called["content_type"] == "video/mp4"
     assert url == "https://r2.example/video-clips/c1/f1.mp4"
     db.clip_cache.update_one.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stage_clip_reuploads_when_modified_time_changes(monkeypatch):
+    db = MagicMock()
+    db.clip_cache.find_one = AsyncMock(return_value={
+        "client_id": "c1", "drive_file_id": "f1",
+        "r2_url": "https://r2.example/old.mp4",
+        "drive_modified_time": "2026-04-01T00:00:00Z",
+    })
+    db.clip_cache.update_one = AsyncMock()
+    db.clients.find_one = AsyncMock(return_value={"google_drive_refresh_token": "tok"})
+
+    monkeypatch.setattr(clip_staging_service, "_drive_modified_time", AsyncMock(return_value="2026-05-09T00:00:00Z"))
+    import google_drive_service, storage
+    monkeypatch.setattr(google_drive_service, "download_clip", lambda t, fid, dest: open(dest, "wb").write(b"x"))
+    monkeypatch.setattr(storage, "upload_file", lambda p, k, content_type: f"https://r2.example/{k}")
+
+    url = await clip_staging_service.stage_clip(db, "c1", "f1")
+    assert url == "https://r2.example/video-clips/c1/f1.mp4"
+    db.clip_cache.update_one.assert_awaited_once()
