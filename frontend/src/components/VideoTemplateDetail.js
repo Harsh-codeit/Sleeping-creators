@@ -39,12 +39,8 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex" onClick={onClose}>
-      <div
-        className="ml-auto w-[680px] bg-zinc-950 border-l border-zinc-800 h-full overflow-auto flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Drawer header */}
+    <div className="h-full flex flex-col bg-zinc-950 overflow-hidden">
+        {/* Header */}
         <div className="h-14 flex items-center justify-between px-5 border-b border-zinc-800 flex-shrink-0">
           <div>
             <div className="text-sm font-semibold text-white">{template.name}</div>
@@ -141,7 +137,6 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
             </button>
           </div>
         </div>
-      </div>
     </div>
   );
 }

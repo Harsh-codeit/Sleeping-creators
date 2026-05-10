@@ -5,12 +5,10 @@ import { toast } from "sonner";
 import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
-import BrandOverridesForm from "../components/BrandOverridesForm";
-import VideoTemplatePicker from "../components/VideoTemplatePicker";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
-const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Video", "Profile"];
+const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Profile"];
 
 const STATUS_DOT = { active: "text-emerald-400", paused: "text-amber-400", error: "text-red-400" };
 const STATUS_BADGE = {
@@ -1401,162 +1399,6 @@ function LeadsTab({ clientId, client, posts }) {
   );
 }
 
-// ─── Video Tab ────────────────────────────────────────────────────────────────
-
-function VideoTab({ client, clientId, onSaved }) {
-  const [showCreate, setShowCreate] = useState(false);
-  const [templateId, setTemplateId] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [recentPosts, setRecentPosts] = useState([]);
-
-  const loadRecentPosts = () => {
-    axios.get(`${API}/posts?client_id=${clientId}&kind=video&limit=10`)
-      .then(r => setRecentPosts(Array.isArray(r.data) ? r.data : r.data.posts || []))
-      .catch(() => {});
-  };
-
-  useEffect(() => { loadRecentPosts(); }, [clientId]);
-
-  const createVideo = async () => {
-    if (!templateId) { toast.error("Pick a template first"); return; }
-    setSubmitting(true);
-    try {
-      const body = { client_id: clientId, template_id: templateId };
-      if (scheduledAt) body.scheduled_at = new Date(scheduledAt).toISOString();
-      const r = await axios.post(`${API}/videos/create`, body);
-      toast.success(`Render queued — post ${r.data.post_id.slice(0, 8)}`);
-      setShowCreate(false);
-      setTemplateId("");
-      setScheduledAt("");
-      loadRecentPosts();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || e.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const STATUS_COLOR = {
-    rendering: "text-amber-400",
-    submitted: "text-blue-400",
-    succeeded: "text-emerald-400",
-    pending_approval: "text-yellow-400",
-    bundle_scheduled: "text-green-400",
-    failed_render: "text-red-400",
-    cancelled: "text-zinc-500",
-  };
-
-  return (
-    <div className="space-y-6 p-4">
-      {/* Brand overrides */}
-      <div>
-        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Brand overrides</div>
-        <BrandOverridesForm client={client} onSaved={onSaved} />
-      </div>
-
-      {/* Create video */}
-      <div>
-        <div className="flex items-center justify-between mb-3 border-b border-zinc-800 pb-2">
-          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Video posts</div>
-          <button
-            data-testid="create-video-btn"
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200"
-          >
-            <Plus size={12} /> Create video
-          </button>
-        </div>
-
-        {/* Recent video posts table */}
-        {recentPosts.length === 0 ? (
-          <div className="font-mono text-xs text-zinc-600 py-4">No video posts yet.</div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Post ID</th>
-                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Status</th>
-                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Scheduled</th>
-                <th className="text-left pb-1.5 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentPosts.map(p => (
-                <tr key={p.id} className="border-b border-zinc-800/50">
-                  <td className="py-1.5 font-mono text-zinc-300">{p.id?.slice(0, 8)}</td>
-                  <td className={`py-1.5 font-mono ${STATUS_COLOR[p.status] || "text-zinc-400"}`}>{p.status}</td>
-                  <td className="py-1.5 font-mono text-zinc-400">{p.scheduled_at?.slice(0, 16)?.replace("T", " ") || "—"}</td>
-                  <td className="py-1.5 font-mono text-zinc-400">{p.created_at?.slice(0, 16)?.replace("T", " ") || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Create video modal */}
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={() => setShowCreate(false)}>
-          <div className="bg-zinc-950 border border-zinc-800 w-[540px] max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800">
-              <div className="text-sm font-semibold text-white">Create video</div>
-              <button
-                data-testid="close-create-video-modal-btn"
-                onClick={() => setShowCreate(false)}
-                className="text-zinc-500 hover:text-white transition-colors duration-200"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div>
-                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
-                  Template <span className="text-red-400">*</span>
-                </div>
-                <VideoTemplatePicker value={templateId} onChange={setTemplateId} />
-              </div>
-
-              <div>
-                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
-                  Schedule at (optional)
-                </div>
-                <input
-                  type="datetime-local"
-                  data-testid="schedule-at-input"
-                  value={scheduledAt}
-                  onChange={e => setScheduledAt(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-zinc-500 transition-colors duration-200"
-                />
-                <div className="text-[10px] font-mono text-zinc-600 mt-1">defaults to 5 min from now</div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1 border-t border-zinc-800">
-                <button
-                  data-testid="cancel-create-video-btn"
-                  onClick={() => setShowCreate(false)}
-                  className="px-4 py-1.5 text-xs font-mono text-zinc-400 hover:text-white transition-colors duration-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  data-testid="queue-render-btn"
-                  onClick={createVideo}
-                  disabled={submitting || !templateId}
-                  className="px-4 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
-                >
-                  {submitting ? "Queuing…" : "Queue render"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Main ClientDetail ────────────────────────────────────────────────────────
 
 export default function ClientDetail() {
@@ -2160,9 +2002,6 @@ export default function ClientDetail() {
         <AppsTab clientId={id} client={client} />
       )}
 
-      {activeTab === "Video" && (
-        <VideoTab client={client} clientId={id} onSaved={fetchClient} />
-      )}
 
       {activeTab === "Profile" && editForm && (
         <EditProfileTab
