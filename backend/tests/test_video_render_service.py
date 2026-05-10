@@ -56,3 +56,29 @@ async def test_build_modifications_static_role_is_omitted():
         ai_text_overrides=None, music_url=None, clip_drive_ids=None,
     )
     assert "Tagline" not in mods
+
+
+@pytest.mark.asyncio
+async def test_build_modifications_clip_role_calls_stage_clip(monkeypatch):
+    template = _template(
+        field_schema=[
+            {"key": "clip_a", "role": "clip", "kind": "video", "inferred": True},
+            {"key": "clip_b", "role": "clip", "kind": "video", "inferred": True},
+        ],
+    )
+    client = {"id": "c1", "brand_overrides": {}}
+
+    import clip_staging_service
+    calls = []
+    async def fake_stage(db, cid, fid):
+        calls.append((cid, fid))
+        return f"https://r2.x/{fid}.mp4"
+    monkeypatch.setattr(clip_staging_service, "stage_clip", fake_stage)
+
+    mods = await video_render_service.build_modifications(
+        db=MagicMock(), template=template, client=client, pipeline=None,
+        ai_text_overrides=None, music_url=None, clip_drive_ids=["drive-1", "drive-2"],
+    )
+    assert mods["clip_a"] == "https://r2.x/drive-1.mp4"
+    assert mods["clip_b"] == "https://r2.x/drive-2.mp4"
+    assert calls == [("c1", "drive-1"), ("c1", "drive-2")]
