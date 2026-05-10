@@ -169,3 +169,37 @@ async def test_submit_render_for_post_creates_render_job_and_calls_creatomate(mo
         {"id": "p1"}, {"$set": {"render_job_id": job["id"]}}
     )
     fake_bucket.acquire.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_handoff_to_bundle_uploads_and_creates_post(monkeypatch):
+    db = MagicMock()
+    db.posts.update_one = AsyncMock()
+    db.clients.find_one = AsyncMock(return_value={
+        "id": "c1", "bundle_team_id": "team-1", "platforms": ["instagram"],
+    })
+
+    # settings fetch
+    import server
+    monkeypatch.setattr(server, "get_settings", AsyncMock(return_value={"bundle_api_key": "BK"}), raising=False)
+
+    import bundle_service
+    monkeypatch.setattr(bundle_service, "upload_file", AsyncMock(return_value="upload-id-1"))
+    monkeypatch.setattr(bundle_service, "create_post", AsyncMock(return_value={"id": "bundle-post-1"}))
+
+    # download r2 mp4
+    monkeypatch.setattr(video_render_service, "_fetch_url_bytes", AsyncMock(return_value=b"mp4-bytes"))
+
+    post = {
+        "id": "p1", "client_id": "c1", "platform": "instagram",
+        "scheduled_at": "2099-01-01T00:00:00+00:00",
+        "caption": "Big sale!", "hashtags": ["#sale"],
+    }
+    bundle_post_id = await video_render_service.handoff_to_bundle(
+        db, post, "https://r2.x/v.mp4", "https://r2.x/v.jpg",
+    )
+    assert bundle_post_id == "bundle-post-1"
+    db.posts.update_one.assert_awaited_with(
+        {"id": "p1"},
+        {"$set": {"status": "bundle_scheduled", "bundle_post_id": "bundle-post-1"}}
+    )

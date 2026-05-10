@@ -249,3 +249,75 @@ async def mirror_to_r2(video_url: str, snapshot_url, client_id: str, render_id: 
                 pass
 
     return r2_video_url, r2_snapshot_url
+
+
+async def _fetch_url_bytes(url: str) -> bytes:
+    import httpx
+    async with httpx.AsyncClient(timeout=120) as c:
+        r = await c.get(url)
+        r.raise_for_status()
+        return r.content
+
+
+def _platform_overrides_for_video(post: dict, platforms: list[str]) -> dict:
+    """Per-platform field overrides for a video post."""
+    import bundle_service
+    caption = post.get("caption", "")
+    hashtags = post.get("hashtags") or []
+    full_text = caption + ("\n\n" + " ".join(hashtags) if hashtags else "")
+
+    out = {}
+    for p in platforms:
+        bp = bundle_service.PLATFORM_MAP.get(p)
+        if not bp:
+            continue
+        out[bp] = {"text": full_text, "uploadIds": post.get("_upload_ids", [])}
+    return out
+
+
+async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: Optional[str]) -> str:
+    """Upload mp4 to Bundle and create a Bundle scheduled post. Returns bundle_post_id."""
+    import bundle_service
+    from server import get_settings
+
+    client = await db.clients.find_one({"id": post["client_id"]})
+    if not client:
+        raise RuntimeError(f"Client {post['client_id']} missing")
+    team_id = client.get("bundle_team_id")
+    if not team_id:
+        raise RuntimeError(f"Client {post['client_id']} has no bundle_team_id")
+
+    settings = await get_settings()
+    api_key = settings.get("bundle_api_key", "")
+    if not api_key:
+        raise RuntimeError("bundle_api_key not configured")
+
+    mp4_bytes = await _fetch_url_bytes(r2_video_url)
+    upload_id = await bundle_service.upload_file(
+        api_key, team_id, mp4_bytes, "video.mp4", "video/mp4",
+    )
+
+    platforms = post.get("target_platforms") or ([post.get("platform")] if post.get("platform") else client.get("platforms", []))
+    platforms = [p for p in platforms if p]
+    overrides_post = {**post, "_upload_ids": [upload_id]}
+    platform_overrides = _platform_overrides_for_video(overrides_post, platforms)
+
+    bundle_resp = await bundle_service.create_post(
+        api_key=api_key,
+        team_id=team_id,
+        platforms=platforms,
+        text=(post.get("caption") or "")[:2200],
+        post_date=post["scheduled_at"],
+        upload_ids=[upload_id],
+        platform_overrides=platform_overrides,
+        title=(post.get("caption") or "Video")[:100],
+    )
+    bundle_post_id = bundle_resp.get("id") or bundle_resp.get("postId") or bundle_resp.get("_id")
+    if not bundle_post_id:
+        raise RuntimeError(f"Bundle create_post returned no id: {bundle_resp}")
+
+    await db.posts.update_one(
+        {"id": post["id"]},
+        {"$set": {"status": "bundle_scheduled", "bundle_post_id": bundle_post_id}},
+    )
+    return bundle_post_id
