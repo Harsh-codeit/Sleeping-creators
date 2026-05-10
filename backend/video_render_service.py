@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import uuid
+import tempfile
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -197,3 +198,54 @@ async def submit_render_for_post(
     await db.render_jobs.insert_one(job)
     await db.posts.update_one({"id": post["id"]}, {"$set": {"render_job_id": job["id"]}})
     return job
+
+
+async def mirror_to_r2(video_url: str, snapshot_url, client_id: str, render_id: str) -> tuple:
+    """Download Creatomate's output (and snapshot) and upload to R2. Returns (r2_video_url, r2_snapshot_url)."""
+    import httpx
+    import storage
+
+    # video
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tf:
+        video_path = tf.name
+    try:
+        async with httpx.AsyncClient(timeout=120) as c:
+            async with c.stream("GET", video_url) as r:
+                r.raise_for_status()
+                with open(video_path, "wb") as out:
+                    async for chunk in r.aiter_bytes():
+                        out.write(chunk)
+        r2_video_url = storage.upload_file(
+            video_path,
+            f"video-renders/{client_id}/{render_id}.mp4",
+            content_type="video/mp4",
+        )
+    finally:
+        try:
+            os.unlink(video_path)
+        except OSError:
+            pass
+
+    # snapshot
+    r2_snapshot_url = None
+    if snapshot_url:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+            snap_path = tf.name
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                resp = await c.get(snapshot_url)
+                resp.raise_for_status()
+                with open(snap_path, "wb") as out:
+                    out.write(resp.content)
+            r2_snapshot_url = storage.upload_file(
+                snap_path,
+                f"video-renders/{client_id}/{render_id}.jpg",
+                content_type="image/jpeg",
+            )
+        finally:
+            try:
+                os.unlink(snap_path)
+            except OSError:
+                pass
+
+    return r2_video_url, r2_snapshot_url

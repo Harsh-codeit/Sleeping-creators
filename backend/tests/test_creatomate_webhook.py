@@ -22,3 +22,49 @@ def test_verify_signature_rejects_wrong():
 
 def test_verify_signature_rejects_empty():
     assert verify_signature(b"x", "", "topsecret") is False
+
+
+from unittest.mock import AsyncMock, MagicMock, patch
+from fastapi.testclient import TestClient
+from fastapi import FastAPI
+import creatomate_webhook
+
+
+def _app(db_mock):
+    app = FastAPI()
+    creatomate_webhook._db_for_test = lambda: db_mock  # injection point
+    app.include_router(creatomate_webhook.router)
+    return TestClient(app)
+
+
+def test_succeeded_webhook_mirrors_video_and_updates_render_job(monkeypatch):
+    db = MagicMock()
+    db.render_jobs.find_one = AsyncMock(return_value={
+        "id": "rj-1", "post_id": "p1", "client_id": "c1",
+        "creatomate_render_id": "render-xyz", "status": "submitted",
+    })
+    db.render_jobs.update_one = AsyncMock()
+    db.posts.update_one = AsyncMock()
+    db.posts.find_one = AsyncMock(return_value={
+        "id": "p1", "client_id": "c1", "scheduled_at": "2099-01-01T00:00:00+00:00",
+    })
+    db.clients.find_one = AsyncMock(return_value={"id": "c1", "auto_approve": False})
+
+    monkeypatch.setenv("CREATOMATE_WEBHOOK_SECRET", "wsec")
+
+    import video_render_service
+    monkeypatch.setattr(video_render_service, "mirror_to_r2",
+                        AsyncMock(return_value=("https://r2.x/v.mp4", "https://r2.x/v.jpg")))
+
+    client = _app(db)
+    body = json.dumps({
+        "id": "render-xyz", "status": "succeeded",
+        "url": "https://creatomate/x.mp4", "snapshot_url": "https://creatomate/x.jpg",
+    }).encode()
+    sig = _sign("wsec", body)
+
+    resp = client.post("/webhooks/creatomate", content=body,
+                       headers={"X-Creatomate-Signature": sig})
+    assert resp.status_code == 200
+    db.render_jobs.update_one.assert_awaited()
+    db.posts.update_one.assert_awaited()
