@@ -195,6 +195,63 @@ class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None
     bundle_webhook_secret: Optional[str] = None
 
+# ─── Creatomate models ────────────────────────────────────────────────────────
+
+class CreatomateFieldSchema(BaseModel):
+    key: str
+    role: str  # ai_text|static_text|clip|logo|brand_style|audio|decorative
+    kind: str  # text|video|image|color|audio
+    ai_hint: Optional[str] = None
+    max_chars: Optional[int] = None
+    inferred: bool = True
+
+class CreatomateTemplate(BaseModel):
+    id: str
+    creatomate_template_id: str
+    name: str
+    thumbnail_url: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    aspect_ratio: Optional[str] = None
+    field_schema: list[CreatomateFieldSchema] = []
+    defaults: dict = {}
+    imported_at: Optional[str] = None
+    last_synced_at: Optional[str] = None
+    status: str = "draft"  # draft|active|inactive
+
+class CreatomateTemplatePatch(BaseModel):
+    status: Optional[str] = None
+    field_schema: Optional[list[CreatomateFieldSchema]] = None
+
+class BrandOverrides(BaseModel):
+    color: Optional[str] = None
+    font_family: Optional[str] = None
+    default_music_url: Optional[str] = None
+    logo_url: Optional[str] = None
+
+class RenderJobStatus(BaseModel):
+    id: str
+    post_id: Optional[str]
+    client_id: str
+    template_id: str
+    creatomate_render_id: Optional[str]
+    status: str  # submitted|succeeded|failed|cancelled
+    submitted_at: Optional[str]
+    completed_at: Optional[str]
+    output_url: Optional[str]
+    snapshot_url: Optional[str]
+    r2_video_url: Optional[str]
+    r2_snapshot_url: Optional[str]
+    error: Optional[str]
+    retry_count: int = 0
+
+class VideoCreateRequest(BaseModel):
+    client_id: str
+    pipeline_id: Optional[str] = None
+    template_id: str  # creatomate_templates.id (NOT creatomate_template_id)
+    scheduled_at: Optional[str] = None
+    music_url: Optional[str] = None
+    clip_drive_ids: Optional[list[str]] = None
+
 class TelegramTestRequest(BaseModel):
     bot_token: str = ""
     chat_id: str = ""
