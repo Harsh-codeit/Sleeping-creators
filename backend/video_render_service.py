@@ -171,8 +171,12 @@ async def submit_render_for_post(
         raise RuntimeError(f"Client {post['client_id']} not found")
 
     ai_text_fields = [f for f in template.get("field_schema", []) if f.get("role") == "ai_text"]
-    topic = post.get("topic") or post.get("caption") or client.get("name", "")
-    ai_text_overrides = await generate_ai_text(ai_text_fields, client, topic) if ai_text_fields else {}
+    manual_overrides = post.get("ai_text_overrides") or {}
+    if manual_overrides:
+        ai_text_overrides = manual_overrides
+    else:
+        topic = post.get("topic") or post.get("caption") or client.get("name", "")
+        ai_text_overrides = await generate_ai_text(ai_text_fields, client, topic) if ai_text_fields else {}
 
     modifications = await build_modifications(
         db=db, template=template, client=client, pipeline=pipeline,
