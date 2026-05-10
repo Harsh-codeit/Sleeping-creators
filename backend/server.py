@@ -3741,7 +3741,7 @@ async def patch_creatomate_template(template_id: str, body: CreatomateTemplatePa
             raise HTTPException(400, "status must be draft|active|inactive")
         update["status"] = body.status
     if body.field_schema is not None:
-        update["field_schema"] = [{**f, "inferred": False} for f in body.field_schema]
+        update["field_schema"] = [{**f.model_dump(), "inferred": False} for f in body.field_schema]
     if not update:
         return {"ok": True, "no_changes": True}
     res = await db.creatomate_templates.update_one({"id": template_id}, {"$set": update})
