@@ -30,3 +30,34 @@ async def submit_render(template_id: str, modifications: dict, webhook_url: str 
         if isinstance(data, list) and data:
             return data[0]
         return data
+
+
+async def get_render(render_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"{CREATOMATE_BASE}/renders/{render_id}",
+            headers=_headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def list_templates() -> list[dict]:
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{CREATOMATE_BASE}/templates",
+            headers=_headers(),
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else data.get("data", [])
+
+
+async def get_template_source(template_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{CREATOMATE_BASE}/templates/{template_id}",
+            headers=_headers(),
+        )
+        resp.raise_for_status()
+        return resp.json()
