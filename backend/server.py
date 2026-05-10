@@ -44,7 +44,7 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/webhooks/creatomate")
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
@@ -102,6 +102,8 @@ class ClientCreate(BaseModel):
     platforms: List[str] = []
     avatar: str = ""
     strategy: dict = {}
+    auto_approve: Optional[bool] = False
+    brand_overrides: Optional[dict] = None
 
 class ClientUpdate(BaseModel):
     # Root client fields
@@ -148,6 +150,8 @@ class ClientUpdate(BaseModel):
     video_recurring_schedule: Optional[dict] = None
     video_default_priority: Optional[str] = None  # "high" | "normal" | "low"
     drive_images_folder_id: Optional[str] = None   # Drive folder for image rotation
+    auto_approve: Optional[bool] = None
+    brand_overrides: Optional[dict] = None
 
 class PostCreate(BaseModel):
     client_id: str
@@ -3098,36 +3102,6 @@ class CarouselCreate(BaseModel):
     drive_image_index: Optional[int] = None      # pre-assigned at generate time
     post_type: Optional[str] = None              # "carousel" | "single_image"; auto-derived if None
 
-class VideoElement(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: str
-    x_ratio: float = 0.5
-    y_ratio: float = 0.5
-    z_index: int = 0
-    start_at: float = 0.0
-    duration: Optional[float] = None
-    animation_in: str = "none"
-    animation_out: str = "none"
-    overridable: bool = False
-    override_key: Optional[str] = None
-    props: dict = Field(default_factory=dict)
-
-class VideoTemplateCreate(BaseModel):
-    name: str
-    client_id: Optional[str] = None
-    aspect_ratio: str = "9:16"
-    video_clip_id: Optional[str] = None
-    video_overridable: bool = True
-    elements: List[VideoElement] = Field(default_factory=list)
-
-class VideoTemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    aspect_ratio: Optional[str] = None
-    client_id: Optional[str] = None
-    video_clip_id: Optional[str] = None
-    video_overridable: Optional[bool] = None
-    elements: Optional[List[VideoElement]] = None
-
 # ── Music library ──────────────────────────────────────────────
 class MusicSegment(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -3741,51 +3715,47 @@ async def publish_carousel(carousel_id: str, local_fallback: bool = Query(False)
 
     return {"status": result["status"], "post_id": post["id"], "error": result.get("error")}
 
-# ── Video Templates ──────────────────────────────────────────────────────────
+# ─── Creatomate template admin ───────────────────────────────────────────────
 
-@api_router.get("/video-templates")
-async def list_video_templates(client_id: Optional[str] = None):
-    query = {}
-    if client_id:
-        query = {"$or": [{"client_id": client_id}, {"client_id": None}]}
-    templates = await db.video_templates.find(query, {"_id": 0}).to_list(500)
-    return templates
+@api_router.get("/creatomate-templates")
+async def list_creatomate_templates(status: Optional[str] = None):
+    q = {}
+    if status:
+        q["status"] = status
+    rows = await db.creatomate_templates.find(q, {"_id": 0}).to_list(500)
+    return rows
 
-@api_router.post("/video-templates", status_code=201)
-async def create_video_template(data: VideoTemplateCreate):
-    template = {
-        "id": str(uuid.uuid4()),
-        **data.model_dump(),
-        "created_at": now_iso(),
-    }
-    await db.video_templates.insert_one(template)
-    await add_log("info", f"Video template '{data.name}' created")
-    return {k: v for k, v in template.items() if k != "_id"}
 
-@api_router.get("/video-templates/{template_id}")
-async def get_video_template(template_id: str):
-    t = await db.video_templates.find_one({"id": template_id}, {"_id": 0})
-    if not t:
-        raise HTTPException(status_code=404, detail="Video template not found")
-    return t
+@api_router.get("/creatomate-templates/{template_id}")
+async def get_creatomate_template(template_id: str):
+    row = await db.creatomate_templates.find_one({"id": template_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(404, "template not found")
+    return row
 
-@api_router.put("/video-templates/{template_id}")
-async def update_video_template(template_id: str, data: VideoTemplateUpdate):
-    updates = data.model_dump(exclude_unset=True)
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    updates["updated_at"] = now_iso()
-    result = await db.video_templates.update_one({"id": template_id}, {"$set": updates})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Video template not found")
-    return await db.video_templates.find_one({"id": template_id}, {"_id": 0})
 
-@api_router.delete("/video-templates/{template_id}")
-async def delete_video_template(template_id: str):
-    result = await db.video_templates.delete_one({"id": template_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Video template not found")
-    return {"status": "deleted"}
+@api_router.patch("/creatomate-templates/{template_id}")
+async def patch_creatomate_template(template_id: str, body: CreatomateTemplatePatch):
+    update = {}
+    if body.status is not None:
+        if body.status not in ("draft", "active", "inactive"):
+            raise HTTPException(400, "status must be draft|active|inactive")
+        update["status"] = body.status
+    if body.field_schema is not None:
+        update["field_schema"] = [{**f, "inferred": False} for f in body.field_schema]
+    if not update:
+        return {"ok": True, "no_changes": True}
+    res = await db.creatomate_templates.update_one({"id": template_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(404, "template not found")
+    row = await db.creatomate_templates.find_one({"id": template_id}, {"_id": 0})
+    return row
+
+
+@api_router.post("/creatomate-templates/sync")
+async def sync_creatomate_templates():
+    from creatomate_template_importer import sync_templates
+    return await sync_templates(db)
 
 
 # ── Music library routes ───────────────────────────────────────
@@ -3898,18 +3868,6 @@ async def delete_music_track(track_id: str):
         raise HTTPException(status_code=404, detail="Track not found")
     await db.music_tracks.delete_one({"id": track_id})
     return {"status": "deleted"}
-
-
-@api_router.post("/video-templates/seed")
-async def seed_video_templates():
-    return {"message": "Seeded 0 starter video templates", "seeded": 0}
-
-
-@api_router.delete("/video-templates/_all")
-async def drop_all_video_templates():
-    """Dev utility: drop all video templates to start fresh with new schema."""
-    result = await db.video_templates.delete_many({})
-    return {"deleted": result.deleted_count}
 
 
 # ─── Pipeline Routes ──────────────────────────────────────────────────────────
@@ -5145,8 +5103,9 @@ async def stream_clip(client_id: str, clip_id: str, request: Request):
 
 
 async def _run_video_recurring(client_id: str):
-    """APScheduler fires this. Enqueues a video job for the client."""
+    """APScheduler fires this. Creates a video post in 'rendering' state and enqueues a render."""
     from video_worker import enqueue_video_job
+
     client = await db.clients.find_one({"id": client_id})
     if not client:
         return
@@ -5154,27 +5113,57 @@ async def _run_video_recurring(client_id: str):
     if not schedule or not schedule.get("enabled"):
         return
 
+    template_id = schedule.get("template_id")
+    if not template_id:
+        await add_log("warning", "Recurring video schedule has no template_id", client_id=client_id)
+        return
+    template = await db.creatomate_templates.find_one({"id": template_id, "status": "active"})
+    if not template:
+        await add_log("warning", f"Recurring video template {template_id} not active", client_id=client_id)
+        return
+
     clips = await db.drive_clips.find({"client_id": client_id}).to_list(500)
     if not clips:
         await add_log("warning", "No Drive clips for recurring video job", client_id=client_id)
         return
 
+    clip_slots = [f for f in template.get("field_schema", []) if f.get("role") == "clip"]
     seq_mode = client.get("video_sequence_mode", "sequential")
     seq_idx = client.get("video_sequence_index", 0)
+    picked = []
+    for i in range(len(clip_slots)):
+        if seq_mode == "random":
+            import random
+            picked.append(random.choice(clips)["drive_file_id"])
+        else:
+            picked.append(clips[(seq_idx + i) % len(clips)]["drive_file_id"])
 
-    from video_service import pick_clip
-    clip = pick_clip(clips, seq_mode, seq_idx)
+    lead_min = int(schedule.get("min_render_lead_minutes", 30))
+    scheduled_at = (datetime.now(timezone.utc) + timedelta(minutes=lead_min)).isoformat()
 
-    payload = {
+    post_doc = {
+        "id": str(uuid.uuid4()),
         "client_id": client_id,
-        "clip_id": clip["drive_file_id"],
-        "platforms": schedule.get("platforms", client.get("platforms", [])),
-        "scheduled_at": None,
-        "template_id": schedule.get("template_id"),
-        "priority": schedule.get("priority", "normal"),
+        "client_name": client.get("name", ""),
+        "kind": "video",
+        "platform": (schedule.get("platforms") or client.get("platforms") or ["instagram"])[0],
+        "target_platforms": schedule.get("platforms") or client.get("platforms", []),
+        "template_id": template["id"],
+        "scheduled_at": scheduled_at,
+        "status": "rendering",
+        "music_url": schedule.get("music_url"),
+        "clip_drive_ids": picked,
+        "topic": schedule.get("topic"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    task_id = enqueue_video_job(payload)
-    await add_log("info", f"Recurring video job enqueued: {task_id}", client_id=client_id)
+    await db.posts.insert_one(post_doc)
+    if seq_mode == "sequential":
+        await db.clients.update_one(
+            {"id": client_id},
+            {"$set": {"video_sequence_index": (seq_idx + len(picked)) % max(1, len(clips))}},
+        )
+    task_id = enqueue_video_job(post_doc["id"], priority=schedule.get("priority", "normal"))
+    await add_log("info", f"Recurring video render enqueued (task {task_id})", client_id=client_id)
 
 
 class CTAGenerateRequest(BaseModel):
@@ -5218,32 +5207,44 @@ async def generate_cta_text(req: CTAGenerateRequest):
 
 
 @api_router.post("/videos/create", status_code=201)
-async def create_video_post_route(data: VideoPostCreate):
+async def create_video_post_route(req: VideoCreateRequest):
+    template = await db.creatomate_templates.find_one({"id": req.template_id, "status": "active"})
+    if not template:
+        raise HTTPException(400, f"Template {req.template_id} not found or not active")
+
+    client = await db.clients.find_one({"id": req.client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    pipeline = None
+    if req.pipeline_id:
+        pipeline = await db.pipelines.find_one({"id": req.pipeline_id})
+
+    scheduled_at = req.scheduled_at or (
+        datetime.now(timezone.utc) + timedelta(minutes=5)
+    ).isoformat()
+
+    post_doc = {
+        "id": str(uuid.uuid4()),
+        "client_id": req.client_id,
+        "client_name": client.get("name", ""),
+        "pipeline_id": req.pipeline_id,
+        "kind": "video",
+        "platform": (client.get("platforms") or ["instagram"])[0],
+        "target_platforms": client.get("platforms") or ["instagram"],
+        "template_id": template["id"],
+        "scheduled_at": scheduled_at,
+        "status": "rendering",
+        "music_url": req.music_url,
+        "clip_drive_ids": req.clip_drive_ids or [],
+        "topic": (pipeline or {}).get("topic") if pipeline else None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.posts.insert_one(post_doc)
+
     from video_worker import enqueue_video_job
-    task_id = enqueue_video_job(data.model_dump())
-    await add_log("info", f"Video job queued (priority={data.priority})", client_id=data.client_id)
-    return {"task_id": task_id, "status": "queued"}
-
-
-@api_router.post("/videos/render")
-async def render_video_preview(data: VideoPostCreate):
-    """Render a video synchronously and return its URL — no post records created."""
-    from video_service import create_video_post as _cvp
-    result = await _cvp(
-        db=db,
-        client_id=data.client_id,
-        clip_id=data.clip_id,
-        platforms=["_preview"],
-        scheduled_at=None,
-        template_id=data.template_id,
-        caption=None,
-        hashtags=[],
-        clip_trim_start=data.clip_trim_start,
-        clip_trim_end=data.clip_trim_end,
-        overrides=data.overrides,
-        _preview_only=True,
-    )
-    return {"video_url": result.get("video_url", "")}
+    task_id = enqueue_video_job(post_doc["id"])
+    return {"task_id": task_id, "post_id": post_doc["id"], "status": "rendering"}
 
 
 @api_router.get("/videos/job/{task_id}")
@@ -5331,6 +5332,9 @@ async def get_schedule_slots():
 
 
 app.include_router(api_router)
+
+import creatomate_webhook as _creatomate_webhook
+app.include_router(_creatomate_webhook.router)
 
 import json as _json
 
