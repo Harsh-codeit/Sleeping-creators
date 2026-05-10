@@ -1,7 +1,9 @@
 import os
 import json
 import logging
+import uuid
 from typing import Optional
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -121,3 +123,77 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str)
             raw = raw[4:]
         raw = raw.rsplit("```", 1)[0]
     return json.loads(raw)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def submit_render_for_post(
+    db,
+    post: dict,
+    clip_drive_ids: Optional[list[str]] = None,
+    music_url: Optional[str] = None,
+    pipeline: Optional[dict] = None,
+) -> dict:
+    """Submit a render to Creatomate for the given post and write a render_jobs row.
+
+    1. Loads template + client.
+    2. AI-fills text fields, stages clips, builds modifications.
+    3. Token-bucket gates the Creatomate API.
+    4. Submits the render.
+    5. Inserts render_jobs row, links post.render_job_id.
+    6. Returns the render_jobs document.
+    """
+    template = await db.creatomate_templates.find_one({"id": post["template_id"]})
+    if not template:
+        raise RuntimeError(f"Template {post['template_id']} not found")
+    if template.get("status") != "active":
+        raise RuntimeError(f"Template {post['template_id']} is not active (status={template.get('status')})")
+
+    client = await db.clients.find_one({"id": post["client_id"]})
+    if not client:
+        raise RuntimeError(f"Client {post['client_id']} not found")
+
+    ai_text_fields = [f for f in template.get("field_schema", []) if f.get("role") == "ai_text"]
+    topic = post.get("topic") or post.get("caption") or client.get("name", "")
+    ai_text_overrides = await generate_ai_text(ai_text_fields, client, topic) if ai_text_fields else {}
+
+    modifications = await build_modifications(
+        db=db, template=template, client=client, pipeline=pipeline,
+        ai_text_overrides=ai_text_overrides, music_url=music_url, clip_drive_ids=clip_drive_ids,
+    )
+
+    import creatomate_rate_limiter, creatomate_service
+    bucket = creatomate_rate_limiter.get_default_bucket()
+    if not bucket.acquire(max_wait_sec=30):
+        raise creatomate_service.CreatomateRateLimited(retry_after=10)
+
+    webhook_url = os.environ.get("CREATOMATE_WEBHOOK_URL") or None
+    submit_resp = await creatomate_service.submit_render(
+        template_id=template["creatomate_template_id"],
+        modifications=modifications,
+        webhook_url=webhook_url,
+    )
+
+    job = {
+        "id": str(uuid.uuid4()),
+        "post_id": post["id"],
+        "client_id": post["client_id"],
+        "pipeline_id": post.get("pipeline_id"),
+        "template_id": template["id"],
+        "creatomate_render_id": submit_resp.get("id"),
+        "modifications": modifications,
+        "status": "submitted",
+        "submitted_at": _now_iso(),
+        "completed_at": None,
+        "output_url": None,
+        "snapshot_url": None,
+        "r2_video_url": None,
+        "r2_snapshot_url": None,
+        "error": None,
+        "retry_count": 0,
+    }
+    await db.render_jobs.insert_one(job)
+    await db.posts.update_one({"id": post["id"]}, {"$set": {"render_job_id": job["id"]}})
+    return job

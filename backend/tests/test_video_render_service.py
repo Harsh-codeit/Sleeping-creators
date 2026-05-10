@@ -125,3 +125,47 @@ async def test_generate_ai_text_returns_per_field_dict(monkeypatch):
     with patch.object(video_render_service, "_anthropic_client", return_value=fake_anthropic):
         out = await video_render_service.generate_ai_text(fields, client, topic)
     assert out == {"Headline": "Crush summer in style", "CTA": "SHOP NOW"}
+
+
+@pytest.mark.asyncio
+async def test_submit_render_for_post_creates_render_job_and_calls_creatomate(monkeypatch):
+    template = _template(
+        field_schema=[
+            {"key": "Headline", "role": "ai_text", "kind": "text", "ai_hint": "h", "inferred": True},
+            {"key": "clip_1", "role": "clip", "kind": "video", "inferred": True},
+        ],
+    )
+    client = {"id": "c1", "name": "Acme", "niche": "fitness", "brand_voice": "loud"}
+    post = {"id": "p1", "client_id": "c1", "template_id": template["id"], "topic": "Sale"}
+
+    db = MagicMock()
+    db.creatomate_templates.find_one = AsyncMock(return_value=template)
+    db.clients.find_one = AsyncMock(return_value=client)
+    db.render_jobs.insert_one = AsyncMock()
+    db.posts.update_one = AsyncMock()
+
+    import clip_staging_service
+    monkeypatch.setattr(clip_staging_service, "stage_clip",
+                        AsyncMock(return_value="https://r2.x/clip.mp4"))
+
+    monkeypatch.setattr(video_render_service, "generate_ai_text",
+                        AsyncMock(return_value={"Headline": "Big sale"}))
+
+    import creatomate_service, creatomate_rate_limiter
+    monkeypatch.setattr(creatomate_service, "submit_render",
+                        AsyncMock(return_value={"id": "render-xyz", "status": "planned"}))
+    fake_bucket = MagicMock()
+    fake_bucket.acquire.return_value = True
+    monkeypatch.setattr(creatomate_rate_limiter, "get_default_bucket", lambda: fake_bucket)
+
+    job = await video_render_service.submit_render_for_post(
+        db, post, clip_drive_ids=["drive-1"], music_url=None, pipeline=None,
+    )
+
+    assert job["creatomate_render_id"] == "render-xyz"
+    assert job["status"] == "submitted"
+    db.render_jobs.insert_one.assert_awaited_once()
+    db.posts.update_one.assert_awaited_once_with(
+        {"id": "p1"}, {"$set": {"render_job_id": job["id"]}}
+    )
+    fake_bucket.acquire.assert_called_once()
