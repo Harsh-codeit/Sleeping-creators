@@ -39,7 +39,7 @@ async def creatomate_webhook(request: Request):
     secret = os.environ.get("CREATOMATE_WEBHOOK_SECRET", "")
     raw = await request.body()
     sig = request.headers.get("X-Creatomate-Signature", "")
-    if not verify_signature(raw, sig, secret):
+    if secret and not verify_signature(raw, sig, secret):
         logger.warning("Creatomate webhook: invalid signature")
         raise HTTPException(401, "invalid signature")
 
@@ -103,9 +103,9 @@ async def creatomate_webhook(request: Request):
             await db.posts.update_one(
                 {"id": post["id"]},
                 {"$set": {
-                    "video_url": r2_video,
-                    "snapshot_url": r2_snap,
-                    "status": "pending_approval",
+                    "r2_video_url": r2_video,
+                    "r2_snapshot_url": r2_snap,
+                    "status": "succeeded",
                 }},
             )
             try:

@@ -45,13 +45,13 @@ def _db():
     max_retries=5,
 )
 def process_video_job(self, job_payload: dict):
-    """Submit a render to Creatomate for an existing post.
+    """Submit a render to Creatomate and poll until complete.
 
     job_payload: {"post_id": str}
-    The post must already exist with status='rendering'.
     """
     import asyncio
     import creatomate_service
+    from datetime import datetime, timezone
 
     db_client, db = _db()
     try:
@@ -65,14 +65,78 @@ def process_video_job(self, job_payload: dict):
             if post.get("pipeline_id"):
                 pipeline = await db.pipelines.find_one({"id": post["pipeline_id"]})
 
-            from video_render_service import submit_render_for_post
-            return await submit_render_for_post(
+            from video_render_service import submit_render_for_post, mirror_to_r2, handoff_to_bundle
+            render_job = await submit_render_for_post(
                 db=db,
                 post=post,
                 clip_drive_ids=post.get("clip_drive_ids") or [],
                 music_url=post.get("music_url"),
                 pipeline=pipeline,
             )
+
+            creatomate_render_id = render_job.get("creatomate_render_id")
+            if not creatomate_render_id:
+                return render_job
+
+            # Poll Creatomate every 5s for up to 3 minutes
+            for _ in range(36):
+                await asyncio.sleep(5)
+                try:
+                    resp = await creatomate_service.get_render(creatomate_render_id)
+                except Exception as e:
+                    logger.warning(f"poll get_render failed: {e}")
+                    continue
+
+                status = resp.get("status")
+                now = datetime.now(timezone.utc).isoformat()
+
+                if status == "succeeded":
+                    r2_video, r2_snap = await mirror_to_r2(
+                        resp.get("url"), resp.get("snapshot_url"),
+                        render_job["client_id"], creatomate_render_id,
+                    )
+                    await db.render_jobs.update_one(
+                        {"id": render_job["id"]},
+                        {"$set": {
+                            "status": "succeeded", "completed_at": now,
+                            "output_url": resp.get("url"),
+                            "snapshot_url": resp.get("snapshot_url"),
+                            "r2_video_url": r2_video, "r2_snapshot_url": r2_snap,
+                        }},
+                    )
+                    post = await db.posts.find_one({"id": job_payload["post_id"]})
+                    client = await db.clients.find_one({"id": post["client_id"]}) or {}
+                    if client.get("auto_approve"):
+                        await handoff_to_bundle(db, post, r2_video, r2_snap)
+                    else:
+                        await db.posts.update_one(
+                            {"id": post["id"]},
+                            {"$set": {
+                                "status": "succeeded",
+                                "r2_video_url": r2_video,
+                                "r2_snapshot_url": r2_snap,
+                            }},
+                        )
+                    logger.info(f"render succeeded post_id={post['id']}")
+                    return {"status": "succeeded", "r2_video_url": r2_video}
+
+                elif status == "failed":
+                    await db.render_jobs.update_one(
+                        {"id": render_job["id"]},
+                        {"$set": {"status": "failed", "completed_at": now,
+                                  "error": resp.get("error", "unknown")}},
+                    )
+                    await db.posts.update_one(
+                        {"id": job_payload["post_id"]},
+                        {"$set": {"status": "failed_render",
+                                  "error_message": resp.get("error", "render failed")}},
+                    )
+                    logger.error(f"render failed post_id={job_payload['post_id']}")
+                    return {"status": "failed"}
+
+            # Timed out — watchdog will clean up after 30min
+            logger.warning(f"process_video_job: timed out polling {creatomate_render_id}")
+            return {"status": "timeout"}
 
         try:
             return asyncio.run(_run())
