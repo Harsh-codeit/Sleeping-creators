@@ -255,7 +255,6 @@ class VideoCreateRequest(BaseModel):
     scheduled_at: Optional[str] = None
     music_url: Optional[str] = None
     clip_drive_ids: Optional[List[str]] = None
-    ai_text_overrides: Optional[dict] = None  # {field_key: text} — skips Claude generation
 
 class TelegramTestRequest(BaseModel):
     bot_token: str = ""
@@ -5237,7 +5236,6 @@ async def create_video_post_route(req: VideoCreateRequest):
         "status": "rendering",
         "music_url": req.music_url,
         "clip_drive_ids": req.clip_drive_ids or [],
-        "ai_text_overrides": req.ai_text_overrides or {},
         "topic": (pipeline or {}).get("topic") if pipeline else None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
