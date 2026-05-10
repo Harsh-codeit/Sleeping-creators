@@ -26,7 +26,13 @@ async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     """Return a public R2 URL for the given Drive clip, staging it if not cached.
 
     Cache invalidates when Drive's modifiedTime changes vs. the cached value.
+    For uploaded clips (source='upload') with r2_url already set, returns directly.
     """
+    # Uploaded clips already have r2_url — skip Drive entirely
+    clip_doc = await db.drive_clips.find_one({"drive_file_id": drive_file_id, "client_id": client_id})
+    if clip_doc and clip_doc.get("r2_url"):
+        return clip_doc["r2_url"]
+
     cached = await db.clip_cache.find_one({"client_id": client_id, "drive_file_id": drive_file_id})
 
     client = await db.clients.find_one({"id": client_id})
