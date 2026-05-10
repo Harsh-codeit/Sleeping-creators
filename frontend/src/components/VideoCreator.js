@@ -167,7 +167,7 @@ export function VideoCreator({ clientId }) {
           No active templates. Go to Video Templates and sync.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {templates.map(t => {
             const aiFieldCount = t.field_schema
               ? t.field_schema.filter(f => f.role === "ai_text").length
@@ -202,16 +202,30 @@ export function VideoCreator({ clientId }) {
     </div>
   );
 
-  const renderFormStep = () => (
-    <div className="flex flex-col min-h-0">
-      <div className="flex-1 overflow-y-auto">
-        {/* Content section */}
-        {aiFields.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-                Content
-              </span>
+  const ROLE_BADGE = {
+    ai_text:     "text-blue-400  bg-blue-400/10  border border-blue-400/30",
+    audio:       "text-purple-400 bg-purple-400/10 border border-purple-400/30",
+    clip:        "text-amber-400 bg-amber-400/10 border border-amber-400/30",
+    logo:        "text-zinc-400  bg-zinc-800     border border-zinc-700",
+    brand_style: "text-zinc-400  bg-zinc-800     border border-zinc-700",
+    static_text: "text-zinc-400  bg-zinc-800     border border-zinc-700",
+    decorative:  "text-zinc-600  bg-zinc-900     border border-zinc-800",
+  };
+
+  const renderFormStep = () => {
+    const schema = selectedTemplate?.field_schema || [];
+    const editableRoles = ["ai_text", "audio", "clip"];
+    const editableFields = schema.filter(f => editableRoles.includes(f.role));
+    const autoFields = schema.filter(f => !editableRoles.includes(f.role));
+
+    return (
+      <div className="flex flex-col min-h-0">
+        <div className="flex-1 overflow-y-auto">
+
+          {/* AI generate row */}
+          {aiFields.length > 0 && (
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Fields</span>
               <button
                 data-testid="generate-ai-btn"
                 onClick={handleGenerateAI}
@@ -222,107 +236,127 @@ export function VideoCreator({ clientId }) {
                 {generating ? "Generating…" : "Generate with AI"}
               </button>
             </div>
-            {aiFields.map(f => (
-              <div key={f.key} className="mb-3">
-                <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1 block">
-                  {f.key}
-                </label>
-                <textarea
-                  data-testid={`field-${f.key}`}
-                  rows={2}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-                  placeholder={f.ai_hint || "leave blank to auto-generate"}
-                  value={texts[f.key] || ""}
-                  onChange={e => setTexts(prev => ({ ...prev, [f.key]: e.target.value }))}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+          )}
 
-        {/* Music section */}
-        {hasAudio && (
-          <div className="mb-4">
-            <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1 block">
-              Music URL
-            </label>
-            <input
-              data-testid="music-url-input"
-              type="text"
-              className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-              placeholder="leave blank for template default"
-              value={musicUrl}
-              onChange={e => setMusicUrl(e.target.value)}
-            />
-          </div>
-        )}
+          {/* 3-column field table */}
+          {editableFields.length > 0 && (
+            <table className="w-full text-xs mb-4">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-1/4">Key</th>
+                  <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-1/6 pl-2">Role</th>
+                  <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest pl-2">Content</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editableFields.map(f => (
+                  <tr key={f.key} className="border-b border-zinc-800/50 align-top">
+                    <td className="py-2 pr-2 font-mono text-zinc-300 text-[11px]">{f.key}</td>
+                    <td className="py-2 pl-2 pr-2">
+                      <span className={`font-mono text-[10px] px-1.5 py-0.5 uppercase tracking-widest ${ROLE_BADGE[f.role] || ROLE_BADGE.decorative}`}>
+                        {f.role}
+                      </span>
+                    </td>
+                    <td className="py-2 pl-2">
+                      {f.role === "ai_text" && (
+                        <textarea
+                          data-testid={`field-${f.key}`}
+                          rows={2}
+                          className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                          placeholder={f.ai_hint || "leave blank to auto-generate"}
+                          value={texts[f.key] || ""}
+                          onChange={e => setTexts(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        />
+                      )}
+                      {f.role === "audio" && (
+                        <input
+                          data-testid="music-url-input"
+                          type="text"
+                          className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                          placeholder="music URL — leave blank for template default"
+                          value={musicUrl}
+                          onChange={e => setMusicUrl(e.target.value)}
+                        />
+                      )}
+                      {f.role === "clip" && (
+                        <div className="flex flex-col gap-1">
+                          {clips.length === 0 ? (
+                            <span className="font-mono text-zinc-600 text-[10px]">No clips found for this client</span>
+                          ) : clips.map(clip => {
+                            const isChecked = selectedClips.some(c => c.id === clip.id);
+                            const atMax = selectedClips.length >= clipCount && !isChecked;
+                            return (
+                              <label key={clip.id} className="flex items-center gap-2 font-mono text-zinc-400 text-[11px] cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  data-testid={`clip-checkbox-${clip.id}`}
+                                  checked={isChecked}
+                                  disabled={atMax}
+                                  className="accent-white"
+                                  onChange={e => {
+                                    if (e.target.checked) setSelectedClips(prev => [...prev, clip]);
+                                    else setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
+                                  }}
+                                />
+                                <span className="truncate max-w-[160px]">{clip.name || clip.drive_file_id}</span>
+                                <span className="text-zinc-600 text-[10px]">#{clip.sequence_number}</span>
+                              </label>
+                            );
+                          })}
+                          <span className="text-[10px] font-mono text-zinc-600 mt-0.5">select up to {clipCount}</span>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
-        {/* Clips section */}
-        {clipCount > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-                Clips
-              </span>
-              <span className="text-[10px] font-mono text-zinc-600">
-                (select up to {clipCount})
-              </span>
+          {/* Auto fields (decorative, logo, etc.) */}
+          {autoFields.length > 0 && (
+            <div>
+              <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">Auto fields</span>
+              <table className="w-full text-xs mt-1 mb-4">
+                <tbody>
+                  {autoFields.map(f => (
+                    <tr key={f.key} className="border-b border-zinc-800/30">
+                      <td className="py-1.5 pr-2 font-mono text-zinc-600 text-[11px] w-1/4">{f.key}</td>
+                      <td className="py-1.5 pl-2 pr-2 w-1/6">
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 uppercase tracking-widest ${ROLE_BADGE[f.role] || ROLE_BADGE.decorative}`}>
+                          {f.role}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pl-2 font-mono text-zinc-600 text-[10px]">auto</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="flex flex-col gap-1">
-              {clips.map(clip => {
-                const isChecked = selectedClips.some(c => c.id === clip.id);
-                const atMax = selectedClips.length >= clipCount && !isChecked;
-                return (
-                  <label
-                    key={clip.id}
-                    className="flex items-center gap-2 text-xs font-mono text-zinc-400 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      data-testid={`clip-checkbox-${clip.id}`}
-                      checked={isChecked}
-                      disabled={atMax}
-                      className="accent-white"
-                      onChange={e => {
-                        if (e.target.checked) {
-                          setSelectedClips(prev => [...prev, clip]);
-                        } else {
-                          setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
-                        }
-                      }}
-                    />
-                    <span className="truncate max-w-[160px]">
-                      {clip.name || clip.drive_file_id}
-                    </span>
-                    <span className="text-zinc-600 text-[10px]">seq: {clip.sequence_number}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Footer */}
-      <div className="sticky bottom-0 bg-zinc-950 border-t border-zinc-800 px-6 py-3 flex justify-between -mx-6">
-        <button
-          data-testid="back-to-templates-btn"
-          onClick={() => setStep("template")}
-          className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5"
-        >
-          Back
-        </button>
-        <button
-          data-testid="render-btn"
-          onClick={handleRender}
-          disabled={submitting}
-          className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {submitting ? "Rendering…" : "Render"}
-        </button>
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-zinc-950 border-t border-zinc-800 px-6 py-3 flex justify-between -mx-6">
+          <button
+            data-testid="back-to-templates-btn"
+            onClick={() => setStep("template")}
+            className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5"
+          >
+            Back
+          </button>
+          <button
+            data-testid="render-btn"
+            onClick={handleRender}
+            disabled={submitting}
+            className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? "Rendering…" : "Render"}
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderRenderingStep = () => (
     <div className="flex flex-col items-center">
