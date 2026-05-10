@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
+import BrandOverridesForm from "../components/BrandOverridesForm";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
@@ -2003,8 +2004,11 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "Video" && (
-        <div className="p-6 text-sm text-muted-foreground">
-          Video tab — coming soon.
+        <div className="space-y-6 p-4">
+          <div>
+            <h3 className="font-semibold mb-2">Brand overrides</h3>
+            <BrandOverridesForm client={client} onSaved={fetchClient} />
+          </div>
         </div>
       )}
 
