@@ -989,26 +989,18 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         slide_format = None
 
     elif pipeline_type == "video":
-        # Video pipeline: pick random clip → render with template → queue
+        # Video pipeline: pick clip → create post → enqueue Creatomate render
         video_template_id = pipeline.get("video_template_id")
         if not video_template_id:
             await add_log("warning", f"Pipeline '{pipeline['name']}': no video template configured", pipeline["client_id"], client["name"])
             return 0
 
-        clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
-        if not clips and pipeline.get("drive_folder_id"):
-            setting = await db.settings.find_one({"key": "google_refresh_token"})
-            refresh_token_val = (setting or {}).get("value", "")
-            if refresh_token_val:
-                try:
-                    from google_drive_service import list_clips as _list_clips
-                    import asyncio as _asyncio
-                    clips = await _asyncio.get_event_loop().run_in_executor(
-                        None, _list_clips, refresh_token_val, pipeline["drive_folder_id"]
-                    )
-                except Exception as _e:
-                    logger.error(f"Video pipeline {pipeline_id}: Drive folder list failed: {_e}")
+        template_doc = await db.creatomate_templates.find_one({"id": video_template_id, "status": "active"})
+        if not template_doc:
+            await add_log("warning", f"Pipeline '{pipeline['name']}': Creatomate template {video_template_id} not active", pipeline["client_id"], client["name"])
+            return 0
 
+        clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
         if not clips:
             await add_log("warning", f"Pipeline '{pipeline['name']}': no clips available", pipeline["client_id"], client["name"])
             return 0
@@ -1017,20 +1009,27 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         clip_id_picked = picked_clip.get("drive_file_id") or picked_clip.get("id")
 
         try:
-            from video_service import create_video_post as _create_video_post
-            result = await _create_video_post(
-                db=db,
-                client_id=pipeline["client_id"],
-                clip_id=clip_id_picked,
-                platforms=pipeline.get("platforms", []),
-                scheduled_at=scheduled_time.isoformat(),
-                template_id=video_template_id,
-                caption=None,
-                hashtags=[],
-                cta_text_override=pipeline.get("overlay_text") or None,
-                cta_button_text_override=pipeline.get("video_cta_text") or None,
-            )
-            video_posts_created = result.get("post_ids", [])
+            from video_worker import enqueue_video_job as _enqueue_video_job
+            post_doc = {
+                "id": str(uuid.uuid4()),
+                "client_id": pipeline["client_id"],
+                "client_name": client.get("name", ""),
+                "pipeline_id": pipeline_id,
+                "kind": "video",
+                "platform": (pipeline.get("platforms") or client.get("platforms") or ["instagram"])[0],
+                "target_platforms": pipeline.get("platforms") or client.get("platforms", []),
+                "template_id": video_template_id,
+                "scheduled_at": scheduled_time.isoformat(),
+                "status": "rendering",
+                "music_url": pipeline.get("music_url"),
+                "clip_drive_ids": [clip_id_picked],
+                "topic": topic,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.posts.insert_one(post_doc)
+            _task_id = _enqueue_video_job(post_doc["id"])
+            video_posts_created = [post_doc["id"]]
+            await add_log("info", f"Video pipeline render enqueued (task {_task_id})", pipeline["client_id"], client["name"])
         except Exception as _ve:
             logger.error(f"Video pipeline {pipeline_id} failed: {_ve}")
             video_posts_created = []
