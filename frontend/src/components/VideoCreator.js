@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { RefreshCw, Wand2, Film, Download } from "lucide-react";
+import { RefreshCw, Wand2, Film, Download, X, Upload, HardDrive } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
@@ -20,6 +20,11 @@ export function VideoCreator({ clientId }) {
   const [scheduleAt, setScheduleAt] = useState("");
   const [posting, setPosting] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [showClipPicker, setShowClipPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState("drive");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef(null);
 
   const fetchTemplates = async () => {
     try {
@@ -202,6 +207,188 @@ export function VideoCreator({ clientId }) {
     </div>
   );
 
+  const handleUploadClip = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await axios.post(`${API}/clients/${clientId}/clips/upload`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (e) => setUploadProgress(Math.round((e.loaded * 100) / e.total)),
+      });
+      const newClip = r.data;
+      setClips(prev => [newClip, ...prev]);
+      if (selectedClips.length < clipCount) {
+        setSelectedClips(prev => [...prev, newClip]);
+      }
+      toast.success("Clip uploaded");
+      setPickerTab("drive");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const toggleClip = (clip) => {
+    const isSelected = selectedClips.some(c => c.id === clip.id);
+    if (isSelected) {
+      setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
+    } else if (selectedClips.length < clipCount) {
+      setSelectedClips(prev => [...prev, clip]);
+    }
+  };
+
+  const renderClipPicker = () => (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={() => setShowClipPicker(false)}>
+      <div
+        className="bg-zinc-950 border border-zinc-800 w-[600px] max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="h-12 flex items-center justify-between px-5 border-b border-zinc-800 flex-shrink-0">
+          <span className="text-xs font-semibold text-white">Choose Clip</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono text-zinc-500">
+              {selectedClips.length} / {clipCount} selected
+            </span>
+            <button onClick={() => setShowClipPicker(false)} className="text-zinc-500 hover:text-white transition-colors duration-200">
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-zinc-800 flex-shrink-0">
+          {[["drive", HardDrive, "From Drive"], ["upload", Upload, "Upload"]].map(([tab, Icon, label]) => (
+            <button
+              key={tab}
+              onClick={() => setPickerTab(tab)}
+              className={`flex items-center gap-1.5 px-5 py-2.5 text-xs font-mono transition-colors duration-200 border-b-2 ${
+                pickerTab === tab
+                  ? "border-white text-white"
+                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Icon size={12} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto">
+          {pickerTab === "drive" && (
+            <div>
+              {clips.length === 0 ? (
+                <div className="py-12 text-center font-mono text-xs text-zinc-600">
+                  No clips found for this client.
+                </div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="text-left px-5 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-8"></th>
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Name</th>
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-20">Source</th>
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-16">Duration</th>
+                      <th className="text-right px-5 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-8">Seq</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clips.map(clip => {
+                      const isSelected = selectedClips.some(c => c.id === clip.id);
+                      const atMax = !isSelected && selectedClips.length >= clipCount;
+                      return (
+                        <tr
+                          key={clip.id}
+                          data-testid={`clip-row-${clip.id}`}
+                          onClick={() => !atMax && toggleClip(clip)}
+                          className={`border-b border-zinc-800/50 transition-colors duration-200 ${atMax ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-zinc-900"} ${isSelected ? "bg-zinc-900" : ""}`}
+                        >
+                          <td className="px-5 py-2.5">
+                            <input
+                              type="checkbox"
+                              data-testid={`clip-checkbox-${clip.id}`}
+                              checked={isSelected}
+                              disabled={atMax}
+                              readOnly
+                              className="accent-white"
+                            />
+                          </td>
+                          <td className="px-2 py-2.5 font-mono text-zinc-300 max-w-[200px]">
+                            <span className="truncate block">{clip.name || clip.drive_file_id}</span>
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <span className={`font-mono text-[10px] px-1.5 py-0.5 uppercase tracking-widest ${clip.source === "upload" ? "text-blue-400 bg-blue-400/10 border border-blue-400/30" : "text-zinc-400 bg-zinc-800 border border-zinc-700"}`}>
+                              {clip.source || "drive"}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2.5 font-mono text-zinc-500 text-[11px]">
+                            {clip.duration ? `${clip.duration.toFixed(1)}s` : "—"}
+                          </td>
+                          <td className="px-5 py-2.5 font-mono text-zinc-600 text-[11px] text-right">#{clip.sequence_number}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {pickerTab === "upload" && (
+            <div className="p-6 flex flex-col items-center gap-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={e => handleUploadClip(e.target.files?.[0])}
+              />
+              <div
+                onClick={() => !uploading && fileInputRef.current?.click()}
+                className={`w-full border border-dashed border-zinc-700 py-12 flex flex-col items-center gap-3 transition-colors duration-200 ${uploading ? "opacity-50 cursor-not-allowed" : "hover:border-zinc-500 cursor-pointer"}`}
+              >
+                <Upload size={28} className="text-zinc-600" />
+                <span className="text-xs font-mono text-zinc-400">Click to choose a video file</span>
+                <span className="text-[10px] font-mono text-zinc-600">MP4, MOV, AVI · max 100 MB · max 60s</span>
+              </div>
+              {uploading && (
+                <div className="w-full">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[10px] font-mono text-zinc-500">Uploading…</span>
+                    <span className="text-[10px] font-mono text-zinc-400">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-zinc-800 h-1">
+                    <div className="bg-white h-1 transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-zinc-800 px-5 py-3 flex justify-between items-center flex-shrink-0">
+          <button onClick={() => setSelectedClips([])} className="border border-zinc-700 text-zinc-400 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5">
+            Clear
+          </button>
+          <button
+            onClick={() => setShowClipPicker(false)}
+            className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-4 py-1.5"
+          >
+            Done ({selectedClips.length} selected)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const ROLE_BADGE = {
     ai_text:     "text-blue-400  bg-blue-400/10  border border-blue-400/30",
     audio:       "text-purple-400 bg-purple-400/10 border border-purple-400/30",
@@ -279,31 +466,29 @@ export function VideoCreator({ clientId }) {
                         />
                       )}
                       {f.role === "clip" && (
-                        <div className="flex flex-col gap-1">
-                          {clips.length === 0 ? (
-                            <span className="font-mono text-zinc-600 text-[10px]">No clips found for this client</span>
-                          ) : clips.map(clip => {
-                            const isChecked = selectedClips.some(c => c.id === clip.id);
-                            const atMax = selectedClips.length >= clipCount && !isChecked;
-                            return (
-                              <label key={clip.id} className="flex items-center gap-2 font-mono text-zinc-400 text-[11px] cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  data-testid={`clip-checkbox-${clip.id}`}
-                                  checked={isChecked}
-                                  disabled={atMax}
-                                  className="accent-white"
-                                  onChange={e => {
-                                    if (e.target.checked) setSelectedClips(prev => [...prev, clip]);
-                                    else setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
-                                  }}
-                                />
-                                <span className="truncate max-w-[160px]">{clip.name || clip.drive_file_id}</span>
-                                <span className="text-zinc-600 text-[10px]">#{clip.sequence_number}</span>
-                              </label>
-                            );
-                          })}
-                          <span className="text-[10px] font-mono text-zinc-600 mt-0.5">select up to {clipCount}</span>
+                        <div className="flex items-center gap-3">
+                          <button
+                            data-testid="choose-clips-btn"
+                            onClick={() => { setPickerTab("drive"); setShowClipPicker(true); }}
+                            className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5 flex items-center gap-1.5"
+                          >
+                            <Film size={11} />
+                            Choose clips
+                          </button>
+                          {selectedClips.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {selectedClips.map(c => (
+                                <span key={c.id} className="font-mono text-[10px] text-zinc-300 bg-zinc-800 border border-zinc-700 px-1.5 py-0.5 flex items-center gap-1">
+                                  {(c.name || c.drive_file_id).slice(0, 20)}
+                                  <button onClick={() => toggleClip(c)} className="text-zinc-500 hover:text-white transition-colors duration-200">
+                                    <X size={9} />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] font-mono text-zinc-600">none selected (up to {clipCount})</span>
+                          )}
                         </div>
                       )}
                     </td>
@@ -470,6 +655,7 @@ export function VideoCreator({ clientId }) {
 
   return (
     <div className="h-full overflow-y-auto bg-zinc-950">
+      {showClipPicker && renderClipPicker()}
       {/* Step header */}
       <div className="px-6 py-3 border-b border-zinc-800 flex items-center gap-2">
         <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
