@@ -5272,9 +5272,77 @@ async def create_video_post_route(req: VideoCreateRequest):
     }
     await db.posts.insert_one(post_doc)
 
-    from video_worker import enqueue_video_job
-    task_id = enqueue_video_job(post_doc["id"])
-    return {"task_id": task_id, "post_id": post_doc["id"], "status": "rendering"}
+    async def _run_render(post_id: str):
+        import creatomate_service
+        from video_render_service import submit_render_for_post, mirror_to_r2, handoff_to_bundle
+        try:
+            _post = await db.posts.find_one({"id": post_id})
+            _pipeline = None
+            if _post.get("pipeline_id"):
+                _pipeline = await db.pipelines.find_one({"id": _post["pipeline_id"]})
+            render_job = await submit_render_for_post(
+                db=db, post=_post,
+                clip_drive_ids=_post.get("clip_drive_ids") or [],
+                music_url=_post.get("music_url"),
+                pipeline=_pipeline,
+            )
+            cid = render_job.get("creatomate_render_id")
+            if not cid:
+                return
+            import asyncio as _aio
+            for _ in range(36):
+                await _aio.sleep(5)
+                try:
+                    resp = await creatomate_service.get_render(cid)
+                except Exception:
+                    continue
+                _status = resp.get("status")
+                _now = datetime.now(timezone.utc).isoformat()
+                if _status == "succeeded":
+                    r2_video, r2_snap = await mirror_to_r2(
+                        resp.get("url"), resp.get("snapshot_url"),
+                        render_job["client_id"], cid,
+                    )
+                    await db.render_jobs.update_one(
+                        {"id": render_job["id"]},
+                        {"$set": {"status": "succeeded", "completed_at": _now,
+                                  "output_url": resp.get("url"), "r2_video_url": r2_video,
+                                  "r2_snapshot_url": r2_snap}},
+                    )
+                    _client = await db.clients.find_one({"id": render_job["client_id"]}) or {}
+                    _post = await db.posts.find_one({"id": post_id})
+                    if _client.get("auto_approve"):
+                        await handoff_to_bundle(db, _post, r2_video, r2_snap)
+                    else:
+                        await db.posts.update_one(
+                            {"id": post_id},
+                            {"$set": {"status": "succeeded",
+                                      "r2_video_url": r2_video,
+                                      "r2_snapshot_url": r2_snap}},
+                        )
+                    return
+                elif _status == "failed":
+                    await db.render_jobs.update_one(
+                        {"id": render_job["id"]},
+                        {"$set": {"status": "failed", "completed_at": _now,
+                                  "error": resp.get("error", "unknown")}},
+                    )
+                    await db.posts.update_one(
+                        {"id": post_id},
+                        {"$set": {"status": "failed_render",
+                                  "error_message": resp.get("error", "render failed")}},
+                    )
+                    return
+        except Exception as _e:
+            logging.error(f"_run_render failed for {post_id}: {_e}")
+            await db.posts.update_one(
+                {"id": post_id},
+                {"$set": {"status": "failed_render", "error_message": str(_e)}},
+            )
+
+    import asyncio
+    asyncio.create_task(_run_render(post_doc["id"]))
+    return {"task_id": post_doc["id"], "post_id": post_doc["id"], "status": "rendering"}
 
 
 @api_router.post("/videos/generate-text")
