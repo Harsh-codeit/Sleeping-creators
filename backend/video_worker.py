@@ -88,3 +88,76 @@ def enqueue_video_job(post_id: str, priority: str = "normal") -> str:
     p = PRIORITY_MAP.get(priority, 5)
     task = process_video_job.apply_async(args=[{"post_id": post_id}], priority=p)
     return task.id
+
+
+@celery_app.task(name="video_worker.watchdog_stuck_renders")
+def watchdog_stuck_renders():
+    """Poll Creatomate for renders stuck in 'submitted' >5min. Mark failed if >30min."""
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+
+    db_client, db = _db()
+    try:
+        async def _run():
+            import creatomate_service
+            cutoff_5 = datetime.now(timezone.utc) - timedelta(minutes=5)
+            cutoff_30 = datetime.now(timezone.utc) - timedelta(minutes=30)
+            cursor = db.render_jobs.find({"status": "submitted"})
+            checked = 0
+            async for rj in cursor:
+                try:
+                    submitted_at = datetime.fromisoformat(rj["submitted_at"].replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                if submitted_at > cutoff_5:
+                    continue
+                if submitted_at < cutoff_30:
+                    await db.render_jobs.update_one(
+                        {"id": rj["id"], "status": "submitted"},
+                        {"$set": {"status": "failed", "error": "watchdog: stuck >30min",
+                                  "completed_at": datetime.now(timezone.utc).isoformat()}},
+                    )
+                    if rj.get("post_id"):
+                        await db.posts.update_one(
+                            {"id": rj["post_id"]},
+                            {"$set": {"status": "failed_render", "error_message": "stuck >30min"}},
+                        )
+                    continue
+                # 5-30 min: poll Creatomate
+                try:
+                    resp = await creatomate_service.get_render(rj["creatomate_render_id"])
+                    if resp.get("status") == "succeeded":
+                        from video_render_service import mirror_to_r2
+                        r2_video, r2_snap = await mirror_to_r2(
+                            resp.get("url"), resp.get("snapshot_url"), rj["client_id"],
+                            rj["creatomate_render_id"],
+                        )
+                        await db.render_jobs.update_one(
+                            {"id": rj["id"], "status": "submitted"},
+                            {"$set": {"status": "succeeded",
+                                      "completed_at": datetime.now(timezone.utc).isoformat(),
+                                      "output_url": resp.get("url"), "snapshot_url": resp.get("snapshot_url"),
+                                      "r2_video_url": r2_video, "r2_snapshot_url": r2_snap}},
+                        )
+                    elif resp.get("status") == "failed":
+                        await db.render_jobs.update_one(
+                            {"id": rj["id"], "status": "submitted"},
+                            {"$set": {"status": "failed", "error": resp.get("error", "unknown"),
+                                      "completed_at": datetime.now(timezone.utc).isoformat()}},
+                        )
+                except Exception as e:
+                    logger.warning(f"watchdog poll failed for {rj.get('id')}: {e}")
+                checked += 1
+            return {"checked": checked}
+
+        return asyncio.run(_run())
+    finally:
+        db_client.close()
+
+
+celery_app.conf.beat_schedule = {
+    "creatomate-watchdog": {
+        "task": "video_worker.watchdog_stuck_renders",
+        "schedule": 60.0,
+    },
+}
