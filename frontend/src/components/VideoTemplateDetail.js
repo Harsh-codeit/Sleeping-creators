@@ -4,17 +4,17 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
-const ROLES = ["ai_text", "static_text", "clip", "logo", "brand_style", "audio", "decorative"];
+const ROLES = ["ai_text", "static_text", "clip", "logo", "audio"];
 
 export function VideoTemplateDetail({ template, onClose, onChanged }) {
-  const [schema, setSchema] = useState(template.field_schema || []);
+  const [fields, setFields] = useState(template.merge_fields || []);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     setSaving(true);
     try {
-      await axios.patch(`${API}/creatomate-templates/${template.id}`, { field_schema: schema });
-      toast.success("Schema saved");
+      await axios.patch(`${API}/shotstack-templates/${template.id}`, { merge_fields: fields });
+      toast.success("Fields saved");
       onChanged?.();
     } catch (e) {
       toast.error(`Save failed: ${e.response?.data?.detail || e.message}`);
@@ -25,7 +25,7 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
 
   const setStatus = async (status) => {
     try {
-      await axios.patch(`${API}/creatomate-templates/${template.id}`, { status });
+      await axios.patch(`${API}/shotstack-templates/${template.id}`, { status });
       toast.success(`Status → ${status}`);
       onChanged?.();
       onClose();
@@ -34,8 +34,8 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
     }
   };
 
-  const updateRole = (key, role) => {
-    setSchema(s => s.map(f => f.key === key ? { ...f, role, inferred: false } : f));
+  const updateRole = (find, role) => {
+    setFields(fs => fs.map(f => f.find === find ? { ...f, role, inferred: false } : f));
   };
 
   return (
@@ -49,7 +49,7 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
           <div>
             <div className="text-sm font-semibold text-white">{template.name}</div>
             <div className="text-[10px] font-mono text-zinc-500">
-              {template.aspect_ratio} · {template.duration_seconds != null ? `${template.duration_seconds}s` : "?s"} · {template.status?.toUpperCase()}
+              {template.status?.toUpperCase()} · {fields.length} fields
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -88,43 +88,45 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
           </div>
         )}
 
-        {/* Field schema */}
+        {/* Merge fields */}
         <div className="p-5 flex-1 overflow-auto">
-          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Field Schema</div>
+          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Merge Fields</div>
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-zinc-800">
-                <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Key</th>
+                <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Field</th>
+                <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest pl-2">Default</th>
                 <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest pl-2">Role</th>
-                <th className="text-left pb-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest pl-2">Hint</th>
               </tr>
             </thead>
             <tbody>
-              {schema.length === 0 && (
+              {fields.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-6 font-mono text-zinc-600 text-center">No fields detected</td>
+                  <td colSpan={3} className="py-6 font-mono text-zinc-600 text-center">No merge fields detected</td>
                 </tr>
               )}
-              {schema.map((f) => (
-                <tr key={f.key} className="border-b border-zinc-800/50">
+              {fields.map((f) => (
+                <tr key={f.find} className="border-b border-zinc-800/50">
                   <td className="py-1.5 font-mono text-zinc-300">
-                    {f.key}
+                    {f.find}
                     {f.inferred && (
-                      <span className="ml-1.5 text-[9px] font-mono text-amber-400 uppercase tracking-widest">AI</span>
+                      <span className="ml-1.5 text-[9px] font-mono text-amber-400 uppercase tracking-widest">auto</span>
                     )}
+                  </td>
+                  <td className="py-1.5 pl-2 font-mono text-zinc-500 max-w-[160px] truncate">
+                    {f.replace || "—"}
                   </td>
                   <td className="py-1.5 pl-2">
                     <select
-                      data-testid={`role-select-${f.key}`}
+                      data-testid={`role-select-${f.find}`}
                       value={f.role || ""}
-                      onChange={e => updateRole(f.key, e.target.value)}
+                      onChange={e => updateRole(f.find, e.target.value)}
                       className="bg-zinc-900 border border-zinc-700 text-white text-xs px-1.5 py-0.5 focus:ring-1 focus:ring-zinc-500 focus:outline-none transition-colors duration-200"
                     >
                       <option value="">—</option>
                       {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </td>
-                  <td className="py-1.5 pl-2 font-mono text-zinc-500">{f.ai_hint || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -137,7 +139,7 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
               disabled={saving}
               className="px-4 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
             >
-              {saving ? "Saving…" : "Save schema"}
+              {saving ? "Saving…" : "Save fields"}
             </button>
           </div>
         </div>

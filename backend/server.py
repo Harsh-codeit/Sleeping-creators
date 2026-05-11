@@ -44,7 +44,7 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/webhooks/creatomate")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle")
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
@@ -199,32 +199,30 @@ class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None
     bundle_webhook_secret: Optional[str] = None
 
-# ─── Creatomate models ────────────────────────────────────────────────────────
+# ─── Shotstack models ─────────────────────────────────────────────────────────
 
-class CreatomateFieldSchema(BaseModel):
-    key: str
-    role: str  # ai_text|static_text|clip|logo|brand_style|audio|decorative
-    kind: str  # text|video|image|color|audio
+class ShotstackMergeField(BaseModel):
+    find: str
+    replace: str = ""
+    role: str = "ai_text"  # ai_text|static_text|clip|logo|audio
     ai_hint: Optional[str] = None
     max_chars: Optional[int] = None
     inferred: bool = True
 
-class CreatomateTemplate(BaseModel):
+class ShotstackTemplate(BaseModel):
     id: str
-    creatomate_template_id: str
+    shotstack_template_id: str
     name: str
     thumbnail_url: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    aspect_ratio: Optional[str] = None
-    field_schema: List[CreatomateFieldSchema] = []
-    defaults: dict = {}
+    audio_url: Optional[str] = None
+    merge_fields: List[ShotstackMergeField] = []
     imported_at: Optional[str] = None
     last_synced_at: Optional[str] = None
     status: str = "draft"  # draft|active|inactive
 
-class CreatomateTemplatePatch(BaseModel):
+class ShotstackTemplatePatch(BaseModel):
     status: Optional[str] = None
-    field_schema: Optional[List[CreatomateFieldSchema]] = None
+    merge_fields: Optional[List[ShotstackMergeField]] = None
 
 class BrandOverrides(BaseModel):
     color: Optional[str] = None
@@ -237,7 +235,7 @@ class RenderJobStatus(BaseModel):
     post_id: Optional[str] = None
     client_id: str
     template_id: str
-    creatomate_render_id: Optional[str] = None
+    shotstack_render_id: Optional[str] = None
     status: str  # submitted|succeeded|failed|cancelled
     submitted_at: Optional[str] = None
     completed_at: Optional[str] = None
@@ -251,11 +249,12 @@ class RenderJobStatus(BaseModel):
 class VideoCreateRequest(BaseModel):
     client_id: str
     pipeline_id: Optional[str] = None
-    template_id: str  # creatomate_templates.id (NOT creatomate_template_id)
+    template_id: str  # shotstack_templates.id
     scheduled_at: Optional[str] = None
     music_url: Optional[str] = None
     clip_drive_ids: Optional[List[str]] = None
-    ai_text_overrides: Optional[dict] = None  # {field_key: text} — skips Claude
+    ai_text_overrides: Optional[dict] = None  # {find_name: text} — skips Claude
+    filter_name: Optional[str] = None  # greyscale|boost|contrast|darken|lighten|muted|negative|blur
 
 class VideoGenerateTextRequest(BaseModel):
     template_id: str
@@ -1001,9 +1000,9 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             await add_log("warning", f"Pipeline '{pipeline['name']}': no video template configured", pipeline["client_id"], client["name"])
             return 0
 
-        template_doc = await db.creatomate_templates.find_one({"id": video_template_id, "status": "active"})
+        template_doc = await db.shotstack_templates.find_one({"id": video_template_id, "status": "active"})
         if not template_doc:
-            await add_log("warning", f"Pipeline '{pipeline['name']}': Creatomate template {video_template_id} not active", pipeline["client_id"], client["name"])
+            await add_log("warning", f"Pipeline '{pipeline['name']}': Shotstack template {video_template_id} not active", pipeline["client_id"], client["name"])
             return 0
 
         clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
@@ -3744,46 +3743,46 @@ async def publish_carousel(carousel_id: str, local_fallback: bool = Query(False)
 
     return {"status": result["status"], "post_id": post["id"], "error": result.get("error")}
 
-# ─── Creatomate template admin ───────────────────────────────────────────────
+# ─── Shotstack template admin ─────────────────────────────────────────────────
 
-@api_router.get("/creatomate-templates")
-async def list_creatomate_templates(status: Optional[str] = None):
+@api_router.get("/shotstack-templates")
+async def list_shotstack_templates(status: Optional[str] = None):
     q = {}
     if status:
         q["status"] = status
-    rows = await db.creatomate_templates.find(q, {"_id": 0}).to_list(500)
+    rows = await db.shotstack_templates.find(q, {"_id": 0}).to_list(500)
     return rows
 
 
-@api_router.get("/creatomate-templates/{template_id}")
-async def get_creatomate_template(template_id: str):
-    row = await db.creatomate_templates.find_one({"id": template_id}, {"_id": 0})
+@api_router.get("/shotstack-templates/{template_id}")
+async def get_shotstack_template(template_id: str):
+    row = await db.shotstack_templates.find_one({"id": template_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "template not found")
     return row
 
 
-@api_router.patch("/creatomate-templates/{template_id}")
-async def patch_creatomate_template(template_id: str, body: CreatomateTemplatePatch):
+@api_router.patch("/shotstack-templates/{template_id}")
+async def patch_shotstack_template(template_id: str, body: ShotstackTemplatePatch):
     update = {}
     if body.status is not None:
         if body.status not in ("draft", "active", "inactive"):
             raise HTTPException(400, "status must be draft|active|inactive")
         update["status"] = body.status
-    if body.field_schema is not None:
-        update["field_schema"] = [{**f.model_dump(), "inferred": False} for f in body.field_schema]
+    if body.merge_fields is not None:
+        update["merge_fields"] = [{**f.model_dump(), "inferred": False} for f in body.merge_fields]
     if not update:
         return {"ok": True, "no_changes": True}
-    res = await db.creatomate_templates.update_one({"id": template_id}, {"$set": update})
+    res = await db.shotstack_templates.update_one({"id": template_id}, {"$set": update})
     if res.matched_count == 0:
         raise HTTPException(404, "template not found")
-    row = await db.creatomate_templates.find_one({"id": template_id}, {"_id": 0})
+    row = await db.shotstack_templates.find_one({"id": template_id}, {"_id": 0})
     return row
 
 
-@api_router.post("/creatomate-templates/sync")
-async def sync_creatomate_templates():
-    from creatomate_template_importer import sync_templates
+@api_router.post("/shotstack-templates/sync")
+async def sync_shotstack_templates():
+    from shotstack_template_importer import sync_templates
     return await sync_templates(db)
 
 
@@ -5146,7 +5145,7 @@ async def _run_video_recurring(client_id: str):
     if not template_id:
         await add_log("warning", "Recurring video schedule has no template_id", client_id=client_id)
         return
-    template = await db.creatomate_templates.find_one({"id": template_id, "status": "active"})
+    template = await db.shotstack_templates.find_one({"id": template_id, "status": "active"})
     if not template:
         await add_log("warning", f"Recurring video template {template_id} not active", client_id=client_id)
         return
@@ -5156,7 +5155,7 @@ async def _run_video_recurring(client_id: str):
         await add_log("warning", "No Drive clips for recurring video job", client_id=client_id)
         return
 
-    clip_slots = [f for f in template.get("field_schema", []) if f.get("role") == "clip"]
+    clip_slots = [f for f in template.get("merge_fields", []) if f.get("role") == "clip"]
     seq_mode = client.get("video_sequence_mode", "sequential")
     seq_idx = client.get("video_sequence_index", 0)
     picked = []
@@ -5237,7 +5236,7 @@ async def generate_cta_text(req: CTAGenerateRequest):
 
 @api_router.post("/videos/create", status_code=201)
 async def create_video_post_route(req: VideoCreateRequest):
-    template = await db.creatomate_templates.find_one({"id": req.template_id, "status": "active"})
+    template = await db.shotstack_templates.find_one({"id": req.template_id, "status": "active"})
     if not template:
         raise HTTPException(400, f"Template {req.template_id} not found or not active")
 
@@ -5267,13 +5266,14 @@ async def create_video_post_route(req: VideoCreateRequest):
         "music_url": req.music_url,
         "clip_drive_ids": req.clip_drive_ids or [],
         "ai_text_overrides": req.ai_text_overrides or {},
+        "filter_name": req.filter_name,
         "topic": (pipeline or {}).get("topic") if pipeline else None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.posts.insert_one(post_doc)
 
     async def _run_render(post_id: str):
-        import creatomate_service
+        import shotstack_service
         from video_render_service import submit_render_for_post, mirror_to_r2, handoff_to_bundle
         try:
             _post = await db.posts.find_one({"id": post_id})
@@ -5286,22 +5286,22 @@ async def create_video_post_route(req: VideoCreateRequest):
                 music_url=_post.get("music_url"),
                 pipeline=_pipeline,
             )
-            cid = render_job.get("creatomate_render_id")
-            if not cid:
+            ss_render_id = render_job.get("shotstack_render_id")
+            if not ss_render_id:
                 return
             import asyncio as _aio
-            for _ in range(36):
+            for _ in range(72):
                 await _aio.sleep(5)
                 try:
-                    resp = await creatomate_service.get_render(cid)
+                    resp = await shotstack_service.poll_render(ss_render_id)
                 except Exception:
                     continue
                 _status = resp.get("status")
                 _now = datetime.now(timezone.utc).isoformat()
-                if _status == "succeeded":
+                if _status == "done":
                     r2_video, r2_snap = await mirror_to_r2(
-                        resp.get("url"), resp.get("snapshot_url"),
-                        render_job["client_id"], cid,
+                        resp.get("url"), None,
+                        render_job["client_id"], ss_render_id,
                     )
                     await db.render_jobs.update_one(
                         {"id": render_job["id"]},
@@ -5322,15 +5322,14 @@ async def create_video_post_route(req: VideoCreateRequest):
                         )
                     return
                 elif _status == "failed":
+                    error = resp.get("error") or "render failed"
                     await db.render_jobs.update_one(
                         {"id": render_job["id"]},
-                        {"$set": {"status": "failed", "completed_at": _now,
-                                  "error": resp.get("error", "unknown")}},
+                        {"$set": {"status": "failed", "completed_at": _now, "error": error}},
                     )
                     await db.posts.update_one(
                         {"id": post_id},
-                        {"$set": {"status": "failed_render",
-                                  "error_message": resp.get("error", "render failed")}},
+                        {"$set": {"status": "failed_render", "error_message": error}},
                     )
                     return
         except Exception as _e:
@@ -5347,14 +5346,14 @@ async def create_video_post_route(req: VideoCreateRequest):
 
 @api_router.post("/videos/generate-text")
 async def generate_video_text_route(req: VideoGenerateTextRequest):
-    template = await db.creatomate_templates.find_one({"id": req.template_id}, {"_id": 0})
+    template = await db.shotstack_templates.find_one({"id": req.template_id}, {"_id": 0})
     if not template:
         raise HTTPException(404, "Template not found")
     client = await db.clients.find_one({"id": req.client_id}, {"_id": 0})
     if not client:
         raise HTTPException(404, "Client not found")
     from video_render_service import generate_ai_text
-    ai_text_fields = [f for f in template.get("field_schema", []) if f.get("role") == "ai_text"]
+    ai_text_fields = [f for f in template.get("merge_fields", []) if f.get("role") == "ai_text"]
     if not ai_text_fields:
         return {}
     topic = req.topic or client.get("name", "")
@@ -5446,9 +5445,6 @@ async def get_schedule_slots():
 
 
 app.include_router(api_router)
-
-import creatomate_webhook as _creatomate_webhook
-app.include_router(_creatomate_webhook.router)
 
 import json as _json
 

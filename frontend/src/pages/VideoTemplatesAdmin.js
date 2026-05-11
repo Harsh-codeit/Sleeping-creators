@@ -19,7 +19,7 @@ export default function VideoTemplatesAdmin() {
 
   const load = async () => {
     try {
-      const r = await axios.get(`${API}/creatomate-templates`);
+      const r = await axios.get(`${API}/shotstack-templates`);
       setRows(r.data);
     } catch {
       toast.error("Failed to load templates");
@@ -31,7 +31,7 @@ export default function VideoTemplatesAdmin() {
   const sync = async () => {
     setSyncing(true);
     try {
-      const r = await axios.post(`${API}/creatomate-templates/sync`);
+      const r = await axios.post(`${API}/shotstack-templates/sync`);
       toast.success(`+${r.data.added.length} added · ${r.data.updated.length} updated · ${r.data.deactivated.length} deactivated`);
       await load();
     } catch (e) {
@@ -47,7 +47,7 @@ export default function VideoTemplatesAdmin() {
       <div className="h-14 flex items-center justify-between px-6 border-b border-zinc-800 bg-zinc-950">
         <div>
           <div className="text-sm font-bold tracking-tight text-white">Video Templates</div>
-          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">CREATOMATE TEMPLATE REGISTRY</div>
+          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">SHOTSTACK TEMPLATE REGISTRY</div>
         </div>
         <button
           data-testid="sync-templates-btn"
@@ -56,7 +56,7 @@ export default function VideoTemplatesAdmin() {
           className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
         >
           <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
-          {syncing ? "Syncing…" : "Sync from Creatomate"}
+          {syncing ? "Syncing…" : "Sync from Shotstack"}
         </button>
       </div>
 
@@ -67,8 +67,6 @@ export default function VideoTemplatesAdmin() {
             <tr className="border-b border-zinc-800">
               <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px] w-16">Thumb</th>
               <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Name</th>
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Ratio</th>
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Duration</th>
               <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Fields</th>
               <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Status</th>
               <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Last synced</th>
@@ -77,8 +75,8 @@ export default function VideoTemplatesAdmin() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-10 text-center font-mono text-zinc-600">
-                  No templates. Click "Sync from Creatomate" to import.
+                <td colSpan={5} className="py-10 text-center font-mono text-zinc-600">
+                  No templates. Click "Sync from Shotstack" to import.
                 </td>
               </tr>
             )}
@@ -95,9 +93,7 @@ export default function VideoTemplatesAdmin() {
                     : <div className="h-10 w-16 bg-zinc-800 border border-zinc-700" />}
                 </td>
                 <td className="py-2 font-medium text-white">{r.name}</td>
-                <td className="py-2 font-mono text-zinc-400">{r.aspect_ratio || "—"}</td>
-                <td className="py-2 font-mono text-zinc-400">{r.duration_seconds != null ? `${r.duration_seconds}s` : "—"}</td>
-                <td className="py-2 font-mono text-zinc-400">{r.field_schema?.length ?? 0}</td>
+                <td className="py-2 font-mono text-zinc-400">{r.merge_fields?.length ?? 0}</td>
                 <td className="py-2">
                   <span className={`font-mono text-[10px] px-1.5 py-0.5 uppercase tracking-widest ${STATUS_BADGE[r.status] || STATUS_BADGE.inactive}`}>
                     {r.status}

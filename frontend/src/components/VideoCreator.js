@@ -40,9 +40,12 @@ export function VideoCreator({ clientId }) {
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [playingId, setPlayingId] = useState(null);
   const audioRef = useRef(null);
+  const [filterName, setFilterName] = useState(null);
+
+  const FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
 
   useEffect(() => {
-    axios.get(`${API}/creatomate-templates?status=active`)
+    axios.get(`${API}/shotstack-templates?status=active`)
       .then(r => setTemplates(r.data))
       .catch(() => toast.error("Failed to load templates"));
   }, []);
@@ -70,6 +73,7 @@ export function VideoCreator({ clientId }) {
     setTexts({});
     setSelectedClips([]);
     setMusicUrl("");
+    setFilterName(null);
     setPost(null);
     setPostId(null);
     setRendering(false);
@@ -100,6 +104,7 @@ export function VideoCreator({ clientId }) {
         template_id: selectedTemplate.id,
         clip_drive_ids: selectedClips.map(c => c.drive_file_id),
         music_url: musicUrl.trim() || undefined,
+        filter_name: filterName || undefined,
       };
       if (Object.keys(filled).length) body.ai_text_overrides = filled;
       const r = await axios.post(`${API}/videos/create`, body);
@@ -144,7 +149,7 @@ export function VideoCreator({ clientId }) {
         onUploadProgress: (e) => setUploadProgress(Math.round((e.loaded * 100) / e.total)),
       });
       setClips(prev => [r.data, ...prev]);
-      const clipCount = selectedTemplate?.field_schema?.filter(f => f.role === "clip").length || 0;
+      const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
       if (selectedClips.length < clipCount) setSelectedClips(prev => [...prev, r.data]);
       toast.success("Clip uploaded");
       setPickerTab("drive");
@@ -154,7 +159,7 @@ export function VideoCreator({ clientId }) {
 
   const toggleClip = (clip) => {
     const isSelected = selectedClips.some(c => c.id === clip.id);
-    const clipCount = selectedTemplate?.field_schema?.filter(f => f.role === "clip").length || 0;
+    const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
     if (isSelected) setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
     else if (selectedClips.length < clipCount) setSelectedClips(prev => [...prev, clip]);
   };
@@ -197,10 +202,10 @@ export function VideoCreator({ clientId }) {
   const isFailed = post && ["failed_render", "failed", "cancelled"].includes(post.status);
   const isSucceeded = post && !isFailed;
 
-  const aiFields = selectedTemplate?.field_schema?.filter(f => f.role === "ai_text") || [];
-  const hasAudio = selectedTemplate?.field_schema?.some(f => f.role === "audio") || false;
-  const clipCount = selectedTemplate?.field_schema?.filter(f => f.role === "clip").length || 0;
-  const autoFields = selectedTemplate?.field_schema?.filter(
+  const aiFields = selectedTemplate?.merge_fields?.filter(f => f.role === "ai_text") || [];
+  const hasAudio = selectedTemplate?.merge_fields?.some(f => f.role === "audio") || false;
+  const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
+  const autoFields = selectedTemplate?.merge_fields?.filter(
     f => !["ai_text", "audio", "clip"].includes(f.role)
   ) || [];
 
@@ -348,18 +353,18 @@ export function VideoCreator({ clientId }) {
                 <div>
                   <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Content</div>
                   {aiFields.map(f => (
-                    <div key={f.key} className="mb-3">
+                    <div key={f.find} className="mb-3">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <span className="text-[10px] font-mono text-zinc-500">{f.key}</span>
+                        <span className="text-[10px] font-mono text-zinc-500">{f.find}</span>
                         <span className={`font-mono text-[9px] px-1 py-0.5 uppercase tracking-widest ${ROLE_BADGE.ai_text}`}>ai</span>
                       </div>
                       <textarea
-                        data-testid={`field-${f.key}`}
+                        data-testid={`field-${f.find}`}
                         rows={2}
                         className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-                        placeholder={f.ai_hint || "leave blank to auto-generate"}
-                        value={texts[f.key] || ""}
-                        onChange={e => setTexts(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={f.ai_hint || f.replace || "leave blank to auto-generate"}
+                        value={texts[f.find] || ""}
+                        onChange={e => setTexts(prev => ({ ...prev, [f.find]: e.target.value }))}
                       />
                     </div>
                   ))}
@@ -421,13 +426,33 @@ export function VideoCreator({ clientId }) {
                 </div>
               )}
 
+              {/* Filter picker */}
+              <div>
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Filter</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {FILTERS.map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setFilterName(prev => prev === f ? null : f)}
+                      className={`font-mono text-[10px] px-2 py-0.5 border transition-colors duration-200 ${
+                        filterName === f
+                          ? "border-white text-white bg-zinc-800"
+                          : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Auto fields */}
               {autoFields.length > 0 && (
                 <div>
                   <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest mb-1.5">Auto</div>
                   {autoFields.map(f => (
-                    <div key={f.key} className="flex items-center justify-between py-1 border-b border-zinc-800/40">
-                      <span className="font-mono text-[10px] text-zinc-600">{f.key}</span>
+                    <div key={f.find} className="flex items-center justify-between py-1 border-b border-zinc-800/40">
+                      <span className="font-mono text-[10px] text-zinc-600">{f.find}</span>
                       <span className={`font-mono text-[9px] px-1 py-0.5 uppercase tracking-widest ${ROLE_BADGE[f.role] || ROLE_BADGE.decorative}`}>{f.role}</span>
                     </div>
                   ))}

@@ -31,71 +31,8 @@ Fields:
 """
 
 
-async def build_modifications(
-    db,
-    template: dict,
-    client: dict,
-    pipeline: Optional[dict],
-    ai_text_overrides: Optional[dict] = None,
-    music_url: Optional[str] = None,
-    clip_drive_ids: Optional[list[str]] = None,
-) -> dict:
-    """Walk the template's field_schema and produce the modifications dict for Creatomate.
-
-    Merge order per field:
-      ai_text:     ai_text_overrides[key] OR Claude-generated (later)
-      clip:        staged R2 url for next clip in clip_drive_ids
-      logo:        client.brand_overrides.logo_url
-      brand_style: client.brand_overrides.color (or font_family for font keys)
-      audio:       music_url > pipeline.music_url > client.brand_overrides.default_music_url
-      static_text/decorative: skipped (template default used)
-
-    A field is included in the output ONLY when we have a value to override with.
-    Missing values fall through to the template's baked-in defaults.
-    """
-    mods: dict = {}
-    overrides = (client or {}).get("brand_overrides", {}) or {}
-    pipeline_music = (pipeline or {}).get("music_url") if pipeline else None
-    clip_drive_ids = list(clip_drive_ids or [])
-    clip_iter = iter(clip_drive_ids)
-    ai_text_overrides = ai_text_overrides or {}
-
-    for field in template.get("field_schema", []):
-        key = field["key"]
-        role = field.get("role")
-
-        if role == "ai_text":
-            val = ai_text_overrides.get(key)
-            if val is not None:
-                mods[key] = val
-        elif role == "clip":
-            try:
-                drive_id = next(clip_iter)
-            except StopIteration:
-                continue
-            from clip_staging_service import stage_clip
-            r2_url = await stage_clip(db, client["id"], drive_id)
-            mods[key] = r2_url
-        elif role == "logo":
-            v = overrides.get("logo_url")
-            if v:
-                mods[key] = v
-        elif role == "brand_style":
-            if field.get("kind") == "color" and overrides.get("color"):
-                mods[key] = overrides["color"]
-            elif field.get("kind") == "text" and overrides.get("font_family"):
-                # Per-element font override uses dot notation
-                mods[f"{key}.font_family"] = overrides["font_family"]
-        elif role == "audio":
-            v = music_url or pipeline_music or overrides.get("default_music_url")
-            if v:
-                mods[key] = v
-        # static_text and decorative: skip
-    return mods
-
-
 async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str) -> dict:
-    """Call Claude once to fill all ai_text fields. Returns {key: text}."""
+    """Call Claude once to fill all ai_text fields. Returns {find_name: text}."""
     if not ai_text_fields:
         return {}
 
@@ -103,7 +40,7 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str)
     niche = client.get("niche") or client.get("industry") or "general"
     brand_voice = client.get("brand_voice", "neutral")
     fields_for_prompt = [{
-        "key": f["key"],
+        "key": f["find"],
         "hint": f.get("ai_hint") or "short caption",
         "max_chars": f.get("max_chars") or 80,
     } for f in ai_text_fields]
@@ -131,10 +68,9 @@ def _now_iso() -> str:
 
 
 async def _log_phase(db, render_job_id: str, phase: str, **fields):
-    """Append a structured render-phase log entry to db.logs."""
     try:
         await db.logs.insert_one({
-            "kind": "creatomate_render",
+            "kind": "shotstack_render",
             "render_job_id": render_job_id,
             "phase": phase,
             "ts": _now_iso(),
@@ -144,6 +80,74 @@ async def _log_phase(db, render_job_id: str, phase: str, **fields):
         logger.warning("phase log insert failed (%s): %s", phase, e)
 
 
+async def build_merge_values(
+    db,
+    template: dict,
+    client: dict,
+    pipeline: Optional[dict],
+    ai_text_overrides: Optional[dict] = None,
+    music_url: Optional[str] = None,
+    clip_drive_ids: Optional[list[str]] = None,
+) -> dict:
+    """
+    Build the merge_values dict {FIELD_NAME: value} for a Shotstack render.
+
+    Merge order per field role:
+      ai_text:      ai_text_overrides[find] OR Claude-generated
+      clip:         staged R2 url for next clip in clip_drive_ids
+      logo:         client.brand_overrides.logo_url
+      audio:        music_url > pipeline.music_url > client brand default
+      static_text:  skipped (template default used)
+
+    Fields without a value are omitted — Shotstack uses the template default.
+    """
+    overrides = (client or {}).get("brand_overrides", {}) or {}
+    pipeline_music = (pipeline or {}).get("music_url") if pipeline else None
+    clip_iter = iter(list(clip_drive_ids or []))
+    ai_text_overrides = ai_text_overrides or {}
+
+    ai_text_fields = [f for f in template.get("merge_fields", []) if f.get("role") == "ai_text"]
+    unfilled_ai = [f for f in ai_text_fields if f["find"] not in ai_text_overrides]
+
+    # Generate text for any ai_text fields not already overridden
+    generated: dict = {}
+    if unfilled_ai:
+        topic = ""  # caller can pass via ai_text_overrides if needed
+        try:
+            generated = await generate_ai_text(unfilled_ai, client, topic)
+        except Exception as e:
+            logger.warning("AI text generation failed: %s", e)
+
+    values: dict = {}
+    for field in template.get("merge_fields", []):
+        find = field["find"]
+        role = field.get("role", "ai_text")
+
+        if role == "ai_text":
+            val = ai_text_overrides.get(find) or generated.get(find)
+            if val:
+                values[find] = val
+        elif role == "clip":
+            try:
+                drive_id = next(clip_iter)
+            except StopIteration:
+                continue
+            from clip_staging_service import stage_clip
+            r2_url = await stage_clip(db, client["id"], drive_id)
+            values[find] = r2_url
+        elif role == "logo":
+            v = overrides.get("logo_url")
+            if v:
+                values[find] = v
+        elif role == "audio":
+            v = music_url or pipeline_music or overrides.get("default_music_url")
+            if v:
+                values[find] = v
+        # static_text: skip
+
+    return values
+
+
 async def submit_render_for_post(
     db,
     post: dict,
@@ -151,16 +155,19 @@ async def submit_render_for_post(
     music_url: Optional[str] = None,
     pipeline: Optional[dict] = None,
 ) -> dict:
-    """Submit a render to Creatomate for the given post and write a render_jobs row.
+    """
+    Submit a Shotstack render for the given post and write a render_jobs row.
 
     1. Loads template + client.
-    2. AI-fills text fields, stages clips, builds modifications.
-    3. Token-bucket gates the Creatomate API.
-    4. Submits the render.
-    5. Inserts render_jobs row, links post.render_job_id.
-    6. Returns the render_jobs document.
+    2. Re-fetches template source from Shotstack (required — we mutate it per render).
+    3. Builds merge values.
+    4. Submits to Shotstack.
+    5. Inserts render_jobs doc, links post.render_job_id.
+    Returns the render_jobs document.
     """
-    template = await db.creatomate_templates.find_one({"id": post["template_id"]})
+    from shotstack_service import get_template, submit_render
+
+    template = await db.shotstack_templates.find_one({"id": post["template_id"]})
     if not template:
         raise RuntimeError(f"Template {post['template_id']} not found")
     if template.get("status") != "active":
@@ -170,29 +177,24 @@ async def submit_render_for_post(
     if not client:
         raise RuntimeError(f"Client {post['client_id']} not found")
 
-    ai_text_fields = [f for f in template.get("field_schema", []) if f.get("role") == "ai_text"]
-    manual_overrides = post.get("ai_text_overrides") or {}
-    if manual_overrides:
-        ai_text_overrides = manual_overrides
-    else:
-        topic = post.get("topic") or post.get("caption") or client.get("name", "")
-        ai_text_overrides = await generate_ai_text(ai_text_fields, client, topic) if ai_text_fields else {}
+    # Re-fetch fresh template source every render (Shotstack rule: never cache timeline)
+    template_data = await get_template(template["shotstack_template_id"])
 
-    modifications = await build_modifications(
+    merge_values = await build_merge_values(
         db=db, template=template, client=client, pipeline=pipeline,
-        ai_text_overrides=ai_text_overrides, music_url=music_url, clip_drive_ids=clip_drive_ids,
+        ai_text_overrides=post.get("ai_text_overrides") or {},
+        music_url=music_url,
+        clip_drive_ids=clip_drive_ids,
     )
 
-    import creatomate_rate_limiter, creatomate_service
-    bucket = creatomate_rate_limiter.get_default_bucket()
-    if not bucket.acquire(max_wait_sec=30):
-        raise creatomate_service.CreatomateRateLimited(retry_after=10)
+    filter_name = post.get("filter_name") or None
+    audio_url_override = music_url or None
 
-    webhook_url = os.environ.get("CREATOMATE_WEBHOOK_URL") or None
-    submit_resp = await creatomate_service.submit_render(
-        template_id=template["creatomate_template_id"],
-        modifications=modifications,
-        webhook_url=webhook_url,
+    shotstack_render_id = await submit_render(
+        template_data=template_data,
+        merge_values=merge_values,
+        filter_name=filter_name,
+        audio_url=audio_url_override,
     )
 
     job = {
@@ -201,8 +203,8 @@ async def submit_render_for_post(
         "client_id": post["client_id"],
         "pipeline_id": post.get("pipeline_id"),
         "template_id": template["id"],
-        "creatomate_render_id": submit_resp.get("id"),
-        "modifications": modifications,
+        "shotstack_render_id": shotstack_render_id,
+        "merge_values": merge_values,
         "status": "submitted",
         "submitted_at": _now_iso(),
         "completed_at": None,
@@ -220,11 +222,10 @@ async def submit_render_for_post(
 
 
 async def mirror_to_r2(video_url: str, snapshot_url, client_id: str, render_id: str) -> tuple:
-    """Download Creatomate's output (and snapshot) and upload to R2. Returns (r2_video_url, r2_snapshot_url)."""
+    """Download Shotstack's output and upload to R2. Returns (r2_video_url, r2_snapshot_url)."""
     import httpx
     import storage
 
-    # video
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tf:
         video_path = tf.name
     try:
@@ -245,7 +246,6 @@ async def mirror_to_r2(video_url: str, snapshot_url, client_id: str, render_id: 
         except OSError:
             pass
 
-    # snapshot
     r2_snapshot_url = None
     if snapshot_url:
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
@@ -279,7 +279,6 @@ async def _fetch_url_bytes(url: str) -> bytes:
 
 
 def _platform_overrides_for_video(post: dict, platforms: list[str]) -> dict:
-    """Per-platform field overrides for a video post."""
     import bundle_service
     caption = post.get("caption", "")
     hashtags = post.get("hashtags") or []

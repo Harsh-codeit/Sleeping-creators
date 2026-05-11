@@ -8,7 +8,7 @@ export function VideoTemplatePicker({ value, onChange }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get(`${API}/creatomate-templates?status=active`)
+    axios.get(`${API}/shotstack-templates?status=active`)
       .then(r => setRows(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -21,7 +21,7 @@ export function VideoTemplatePicker({ value, onChange }) {
   if (rows.length === 0) {
     return (
       <div className="font-mono text-xs text-zinc-600 py-4 border border-zinc-800 text-center">
-        No active templates. Go to Video → Sync from Creatomate.
+        No active templates. Go to Video → Sync from Shotstack.
       </div>
     );
   }
@@ -49,7 +49,7 @@ export function VideoTemplatePicker({ value, onChange }) {
             <div className="px-2 py-1.5">
               <div className="text-xs font-semibold text-white truncate">{r.name}</div>
               <div className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                {r.aspect_ratio || "—"} · {r.duration_seconds != null ? `${r.duration_seconds}s` : "?s"}
+                {r.merge_fields?.length ?? 0} fields
               </div>
             </div>
             {isSelected && (
