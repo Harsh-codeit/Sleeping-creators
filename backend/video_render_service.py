@@ -63,6 +63,77 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str)
     return json.loads(raw)
 
 
+_CONTENT_PROMPT = """You are writing content for a social media video post.
+
+Client:
+- Name: {client_name}
+- Niche: {niche}
+- Brand voice: {brand_voice}
+- Platforms: {platforms}
+
+Prompt: {prompt}
+
+Generate all content in one response:
+
+1. "merge_values" — text for each field that appears inside the video. Match each field's hint and max_chars exactly.
+2. "caption" — the social media post caption that accompanies the video. Engaging, matches brand voice, max 2200 chars.
+3. "hashtags" — array of 20 relevant hashtags without the # symbol.
+
+Video fields:
+{fields}
+
+Return ONLY valid JSON — no explanation, no markdown fences:
+{{
+  "merge_values": {{{merge_values_example}}},
+  "caption": "...",
+  "hashtags": ["tag1", "tag2"]
+}}"""
+
+
+async def generate_video_content(
+    prompt: str,
+    client: dict,
+    ai_text_fields: list[dict],
+) -> dict:
+    """One Claude call → {merge_values: {FIELD: text}, caption: str, hashtags: [str]}."""
+    client_name = client.get("name", "the brand")
+    niche = client.get("niche") or client.get("industry") or "general"
+    brand_voice = client.get("brand_voice", "neutral")
+    platforms = ", ".join(client.get("platforms") or ["instagram"])
+
+    fields_json = json.dumps([{
+        "field": f["find"],
+        "hint": f.get("ai_hint") or "short punchy text",
+        "max_chars": f.get("max_chars") or 80,
+    } for f in ai_text_fields], indent=2) if ai_text_fields else "[]"
+
+    example_kv = ", ".join(f'"{f["find"]}": "..."' for f in ai_text_fields) if ai_text_fields else ""
+
+    full_prompt = _CONTENT_PROMPT.format(
+        client_name=client_name, niche=niche, brand_voice=brand_voice,
+        platforms=platforms, prompt=prompt,
+        fields=fields_json, merge_values_example=example_kv,
+    )
+
+    msg = _anthropic_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1500,
+        messages=[{"role": "user", "content": full_prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
+    data = json.loads(raw)
+    return {
+        "merge_values": data.get("merge_values") or {},
+        "caption": data.get("caption") or "",
+        "hashtags": data.get("hashtags") or [],
+    }
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -88,6 +159,7 @@ async def build_merge_values(
     ai_text_overrides: Optional[dict] = None,
     music_url: Optional[str] = None,
     clip_drive_ids: Optional[list[str]] = None,
+    generated_merge_values: Optional[dict] = None,
 ) -> dict:
     """
     Build the merge_values dict {FIELD_NAME: value} for a Shotstack render.
@@ -109,12 +181,12 @@ async def build_merge_values(
     ai_text_fields = [f for f in template.get("merge_fields", []) if f.get("role") == "ai_text"]
     unfilled_ai = [f for f in ai_text_fields if f["find"] not in ai_text_overrides]
 
-    # Generate text for any ai_text fields not already overridden
-    generated: dict = {}
-    if unfilled_ai:
-        topic = ""  # caller can pass via ai_text_overrides if needed
+    # Priority: explicit overrides > pre-generated values > Claude fallback
+    generated: dict = generated_merge_values or {}
+    still_unfilled = [f for f in unfilled_ai if f["find"] not in generated]
+    if still_unfilled:
         try:
-            generated = await generate_ai_text(unfilled_ai, client, topic)
+            generated.update(await generate_ai_text(still_unfilled, client, ""))
         except Exception as e:
             logger.warning("AI text generation failed: %s", e)
 
@@ -185,6 +257,7 @@ async def submit_render_for_post(
         ai_text_overrides=post.get("ai_text_overrides") or {},
         music_url=music_url,
         clip_drive_ids=clip_drive_ids,
+        generated_merge_values=post.get("generated_merge_values") or {},
     )
 
     filter_name = post.get("filter_name") or None

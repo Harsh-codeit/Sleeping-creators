@@ -41,6 +41,9 @@ export function VideoCreator({ clientId }) {
   const [playingId, setPlayingId] = useState(null);
   const audioRef = useRef(null);
   const [filterName, setFilterName] = useState(null);
+  const [prompt, setPrompt] = useState("");
+  const [caption, setCaption] = useState("");
+  const [hashtags, setHashtags] = useState("");
 
   const FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
 
@@ -74,6 +77,9 @@ export function VideoCreator({ clientId }) {
     setSelectedClips([]);
     setMusicUrl("");
     setFilterName(null);
+    setPrompt("");
+    setCaption("");
+    setHashtags("");
     setPost(null);
     setPostId(null);
     setRendering(false);
@@ -83,14 +89,19 @@ export function VideoCreator({ clientId }) {
     } catch { setClips([]); }
   };
 
-  const handleGenerateAI = async () => {
+  const handleGenerate = async () => {
+    if (!prompt.trim()) { toast.error("Enter a prompt first"); return; }
     setGenerating(true);
     try {
-      const r = await axios.post(`${API}/videos/generate-text`, {
-        template_id: selectedTemplate.id, client_id: clientId,
+      const r = await axios.post(`${API}/videos/generate-content`, {
+        template_id: selectedTemplate.id,
+        client_id: clientId,
+        prompt: prompt.trim(),
       });
-      setTexts(prev => ({ ...prev, ...r.data }));
-    } catch { toast.error("Failed to generate text"); }
+      setTexts(prev => ({ ...prev, ...r.data.merge_values }));
+      setCaption(r.data.caption || "");
+      setHashtags((r.data.hashtags || []).join(", "));
+    } catch { toast.error("Failed to generate content"); }
     finally { setGenerating(false); }
   };
 
@@ -99,14 +110,18 @@ export function VideoCreator({ clientId }) {
     setSubmitting(true);
     try {
       const filled = Object.fromEntries(Object.entries(texts).filter(([, v]) => v.trim()));
+      const hashtagArr = hashtags.split(",").map(h => h.trim().replace(/^#/, "")).filter(Boolean);
       const body = {
         client_id: clientId,
         template_id: selectedTemplate.id,
         clip_drive_ids: selectedClips.map(c => c.drive_file_id),
         music_url: musicUrl.trim() || undefined,
         filter_name: filterName || undefined,
+        prompt: prompt.trim() || undefined,
+        caption: caption.trim() || undefined,
+        hashtags: hashtagArr.length ? hashtagArr : undefined,
+        generated_merge_values: Object.keys(filled).length ? filled : undefined,
       };
-      if (Object.keys(filled).length) body.ai_text_overrides = filled;
       const r = await axios.post(`${API}/videos/create`, body);
       setPostId(r.data.post_id);
       setPost(null);
@@ -327,17 +342,6 @@ export function VideoCreator({ clientId }) {
       <div className="w-80 flex-shrink-0 flex flex-col overflow-hidden">
         <div className="px-4 py-2.5 border-b border-zinc-800 flex-shrink-0 flex items-center justify-between">
           <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Configure</span>
-          {aiFields.length > 0 && selectedTemplate && (
-            <button
-              data-testid="generate-ai-btn"
-              onClick={handleGenerateAI}
-              disabled={generating || !clientId}
-              className="border border-zinc-700 text-zinc-300 text-[10px] hover:bg-zinc-800 transition-colors duration-200 px-2 py-1 flex items-center gap-1 disabled:opacity-40"
-            >
-              <Wand2 size={10} />
-              {generating ? "Generating…" : "Generate AI"}
-            </button>
-          )}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -347,6 +351,28 @@ export function VideoCreator({ clientId }) {
             </div>
           ) : (
             <div className="p-4 flex flex-col gap-4">
+
+              {/* Prompt + Generate */}
+              <div>
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Prompt</div>
+                <textarea
+                  data-testid="prompt-input"
+                  rows={3}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-2"
+                  placeholder="Describe the video — topic, angle, goal…"
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
+                />
+                <button
+                  data-testid="generate-content-btn"
+                  onClick={handleGenerate}
+                  disabled={generating || !prompt.trim() || !clientId}
+                  className="w-full flex items-center justify-center gap-1.5 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5 disabled:opacity-40"
+                >
+                  <Wand2 size={11} />
+                  {generating ? "Generating…" : "Generate content"}
+                </button>
+              </div>
 
               {/* AI text fields */}
               {aiFields.length > 0 && (
@@ -446,6 +472,32 @@ export function VideoCreator({ clientId }) {
                 </div>
               </div>
 
+              {/* Caption */}
+              <div>
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Caption</div>
+                <textarea
+                  data-testid="caption-input"
+                  rows={4}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                  placeholder="Social media caption (auto-filled after Generate)"
+                  value={caption}
+                  onChange={e => setCaption(e.target.value)}
+                />
+              </div>
+
+              {/* Hashtags */}
+              <div>
+                <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">Hashtags</div>
+                <input
+                  data-testid="hashtags-input"
+                  type="text"
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-2 py-1.5 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                  placeholder="tag1, tag2, tag3 (auto-filled after Generate)"
+                  value={hashtags}
+                  onChange={e => setHashtags(e.target.value)}
+                />
+              </div>
+
               {/* Auto fields */}
               {autoFields.length > 0 && (
                 <div>
@@ -508,7 +560,7 @@ export function VideoCreator({ clientId }) {
 
               <button
                 data-testid="start-over-btn"
-                onClick={() => { setPost(null); setPostId(null); setTexts({}); setSelectedClips([]); setMusicUrl(""); }}
+                onClick={() => { setPost(null); setPostId(null); setTexts({}); setSelectedClips([]); setMusicUrl(""); setCaption(""); setHashtags(""); setPrompt(""); }}
                 className="w-full text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors duration-200 py-1"
               >
                 Render again

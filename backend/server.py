@@ -253,13 +253,22 @@ class VideoCreateRequest(BaseModel):
     scheduled_at: Optional[str] = None
     music_url: Optional[str] = None
     clip_drive_ids: Optional[List[str]] = None
-    ai_text_overrides: Optional[dict] = None  # {find_name: text} — skips Claude
+    ai_text_overrides: Optional[dict] = None       # {find_name: text} — skips Claude
+    generated_merge_values: Optional[dict] = None  # from /videos/generate-content
+    caption: Optional[str] = None
+    hashtags: Optional[List[str]] = None
+    prompt: Optional[str] = None
     filter_name: Optional[str] = None  # greyscale|boost|contrast|darken|lighten|muted|negative|blur
 
 class VideoGenerateTextRequest(BaseModel):
     template_id: str
     client_id: str
     topic: Optional[str] = None
+
+class VideoGenerateContentRequest(BaseModel):
+    template_id: str
+    client_id: str
+    prompt: str
 
 class TelegramTestRequest(BaseModel):
     bot_token: str = ""
@@ -5266,8 +5275,12 @@ async def create_video_post_route(req: VideoCreateRequest):
         "music_url": req.music_url,
         "clip_drive_ids": req.clip_drive_ids or [],
         "ai_text_overrides": req.ai_text_overrides or {},
+        "generated_merge_values": req.generated_merge_values or {},
+        "caption": req.caption or "",
+        "hashtags": req.hashtags or [],
+        "prompt": req.prompt,
         "filter_name": req.filter_name,
-        "topic": (pipeline or {}).get("topic") if pipeline else None,
+        "topic": req.prompt or (pipeline or {}).get("topic") if pipeline else req.prompt,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.posts.insert_one(post_doc)
@@ -5358,6 +5371,20 @@ async def generate_video_text_route(req: VideoGenerateTextRequest):
         return {}
     topic = req.topic or client.get("name", "")
     return await generate_ai_text(ai_text_fields, client, topic)
+
+
+@api_router.post("/videos/generate-content")
+async def generate_video_content_route(req: VideoGenerateContentRequest):
+    """Generate merge field values + caption + hashtags from a user prompt."""
+    template = await db.shotstack_templates.find_one({"id": req.template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(404, "Template not found")
+    client = await db.clients.find_one({"id": req.client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    from video_render_service import generate_video_content
+    ai_text_fields = [f for f in template.get("merge_fields", []) if f.get("role") == "ai_text"]
+    return await generate_video_content(req.prompt, client, ai_text_fields)
 
 
 @api_router.get("/videos/job/{task_id}")
