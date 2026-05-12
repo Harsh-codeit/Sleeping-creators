@@ -615,7 +615,10 @@ export function VideoCreator() {
   const isSucceeded = post && !isFailed;
   const aiFields = selectedTemplate?.merge_fields?.filter(f => f.role === "ai_text") || [];
   const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
-  const hasAudio = selectedTemplate?.merge_fields?.some(f => f.role === "audio") || false;
+  // A template can be overridden if it has audio anywhere: soundtrack (audio_url),
+  // an audio merge field, OR none at all (we'll introduce a soundtrack on render).
+  const hasAudioMergeField = selectedTemplate?.merge_fields?.some(f => f.role === "audio") || false;
+  const hasTemplateAudio = !!selectedTemplate?.audio_url || hasAudioMergeField;
 
   const canNext = { 1: !!selectedClient, 2: !!selectedTemplate, 3: true, 4: true };
   const canGoTo = (n) => {
@@ -858,28 +861,29 @@ export function VideoCreator() {
               </div>
             </div>
 
-            {hasAudio ? (
-              <div>
-                <div className="text-xs font-semibold text-white mb-3">Background Music</div>
-                <button
-                  onClick={openMusicPicker}
-                  className="w-full border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-3 flex items-center gap-2"
-                >
-                  <Music2 size={13} />
-                  {selectedTrack ? selectedTrack.name : "Choose a music track…"}
-                </button>
-                {selectedTrack && (
-                  <button
-                    onClick={() => { setSelectedTrack(null); setMusicUrl(""); }}
-                    className="mt-1.5 text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
-                  >
-                    × Clear selection
-                  </button>
-                )}
+            <div>
+              <div className="flex items-baseline justify-between mb-3">
+                <div className="text-xs font-semibold text-white">Background Music</div>
+                <span className="text-[10px] font-mono text-zinc-600">
+                  {hasTemplateAudio ? "Override template default" : "Optional — adds music"}
+                </span>
               </div>
-            ) : (
-              <p className="text-[10px] font-mono text-zinc-700">This template has no audio field — music unavailable.</p>
-            )}
+              <button
+                onClick={openMusicPicker}
+                className="w-full border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-3 flex items-center gap-2"
+              >
+                <Music2 size={13} />
+                {selectedTrack ? selectedTrack.name : (hasTemplateAudio ? "Use template default · Pick to override…" : "Pick a music track…")}
+              </button>
+              {selectedTrack && (
+                <button
+                  onClick={() => { setSelectedTrack(null); setMusicUrl(""); }}
+                  className="mt-1.5 text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  × Clear selection
+                </button>
+              )}
+            </div>
           </div>
         )}
 
