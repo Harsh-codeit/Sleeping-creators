@@ -22,6 +22,7 @@ function TemplateCard({ template, onClick }) {
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState(template.thumbnail_url);
+  const [loadError, setLoadError] = useState(false);
 
   const handleMouseEnter = () => {
     setHovered(true);
@@ -45,6 +46,7 @@ function TemplateCard({ template, onClick }) {
     try {
       const r = await axios.post(`${API}/shotstack-templates/${template.id}/generate-preview`);
       setThumbnailUrl(r.data.thumbnail_url);
+      setLoadError(false);
       toast.success("Preview ready");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Preview generation failed");
@@ -53,7 +55,8 @@ function TemplateCard({ template, onClick }) {
     }
   };
 
-  const hasVideo = isVideo(thumbnailUrl);
+  const hasVideo = isVideo(thumbnailUrl) && !loadError;
+  const showPreview = thumbnailUrl && !loadError;
 
   return (
     <div
@@ -74,12 +77,14 @@ function TemplateCard({ template, onClick }) {
             playsInline
             preload="metadata"
             className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setLoadError(true)}
           />
-        ) : thumbnailUrl ? (
+        ) : showPreview ? (
           <img
             src={thumbnailUrl}
             alt={template.name}
             className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setLoadError(true)}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-3">
@@ -99,8 +104,8 @@ function TemplateCard({ template, onClick }) {
           </div>
         )}
 
-        {/* Hover overlay — only when preview exists */}
-        {thumbnailUrl && (
+        {/* Hover overlay — only when preview loaded successfully */}
+        {showPreview && (
           <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}>
             <span className="text-[10px] font-mono text-white uppercase tracking-widest">
               {hasVideo ? "▶ Playing" : "Click to edit"}
