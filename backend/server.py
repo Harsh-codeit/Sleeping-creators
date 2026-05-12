@@ -3756,10 +3756,7 @@ async def publish_carousel(carousel_id: str, local_fallback: bool = Query(False)
 
 @api_router.get("/shotstack-templates")
 async def list_shotstack_templates(status: Optional[str] = None):
-    if status:
-        q = {"status": status}
-    else:
-        q = {"status": {"$ne": "inactive"}}
+    q = {"status": status} if status else {}
     rows = await db.shotstack_templates.find(q, {"_id": 0}).to_list(500)
     return rows
 
