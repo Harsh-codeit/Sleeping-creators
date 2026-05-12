@@ -3796,6 +3796,41 @@ async def sync_shotstack_templates():
     return await sync_templates(db)
 
 
+@api_router.post("/shotstack-templates/{template_id}/generate-preview")
+async def generate_template_preview(template_id: str):
+    import asyncio
+    from shotstack_service import get_template, submit_render, poll_render
+    from shotstack_template_importer import _mirror_preview_to_r2
+
+    tpl = await db.shotstack_templates.find_one({"id": template_id})
+    if not tpl:
+        raise HTTPException(404, "template not found")
+
+    template_data = await get_template(tpl["shotstack_template_id"])
+    render_id = await submit_render(template_data=template_data, merge_values={})
+
+    for _ in range(60):  # up to 5 minutes
+        await asyncio.sleep(5)
+        try:
+            resp = await poll_render(render_id)
+        except Exception as e:
+            logger.warning("generate_template_preview poll error: %s", e)
+            continue
+        status = resp.get("status")
+        if status == "done":
+            r2_url = await _mirror_preview_to_r2(resp["url"], template_id)
+            url = r2_url or resp["url"]
+            await db.shotstack_templates.update_one(
+                {"id": template_id},
+                {"$set": {"thumbnail_url": url}, "$unset": {"preview_render_id": ""}},
+            )
+            return {"thumbnail_url": url}
+        if status == "failed":
+            raise HTTPException(500, detail=f"Render failed: {resp.get('error', 'unknown')}")
+
+    raise HTTPException(504, detail="Render timed out after 5 minutes")
+
+
 # ── Music library routes ───────────────────────────────────────
 
 @api_router.post("/music/upload", status_code=201)

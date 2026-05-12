@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { RefreshCw, Film } from "lucide-react";
+import { RefreshCw, Film, Loader2 } from "lucide-react";
 import VideoTemplateDetail from "../components/VideoTemplateDetail";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
@@ -20,6 +20,8 @@ function isVideo(url) {
 function TemplateCard({ template, onClick }) {
   const videoRef = useRef(null);
   const [hovered, setHovered] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState(template.thumbnail_url);
 
   const handleMouseEnter = () => {
     setHovered(true);
@@ -37,8 +39,21 @@ function TemplateCard({ template, onClick }) {
     }
   };
 
-  const url = template.thumbnail_url;
-  const hasVideo = isVideo(url);
+  const handleGeneratePreview = async (e) => {
+    e.stopPropagation();
+    setGenerating(true);
+    try {
+      const r = await axios.post(`${API}/shotstack-templates/${template.id}/generate-preview`);
+      setThumbnailUrl(r.data.thumbnail_url);
+      toast.success("Preview ready");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Preview generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const hasVideo = isVideo(thumbnailUrl);
 
   return (
     <div
@@ -53,31 +68,45 @@ function TemplateCard({ template, onClick }) {
         {hasVideo ? (
           <video
             ref={videoRef}
-            src={url}
+            src={thumbnailUrl}
             muted
             loop
             playsInline
             preload="metadata"
             className="absolute inset-0 w-full h-full object-cover"
           />
-        ) : url ? (
+        ) : thumbnailUrl ? (
           <img
-            src={url}
+            src={thumbnailUrl}
             alt={template.name}
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Film size={32} className="text-zinc-700" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-3">
+            {generating ? (
+              <>
+                <Loader2 size={24} className="text-zinc-400 animate-spin" />
+                <span className="text-[10px] font-mono text-zinc-500 text-center">Rendering…</span>
+              </>
+            ) : (
+              <button
+                onClick={handleGeneratePreview}
+                className="px-3 py-1.5 bg-white text-black text-[10px] font-semibold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
+              >
+                Generate Preview
+              </button>
+            )}
           </div>
         )}
 
-        {/* Hover overlay */}
-        <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}>
-          <span className="text-[10px] font-mono text-white uppercase tracking-widest">
-            {hasVideo ? "▶ Playing" : "Click to edit"}
-          </span>
-        </div>
+        {/* Hover overlay — only when preview exists */}
+        {thumbnailUrl && (
+          <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}>
+            <span className="text-[10px] font-mono text-white uppercase tracking-widest">
+              {hasVideo ? "▶ Playing" : "Click to edit"}
+            </span>
+          </div>
+        )}
 
         {/* Status badge — always visible */}
         <div className="absolute top-2 right-2">
