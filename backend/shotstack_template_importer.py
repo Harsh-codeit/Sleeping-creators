@@ -76,6 +76,7 @@ async def sync_templates(db) -> dict:
         get_template,
         extract_merge_fields,
         extract_audio_url,
+        extract_preview_url,
     )
 
     remote_templates = await list_templates()
@@ -105,6 +106,8 @@ async def sync_templates(db) -> dict:
             })
 
         audio_url = extract_audio_url(full)
+        # Fallback: first video/image asset from the timeline (instant, no render needed)
+        timeline_asset_url = extract_preview_url(full)
         now = _now_iso()
 
         existing = await db.shotstack_templates.find_one({"shotstack_template_id": ss_id})
@@ -119,10 +122,15 @@ async def sync_templates(db) -> dict:
             # Preserve manually overridden field roles (inferred=False)
             preserved = {f["find"]: f for f in existing.get("merge_fields", []) if not f.get("inferred", True)}
             common["merge_fields"] = [preserved.get(f["find"], f) for f in merge_fields]
+
+            # Backfill timeline asset URL if still no thumbnail
+            if not existing.get("thumbnail_url") and timeline_asset_url:
+                common["thumbnail_url"] = timeline_asset_url
+
             await db.shotstack_templates.update_one({"id": existing["id"]}, {"$set": common})
             updated.append({"id": existing["id"], "name": common["name"]})
 
-            # Queue preview render if still missing
+            # Queue render preview if still missing a proper render
             if not existing.get("thumbnail_url") and not existing.get("preview_render_id"):
                 render_id = await _submit_preview_render(full)
                 if render_id:
@@ -136,7 +144,8 @@ async def sync_templates(db) -> dict:
                 "status": "draft",
                 "imported_at": now,
                 "merge_fields": merge_fields,
-                "thumbnail_url": None,
+                # Use timeline asset as immediate placeholder; render will replace it
+                "thumbnail_url": timeline_asset_url,
                 "preview_render_id": None,
                 **common,
             }
@@ -147,7 +156,7 @@ async def sync_templates(db) -> dict:
             )
             added.append({"id": doc["id"], "name": common["name"]})
 
-            # Queue preview render for new template
+            # Queue render for proper preview (replaces timeline asset URL when done)
             render_id = await _submit_preview_render(full)
             if render_id:
                 await db.shotstack_templates.update_one(
@@ -177,12 +186,6 @@ async def poll_preview_renders(db) -> dict:
         {"preview_render_id": {"$exists": True, "$ne": None}}
     )
     async for tpl in cursor:
-        if tpl.get("thumbnail_url"):
-            # Already resolved — clear stale render_id
-            await db.shotstack_templates.update_one(
-                {"id": tpl["id"]}, {"$unset": {"preview_render_id": ""}}
-            )
-            continue
 
         render_id = tpl["preview_render_id"]
         try:
