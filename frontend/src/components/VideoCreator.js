@@ -283,6 +283,10 @@ export function VideoCreator() {
   const [posting, setPosting] = useState(false);
   const [scheduling, setScheduling] = useState(false);
 
+  // Draft autosave
+  const [draft, setDraft] = useState(null);             // saved draft found in localStorage (banner offer)
+  const [draftLoaded, setDraftLoaded] = useState(false); // prevents autosave from clobbering during restore
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
     axios.get(`${API}/clients`)
@@ -312,11 +316,95 @@ export function VideoCreator() {
           setPost(r.data);
           setRendering(false);
           clearInterval(iv);
+          if (DONE.includes(r.data.status)) {
+            try { localStorage.removeItem("video_creator_draft_v1"); } catch {}
+          }
         }
       } catch {}
     }, 4000);
     return () => clearInterval(iv);
   }, [rendering, postId]);
+
+  // ── Draft autosave ─────────────────────────────────────────────────────────
+  const DRAFT_KEY = "video_creator_draft_v1";
+
+  // Load draft on mount — only offer if there's meaningful state to restore
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      // Don't offer to restore if it's just a step-1 stub
+      if (d?.selectedClientId && (d.selectedTemplateId || d.caption || d.prompt || Object.keys(d.texts || {}).length)) {
+        setDraft(d);
+      } else {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch { /* ignore parse errors */ }
+  }, []);
+
+  // Autosave on state change (debounced 400ms). Skip while rendering/posted.
+  useEffect(() => {
+    if (!selectedClient && !selectedTemplate) return;  // nothing to save
+    if (post || rendering) return;                     // don't save during/after render
+    const t = setTimeout(() => {
+      const payload = {
+        savedAt: new Date().toISOString(),
+        step,
+        selectedClientId: selectedClient?.id,
+        selectedTemplateId: selectedTemplate?.id,
+        filterName, musicUrl,
+        selectedTrack,
+        prompt, texts, caption, hashtags,
+        selectedClips,
+      };
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(payload)); } catch {}
+    }, 400);
+    return () => clearTimeout(t);
+  }, [step, selectedClient, selectedTemplate, filterName, musicUrl, selectedTrack,
+      prompt, texts, caption, hashtags, selectedClips, post, rendering]);
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setDraft(null);
+  };
+
+  const handleResumeDraft = async () => {
+    if (!draft) return;
+    try {
+      const client = clients.find(c => c.id === draft.selectedClientId);
+      if (!client) { toast.error("Client from draft no longer exists"); clearDraft(); return; }
+
+      // Restore client (also fetches drive clips)
+      await handleSelectClient(client);
+
+      // Fetch templates + find saved one
+      let template = null;
+      if (draft.selectedTemplateId) {
+        try {
+          const r = await axios.get(`${API}/shotstack-templates?status=active`);
+          setTemplates(r.data);
+          template = r.data.find(t => t.id === draft.selectedTemplateId) || null;
+          if (!template) toast.error("Template from draft no longer active");
+        } catch { toast.error("Failed to load template from draft"); }
+      }
+
+      setSelectedTemplate(template);
+      setFilterName(draft.filterName || null);
+      setMusicUrl(draft.musicUrl || "");
+      setSelectedTrack(draft.selectedTrack || null);
+      setPrompt(draft.prompt || "");
+      setTexts(draft.texts || {});
+      setCaption(draft.caption || "");
+      setHashtags(draft.hashtags || "");
+      setSelectedClips(draft.selectedClips || []);
+      setStep(Math.min(draft.step || 1, template ? 5 : 2));
+      setDraft(null);  // hide banner
+      toast.success("Draft restored");
+    } catch {
+      toast.error("Failed to restore draft");
+    }
+  };
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleSelectClient = async (client) => {
@@ -464,6 +552,7 @@ export function VideoCreator() {
     setTexts({}); setSelectedClips([]); setMusicUrl(""); setSelectedTrack(null);
     setFilterName(null); setPrompt(""); setCaption(""); setHashtags("");
     setPost(null); setPostId(null); setRendering(false);
+    clearDraft();
   };
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -472,9 +561,6 @@ export function VideoCreator() {
   const aiFields = selectedTemplate?.merge_fields?.filter(f => f.role === "ai_text") || [];
   const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
   const hasAudio = selectedTemplate?.merge_fields?.some(f => f.role === "audio") || false;
-  const progress = !rendering ? 0
-    : pollAttempt === 0 ? 20
-    : 30 + Math.min((pollAttempt / 70) * 60, 60);
 
   const canNext = { 1: !!selectedClient, 2: !!selectedTemplate, 3: true, 4: true };
   const canGoTo = (n) => {
@@ -512,6 +598,32 @@ export function VideoCreator() {
         {/* Step 1: Client */}
         {step === 1 && (
           <div className="p-6">
+            {/* Draft restore banner */}
+            {draft && !selectedClient && (
+              <div className="mb-5 border border-amber-400/30 bg-amber-400/5 px-4 py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-amber-200">Unsaved draft from earlier</div>
+                  <div className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                    Saved {new Date(draft.savedAt).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={clearDraft}
+                    className="border border-zinc-700 text-zinc-400 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    onClick={handleResumeDraft}
+                    className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5"
+                  >
+                    Resume
+                  </button>
+                </div>
+              </div>
+            )}
+
             <input
               type="text"
               value={clientSearch}
@@ -952,8 +1064,8 @@ export function VideoCreator() {
             {isFailed && (
               <div className="flex flex-col gap-4">
                 <button
-                  onClick={() => { setPost(null); setPostId(null); setRendering(false); }}
-                  className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-2"
+                  onClick={() => { setPost(null); setPostId(null); setRendering(false); handleRender(); }}
+                  className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-4 py-2"
                 >
                   Try again
                 </button>
