@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { toast } from "sonner";
+import { Music2, Upload, X, Play, Pause, Check, Loader2 } from "lucide-react";
 import {
   API, BUILT_IN_TEMPLATES, TYPE_SETTINGS, SLIDE_FORMATS, buildCtaButtonText,
   VIDEO_FILTERS, VIDEO_HOOK_STRATEGIES,
@@ -11,6 +13,64 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
   const [customTemplates, setCustomTemplates] = useState([]);
   const [clientHooks, setClientHooks] = useState([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Music picker state
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [playingId, setPlayingId] = useState(null);
+  const [selectedTrackName, setSelectedTrackName] = useState("");
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+  const audioRef = useRef(null);
+  const audioFileRef = useRef(null);
+
+  const openMusicPicker = async () => {
+    setShowMusicPicker(true);
+    try {
+      const r = await axios.get(`${API}/music`);
+      setMusicTracks(r.data);
+    } catch { toast.error("Failed to load music library"); }
+  };
+
+  const closeMusicPicker = () => {
+    if (audioRef.current) audioRef.current.pause();
+    setPlayingId(null);
+    setShowMusicPicker(false);
+  };
+
+  const togglePlay = (track) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playingId === track.id) { audio.pause(); setPlayingId(null); }
+    else { audio.src = track.r2_url; audio.play().catch(() => {}); setPlayingId(track.id); }
+  };
+
+  const pickTrack = (track) => {
+    if (audioRef.current) audioRef.current.pause();
+    setPlayingId(null);
+    setSelectedTrackName(track.name);
+    onChange("video_audio_url", track.r2_url);
+    setShowMusicPicker(false);
+  };
+
+  const handleUploadAudio = async (file) => {
+    if (!file) return;
+    setUploadingAudio(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await axios.post(`${API}/shotstack-templates/upload-audio`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      onChange("video_audio_url", r.data.audio_url);
+      setSelectedTrackName(file.name);
+      toast.success("Audio uploaded");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploadingAudio(false);
+      if (audioFileRef.current) audioFileRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     axios.get(`${API}/templates`).then(r => {
@@ -40,6 +100,7 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
     const hooksEmpty = clientHooks.length === 0;
 
     return (
+      <>
       <div className="space-y-5">
         {/* Template */}
         <div>
@@ -154,17 +215,44 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
 
         {/* Background music override */}
         <div>
-          <label className="label-xs">Background Music URL (optional)</label>
-          <input
-            type="text"
-            value={form.video_audio_url || ""}
-            onChange={(e) => onChange("video_audio_url", e.target.value)}
-            placeholder="Leave blank to use template default — paste an audio URL to override"
-            className="field font-mono text-xs"
-          />
-          <div className="text-[10px] font-mono text-zinc-600 mt-1">
-            Tip: upload music via the Studio's music picker, then copy the URL here.
+          <label className="label-xs">Background Music (optional)</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={openMusicPicker}
+              className="flex-1 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-2 min-w-0"
+            >
+              <Music2 size={12} className="flex-shrink-0" />
+              <span className="truncate">
+                {selectedTrackName || (form.video_audio_url ? "Custom URL set" : "Pick from library…")}
+              </span>
+            </button>
+            <input
+              ref={audioFileRef}
+              type="file"
+              accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp3,audio/ogg"
+              className="hidden"
+              onChange={e => handleUploadAudio(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              onClick={() => !uploadingAudio && audioFileRef.current?.click()}
+              disabled={uploadingAudio}
+              className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-40"
+            >
+              {uploadingAudio ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+              {uploadingAudio ? "Uploading…" : "Upload"}
+            </button>
           </div>
+          {form.video_audio_url && (
+            <button
+              type="button"
+              onClick={() => { onChange("video_audio_url", ""); setSelectedTrackName(""); }}
+              className="mt-1.5 text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              × Clear override (use template default)
+            </button>
+          )}
         </div>
 
         {/* AI content toggle */}
@@ -208,6 +296,65 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
           )}
         </div>
       </div>
+
+      {/* Music picker modal */}
+      {showMusicPicker && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={closeMusicPicker}>
+          <div className="bg-zinc-950 border border-zinc-800 w-[520px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="h-11 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-white">Music Library</span>
+              <button onClick={closeMusicPicker} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {musicTracks.length === 0 ? (
+                <div className="py-12 text-center font-mono text-xs text-zinc-600">
+                  No tracks in library.<br />Use the Upload button or add tracks from the Music page.
+                </div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="w-10 px-3 py-2" />
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Track</th>
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-16">Dur</th>
+                      <th className="w-10 px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {musicTracks.map(track => {
+                      const isPlaying = playingId === track.id;
+                      const isSelected = form.video_audio_url === track.r2_url;
+                      return (
+                        <tr key={track.id} onClick={() => pickTrack(track)}
+                          className={`border-b border-zinc-800/50 cursor-pointer transition-colors hover:bg-zinc-900 ${isSelected ? "bg-zinc-900" : ""}`}>
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); togglePlay(track); }}
+                              className="w-7 h-7 flex items-center justify-center border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors"
+                            >
+                              {isPlaying ? <Pause size={11} /> : <Play size={11} />}
+                            </button>
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="font-mono text-zinc-300 text-[11px] truncate max-w-[220px]">{track.name}</div>
+                          </td>
+                          <td className="px-2 py-2 font-mono text-zinc-500 text-[10px]">
+                            {track.duration ? `${Math.round(track.duration)}s` : "—"}
+                          </td>
+                          <td className="px-3 py-2">{isSelected && <Check size={12} className="text-white" />}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
+      </>
     );
   }
 

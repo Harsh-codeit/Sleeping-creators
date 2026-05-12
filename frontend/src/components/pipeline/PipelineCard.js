@@ -34,6 +34,14 @@ export default function PipelineCard({
     metaLine = "Competitor-matched slides";
   } else if (pipeline.pipeline_type === "experimental") {
     metaLine = "Random format each run";
+  } else if (pipeline.pipeline_type === "video") {
+    const parts = [];
+    const hookStrat = pipeline.video_hook_strategy || "rotate";
+    parts.push(hookStrat === "rotate" ? "Rotate hooks" : hookStrat === "random" ? "Random hook" : "No hooks");
+    if (pipeline.video_filter_name) parts.push(`${pipeline.video_filter_name} filter`);
+    if (pipeline.video_use_ai_content === false) parts.push("manual content");
+    else parts.push("AI captions");
+    metaLine = parts.join(" · ");
   } else {
     const parts = [];
     if (pipeline.carousel_template) parts.push(allLabels[pipeline.carousel_template] || pipeline.carousel_template);
