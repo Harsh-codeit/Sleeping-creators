@@ -30,16 +30,6 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _submit_preview_render(template_data: dict) -> str | None:
-    """Submit a render using template defaults (no merge overrides). Returns render_id or None."""
-    from shotstack_service import submit_render
-    try:
-        return await submit_render(template_data=template_data, merge_values={})
-    except Exception as e:
-        logger.warning("Preview render submission failed: %s", e)
-        return None
-
-
 async def _mirror_preview_to_r2(url: str, template_id: str) -> str | None:
     """Download the rendered MP4 from Shotstack CDN and upload to R2. Returns R2 URL or None."""
     import httpx

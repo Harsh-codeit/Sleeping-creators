@@ -3793,13 +3793,17 @@ async def sync_shotstack_templates():
     return await sync_templates(db)
 
 
-# Placeholder assets used when a merge field has no default value
+# Placeholder assets used when a merge field has no `replace` default value.
+# Every role must yield a non-empty value — Shotstack does NOT auto-fall-back to
+# template defaults when a merge key is omitted; the literal {{FIELD}} leaks
+# into the rendered output (a "broken URL" error for assets, garbage text for
+# text fields). See SHOTSTACK_TEMPLATE_FEATURE.md Step 2.
 _PREVIEW_PLACEHOLDERS = {
     "clip":        "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/beach-overhead.mp4",
     "audio":       "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/music/unminus/lit.mp3",
     "logo":        "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/logos/shotstack-logo.png",
     "ai_text":     "Sample text",
-    "static_text": "",
+    "static_text": "Sample text",
 }
 
 
