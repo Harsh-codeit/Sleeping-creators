@@ -137,6 +137,35 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
     return data
 
 
+def _apply_text_asset_overrides(timeline: dict, merge_values: dict, merge_defaults: list) -> None:
+    """For each merge field whose `replace` default appears verbatim as a
+    text-asset's `text`/`html` in the timeline, substitute the override value.
+
+    Why this exists: some Shotstack templates register a merge field (e.g.,
+    MAIN_TEXT) in `template.merge` but DON'T use the {{FIELD}} placeholder in
+    the timeline text — the default text is just baked in as a literal. The
+    merge array Shotstack receives then has nothing to substitute against and
+    the override is silently dropped. Mutates `timeline` in place.
+    """
+    if not merge_values or not merge_defaults:
+        return
+    overrides_by_default = {}
+    for entry in merge_defaults:
+        default = (entry.get("replace") or "").strip()
+        override = merge_values.get(entry.get("find"))
+        if default and override and default != override:
+            overrides_by_default[default] = override
+    if not overrides_by_default:
+        return
+    for track in timeline.get("tracks", []) or []:
+        for clip in track.get("clips", []) or []:
+            asset = clip.get("asset", {}) or {}
+            for key in ("text", "html"):
+                v = asset.get(key)
+                if isinstance(v, str) and v.strip() in overrides_by_default:
+                    asset[key] = overrides_by_default[v.strip()]
+
+
 def _normalize_placeholders(obj):
     """
     Strip whitespace inside {{ FIELD }} placeholders → {{FIELD}}.
@@ -166,6 +195,17 @@ async def submit_render(
     """
     mutated = _apply_filter_and_audio(template_data, filter_name, audio_url)
     tpl = mutated.get("template", {})
+
+    # Belt-and-suspenders: substitute merge values directly into text-asset
+    # content where the asset's literal text matches the merge field's default.
+    # Catches templates that register merge fields without putting {{FIELD}}
+    # placeholders in their timeline text. Safe no-op for proper templates
+    # (the timeline contains {{FIELD}}, not the literal default).
+    _apply_text_asset_overrides(
+        tpl.get("timeline", {}),
+        merge_values,
+        tpl.get("merge") or [],
+    )
 
     merge_array = [
         {"find": k, "replace": v}
