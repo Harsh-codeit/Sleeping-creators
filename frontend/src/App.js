@@ -12,6 +12,7 @@ import Logs from "./pages/Logs";
 import Carousel from "./pages/Carousel";
 import CalendarPage from "./pages/CalendarPage";
 import TemplateLibrary from "./pages/TemplateLibrary";
+import TemplateBuilder from "./pages/TemplateBuilder";
 import Onboarding from "./pages/Onboarding";
 import InstagramCallback from "./pages/InstagramCallback";
 import FacebookCallback from "./pages/FacebookCallback";
@@ -82,6 +83,9 @@ function App() {
               <Route path="clients" element={<Clients />} />
               <Route path="clients/:id" element={<ClientDetail />} />
               <Route path="templates" element={<TemplateLibrary />} />
+              <Route path="templates/new" element={<TemplateBuilder />} />
+              <Route path="templates/:id/edit" element={<TemplateBuilder />} />
+              <Route path="templates/:id/clone" element={<TemplateBuilder />} />
               <Route path="calendar" element={<CalendarPage />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="dropbox" element={<GlobalLibrary />} />
