@@ -278,10 +278,13 @@ export function VideoCreator() {
     finally { setUploading(false); setUploadProgress(0); if (fileInputRef.current) fileInputRef.current.value = ""; }
   };
 
+  const clipKey = (c) => c.drive_file_id || c.id || c.name;
+
   const toggleClip = (clip) => {
-    const isSelected = selectedClips.some(c => c.id === clip.id);
+    const key = clipKey(clip);
+    const isSelected = selectedClips.some(c => clipKey(c) === key);
     const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
-    if (isSelected) setSelectedClips(prev => prev.filter(c => c.id !== clip.id));
+    if (isSelected) setSelectedClips(prev => prev.filter(c => clipKey(c) !== key));
     else if (selectedClips.length < clipCount) setSelectedClips(prev => [...prev, clip]);
   };
 
@@ -533,7 +536,7 @@ export function VideoCreator() {
                 {selectedClips.length > 0 && (
                   <div className="mt-2 flex flex-col gap-1">
                     {selectedClips.map(c => (
-                      <div key={c.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5">
+                      <div key={clipKey(c)} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5">
                         <span className="font-mono text-[10px] text-zinc-300 truncate">{c.name || c.drive_file_id}</span>
                         <button onClick={() => toggleClip(c)} className="text-zinc-600 hover:text-white ml-2 transition-colors">
                           <X size={10} />
@@ -774,10 +777,10 @@ export function VideoCreator() {
                       </thead>
                       <tbody>
                         {clips.map(clip => {
-                          const isSel = selectedClips.some(c => c.id === clip.id);
+                          const isSel = selectedClips.some(c => clipKey(c) === clipKey(clip));
                           const atMax = !isSel && selectedClips.length >= clipCount;
                           return (
-                            <tr key={clip.id}
+                            <tr key={clipKey(clip)}
                               onClick={() => !atMax && toggleClip(clip)}
                               className={`border-b border-zinc-800/50 transition-colors ${atMax ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-zinc-900"} ${isSel ? "bg-zinc-900" : ""}`}>
                               <td className="px-4 py-2"><input type="checkbox" checked={isSel} disabled={atMax} readOnly className="accent-white" /></td>
