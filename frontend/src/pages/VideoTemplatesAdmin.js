@@ -1,16 +1,107 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Film } from "lucide-react";
 import VideoTemplateDetail from "../components/VideoTemplateDetail";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
 const STATUS_BADGE = {
   active:   "text-emerald-400 bg-emerald-400/10 border border-emerald-400/30",
-  draft:    "text-amber-400 bg-amber-400/10 border border-amber-400/30",
-  inactive: "text-zinc-500 bg-zinc-800 border border-zinc-700",
+  draft:    "text-amber-400  bg-amber-400/10  border border-amber-400/30",
+  inactive: "text-zinc-500   bg-zinc-800      border border-zinc-700",
 };
+
+function isVideo(url) {
+  if (!url) return false;
+  return /\.(mp4|mov|webm|ogg)(\?|$)/i.test(url);
+}
+
+function TemplateCard({ template, onClick }) {
+  const videoRef = useRef(null);
+  const [hovered, setHovered] = useState(false);
+
+  const handleMouseEnter = () => {
+    setHovered(true);
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHovered(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  };
+
+  const url = template.thumbnail_url;
+  const hasVideo = isVideo(url);
+
+  return (
+    <div
+      data-testid={`template-card-${template.id}`}
+      onClick={onClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className="group cursor-pointer bg-zinc-900 border border-zinc-800 hover:border-zinc-600 transition-all duration-200 flex flex-col"
+    >
+      {/* Preview area */}
+      <div className="relative w-full aspect-[9/16] bg-zinc-800 overflow-hidden">
+        {hasVideo ? (
+          <video
+            ref={videoRef}
+            src={url}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : url ? (
+          <img
+            src={url}
+            alt={template.name}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Film size={32} className="text-zinc-700" />
+          </div>
+        )}
+
+        {/* Hover overlay */}
+        <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}>
+          <span className="text-[10px] font-mono text-white uppercase tracking-widest">
+            {hasVideo ? "▶ Playing" : "Click to edit"}
+          </span>
+        </div>
+
+        {/* Status badge — always visible */}
+        <div className="absolute top-2 right-2">
+          <span className={`font-mono text-[9px] px-1.5 py-0.5 uppercase tracking-widest ${STATUS_BADGE[template.status] || STATUS_BADGE.inactive}`}>
+            {template.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Card footer */}
+      <div className="px-3 py-2.5 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-white truncate leading-tight">{template.name}</div>
+          <div className="text-[10px] font-mono text-zinc-500 mt-0.5">
+            {template.merge_fields?.length ?? 0} fields
+          </div>
+        </div>
+        <div className="text-[10px] font-mono text-zinc-600 flex-shrink-0">
+          {template.last_synced_at?.slice(5, 10) ?? "—"}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function VideoTemplatesAdmin() {
   const [rows, setRows] = useState([]);
@@ -43,7 +134,7 @@ export default function VideoTemplatesAdmin() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Page header */}
+      {/* Header */}
       <div className="h-14 flex items-center justify-between px-6 border-b border-zinc-800 bg-zinc-950">
         <div>
           <div className="text-sm font-bold tracking-tight text-white">Video Templates</div>
@@ -60,52 +151,25 @@ export default function VideoTemplatesAdmin() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="px-6 py-4">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-zinc-800">
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px] w-16">Thumb</th>
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Name</th>
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Fields</th>
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Status</th>
-              <th className="text-left pb-2 font-mono text-zinc-500 uppercase tracking-widest text-[10px]">Last synced</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="py-10 text-center font-mono text-zinc-600">
-                  No templates. Click "Sync from Shotstack" to import.
-                </td>
-              </tr>
-            )}
-            {rows.map((r) => (
-              <tr
+      {/* Grid */}
+      <div className="p-6">
+        {rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <Film size={36} className="text-zinc-700" />
+            <p className="font-mono text-zinc-600 text-sm">No templates yet.</p>
+            <p className="font-mono text-zinc-700 text-xs">Click "Sync from Shotstack" to import.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {rows.map(r => (
+              <TemplateCard
                 key={r.id}
-                data-testid={`template-row-${r.id}`}
-                className="border-b border-zinc-800/60 hover:bg-zinc-900 cursor-pointer transition-colors duration-200"
+                template={r}
                 onClick={() => setSelected(r)}
-              >
-                <td className="py-2 pr-2">
-                  {r.thumbnail_url
-                    ? <img src={r.thumbnail_url} alt="" className="h-10 w-16 object-cover" />
-                    : <div className="h-10 w-16 bg-zinc-800 border border-zinc-700" />}
-                </td>
-                <td className="py-2 font-medium text-white">{r.name}</td>
-                <td className="py-2 font-mono text-zinc-400">{r.merge_fields?.length ?? 0}</td>
-                <td className="py-2">
-                  <span className={`font-mono text-[10px] px-1.5 py-0.5 uppercase tracking-widest ${STATUS_BADGE[r.status] || STATUS_BADGE.inactive}`}>
-                    {r.status}
-                  </span>
-                </td>
-                <td className="py-2 font-mono text-zinc-500">
-                  {r.last_synced_at?.slice(0, 16)?.replace("T", " ") ?? "—"}
-                </td>
-              </tr>
+              />
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
 
       {selected && (
