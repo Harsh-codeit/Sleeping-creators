@@ -262,7 +262,9 @@ export function VideoCreator() {
   const [musicTracks, setMusicTracks] = useState([]);
   const [selectedTrack, setSelectedTrack] = useState(null);
   const [playingId, setPlayingId] = useState(null);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
   const audioRef = useRef(null);
+  const audioFileRef = useRef(null);
 
   // Step 4
   const [step4Tab, setStep4Tab] = useState("generate");
@@ -568,6 +570,30 @@ export function VideoCreator() {
   const handleSelectTrack = (track) => {
     if (audioRef.current) audioRef.current.pause();
     setPlayingId(null); setSelectedTrack(track); setMusicUrl(track.r2_url); setShowMusicPicker(false);
+  };
+
+  const handleUploadAudio = async (file) => {
+    if (!file) return;
+    setUploadingAudio(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await axios.post(`${API}/shotstack-templates/upload-audio`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const track = { id: `upload-${Date.now()}`, name: file.name, r2_url: r.data.audio_url };
+      if (audioRef.current) audioRef.current.pause();
+      setPlayingId(null);
+      setSelectedTrack(track);
+      setMusicUrl(track.r2_url);
+      setShowMusicPicker(false);
+      toast.success("Audio uploaded");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploadingAudio(false);
+      if (audioFileRef.current) audioFileRef.current.value = "";
+    }
   };
 
   const closeMusicPicker = () => {
@@ -1302,11 +1328,28 @@ export function VideoCreator() {
           <div className="bg-zinc-950 border border-zinc-800 w-[520px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="h-11 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
               <span className="text-xs font-semibold text-white">Music Library</span>
-              <button onClick={closeMusicPicker} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={audioFileRef}
+                  type="file"
+                  accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp3,audio/ogg"
+                  className="hidden"
+                  onChange={e => handleUploadAudio(e.target.files?.[0])}
+                />
+                <button
+                  onClick={() => !uploadingAudio && audioFileRef.current?.click()}
+                  disabled={uploadingAudio}
+                  className="flex items-center gap-1.5 border border-zinc-700 text-zinc-300 text-[11px] font-mono hover:bg-zinc-800 transition-colors duration-200 px-2.5 py-1 disabled:opacity-40"
+                >
+                  {uploadingAudio ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
+                  {uploadingAudio ? "Uploading…" : "Upload"}
+                </button>
+                <button onClick={closeMusicPicker} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               {musicTracks.length === 0
-                ? <div className="py-12 text-center font-mono text-xs text-zinc-600">No tracks in library.<br />Upload music from the Music page.</div>
+                ? <div className="py-12 text-center font-mono text-xs text-zinc-600">No tracks in library.<br />Use the Upload button above or add tracks from the Music page.</div>
                 : (
                   <table className="w-full text-xs">
                     <thead>
