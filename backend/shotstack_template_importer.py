@@ -147,12 +147,11 @@ async def sync_templates(db) -> dict:
             )
             added.append({"id": doc["id"], "name": common["name"]})
 
-    # Soft-deactivate templates removed from Shotstack
+    # Delete templates that no longer exist in Shotstack
     deactivated = []
     async for row in db.shotstack_templates.find({"shotstack_template_id": {"$nin": list(seen_ids)}}):
-        if row.get("status") != "inactive":
-            await db.shotstack_templates.update_one({"id": row["id"]}, {"$set": {"status": "inactive"}})
-            deactivated.append({"id": row["id"], "name": row.get("name", "")})
+        await db.shotstack_templates.delete_one({"id": row["id"]})
+        deactivated.append({"id": row["id"], "name": row.get("name", "")})
 
     return {"added": added, "updated": updated, "deactivated": deactivated}
 
