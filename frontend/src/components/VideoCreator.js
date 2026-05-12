@@ -259,6 +259,7 @@ export function VideoCreator() {
   const audioRef = useRef(null);
 
   // Step 4
+  const [step4Tab, setStep4Tab] = useState("generate");
   const [prompt, setPrompt] = useState("");
   const [texts, setTexts] = useState({});
   const [caption, setCaption] = useState("");
@@ -595,26 +596,50 @@ export function VideoCreator() {
             <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-5">Choose a style</div>
 
             <div className="mb-8">
-              <div className="text-xs font-semibold text-white mb-3">Filter</div>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex items-baseline justify-between mb-3">
+                <div className="text-xs font-semibold text-white">Filter</div>
+                <span className="text-[10px] font-mono text-zinc-600">Optional</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {/* "None" tile */}
+                <button
+                  onClick={() => setFilterName(null)}
+                  className={`group flex flex-col items-center gap-1.5 p-1.5 border transition-colors duration-200 ${
+                    !filterName ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600"
+                  }`}
+                >
+                  <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden">
+                    {selectedTemplate?.thumbnail_url ? (
+                      <img src={selectedTemplate.thumbnail_url} alt="No filter"
+                        className="w-full h-full object-cover" />
+                    ) : (
+                      <Film size={14} className="text-zinc-700" />
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-mono uppercase tracking-widest ${!filterName ? "text-white" : "text-zinc-500"}`}>None</span>
+                </button>
+
                 {FILTERS.map(f => (
                   <button
                     key={f}
                     onClick={() => setFilterName(prev => prev === f ? null : f)}
-                    className={`font-mono text-[11px] px-3 py-1.5 border transition-colors duration-200 ${
-                      filterName === f
-                        ? "border-white text-white bg-zinc-800"
-                        : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+                    className={`group flex flex-col items-center gap-1.5 p-1.5 border transition-colors duration-200 ${
+                      filterName === f ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600"
                     }`}
                   >
-                    {f}
+                    <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden">
+                      {selectedTemplate?.thumbnail_url ? (
+                        <img src={selectedTemplate.thumbnail_url} alt={f}
+                          className="w-full h-full object-cover"
+                          style={{ filter: FILTER_CSS[f] }} />
+                      ) : (
+                        <Film size={14} className="text-zinc-700" />
+                      )}
+                    </div>
+                    <span className={`text-[10px] font-mono uppercase tracking-widest ${filterName === f ? "text-white" : "text-zinc-500"}`}>{f}</span>
                   </button>
                 ))}
               </div>
-              {filterName
-                ? <span className="text-[10px] font-mono text-zinc-500">Active: <span className="text-white">{filterName}</span></span>
-                : <span className="text-[10px] font-mono text-zinc-600">No filter selected (optional)</span>
-              }
             </div>
 
             {hasAudio ? (
@@ -642,104 +667,174 @@ export function VideoCreator() {
           </div>
         )}
 
-        {/* Step 4: Content */}
-        {step === 4 && (
-          <div className="p-6 max-w-2xl flex flex-col gap-7">
+        {/* Step 4: Content (tabbed) */}
+        {step === 4 && (() => {
+          const captionLen = caption.length;
+          const hashtagList = hashtags.split(",").map(t => t.trim().replace(/^#/, "")).filter(Boolean);
+          const TABS = [
+            { id: "generate", label: "Generate", count: aiFields.length },
+            { id: "clips", label: "Clips", count: clipCount > 0 ? `${selectedClips.length}/${clipCount}` : null },
+            { id: "copy", label: "Copy", count: null },
+          ];
+          return (
+            <div className="flex flex-col h-full">
+              {/* Tab strip */}
+              <div className="flex border-b border-zinc-800 px-6 flex-shrink-0">
+                {TABS.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setStep4Tab(t.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-mono transition-colors border-b-2 -mb-px ${
+                      step4Tab === t.id ? "border-white text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    {t.label}
+                    {t.count !== null && t.count !== 0 && (
+                      <span className={`text-[10px] ${step4Tab === t.id ? "text-zinc-400" : "text-zinc-600"}`}>
+                        {t.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-            {/* Prompt + Generate */}
-            <div>
-              <div className="text-xs font-semibold text-white mb-2">AI Prompt</div>
-              <textarea
-                rows={3}
-                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-2"
-                placeholder="Describe what this video is about — topic, angle, audience…"
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleGenerate(); }}
-              />
-              <button
-                onClick={handleGenerate}
-                disabled={generating || !prompt.trim()}
-                className="flex items-center gap-2 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-2 disabled:opacity-40"
-              >
-                {generating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                {generating ? "Generating…" : "Generate with AI"}
-              </button>
-            </div>
+              {/* Tab body */}
+              <div className="p-6 max-w-2xl flex-1 overflow-y-auto">
 
-            {/* AI text fields */}
-            {aiFields.length > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-white mb-3">Video Text Fields</div>
-                <div className="flex flex-col gap-3">
-                  {aiFields.map(f => (
-                    <div key={f.find}>
-                      <div className="text-[10px] font-mono text-zinc-500 mb-1 uppercase tracking-widest">{f.find}</div>
+                {/* Generate tab */}
+                {step4Tab === "generate" && (
+                  <div className="flex flex-col gap-6">
+                    <div>
+                      <div className="text-xs font-semibold text-white mb-2">AI Prompt</div>
                       <textarea
-                        rows={2}
+                        rows={3}
+                        className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-2"
+                        placeholder="Describe what this video is about — topic, angle, audience…"
+                        value={prompt}
+                        onChange={e => setPrompt(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleGenerate(); }}
+                      />
+                      <button
+                        onClick={handleGenerate}
+                        disabled={generating || !prompt.trim()}
+                        className="flex items-center gap-2 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-2 disabled:opacity-40"
+                      >
+                        {generating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                        {generating ? "Generating…" : "Generate with AI"}
+                      </button>
+                    </div>
+
+                    {aiFields.length > 0 ? (
+                      <div>
+                        <div className="text-xs font-semibold text-white mb-3">Video Text Fields</div>
+                        <div className="flex flex-col gap-3">
+                          {aiFields.map(f => (
+                            <div key={f.find}>
+                              <div className="text-[10px] font-mono text-zinc-500 mb-1 uppercase tracking-widest">{f.find}</div>
+                              <textarea
+                                rows={2}
+                                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                                placeholder={f.ai_hint || f.replace || "Auto-generated"}
+                                value={texts[f.find] || ""}
+                                onChange={e => setTexts(prev => ({ ...prev, [f.find]: e.target.value }))}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] font-mono text-zinc-700">This template has no editable text fields.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Clips tab */}
+                {step4Tab === "clips" && (
+                  <div className="flex flex-col gap-3">
+                    {clipCount === 0 ? (
+                      <p className="text-[10px] font-mono text-zinc-700">This template has no video clip slots.</p>
+                    ) : (
+                      <>
+                        <div className="flex items-baseline justify-between">
+                          <div className="text-xs font-semibold text-white">Video Clips</div>
+                          <span className="text-[10px] font-mono text-zinc-500">{selectedClips.length} / {clipCount}</span>
+                        </div>
+                        <button
+                          onClick={() => { setPickerTab("drive"); setShowClipPicker(true); }}
+                          className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-2.5 flex items-center gap-2 self-start"
+                        >
+                          <Film size={12} />
+                          Choose clips
+                        </button>
+                        {selectedClips.length > 0 && (
+                          <div className="mt-1 flex flex-col gap-1">
+                            {selectedClips.map((c, i) => (
+                              <div key={clipKey(c)} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-mono text-[9px] text-zinc-600 uppercase tracking-widest flex-shrink-0">
+                                    MEDIA_{i + 1}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-zinc-300 truncate">{c.name || c.drive_file_id}</span>
+                                </div>
+                                <button onClick={() => toggleClip(c)} className="text-zinc-600 hover:text-white ml-2 transition-colors flex-shrink-0">
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Copy tab */}
+                {step4Tab === "copy" && (
+                  <div className="flex flex-col gap-6">
+                    <div>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <div className="text-xs font-semibold text-white">Caption</div>
+                        <span className={`text-[10px] font-mono ${captionLen > 2200 ? "text-red-400" : captionLen > 2000 ? "text-amber-400" : "text-zinc-600"}`}>
+                          {captionLen} / 2200
+                        </span>
+                      </div>
+                      <textarea
+                        rows={6}
                         className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-                        placeholder={f.ai_hint || f.replace || "Auto-generated"}
-                        value={texts[f.find] || ""}
-                        onChange={e => setTexts(prev => ({ ...prev, [f.find]: e.target.value }))}
+                        placeholder="Social media caption — auto-filled by AI after Generate"
+                        value={caption}
+                        onChange={e => setCaption(e.target.value)}
                       />
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Clips */}
-            {clipCount > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-white mb-2">Video Clips</div>
-                <button
-                  onClick={() => { setPickerTab("drive"); setShowClipPicker(true); }}
-                  className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-2.5 flex items-center gap-2"
-                >
-                  <Film size={12} />
-                  Choose clips
-                  <span className="font-mono text-[10px] text-zinc-500 ml-1">{selectedClips.length}/{clipCount}</span>
-                </button>
-                {selectedClips.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1">
-                    {selectedClips.map(c => (
-                      <div key={clipKey(c)} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 px-3 py-1.5">
-                        <span className="font-mono text-[10px] text-zinc-300 truncate">{c.name || c.drive_file_id}</span>
-                        <button onClick={() => toggleClip(c)} className="text-zinc-600 hover:text-white ml-2 transition-colors">
-                          <X size={10} />
-                        </button>
+                    <div>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <div className="text-xs font-semibold text-white">Hashtags</div>
+                        <span className={`text-[10px] font-mono ${hashtagList.length > 30 ? "text-red-400" : "text-zinc-600"}`}>
+                          {hashtagList.length} / 30
+                        </span>
                       </div>
-                    ))}
+                      <input
+                        type="text"
+                        className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                        placeholder="tag1, tag2, tag3 — auto-filled by AI after Generate"
+                        value={hashtags}
+                        onChange={e => setHashtags(e.target.value)}
+                      />
+                      {hashtagList.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {hashtagList.slice(0, 30).map((t, i) => (
+                            <span key={i} className="text-[10px] font-mono text-sky-400 bg-sky-400/10 border border-sky-400/20 px-1.5 py-0.5">#{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-            )}
-
-            {/* Caption */}
-            <div>
-              <div className="text-xs font-semibold text-white mb-2">Caption</div>
-              <textarea
-                rows={4}
-                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono resize-none focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-                placeholder="Social media caption — auto-filled by AI after Generate"
-                value={caption}
-                onChange={e => setCaption(e.target.value)}
-              />
             </div>
-
-            {/* Hashtags */}
-            <div>
-              <div className="text-xs font-semibold text-white mb-2">Hashtags</div>
-              <input
-                type="text"
-                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
-                placeholder="tag1, tag2, tag3 — auto-filled by AI after Generate"
-                value={hashtags}
-                onChange={e => setHashtags(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Step 5: Render & Post */}
         {step === 5 && (
