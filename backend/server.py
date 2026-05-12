@@ -3793,6 +3793,31 @@ async def sync_shotstack_templates():
     return await sync_templates(db)
 
 
+# Placeholder assets used when a merge field has no default value
+_PREVIEW_PLACEHOLDERS = {
+    "clip":        "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/footage/beach-overhead.mp4",
+    "audio":       "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/music/unminus/lit.mp3",
+    "logo":        "https://shotstack-assets.s3.ap-southeast-2.amazonaws.com/logos/shotstack-logo.png",
+    "ai_text":     "Sample text",
+    "static_text": "",
+}
+
+
+def _preview_merge_values(merge_fields: list) -> dict:
+    """Build merge values for a preview render.
+    Uses each field's stored default (replace), falling back to a safe placeholder
+    for any empty clip / audio / logo field so Shotstack can resolve every asset URL.
+    """
+    values = {}
+    for f in merge_fields:
+        val = (f.get("replace") or "").strip()
+        if not val:
+            val = _PREVIEW_PLACEHOLDERS.get(f.get("role", "ai_text"), "Sample text")
+        if val:
+            values[f["find"]] = val
+    return values
+
+
 @api_router.post("/shotstack-templates/{template_id}/generate-preview")
 async def generate_template_preview(template_id: str):
     import asyncio
@@ -3804,7 +3829,8 @@ async def generate_template_preview(template_id: str):
         raise HTTPException(404, "template not found")
 
     template_data = await get_template(tpl["shotstack_template_id"])
-    render_id = await submit_render(template_data=template_data, merge_values={})
+    merge_values = _preview_merge_values(tpl.get("merge_fields") or [])
+    render_id = await submit_render(template_data=template_data, merge_values=merge_values)
 
     for _ in range(60):  # up to 5 minutes
         await asyncio.sleep(5)
