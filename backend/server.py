@@ -3822,8 +3822,12 @@ def _preview_merge_values(merge_fields: list) -> dict:
     return values
 
 
+class PreviewRenderRequest(BaseModel):
+    audio_url: Optional[str] = None  # override the template's default background music
+
+
 @api_router.post("/shotstack-templates/{template_id}/generate-preview")
-async def generate_template_preview(template_id: str):
+async def generate_template_preview(template_id: str, req: PreviewRenderRequest = None):
     import asyncio
     from shotstack_service import get_template, submit_render, poll_render
     from shotstack_template_importer import _mirror_preview_to_r2
@@ -3834,7 +3838,12 @@ async def generate_template_preview(template_id: str):
 
     template_data = await get_template(tpl["shotstack_template_id"])
     merge_values = _preview_merge_values(tpl.get("merge_fields") or [])
-    render_id = await submit_render(template_data=template_data, merge_values=merge_values)
+    audio_override = (req.audio_url or "").strip() if req else ""
+    render_id = await submit_render(
+        template_data=template_data,
+        merge_values=merge_values,
+        audio_url=audio_override or None,
+    )
 
     for _ in range(60):  # up to 5 minutes
         await asyncio.sleep(5)

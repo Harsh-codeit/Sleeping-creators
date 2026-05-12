@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { X, Music2, Play, Pause, Check, Loader2, RefreshCw } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 const ROLES = ["ai_text", "static_text", "clip", "logo", "audio"];
@@ -9,6 +9,19 @@ const ROLES = ["ai_text", "static_text", "clip", "logo", "audio"];
 export function VideoTemplateDetail({ template, onClose, onChanged }) {
   const [fields, setFields] = useState(template.merge_fields || []);
   const [saving, setSaving] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(template.preview_url || null);
+
+  // Audio override state
+  const [audioOverride, setAudioOverride] = useState("");
+  const [selectedTrack, setSelectedTrack] = useState(null);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [musicTracks, setMusicTracks] = useState([]);
+  const [playingId, setPlayingId] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const audioRef = useRef(null);
+
+  const hasAudioInTemplate = !!template.audio_url
+    || (template.merge_fields || []).some(f => f.role === "audio");
 
   const save = async () => {
     setSaving(true);
@@ -37,6 +50,60 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
   const updateRole = (find, role) => {
     setFields(fs => fs.map(f => f.find === find ? { ...f, role, inferred: false } : f));
   };
+
+  const openMusicPicker = async () => {
+    setShowMusicPicker(true);
+    try {
+      const r = await axios.get(`${API}/music`);
+      setMusicTracks(r.data);
+    } catch { toast.error("Failed to load music library"); }
+  };
+
+  const closeMusicPicker = () => {
+    if (audioRef.current) audioRef.current.pause();
+    setPlayingId(null);
+    setShowMusicPicker(false);
+  };
+
+  const togglePlay = (track) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playingId === track.id) { audio.pause(); setPlayingId(null); }
+    else { audio.src = track.r2_url; audio.play().catch(() => {}); setPlayingId(track.id); }
+  };
+
+  const pickTrack = (track) => {
+    if (audioRef.current) audioRef.current.pause();
+    setPlayingId(null);
+    setSelectedTrack(track);
+    setAudioOverride(track.r2_url);
+    setShowMusicPicker(false);
+  };
+
+  const clearAudioOverride = () => {
+    setAudioOverride("");
+    setSelectedTrack(null);
+  };
+
+  const regeneratePreview = async () => {
+    setRegenerating(true);
+    try {
+      const r = await axios.post(
+        `${API}/shotstack-templates/${template.id}/generate-preview`,
+        audioOverride ? { audio_url: audioOverride } : {},
+      );
+      setPreviewUrl(r.data.preview_url);
+      toast.success("Preview regenerated");
+      onChanged?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Preview generation failed");
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  // Pause preview audio if drawer closes
+  useEffect(() => () => { if (audioRef.current) audioRef.current.pause(); }, []);
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex" onClick={onClose}>
@@ -82,11 +149,12 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
         </div>
 
         {/* Preview — rendered MP4 preferred, falls back to timeline thumbnail */}
-        {(template.preview_url || template.thumbnail_url) && (
+        {(previewUrl || template.thumbnail_url) && (
           <div className="border-b border-zinc-800 flex-shrink-0">
-            {template.preview_url ? (
+            {previewUrl ? (
               <video
-                src={template.preview_url}
+                key={previewUrl}
+                src={previewUrl}
                 autoPlay
                 muted
                 loop
@@ -96,6 +164,57 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
             ) : (
               <img src={template.thumbnail_url} alt={template.name} className="w-full object-cover max-h-48" />
             )}
+          </div>
+        )}
+
+        {/* Audio override — per SHOTSTACK_TEMPLATE_FEATURE.md "Merge Field Form":
+            "If the template has an audio URL, show an optional Audio URL input pre-filled with that URL." */}
+        {hasAudioInTemplate && (
+          <div className="border-b border-zinc-800 px-5 py-4 flex-shrink-0">
+            <div className="flex items-baseline justify-between mb-2">
+              <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Audio override</div>
+              <span className="text-[10px] font-mono text-zinc-600">Optional</span>
+            </div>
+
+            <button
+              onClick={openMusicPicker}
+              className="w-full border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-2 mb-2"
+            >
+              <Music2 size={12} />
+              <span className="truncate">
+                {selectedTrack ? selectedTrack.name : "Pick from music library…"}
+              </span>
+            </button>
+
+            <input
+              type="text"
+              value={audioOverride}
+              onChange={e => { setAudioOverride(e.target.value); setSelectedTrack(null); }}
+              placeholder={template.audio_url || "Or paste an audio URL…"}
+              className="w-full bg-zinc-900 border border-zinc-700 text-white text-[11px] px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-2"
+            />
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={regeneratePreview}
+                disabled={regenerating}
+                className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40"
+              >
+                {regenerating ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                {regenerating ? "Rendering…" : "Regenerate preview"}
+              </button>
+              {(audioOverride || selectedTrack) && (
+                <button
+                  onClick={clearAudioOverride}
+                  className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+                >
+                  × Clear
+                </button>
+              )}
+            </div>
+            <p className="text-[10px] font-mono text-zinc-600 mt-2">
+              Each regenerate costs a render credit.
+            </p>
           </div>
         )}
 
@@ -155,6 +274,64 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
           </div>
         </div>
       </div>
+
+      {/* Music picker modal */}
+      {showMusicPicker && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center" onClick={closeMusicPicker}>
+          <div className="bg-zinc-950 border border-zinc-800 w-[520px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="h-11 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
+              <span className="text-xs font-semibold text-white">Music Library</span>
+              <button onClick={closeMusicPicker} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {musicTracks.length === 0 ? (
+                <div className="py-12 text-center font-mono text-xs text-zinc-600">
+                  No tracks in library.<br />Upload music from the Music page.
+                </div>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="w-10 px-3 py-2" />
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest">Track</th>
+                      <th className="text-left px-2 py-2 font-mono text-zinc-500 uppercase text-[10px] tracking-widest w-16">Dur</th>
+                      <th className="w-10 px-3 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {musicTracks.map(track => {
+                      const isPlaying = playingId === track.id;
+                      const isSelected = selectedTrack?.id === track.id;
+                      return (
+                        <tr key={track.id} onClick={() => pickTrack(track)}
+                          className={`border-b border-zinc-800/50 cursor-pointer transition-colors hover:bg-zinc-900 ${isSelected ? "bg-zinc-900" : ""}`}>
+                          <td className="px-3 py-2">
+                            <button
+                              onClick={e => { e.stopPropagation(); togglePlay(track); }}
+                              className="w-7 h-7 flex items-center justify-center border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors"
+                            >
+                              {isPlaying ? <Pause size={11} /> : <Play size={11} />}
+                            </button>
+                          </td>
+                          <td className="px-2 py-2">
+                            <div className="font-mono text-zinc-300 text-[11px] truncate max-w-[220px]">{track.name}</div>
+                          </td>
+                          <td className="px-2 py-2 font-mono text-zinc-500 text-[10px]">
+                            {track.duration ? `${Math.round(track.duration)}s` : "—"}
+                          </td>
+                          <td className="px-3 py-2">{isSelected && <Check size={12} className="text-white" />}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
     </div>
   );
 }
