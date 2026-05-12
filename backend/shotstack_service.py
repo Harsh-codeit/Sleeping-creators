@@ -65,9 +65,18 @@ def extract_merge_fields(template_data: dict) -> list[dict]:
 
 
 def extract_audio_url(template_data: dict) -> str | None:
-    """Find the first audio asset src in the timeline."""
+    """Find the template's background-music URL.
+    Per Shotstack docs, background music lives at `timeline.soundtrack.src`.
+    Some templates use audio-type clip assets in tracks instead — check both."""
     tpl = template_data.get("template", {})
     timeline = tpl.get("timeline", {})
+    # Preferred: top-level soundtrack
+    soundtrack = timeline.get("soundtrack")
+    if isinstance(soundtrack, dict):
+        src = soundtrack.get("src") or ""
+        if src.startswith("http"):
+            return src
+    # Fallback: audio-type clip assets
     for track in timeline.get("tracks", []):
         for clip in track.get("clips", []):
             asset = clip.get("asset", {})
@@ -89,18 +98,42 @@ def extract_preview_url(template_data: dict) -> str | None:
 
 
 def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_url: str | None) -> dict:
-    """Return a deep copy of template_data with filter + audio mutations applied."""
+    """Return a deep copy of template_data with filter + audio mutations applied.
+
+    Audio override priority (per Shotstack guidance):
+      1) timeline.soundtrack.src — canonical background-music location
+      2) audio-type clip assets in timeline.tracks — used by some templates
+      3) if neither exists, introduce a soundtrack so the chosen audio plays
+    """
     import copy
     data = copy.deepcopy(template_data)
     tpl = data.get("template", {})
     timeline = tpl.get("timeline", {})
-    for track in timeline.get("tracks", []):
-        for clip in track.get("clips", []):
-            asset = clip.get("asset", {})
-            if filter_name and filter_name in _FILTERS and asset.get("type") == "video":
-                clip["filter"] = filter_name
-            if audio_url and asset.get("type") == "audio":
-                asset["src"] = audio_url
+
+    # 1) Filter — apply to every video clip
+    if filter_name and filter_name in _FILTERS:
+        for track in timeline.get("tracks", []) or []:
+            for clip in track.get("clips", []) or []:
+                if clip.get("asset", {}).get("type") == "video":
+                    clip["filter"] = filter_name
+
+    # 2) Audio override
+    if audio_url:
+        applied = False
+        soundtrack = timeline.get("soundtrack")
+        if isinstance(soundtrack, dict):
+            soundtrack["src"] = audio_url
+            applied = True
+        for track in timeline.get("tracks", []) or []:
+            for clip in track.get("clips", []) or []:
+                asset = clip.get("asset", {})
+                if asset.get("type") == "audio":
+                    asset["src"] = audio_url
+                    applied = True
+        if not applied:
+            # Template had no audio at all — add a soundtrack so the chosen audio plays
+            timeline["soundtrack"] = {"src": audio_url}
+
     return data
 
 
