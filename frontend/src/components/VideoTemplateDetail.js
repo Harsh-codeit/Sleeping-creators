@@ -53,7 +53,7 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {template.status === "draft" && (
+            {(template.status === "draft" || template.status === "inactive") && (
               <button
                 data-testid="publish-template-btn"
                 onClick={() => setStatus("active")}
