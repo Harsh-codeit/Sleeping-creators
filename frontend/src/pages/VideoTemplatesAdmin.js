@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { RefreshCw, Film, Loader2 } from "lucide-react";
+import { RefreshCw, Film, Loader2, Trash2 } from "lucide-react";
 import VideoTemplateDetail from "../components/VideoTemplateDetail";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
@@ -17,10 +17,11 @@ function isVideo(url) {
   return /\.(mp4|mov|webm|ogg)(\?|$)/i.test(url);
 }
 
-function TemplateCard({ template, onClick }) {
+function TemplateCard({ template, onClick, onDeleted }) {
   const videoRef = useRef(null);
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // thumbnail_url = instant free preview from timeline asset (always set on sync)
   // previewUrl    = rendered MP4 stored in R2 (only after Generate Preview)
   const [thumbnailUrl] = useState(template.thumbnail_url);
@@ -51,11 +52,25 @@ function TemplateCard({ template, onClick }) {
     try {
       const r = await axios.post(`${API}/shotstack-templates/${template.id}/generate-preview`);
       setPreviewUrl(r.data.preview_url);
-      toast.success("Preview ready");
+      toast.success(previewUrl ? "Preview updated" : "Preview ready");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Preview generation failed");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Remove template "${template.name}" from the local registry?\n\nIt will re-appear on the next Sync (with no preview).`)) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`${API}/shotstack-templates/${template.id}`);
+      toast.success("Template removed");
+      onDeleted?.(template.id);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to remove");
+      setDeleting(false);
     }
   };
 
@@ -91,34 +106,49 @@ function TemplateCard({ template, onClick }) {
           />
         )}
 
-        {/* Generate Preview button — shown when no rendered preview yet */}
-        {!previewUrl && (
-          <div className={`absolute inset-0 flex flex-col items-end justify-end p-3 pointer-events-none`}>
-            <div className="pointer-events-auto">
-              {generating ? (
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-black/70 text-zinc-300">
-                  <Loader2 size={11} className="animate-spin" />
-                  <span className="text-[10px] font-mono">Rendering…</span>
-                </div>
-              ) : (
-                <button
-                  onClick={handleGeneratePreview}
-                  className="px-2.5 py-1.5 bg-white text-black text-[10px] font-semibold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
-                >
-                  Generate Preview
-                </button>
-              )}
-            </div>
+        {/* Bottom-right action button — Generate Preview if none, Re-render if preview exists */}
+        <div className="absolute inset-0 flex flex-col items-end justify-end p-3 pointer-events-none">
+          <div className="pointer-events-auto">
+            {generating ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-black/70 text-zinc-300">
+                <Loader2 size={11} className="animate-spin" />
+                <span className="text-[10px] font-mono">Rendering…</span>
+              </div>
+            ) : !previewUrl ? (
+              <button
+                onClick={handleGeneratePreview}
+                className="px-2.5 py-1.5 bg-white text-black text-[10px] font-semibold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
+              >
+                Generate Preview
+              </button>
+            ) : (
+              <button
+                onClick={handleGeneratePreview}
+                title="Re-render preview (template was updated in Shotstack)"
+                className={`flex items-center gap-1.5 px-2 py-1.5 bg-black/70 text-zinc-300 text-[10px] font-mono uppercase tracking-widest hover:bg-black hover:text-white transition-all duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}
+              >
+                <RefreshCw size={10} />
+                Re-render
+              </button>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Hover overlay */}
         <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 pointer-events-none ${hovered && hoverVideoUrl ? "opacity-100" : "opacity-0"}`}>
           <span className="text-[10px] font-mono text-white uppercase tracking-widest">▶ Playing</span>
         </div>
 
-        {/* Status badge — always visible */}
-        <div className="absolute top-2 right-2">
+        {/* Top-right: status badge + delete button (delete only on hover) */}
+        <div className="absolute top-2 right-2 flex items-center gap-1.5">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Remove from local registry (re-appears on next Sync)"
+            className={`flex items-center justify-center w-6 h-6 bg-black/70 text-zinc-400 hover:text-red-400 hover:bg-black transition-all duration-200 ${hovered ? "opacity-100" : "opacity-0"} disabled:opacity-40`}
+          >
+            {deleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+          </button>
           <span className={`font-mono text-[9px] px-1.5 py-0.5 uppercase tracking-widest ${STATUS_BADGE[template.status] || STATUS_BADGE.inactive}`}>
             {template.status}
           </span>
@@ -204,6 +234,7 @@ export default function VideoTemplatesAdmin() {
                 key={r.id}
                 template={r}
                 onClick={() => setSelected(r)}
+                onDeleted={(id) => setRows(prev => prev.filter(t => t.id !== id))}
               />
             ))}
           </div>

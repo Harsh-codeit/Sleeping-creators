@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, Music2, Play, Pause, Check, Loader2, RefreshCw, Upload } from "lucide-react";
+import { X, Music2, Play, Pause, Check, Loader2, RefreshCw, Upload, Trash2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 const ROLES = ["ai_text", "static_text", "clip", "logo", "audio"];
@@ -42,6 +42,18 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
     try {
       await axios.patch(`${API}/shotstack-templates/${template.id}`, { status });
       toast.success(`Status → ${status}`);
+      onChanged?.();
+      onClose();
+    } catch (e) {
+      toast.error(`Failed: ${e.response?.data?.detail || e.message}`);
+    }
+  };
+
+  const deleteTemplate = async () => {
+    if (!window.confirm(`Remove template "${template.name}" from the local registry?\n\nIt will re-appear on the next Sync (fresh, with no preview).`)) return;
+    try {
+      await axios.delete(`${API}/shotstack-templates/${template.id}`);
+      toast.success("Template removed");
       onChanged?.();
       onClose();
     } catch (e) {
@@ -301,7 +313,7 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
             </tbody>
           </table>
 
-          <div className="mt-5 flex gap-2">
+          <div className="mt-5 flex items-center justify-between gap-2">
             <button
               data-testid="save-schema-btn"
               onClick={save}
@@ -309,6 +321,14 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
               className="px-4 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
             >
               {saving ? "Saving…" : "Save fields"}
+            </button>
+            <button
+              onClick={deleteTemplate}
+              title="Remove from local registry (re-appears on next Sync)"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-red-900/40 text-red-400 text-xs font-mono hover:bg-red-900/10 transition-colors duration-200"
+            >
+              <Trash2 size={11} />
+              Remove
             </button>
           </div>
         </div>

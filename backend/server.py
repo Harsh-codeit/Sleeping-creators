@@ -3793,6 +3793,17 @@ async def sync_shotstack_templates():
     return await sync_templates(db)
 
 
+@api_router.delete("/shotstack-templates/{template_id}")
+async def delete_shotstack_template(template_id: str):
+    """Hard-delete from the local registry. The next sync will re-import the
+    template from Shotstack if it still exists there — fresh, with no
+    preview_url, so the user can re-generate after a template update."""
+    res = await db.shotstack_templates.delete_one({"id": template_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "template not found")
+    return {"ok": True}
+
+
 # Placeholder assets used when a merge field has no `replace` default value.
 # Every role must yield a non-empty value — Shotstack does NOT auto-fall-back to
 # template defaults when a merge key is omitted; the literal {{FIELD}} leaks
