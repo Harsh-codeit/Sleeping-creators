@@ -341,6 +341,9 @@ class PipelineCreate(BaseModel):
     video_audio_url: Optional[str] = None         # override timeline.soundtrack.src
     video_hook_strategy: Optional[str] = "rotate" # rotate | random | none
     video_use_ai_content: Optional[bool] = True   # call generate_video_content for caption/hashtags/text
+    video_clip_ids: List[str] = []                # subset of client's drive_clips to use (empty = use all)
+    video_clip_strategy: Optional[str] = "random" # random | sequential
+    next_clip_index: Optional[int] = 0            # sequential rotation cursor
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -365,6 +368,8 @@ class PipelineUpdate(BaseModel):
     video_audio_url: Optional[str] = None
     video_hook_strategy: Optional[str] = None
     video_use_ai_content: Optional[bool] = None
+    video_clip_ids: Optional[List[str]] = None
+    video_clip_strategy: Optional[str] = None
 
 class OnboardingCreate(BaseModel):
     # Step 1 – Basic Identity
@@ -1031,14 +1036,37 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
 
         # Required clips: count clip-role merge fields on the template
         required_clip_count = sum(1 for f in template_doc.get("merge_fields", []) if f.get("role") == "clip")
-        clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
-        if required_clip_count > 0 and len(clips) < required_clip_count:
+        all_client_clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
+
+        # Per-pipeline clip subset — preserve user-defined order
+        configured_clip_ids = pipeline.get("video_clip_ids") or []
+        if configured_clip_ids:
+            clip_by_id = {(c.get("drive_file_id") or c.get("id")): c for c in all_client_clips}
+            pool = [clip_by_id[cid] for cid in configured_clip_ids if cid in clip_by_id]
+            if len(pool) < len(configured_clip_ids):
+                logger.warning(f"Pipeline {pipeline_id}: {len(configured_clip_ids) - len(pool)} configured clip(s) no longer in drive_clips")
+        else:
+            pool = all_client_clips
+
+        if required_clip_count > 0 and len(pool) < required_clip_count:
             await add_log("warning",
-                          f"Pipeline '{pipeline['name']}': template needs {required_clip_count} clip(s) but client has {len(clips)}",
+                          f"Pipeline '{pipeline['name']}': needs {required_clip_count} clip(s), pool has {len(pool)}",
                           pipeline["client_id"], client["name"])
             return 0
 
-        picked_clips = _random.sample(clips, required_clip_count) if required_clip_count > 0 else []
+        # Pick N clips per strategy. Sequential preserves the user's ordering;
+        # random samples without replacement within the pool.
+        clip_strategy = pipeline.get("video_clip_strategy") or "random"
+        next_clip_index = pipeline.get("next_clip_index", 0) or 0
+        if required_clip_count == 0:
+            picked_clips = []
+        elif clip_strategy == "sequential" and configured_clip_ids:
+            picked_clips = []
+            for i in range(required_clip_count):
+                picked_clips.append(pool[(next_clip_index + i) % len(pool)])
+            next_clip_index = (next_clip_index + required_clip_count) % len(pool)
+        else:
+            picked_clips = _random.sample(pool, required_clip_count)
         clip_drive_ids = [c.get("drive_file_id") or c.get("id") for c in picked_clips]
 
         # Hook selection (rotate / random / none)
@@ -1109,6 +1137,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             "last_run_at": now.isoformat(),
             "next_run_at": calculate_next_run(pipeline, scheduled_time),
             "next_hook_index": next_hook_index,
+            "next_clip_index": next_clip_index,
             "total_runs": pipeline.get("total_runs", 0) + 1,
             "successful_runs": pipeline.get("successful_runs", 0) + (1 if video_posts_created else 0),
             "status": "active",

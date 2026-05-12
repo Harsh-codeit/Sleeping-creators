@@ -102,15 +102,6 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
     return (
       <>
       <div className="space-y-5">
-        {/* Template */}
-        <div>
-          <label className="label-xs">Video Template</label>
-          <VideoTemplatePicker
-            value={form.video_template_id}
-            onChange={(id) => onChange("video_template_id", id)}
-          />
-        </div>
-
         {/* Content source — hook strategy */}
         <div>
           <label className="label-xs">Content Source</label>

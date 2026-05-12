@@ -7,10 +7,12 @@ import { EMPTY_FORM } from "./constants";
 import PipelineWizardStep1 from "./PipelineWizardStep1";
 import PipelineWizardStep2 from "./PipelineWizardStep2";
 import PipelineWizardStep3 from "./PipelineWizardStep3";
+import PipelineWizardStepSource from "./PipelineWizardStepSource";
 
-const STEPS = ["Type", "Content", "Schedule"];
+const STEPS_DEFAULT = ["Type", "Content", "Schedule"];
+const STEPS_VIDEO   = ["Type", "Source", "Content", "Schedule"];
 
-function ProgressBar({ step }) {
+function ProgressBar({ step, steps: STEPS }) {
   return (
     <div className="flex items-center gap-0 px-6 pt-5 pb-3">
       {STEPS.map((label, i) => {
@@ -76,11 +78,15 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
 
   const onChange = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  const isVideo = form.pipeline_type === "video";
+  const STEPS = isVideo ? STEPS_VIDEO : STEPS_DEFAULT;
+  const lastStep = STEPS.length - 1;
+
   // Validation per step
   const canNext = () => {
     if (step === 0) return Boolean(form.pipeline_type) && form.name.trim().length > 0;
-    if (step === 1) return true; // no required fields
-    return false;
+    if (isVideo && step === 1) return Boolean(form.video_template_id);
+    return true;
   };
   const canSubmit = () => form.platforms.length > 0;
 
@@ -103,14 +109,24 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
           <DialogTitle className="px-6 pt-5 pb-0 text-sm font-semibold text-white">
             {previewName}
           </DialogTitle>
-          <ProgressBar step={step} />
+          <ProgressBar step={step} steps={STEPS} />
         </DialogHeader>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {step === 0 && <PipelineWizardStep1 form={form} onChange={onChange} />}
-          {step === 1 && <PipelineWizardStep2 form={form} onChange={onChange} clientId={clientId} />}
-          {step === 2 && <PipelineWizardStep3 form={form} onChange={onChange} />}
+          {isVideo ? (
+            <>
+              {step === 1 && <PipelineWizardStepSource form={form} onChange={onChange} clientId={clientId} />}
+              {step === 2 && <PipelineWizardStep2 form={form} onChange={onChange} clientId={clientId} />}
+              {step === 3 && <PipelineWizardStep3 form={form} onChange={onChange} />}
+            </>
+          ) : (
+            <>
+              {step === 1 && <PipelineWizardStep2 form={form} onChange={onChange} clientId={clientId} />}
+              {step === 2 && <PipelineWizardStep3 form={form} onChange={onChange} />}
+            </>
+          )}
         </div>
 
         {/* Fixed footer */}
@@ -125,7 +141,7 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
             </button>
           )}
           <div className="flex-1" />
-          {step < 2 ? (
+          {step < lastStep ? (
             <button
               type="button"
               onClick={() => setStep(s => s + 1)}

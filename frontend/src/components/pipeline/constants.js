@@ -104,8 +104,10 @@ export const EMPTY_FORM = {
   // Autopilot video config
   video_filter_name: "",
   video_audio_url: "",
-  video_hook_strategy: "rotate",  // rotate | random | none
+  video_hook_strategy: "rotate",   // rotate | random | none
   video_use_ai_content: true,
+  video_clip_ids: [],              // subset of client's drive clips, in order (empty = use all)
+  video_clip_strategy: "random",   // random | sequential
 };
 
 export const VIDEO_FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
