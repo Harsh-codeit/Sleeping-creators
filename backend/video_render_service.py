@@ -27,6 +27,58 @@ def _strategy_block(client: dict) -> dict:
     }
 
 
+_HOOK_PROMPT = """You are designing a reusable "video hook" — a short content brief that a social-media manager will reuse to generate many different videos for the same client.
+
+Client:
+- Name: {client_name}
+- Niche: {niche}
+- Brand voice: {brand_voice}
+- Audience: {target_audience}
+
+Strategy:
+- Themes: {themes}
+- Tone of voice: {tone}
+- Always cover: {topics_include}
+- Never cover: {topics_exclude}
+
+Seed keyword / angle from the user (may be empty — invent something on-strategy if so): {keyword}
+
+Generate ONE hook with:
+1. "title" — a short, scannable label (max 60 chars). Concrete, specific, in the brand voice. NOT a hashtag.
+2. "prompt" — one or two sentences describing the kind of video to create. This will be fed back to an AI to generate caption/hashtags/on-screen text. Be specific about angle, audience pain, and outcome. Stay on-theme. Never reference excluded topics.
+
+Return ONLY valid JSON, no markdown fences, no explanation:
+{{"title": "...", "prompt": "..."}}"""
+
+
+async def generate_video_hook(client: dict, keyword: str = "") -> dict:
+    """One Claude call → {title: str, prompt: str} for a reusable hook."""
+    prompt = _HOOK_PROMPT.format(
+        client_name=client.get("name", "the brand"),
+        niche=client.get("niche") or client.get("industry") or "general",
+        brand_voice=client.get("brand_voice", "neutral"),
+        target_audience=client.get("target_audience") or "—",
+        keyword=(keyword or "").strip() or "—",
+        **_strategy_block(client),
+    )
+    msg = _anthropic_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
+    data = json.loads(raw)
+    return {
+        "title":  (data.get("title") or "").strip()[:80],
+        "prompt": (data.get("prompt") or "").strip(),
+    }
+
+
 _AI_TEXT_PROMPT = """You write short text for a social media video.
 
 Brand context:

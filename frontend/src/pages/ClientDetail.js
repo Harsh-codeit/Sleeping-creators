@@ -1419,6 +1419,9 @@ export default function ClientDetail() {
   const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [], video_hooks: [] });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
   const [topicExcludeInput, setTopicExcludeInput] = useState("");
+  const [hookGenOpen, setHookGenOpen] = useState(false);
+  const [hookGenKeyword, setHookGenKeyword] = useState("");
+  const [hookGenLoading, setHookGenLoading] = useState(false);
   const [competitorInsight, setCompetitorInsight] = useState(null);
   const [togglingWinner, setTogglingWinner] = useState(null);
 
@@ -1485,6 +1488,28 @@ export default function ClientDetail() {
       toast.error(err?.response?.data?.detail || "Failed to save profile");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const generateHook = async () => {
+    setHookGenLoading(true);
+    try {
+      const r = await axios.post(`${API}/clients/${id}/generate-video-hook`, {
+        keyword: hookGenKeyword.trim() || "",
+      });
+      const newHook = {
+        id: (crypto?.randomUUID?.() || `hook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+        title: r.data.title || "",
+        prompt: r.data.prompt || "",
+      };
+      setStrategyForm(f => ({ ...f, video_hooks: [newHook, ...f.video_hooks] }));
+      setHookGenKeyword("");
+      setHookGenOpen(false);
+      toast.success("Hook generated — review & Save Strategy to persist");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Generation failed");
+    } finally {
+      setHookGenLoading(false);
     }
   };
 
@@ -1949,18 +1974,67 @@ export default function ClientDetail() {
               ))}
             </div>
 
-            <button
-              onClick={() => setStrategyForm(f => ({
-                ...f,
-                video_hooks: [
-                  ...f.video_hooks,
-                  { id: (crypto?.randomUUID?.() || `hook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), title: "", prompt: "" }
-                ]
-              }))}
-              className="mt-3 w-full border border-dashed border-zinc-700 hover:border-zinc-500 hover:bg-zinc-950 transition-colors duration-200 px-3 py-2.5 text-[11px] font-mono text-zinc-500 hover:text-zinc-300 flex items-center justify-center gap-1.5"
-            >
-              <Plus size={12} /> Add hook
-            </button>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setStrategyForm(f => ({
+                  ...f,
+                  video_hooks: [
+                    ...f.video_hooks,
+                    { id: (crypto?.randomUUID?.() || `hook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), title: "", prompt: "" }
+                  ]
+                }))}
+                className="border border-dashed border-zinc-700 hover:border-zinc-500 hover:bg-zinc-950 transition-colors duration-200 px-3 py-2.5 text-[11px] font-mono text-zinc-500 hover:text-zinc-300 flex items-center justify-center gap-1.5"
+              >
+                <Plus size={12} /> Add hook
+              </button>
+              <button
+                onClick={() => setHookGenOpen(o => !o)}
+                className={`border border-dashed transition-colors duration-200 px-3 py-2.5 text-[11px] font-mono flex items-center justify-center gap-1.5 ${
+                  hookGenOpen
+                    ? "border-zinc-500 bg-zinc-950 text-zinc-300"
+                    : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:bg-zinc-950 hover:text-zinc-300"
+                }`}
+              >
+                <Wand2 size={12} /> Generate with AI
+              </button>
+            </div>
+
+            {hookGenOpen && (
+              <div className="mt-2 border border-zinc-800 bg-zinc-950 p-3 space-y-2">
+                <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                  Seed keyword (optional)
+                </label>
+                <input
+                  value={hookGenKeyword}
+                  onChange={e => setHookGenKeyword(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !hookGenLoading) generateHook(); }}
+                  placeholder="growth, productivity, mindset… (leave blank to let AI pick on-strategy)"
+                  className="w-full bg-zinc-900 border border-zinc-700 px-2.5 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors duration-200 font-mono"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-mono text-zinc-600">
+                    Uses {client?.name || "client"}'s niche, voice, and topic rules.
+                  </p>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => { setHookGenOpen(false); setHookGenKeyword(""); }}
+                      disabled={hookGenLoading}
+                      className="border border-zinc-700 text-zinc-400 text-[11px] font-mono hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5 disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={generateHook}
+                      disabled={hookGenLoading}
+                      className="bg-white text-black text-[11px] font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40"
+                    >
+                      {hookGenLoading ? <RefreshCw size={11} className="animate-spin" /> : <Wand2 size={11} />}
+                      {hookGenLoading ? "Generating…" : "Generate"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <button

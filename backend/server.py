@@ -5496,6 +5496,25 @@ async def generate_video_content_route(req: VideoGenerateContentRequest):
     return await generate_video_content(req.prompt, client, ai_text_fields)
 
 
+class GenerateVideoHookRequest(BaseModel):
+    keyword: Optional[str] = ""  # optional seed; AI invents on-strategy if empty
+
+
+@api_router.post("/clients/{client_id}/generate-video-hook")
+async def generate_video_hook_route(client_id: str, req: GenerateVideoHookRequest):
+    """Use Claude to draft a reusable video hook {title, prompt} for this client.
+    Pulls in client.strategy (themes, tone, topics_include/exclude) automatically."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    from video_render_service import generate_video_hook
+    try:
+        return await generate_video_hook(client, req.keyword or "")
+    except Exception as e:
+        logger.exception("generate_video_hook failed")
+        raise HTTPException(500, f"Generation failed: {e}")
+
+
 @api_router.get("/videos/job/{task_id}")
 async def get_video_job_status(task_id: str):
     """Check Celery task status."""
