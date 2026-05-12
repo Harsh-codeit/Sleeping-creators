@@ -3826,6 +3826,32 @@ class PreviewRenderRequest(BaseModel):
     audio_url: Optional[str] = None  # override the template's default background music
 
 
+@api_router.post("/shotstack-templates/upload-audio", status_code=201)
+async def upload_template_audio_override(file: UploadFile = File(...)):
+    """One-shot audio upload for template preview overrides. Returns { audio_url }.
+    Does NOT add the track to the music library (use /music/upload for that)."""
+    import storage as _storage
+
+    allowed = {"audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp3", "audio/ogg"}
+    if file.content_type not in allowed:
+        raise HTTPException(400, "File must be mp3, wav, or ogg")
+
+    if not _storage.is_enabled():
+        raise HTTPException(503, "Storage is not configured")
+
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, "Audio file must be under 50 MB")
+
+    ext = os.path.splitext(file.filename or "audio.mp3")[1] or ".mp3"
+    key = f"template-audio-overrides/{uuid.uuid4().hex}{ext}"
+    url = _storage.upload_bytes(content, key, content_type=file.content_type or "audio/mpeg")
+    if not url:
+        raise HTTPException(500, "Failed to upload audio")
+
+    return {"audio_url": url}
+
+
 @api_router.post("/shotstack-templates/{template_id}/generate-preview")
 async def generate_template_preview(template_id: str, req: PreviewRenderRequest = None):
     import asyncio

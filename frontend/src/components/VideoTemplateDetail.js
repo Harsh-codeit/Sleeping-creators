@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, Music2, Play, Pause, Check, Loader2, RefreshCw } from "lucide-react";
+import { X, Music2, Play, Pause, Check, Loader2, RefreshCw, Upload } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 const ROLES = ["ai_text", "static_text", "clip", "logo", "audio"];
@@ -18,7 +18,9 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
   const [musicTracks, setMusicTracks] = useState([]);
   const [playingId, setPlayingId] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
   const audioRef = useRef(null);
+  const audioFileRef = useRef(null);
 
   const hasAudioInTemplate = !!template.audio_url
     || (template.merge_fields || []).some(f => f.role === "audio");
@@ -83,6 +85,26 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
   const clearAudioOverride = () => {
     setAudioOverride("");
     setSelectedTrack(null);
+  };
+
+  const handleUploadAudio = async (file) => {
+    if (!file) return;
+    setUploadingAudio(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await axios.post(`${API}/shotstack-templates/upload-audio`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setAudioOverride(r.data.audio_url);
+      setSelectedTrack({ id: "upload", name: file.name, r2_url: r.data.audio_url });
+      toast.success("Audio uploaded");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploadingAudio(false);
+      if (audioFileRef.current) audioFileRef.current.value = "";
+    }
   };
 
   const regeneratePreview = async () => {
@@ -176,15 +198,32 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
               <span className="text-[10px] font-mono text-zinc-600">Optional</span>
             </div>
 
-            <button
-              onClick={openMusicPicker}
-              className="w-full border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-2 mb-2"
-            >
-              <Music2 size={12} />
-              <span className="truncate">
-                {selectedTrack ? selectedTrack.name : "Pick from music library…"}
-              </span>
-            </button>
+            <div className="flex gap-2 mb-2">
+              <button
+                onClick={openMusicPicker}
+                className="flex-1 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-2 min-w-0"
+              >
+                <Music2 size={12} className="flex-shrink-0" />
+                <span className="truncate">
+                  {selectedTrack ? selectedTrack.name : "Pick from library…"}
+                </span>
+              </button>
+              <input
+                ref={audioFileRef}
+                type="file"
+                accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp3,audio/ogg"
+                className="hidden"
+                onChange={e => handleUploadAudio(e.target.files?.[0])}
+              />
+              <button
+                onClick={() => !uploadingAudio && audioFileRef.current?.click()}
+                disabled={uploadingAudio}
+                className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-40"
+              >
+                {uploadingAudio ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                {uploadingAudio ? "Uploading…" : "Upload"}
+              </button>
+            </div>
 
             <input
               type="text"
