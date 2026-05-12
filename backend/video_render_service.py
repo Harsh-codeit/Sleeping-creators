@@ -14,6 +14,19 @@ def _anthropic_client():
     return anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
 
+def _strategy_block(client: dict) -> dict:
+    """Pull strategy fields from the client doc into a dict ready for prompt
+    string formatting. Returns "—" for empty fields so the prompt stays readable."""
+    strategy = client.get("strategy") or {}
+    return {
+        "themes":         ", ".join(strategy.get("themes") or []) or "—",
+        "tone":           strategy.get("tone") or client.get("brand_voice") or "neutral",
+        "topics_include": ", ".join(strategy.get("topics_include") or []) or "—",
+        "topics_exclude": ", ".join(strategy.get("topics_exclude") or []) or "—",
+        "brand_hashtags": ", ".join(strategy.get("hashtags") or []) or "—",
+    }
+
+
 _AI_TEXT_PROMPT = """You write short text for a social media video.
 
 Brand context:
@@ -21,9 +34,16 @@ Brand context:
 - Niche: {niche}
 - Voice: {brand_voice}
 
+Strategy:
+- Themes: {themes}
+- Tone of voice: {tone}
+- Always cover: {topics_include}
+- Never cover: {topics_exclude}
+
 Topic: {topic}
 
 Generate text for these fields. Match each field's hint and max_chars exactly.
+Stay on-tone and on-theme. Never reference excluded topics.
 Return ONLY valid JSON: {{"<field_key>": "<text>", ...}} — no explanation.
 
 Fields:
@@ -48,6 +68,7 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str)
     prompt = _AI_TEXT_PROMPT.format(
         client_name=client_name, niche=niche, brand_voice=brand_voice,
         topic=topic, fields=json.dumps(fields_for_prompt, indent=2),
+        **_strategy_block(client),
     )
     msg = _anthropic_client().messages.create(
         model="claude-haiku-4-5-20251001",
@@ -71,9 +92,17 @@ Client:
 - Brand voice: {brand_voice}
 - Platforms: {platforms}
 
+Strategy:
+- Themes: {themes}
+- Tone of voice: {tone}
+- Always cover: {topics_include}
+- Never cover: {topics_exclude}
+- Brand hashtags (include in the final list when relevant): {brand_hashtags}
+
 Prompt: {prompt}
 
-Generate all content in one response:
+Generate all content in one response. Stay on-theme and on-tone. Never reference
+excluded topics. If brand hashtags are listed above, include them in the hashtag array.
 
 1. "merge_values" — text for each field that appears inside the video. Match each field's hint and max_chars exactly.
 2. "caption" — the social media post caption that accompanies the video. Engaging, matches brand voice, max 2200 chars.
@@ -113,6 +142,7 @@ async def generate_video_content(
         client_name=client_name, niche=niche, brand_voice=brand_voice,
         platforms=platforms, prompt=prompt,
         fields=fields_json, merge_values_example=example_kv,
+        **_strategy_block(client),
     )
 
     msg = _anthropic_client().messages.create(

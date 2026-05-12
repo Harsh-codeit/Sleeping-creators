@@ -1416,7 +1416,7 @@ export default function ClientDetail() {
   const [templates, setTemplates] = useState([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState(null);
-  const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [] });
+  const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [], video_hooks: [] });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
   const [topicExcludeInput, setTopicExcludeInput] = useState("");
   const [competitorInsight, setCompetitorInsight] = useState(null);
@@ -1439,7 +1439,8 @@ export default function ClientDetail() {
         tone: s.tone || clientResp.data.brand_voice || "",
         hashtags: (s.hashtags || []).join(", "),
         topics_include: s.topics_include || [],
-        topics_exclude: s.topics_exclude || []
+        topics_exclude: s.topics_exclude || [],
+        video_hooks: s.video_hooks || []
       });
     } catch { toast.error("Failed to load client"); }
     finally { setLoading(false); }
@@ -1495,7 +1496,8 @@ export default function ClientDetail() {
         tone: strategyForm.tone,
         hashtags: strategyForm.hashtags.split(",").map(h => h.trim().replace(/^#/, "").replace(/^/, "#")).filter(h => h !== "#"),
         topics_include: strategyForm.topics_include,
-        topics_exclude: strategyForm.topics_exclude
+        topics_exclude: strategyForm.topics_exclude,
+        video_hooks: strategyForm.video_hooks.filter(h => h.title.trim() || h.prompt.trim())
       };
       const resp = await axios.put(`${API}/clients/${id}`, { strategy });
       setClient(resp.data);
@@ -1897,6 +1899,68 @@ export default function ClientDetail() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Video Hooks card */}
+          <div className="bg-zinc-900 border border-zinc-800 p-4">
+            <div className="flex items-baseline justify-between mb-4">
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Video Hooks</span>
+              <span className="text-[10px] font-mono text-zinc-600">
+                {strategyForm.video_hooks.length} saved
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {strategyForm.video_hooks.map((hook, i) => (
+                <div key={hook.id} className="group flex items-start gap-2">
+                  <div className="flex-1 border border-zinc-800 hover:border-zinc-700 transition-colors duration-200 p-3 space-y-2">
+                    <input
+                      value={hook.title}
+                      onChange={e => setStrategyForm(f => ({
+                        ...f,
+                        video_hooks: f.video_hooks.map((h, j) => j === i ? { ...h, title: e.target.value } : h)
+                      }))}
+                      placeholder="Hook title (e.g., 3 ways to grow your business)"
+                      maxLength={80}
+                      className="w-full bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none border-b border-transparent focus:border-zinc-700 pb-1.5 transition-colors duration-200"
+                    />
+                    <textarea
+                      value={hook.prompt}
+                      onChange={e => setStrategyForm(f => ({
+                        ...f,
+                        video_hooks: f.video_hooks.map((h, j) => j === i ? { ...h, prompt: e.target.value } : h)
+                      }))}
+                      placeholder="Full AI prompt — the brief the model uses to write caption/text/hashtags"
+                      rows={2}
+                      className="w-full bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 resize-none transition-colors duration-200 font-mono leading-relaxed"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setStrategyForm(f => ({
+                      ...f,
+                      video_hooks: f.video_hooks.filter((_, j) => j !== i)
+                    }))}
+                    aria-label="Remove hook"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 text-zinc-600 hover:text-rose-400"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setStrategyForm(f => ({
+                ...f,
+                video_hooks: [
+                  ...f.video_hooks,
+                  { id: (crypto?.randomUUID?.() || `hook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`), title: "", prompt: "" }
+                ]
+              }))}
+              className="mt-3 w-full border border-dashed border-zinc-700 hover:border-zinc-500 hover:bg-zinc-950 transition-colors duration-200 px-3 py-2.5 text-[11px] font-mono text-zinc-500 hover:text-zinc-300 flex items-center justify-center gap-1.5"
+            >
+              <Plus size={12} /> Add hook
+            </button>
           </div>
 
           <button

@@ -914,6 +914,34 @@ export function VideoCreator() {
                 {/* Generate tab */}
                 {step4Tab === "generate" && (
                   <div className="flex flex-col gap-6">
+                    {/* Saved hooks — chip strip; clicking a chip fills the AI Prompt textarea */}
+                    {(selectedClient?.strategy?.video_hooks?.length ?? 0) > 0 && (
+                      <div>
+                        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
+                          Saved hooks
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedClient.strategy.video_hooks.map(h => {
+                            const isActive = prompt.trim() === (h.prompt || "").trim();
+                            return (
+                              <button
+                                key={h.id}
+                                onClick={() => setPrompt(h.prompt)}
+                                title={h.prompt}
+                                className={`font-mono text-[11px] px-2.5 py-1 border transition-colors duration-200 max-w-[240px] truncate ${
+                                  isActive
+                                    ? "border-white text-white bg-zinc-900"
+                                    : "border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-900"
+                                }`}
+                              >
+                                {h.title || (h.prompt ? h.prompt.slice(0, 40) + "…" : "Untitled")}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <div className="text-xs font-semibold text-white mb-2">AI Prompt</div>
                       <textarea
