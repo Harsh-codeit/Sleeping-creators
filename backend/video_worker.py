@@ -216,9 +216,26 @@ def watchdog_stuck_renders():
         db_client.close()
 
 
+@celery_app.task(name="video_worker.poll_template_previews")
+def poll_template_previews():
+    """Poll pending template preview renders and save thumbnail_url when done."""
+    import asyncio
+
+    db_client, db = _db()
+    try:
+        from shotstack_template_importer import poll_preview_renders
+        return asyncio.run(poll_preview_renders(db))
+    finally:
+        db_client.close()
+
+
 celery_app.conf.beat_schedule = {
     "shotstack-watchdog": {
         "task": "video_worker.watchdog_stuck_renders",
         "schedule": 60.0,
+    },
+    "poll-template-previews": {
+        "task": "video_worker.poll_template_previews",
+        "schedule": 30.0,
     },
 }
