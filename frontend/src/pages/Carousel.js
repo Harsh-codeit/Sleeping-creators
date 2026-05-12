@@ -1290,31 +1290,7 @@ export default function Carousel() {
 
       {studioTab === "video" && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* Client selector bar */}
-          <div className="flex-shrink-0 border-b border-zinc-800 px-6 py-3 flex items-center gap-3">
-            <span className="text-[10px] font-mono text-zinc-500 uppercase">Client</span>
-            <select
-              value={selectedClientId}
-              onChange={e => setSelectedClientId(e.target.value)}
-              className="bg-zinc-900 border border-zinc-700 text-white text-xs font-mono px-3 py-1.5 focus:outline-none focus:border-zinc-500 min-w-[200px]"
-            >
-              <option value="">— select a client —</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Editor or prompt */}
-          <div className="flex-1 overflow-auto">
-            {selectedClientId ? (
-              <VideoCreator clientId={selectedClientId} />
-            ) : (
-              <div className="flex items-center justify-center h-full text-zinc-600 text-sm font-mono">
-                Select a client to get started.
-              </div>
-            )}
-          </div>
+          <VideoCreator />
         </div>
       )}
     </div>
