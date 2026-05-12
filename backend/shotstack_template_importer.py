@@ -76,6 +76,7 @@ async def sync_templates(db) -> dict:
         get_template,
         extract_merge_fields,
         extract_audio_url,
+        extract_preview_url,
     )
 
     remote_templates = await list_templates()
@@ -105,6 +106,8 @@ async def sync_templates(db) -> dict:
             })
 
         audio_url = extract_audio_url(full)
+        # Free instant thumbnail — first video/image asset src from the timeline
+        thumbnail_url = extract_preview_url(full)
         now = _now_iso()
 
         existing = await db.shotstack_templates.find_one({"shotstack_template_id": ss_id})
@@ -120,6 +123,10 @@ async def sync_templates(db) -> dict:
             preserved = {f["find"]: f for f in existing.get("merge_fields", []) if not f.get("inferred", True)}
             common["merge_fields"] = [preserved.get(f["find"], f) for f in merge_fields]
 
+            # Backfill thumbnail if still missing
+            if not existing.get("thumbnail_url") and thumbnail_url:
+                common["thumbnail_url"] = thumbnail_url
+
             await db.shotstack_templates.update_one({"id": existing["id"]}, {"$set": common})
             updated.append({"id": existing["id"], "name": common["name"]})
 
@@ -129,8 +136,8 @@ async def sync_templates(db) -> dict:
                 "status": "draft",
                 "imported_at": now,
                 "merge_fields": merge_fields,
-                "thumbnail_url": None,
-                "preview_render_id": None,
+                "thumbnail_url": thumbnail_url,  # instant, free — from timeline asset
+                "preview_url": None,             # rendered MP4 — set after Generate Preview
                 **common,
             }
             await db.shotstack_templates.update_one(
@@ -173,7 +180,7 @@ async def poll_preview_renders(db) -> dict:
                 r2_url = await _mirror_preview_to_r2(url, tpl["id"])
                 await db.shotstack_templates.update_one(
                     {"id": tpl["id"]},
-                    {"$set": {"thumbnail_url": r2_url or url}, "$unset": {"preview_render_id": ""}},
+                    {"$set": {"preview_url": r2_url or url}, "$unset": {"preview_render_id": ""}},
                 )
                 logger.info("Preview ready for template %s: %s", tpl.get("name"), r2_url or url)
                 updated += 1

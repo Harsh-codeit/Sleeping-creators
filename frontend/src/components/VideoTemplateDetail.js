@@ -81,10 +81,21 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
           </div>
         </div>
 
-        {/* Thumbnail */}
-        {template.thumbnail_url && (
+        {/* Preview — rendered MP4 preferred, falls back to timeline thumbnail */}
+        {(template.preview_url || template.thumbnail_url) && (
           <div className="border-b border-zinc-800 flex-shrink-0">
-            <img src={template.thumbnail_url} alt={template.name} className="w-full object-cover max-h-48" />
+            {template.preview_url ? (
+              <video
+                src={template.preview_url}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full object-cover max-h-48"
+              />
+            ) : (
+              <img src={template.thumbnail_url} alt={template.name} className="w-full object-cover max-h-48" />
+            )}
           </div>
         )}
 

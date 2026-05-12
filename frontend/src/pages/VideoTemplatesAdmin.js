@@ -21,8 +21,13 @@ function TemplateCard({ template, onClick }) {
   const videoRef = useRef(null);
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [thumbnailUrl, setThumbnailUrl] = useState(template.thumbnail_url);
-  const [loadError, setLoadError] = useState(false);
+  // thumbnail_url = instant free preview from timeline asset (always set on sync)
+  // previewUrl    = rendered MP4 stored in R2 (only after Generate Preview)
+  const [thumbnailUrl] = useState(template.thumbnail_url);
+  const [previewUrl, setPreviewUrl] = useState(template.preview_url);
+
+  // The video that plays on hover: rendered preview if available, else timeline asset if it's a video
+  const hoverVideoUrl = previewUrl || (isVideo(thumbnailUrl) ? thumbnailUrl : null);
 
   const handleMouseEnter = () => {
     setHovered(true);
@@ -45,8 +50,7 @@ function TemplateCard({ template, onClick }) {
     setGenerating(true);
     try {
       const r = await axios.post(`${API}/shotstack-templates/${template.id}/generate-preview`);
-      setThumbnailUrl(r.data.thumbnail_url);
-      setLoadError(false);
+      setPreviewUrl(r.data.preview_url);
       toast.success("Preview ready");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Preview generation failed");
@@ -54,9 +58,6 @@ function TemplateCard({ template, onClick }) {
       setGenerating(false);
     }
   };
-
-  const hasVideo = isVideo(thumbnailUrl) && !loadError;
-  const showPreview = thumbnailUrl && !loadError;
 
   return (
     <div
@@ -68,50 +69,53 @@ function TemplateCard({ template, onClick }) {
     >
       {/* Preview area */}
       <div className="relative w-full aspect-[9/16] bg-zinc-800 overflow-hidden">
-        {hasVideo ? (
+        {/* Hover-play video (rendered preview or timeline video asset) */}
+        {hoverVideoUrl && (
           <video
             ref={videoRef}
-            src={thumbnailUrl}
+            src={hoverVideoUrl}
             muted
             loop
             playsInline
             preload="metadata"
             className="absolute inset-0 w-full h-full object-cover"
-            onError={() => setLoadError(true)}
           />
-        ) : showPreview ? (
+        )}
+
+        {/* Static thumbnail shown when not playing (image or video poster) */}
+        {!hoverVideoUrl && thumbnailUrl && (
           <img
             src={thumbnailUrl}
             alt={template.name}
             className="absolute inset-0 w-full h-full object-cover"
-            onError={() => setLoadError(true)}
           />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-3">
-            {generating ? (
-              <>
-                <Loader2 size={24} className="text-zinc-400 animate-spin" />
-                <span className="text-[10px] font-mono text-zinc-500 text-center">Rendering…</span>
-              </>
-            ) : (
-              <button
-                onClick={handleGeneratePreview}
-                className="px-3 py-1.5 bg-white text-black text-[10px] font-semibold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
-              >
-                Generate Preview
-              </button>
-            )}
+        )}
+
+        {/* Generate Preview button — shown when no rendered preview yet */}
+        {!previewUrl && (
+          <div className={`absolute inset-0 flex flex-col items-end justify-end p-3 pointer-events-none`}>
+            <div className="pointer-events-auto">
+              {generating ? (
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-black/70 text-zinc-300">
+                  <Loader2 size={11} className="animate-spin" />
+                  <span className="text-[10px] font-mono">Rendering…</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleGeneratePreview}
+                  className="px-2.5 py-1.5 bg-white text-black text-[10px] font-semibold uppercase tracking-widest hover:bg-zinc-200 transition-colors"
+                >
+                  Generate Preview
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Hover overlay — only when preview loaded successfully */}
-        {showPreview && (
-          <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 ${hovered ? "opacity-100" : "opacity-0"}`}>
-            <span className="text-[10px] font-mono text-white uppercase tracking-widest">
-              {hasVideo ? "▶ Playing" : "Click to edit"}
-            </span>
-          </div>
-        )}
+        {/* Hover overlay */}
+        <div className={`absolute inset-0 bg-black/40 flex items-end p-3 transition-opacity duration-200 pointer-events-none ${hovered && hoverVideoUrl ? "opacity-100" : "opacity-0"}`}>
+          <span className="text-[10px] font-mono text-white uppercase tracking-widest">▶ Playing</span>
+        </div>
 
         {/* Status badge — always visible */}
         <div className="absolute top-2 right-2">

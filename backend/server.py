@@ -3819,9 +3819,9 @@ async def generate_template_preview(template_id: str):
             url = r2_url or resp["url"]
             await db.shotstack_templates.update_one(
                 {"id": template_id},
-                {"$set": {"thumbnail_url": url}, "$unset": {"preview_render_id": ""}},
+                {"$set": {"preview_url": url}, "$unset": {"preview_render_id": ""}},
             )
-            return {"thumbnail_url": url}
+            return {"preview_url": url}
         if status == "failed":
             raise HTTPException(500, detail=f"Render failed: {resp.get('error', 'unknown')}")
 
