@@ -101,7 +101,20 @@ export const EMPTY_FORM = {
   drive_folder_id: "",
   overlay_text: "",
   video_cta_text: "",
+  // Autopilot video config
+  video_filter_name: "",
+  video_audio_url: "",
+  video_hook_strategy: "rotate",  // rotate | random | none
+  video_use_ai_content: true,
 };
+
+export const VIDEO_FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
+
+export const VIDEO_HOOK_STRATEGIES = [
+  { value: "rotate", label: "Rotate", desc: "Cycle through saved hooks in order" },
+  { value: "random", label: "Random", desc: "Pick a random hook each run" },
+  { value: "none",   label: "No hooks", desc: "Use fallback prompt below" },
+];
 
 // Which content fields are shown per pipeline type
 export const TYPE_SETTINGS = {

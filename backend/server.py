@@ -336,6 +336,11 @@ class PipelineCreate(BaseModel):
     drive_folder_id: Optional[str] = None
     overlay_text: Optional[str] = None
     video_cta_text: Optional[str] = None
+    # Autopilot video config
+    video_filter_name: Optional[str] = None       # greyscale|boost|contrast|darken|lighten|muted|negative|blur
+    video_audio_url: Optional[str] = None         # override timeline.soundtrack.src
+    video_hook_strategy: Optional[str] = "rotate" # rotate | random | none
+    video_use_ai_content: Optional[bool] = True   # call generate_video_content for caption/hashtags/text
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -355,6 +360,11 @@ class PipelineUpdate(BaseModel):
     specific_times: Optional[List[str]] = None
     require_approval: Optional[bool] = None
     status: Optional[str] = None
+    video_template_id: Optional[str] = None
+    video_filter_name: Optional[str] = None
+    video_audio_url: Optional[str] = None
+    video_hook_strategy: Optional[str] = None
+    video_use_ai_content: Optional[bool] = None
 
 class OnboardingCreate(BaseModel):
     # Step 1 – Basic Identity
@@ -1003,7 +1013,12 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         slide_format = None
 
     elif pipeline_type == "video":
-        # Video pipeline: pick clip → create post → enqueue Creatomate render
+        # Autopilot video pipeline:
+        # 1) Pick a hook from client.strategy.video_hooks per video_hook_strategy
+        # 2) AI-generate caption/hashtags/ai_text merge values (if enabled)
+        # 3) Pick clips for the template's clip slots
+        # 4) Create a post doc shaped like POST /videos/create produces
+        # 5) Enqueue via the same worker — submit_render_for_post handles the rest
         video_template_id = pipeline.get("video_template_id")
         if not video_template_id:
             await add_log("warning", f"Pipeline '{pipeline['name']}': no video template configured", pipeline["client_id"], client["name"])
@@ -1011,39 +1026,81 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
 
         template_doc = await db.shotstack_templates.find_one({"id": video_template_id, "status": "active"})
         if not template_doc:
-            await add_log("warning", f"Pipeline '{pipeline['name']}': Shotstack template {video_template_id} not active", pipeline["client_id"], client["name"])
+            await add_log("warning", f"Pipeline '{pipeline['name']}': Shotstack template not active", pipeline["client_id"], client["name"])
             return 0
 
+        # Required clips: count clip-role merge fields on the template
+        required_clip_count = sum(1 for f in template_doc.get("merge_fields", []) if f.get("role") == "clip")
         clips = await db.drive_clips.find({"client_id": pipeline["client_id"]}).to_list(500)
-        if not clips:
-            await add_log("warning", f"Pipeline '{pipeline['name']}': no clips available", pipeline["client_id"], client["name"])
+        if required_clip_count > 0 and len(clips) < required_clip_count:
+            await add_log("warning",
+                          f"Pipeline '{pipeline['name']}': template needs {required_clip_count} clip(s) but client has {len(clips)}",
+                          pipeline["client_id"], client["name"])
             return 0
 
-        picked_clip = _random.choice(clips)
-        clip_id_picked = picked_clip.get("drive_file_id") or picked_clip.get("id")
+        picked_clips = _random.sample(clips, required_clip_count) if required_clip_count > 0 else []
+        clip_drive_ids = [c.get("drive_file_id") or c.get("id") for c in picked_clips]
+
+        # Hook selection (rotate / random / none)
+        hooks = (client.get("strategy") or {}).get("video_hooks") or []
+        hook_strategy = pipeline.get("video_hook_strategy") or "rotate"
+        chosen_hook = None
+        next_hook_index = pipeline.get("next_hook_index", 0) or 0
+        if hooks and hook_strategy != "none":
+            if hook_strategy == "random":
+                chosen_hook = _random.choice(hooks)
+            else:  # rotate
+                idx = next_hook_index % len(hooks)
+                chosen_hook = hooks[idx]
+                next_hook_index = (idx + 1) % len(hooks)
+
+        prompt_text = (chosen_hook or {}).get("prompt") or pipeline.get("global_instructions") or topic or ""
+
+        # Optional AI content generation — caption, hashtags, ai_text merge values
+        generated_merge_values: dict = {}
+        caption: str = ""
+        hashtags: list = []
+        if pipeline.get("video_use_ai_content") is not False and prompt_text.strip():
+            ai_text_fields = [f for f in template_doc.get("merge_fields", []) if f.get("role") == "ai_text"]
+            try:
+                from video_render_service import generate_video_content
+                r = await generate_video_content(prompt_text, client, ai_text_fields)
+                generated_merge_values = r.get("merge_values") or {}
+                caption = r.get("caption") or ""
+                hashtags = r.get("hashtags") or []
+            except Exception as _ge:
+                logger.warning(f"Pipeline {pipeline_id} AI content gen failed: {_ge}")
+
+        post_doc = {
+            "id": str(uuid.uuid4()),
+            "client_id": pipeline["client_id"],
+            "client_name": client.get("name", ""),
+            "pipeline_id": pipeline_id,
+            "kind": "video",
+            "platform": (pipeline.get("platforms") or client.get("platforms") or ["instagram"])[0],
+            "target_platforms": pipeline.get("platforms") or client.get("platforms", []),
+            "template_id": video_template_id,
+            "scheduled_at": scheduled_time.isoformat(),
+            "status": "rendering",
+            "music_url": pipeline.get("video_audio_url"),
+            "filter_name": pipeline.get("video_filter_name"),
+            "clip_drive_ids": clip_drive_ids,
+            "generated_merge_values": generated_merge_values,
+            "caption": caption,
+            "hashtags": hashtags,
+            "prompt": prompt_text,
+            "topic": (chosen_hook or {}).get("title") or topic,
+            "hook_id": (chosen_hook or {}).get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
 
         try:
             from video_worker import enqueue_video_job as _enqueue_video_job
-            post_doc = {
-                "id": str(uuid.uuid4()),
-                "client_id": pipeline["client_id"],
-                "client_name": client.get("name", ""),
-                "pipeline_id": pipeline_id,
-                "kind": "video",
-                "platform": (pipeline.get("platforms") or client.get("platforms") or ["instagram"])[0],
-                "target_platforms": pipeline.get("platforms") or client.get("platforms", []),
-                "template_id": video_template_id,
-                "scheduled_at": scheduled_time.isoformat(),
-                "status": "rendering",
-                "music_url": pipeline.get("music_url"),
-                "clip_drive_ids": [clip_id_picked],
-                "topic": topic,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
             await db.posts.insert_one(post_doc)
             _task_id = _enqueue_video_job(post_doc["id"])
             video_posts_created = [post_doc["id"]]
-            await add_log("info", f"Video pipeline render enqueued (task {_task_id})", pipeline["client_id"], client["name"])
+            hook_label = (chosen_hook or {}).get("title") or "(no hook)"
+            await add_log("info", f"Video pipeline render enqueued — hook: {hook_label} (task {_task_id})", pipeline["client_id"], client["name"])
         except Exception as _ve:
             logger.error(f"Video pipeline {pipeline_id} failed: {_ve}")
             video_posts_created = []
@@ -1051,13 +1108,14 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         pipeline_updates_v: dict = {
             "last_run_at": now.isoformat(),
             "next_run_at": calculate_next_run(pipeline, scheduled_time),
+            "next_hook_index": next_hook_index,
             "total_runs": pipeline.get("total_runs", 0) + 1,
             "successful_runs": pipeline.get("successful_runs", 0) + (1 if video_posts_created else 0),
             "status": "active",
         }
         await db.pipelines.update_one({"id": pipeline_id}, {"$set": pipeline_updates_v})
         level = "success" if video_posts_created else "warning"
-        await add_log(level, f"Pipeline '{pipeline['name']}' [video]: {len(video_posts_created)} video post(s) created", pipeline["client_id"], client["name"])
+        await add_log(level, f"Pipeline '{pipeline['name']}' [video]: {len(video_posts_created)} post(s) created", pipeline["client_id"], client["name"])
         return len(video_posts_created)
 
     # When the pipeline has no locked format (user picked "Auto"), walk a deterministic
