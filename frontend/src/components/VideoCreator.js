@@ -99,6 +99,7 @@ export function VideoCreator() {
   // Step 1
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [clientSearch, setClientSearch] = useState("");
 
   // Step 2
   const [templates, setTemplates] = useState([]);
@@ -340,36 +341,58 @@ export function VideoCreator() {
         {/* Step 1: Client */}
         {step === 1 && (
           <div className="p-6">
-            <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-5">Select a client</div>
+            <input
+              type="text"
+              value={clientSearch}
+              onChange={e => setClientSearch(e.target.value)}
+              placeholder="Search clients…"
+              className="w-full max-w-sm bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-5"
+            />
             {clients.length === 0 ? (
               <div className="py-16 text-center font-mono text-xs text-zinc-600">No clients found.</div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                {clients.map(c => {
-                  const initials = (c.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-                  const isSelected = selectedClient?.id === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => handleSelectClient(c)}
-                      className={`p-4 text-left border transition-all duration-200 ${
-                        isSelected ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600 bg-zinc-900"
-                      }`}
-                    >
-                      <div className={`w-10 h-10 flex items-center justify-center font-bold text-sm mb-3 ${
-                        isSelected ? "bg-white text-black" : "bg-zinc-800 text-zinc-300"
-                      }`}>
-                        {initials}
-                      </div>
-                      <div className="text-xs font-semibold text-white truncate">{c.name}</div>
-                      <div className="text-[10px] font-mono text-zinc-500 mt-0.5 truncate">
-                        {c.niche || c.industry || "—"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            ) : (() => {
+              const q = clientSearch.trim().toLowerCase();
+              const filtered = q ? clients.filter(c => (c.name || "").toLowerCase().includes(q) || (c.niche || c.industry || "").toLowerCase().includes(q)) : clients;
+              return filtered.length === 0 ? (
+                <div className="py-8 text-center font-mono text-xs text-zinc-600">No clients match "{clientSearch}"</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {filtered.map(c => {
+                    const initials = (c.avatar || (c.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2)).toUpperCase();
+                    const isSelected = selectedClient?.id === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => handleSelectClient(c)}
+                        className={`p-3 text-left border transition-all duration-200 flex items-center gap-3 ${
+                          isSelected ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600 bg-zinc-900"
+                        }`}
+                      >
+                        {c.profile_photo_url ? (
+                          <img
+                            src={c.profile_photo_url}
+                            alt={c.name}
+                            className={`w-11 h-11 flex-shrink-0 object-cover ${isSelected ? "ring-2 ring-white" : ""}`}
+                          />
+                        ) : (
+                          <div className={`w-11 h-11 flex-shrink-0 flex items-center justify-center font-bold text-sm ${
+                            isSelected ? "bg-white text-black" : "bg-zinc-800 text-zinc-300"
+                          }`}>
+                            {initials}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-white truncate leading-tight">{c.name}</div>
+                          <div className="text-[10px] font-mono text-zinc-500 mt-0.5 truncate">
+                            {c.niche || c.industry || "—"}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
