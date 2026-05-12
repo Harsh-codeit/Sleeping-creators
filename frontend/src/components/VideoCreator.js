@@ -819,46 +819,36 @@ export function VideoCreator() {
                 <div className="text-xs font-semibold text-white">Filter</div>
                 <span className="text-[10px] font-mono text-zinc-600">Optional</span>
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {/* "None" tile */}
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setFilterName(null)}
-                  className={`group flex flex-col items-center gap-1.5 p-1.5 border transition-colors duration-200 ${
-                    !filterName ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600"
+                  className={`font-mono text-[11px] uppercase tracking-widest px-3 py-1.5 border transition-colors duration-200 ${
+                    !filterName
+                      ? "border-white text-white bg-zinc-900"
+                      : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden">
-                    {selectedTemplate?.thumbnail_url ? (
-                      <img src={selectedTemplate.thumbnail_url} alt="No filter"
-                        className="w-full h-full object-cover" />
-                    ) : (
-                      <Film size={14} className="text-zinc-700" />
-                    )}
-                  </div>
-                  <span className={`text-[10px] font-mono uppercase tracking-widest ${!filterName ? "text-white" : "text-zinc-500"}`}>None</span>
+                  none
                 </button>
-
                 {FILTERS.map(f => (
                   <button
                     key={f}
                     onClick={() => setFilterName(prev => prev === f ? null : f)}
-                    className={`group flex flex-col items-center gap-1.5 p-1.5 border transition-colors duration-200 ${
-                      filterName === f ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600"
+                    className={`font-mono text-[11px] uppercase tracking-widest px-3 py-1.5 border transition-colors duration-200 ${
+                      filterName === f
+                        ? "border-white text-white bg-zinc-900"
+                        : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden">
-                      {selectedTemplate?.thumbnail_url ? (
-                        <img src={selectedTemplate.thumbnail_url} alt={f}
-                          className="w-full h-full object-cover"
-                          style={{ filter: FILTER_CSS[f] }} />
-                      ) : (
-                        <Film size={14} className="text-zinc-700" />
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-mono uppercase tracking-widest ${filterName === f ? "text-white" : "text-zinc-500"}`}>{f}</span>
+                    {f}
                   </button>
                 ))}
               </div>
+              {filterName && (
+                <p className="text-[10px] font-mono text-zinc-500 mt-2">
+                  Live preview applied to the video on the left.
+                </p>
+              )}
             </div>
 
             <div>
