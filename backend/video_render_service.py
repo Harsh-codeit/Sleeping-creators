@@ -194,28 +194,30 @@ async def build_merge_values(
     for field in template.get("merge_fields", []):
         find = field["find"]
         role = field.get("role", "ai_text")
+        default = field.get("replace", "")
+        user_value = None
 
         if role == "ai_text":
-            val = ai_text_overrides.get(find) or generated.get(find)
-            if val:
-                values[find] = val
+            user_value = ai_text_overrides.get(find) or generated.get(find)
         elif role == "clip":
             try:
                 drive_id = next(clip_iter)
+                from clip_staging_service import stage_clip
+                user_value = await stage_clip(db, client["id"], drive_id)
             except StopIteration:
-                continue
-            from clip_staging_service import stage_clip
-            r2_url = await stage_clip(db, client["id"], drive_id)
-            values[find] = r2_url
+                user_value = None
         elif role == "logo":
-            v = overrides.get("logo_url")
-            if v:
-                values[find] = v
+            user_value = overrides.get("logo_url")
         elif role == "audio":
-            v = music_url or pipeline_music or overrides.get("default_music_url")
-            if v:
-                values[find] = v
-        # static_text: skip
+            user_value = music_url or pipeline_music or overrides.get("default_music_url")
+        # static_text: no user override; falls through to template default
+
+        # Always include a value — either user-provided or the template's `replace` default.
+        # Shotstack does NOT auto-fall-back to template defaults when a merge key is omitted;
+        # the literal {{FIELD}} stays in the timeline and breaks asset-URL fields.
+        final = user_value or default
+        if final:
+            values[find] = final
 
     return values
 

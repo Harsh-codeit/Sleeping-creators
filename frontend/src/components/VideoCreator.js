@@ -463,6 +463,11 @@ export function VideoCreator() {
 
   const handleRender = async () => {
     if (!selectedTemplate || !selectedClient) return;
+    const requiredClips = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
+    if (requiredClips > 0 && selectedClips.length < requiredClips) {
+      toast.error(`This template needs ${requiredClips} clip${requiredClips === 1 ? "" : "s"}; you've added ${selectedClips.length}. Go to Content → Clips.`);
+      return;
+    }
     setSubmitting(true);
     try {
       const filled = Object.fromEntries(Object.entries(texts).filter(([, v]) => v.trim()));
@@ -1082,10 +1087,15 @@ export function VideoCreator() {
                   )}
                 </div>
 
+                {clipCount > 0 && selectedClips.length < clipCount && (
+                  <div className="border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11px] font-mono text-amber-200">
+                    This template needs {clipCount} clip{clipCount === 1 ? "" : "s"}; you have {selectedClips.length}. Go back to Content → Clips.
+                  </div>
+                )}
                 <button
                   onClick={handleRender}
-                  disabled={submitting}
-                  className="w-full bg-white text-black text-sm font-bold py-3.5 hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
+                  disabled={submitting || (clipCount > 0 && selectedClips.length < clipCount)}
+                  className="w-full bg-white text-black text-sm font-bold py-3.5 hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Queuing…" : "Render Video"}
                 </button>

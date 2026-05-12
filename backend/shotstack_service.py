@@ -104,6 +104,21 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
     return data
 
 
+def _normalize_placeholders(obj):
+    """
+    Strip whitespace inside {{ FIELD }} placeholders → {{FIELD}}.
+    Shotstack does literal substitution, so a `find: "MEDIA_1"` won't match
+    `{{ MEDIA_1 }}` (with spaces) — the placeholder leaks into the rendered URL.
+    """
+    if isinstance(obj, str):
+        return re.sub(r"\{\{\s*([A-Z0-9_]+)\s*\}\}", r"{{\1}}", obj)
+    if isinstance(obj, dict):
+        return {k: _normalize_placeholders(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_normalize_placeholders(v) for v in obj]
+    return obj
+
+
 async def submit_render(
     template_data: dict,
     merge_values: dict,
@@ -126,7 +141,7 @@ async def submit_render(
     ]
 
     body = {
-        "timeline": tpl.get("timeline", {}),
+        "timeline": _normalize_placeholders(tpl.get("timeline", {})),
         "output": tpl.get("output", {}),
         "merge": merge_array,
     }
