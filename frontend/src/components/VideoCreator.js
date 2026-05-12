@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, Fragment } from "react";
+import { Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import {
   Wand2, Film, Download, X, Upload, HardDrive,
-  Play, Pause, Music2, Check, ChevronLeft, ChevronRight, Loader2,
+  Play, Pause, Music2, Check, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Loader2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
@@ -248,6 +249,11 @@ export function VideoCreator() {
   // Step 2
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [recentTemplateIds, setRecentTemplateIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("video_creator_recent_templates_v1") || "[]"); }
+    catch { return []; }
+  });
 
   // Step 3
   const [filterName, setFilterName] = useState(null);
@@ -318,11 +324,19 @@ export function VideoCreator() {
           clearInterval(iv);
           if (DONE.includes(r.data.status)) {
             try { localStorage.removeItem("video_creator_draft_v1"); } catch {}
+            if (selectedTemplate?.id) {
+              setRecentTemplateIds(prev => {
+                const next = [selectedTemplate.id, ...prev.filter(id => id !== selectedTemplate.id)].slice(0, 5);
+                try { localStorage.setItem("video_creator_recent_templates_v1", JSON.stringify(next)); } catch {}
+                return next;
+              });
+            }
           }
         }
       } catch {}
     }, 4000);
     return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendering, postId]);
 
   // ── Draft autosave ─────────────────────────────────────────────────────────
@@ -521,6 +535,16 @@ export function VideoCreator() {
     else if (selectedClips.length < clipCount) setSelectedClips(prev => [...prev, clip]);
   };
 
+  const reorderClip = (index, direction) => {
+    setSelectedClips(prev => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
   const openMusicPicker = async () => {
     setShowMusicPicker(true);
     try {
@@ -682,23 +706,72 @@ export function VideoCreator() {
         {/* Step 2: Template */}
         {step === 2 && (
           <div className="p-6">
-            <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-5">Choose a template</div>
             {templates.length === 0 ? (
-              <div className="py-16 text-center font-mono text-xs text-zinc-600">
-                No active templates. Go to Video Templates and sync from Shotstack.
+              <div className="py-16 flex flex-col items-center gap-4">
+                <Film size={40} className="text-zinc-700" />
+                <p className="font-mono text-xs text-zinc-500">No active templates yet.</p>
+                <Link
+                  to="/video-templates"
+                  className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-4 py-2"
+                >
+                  Open Video Templates →
+                </Link>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {templates.map(t => (
-                  <TemplateCard
-                    key={t.id}
-                    template={t}
-                    selected={selectedTemplate?.id === t.id}
-                    onClick={() => handleSelectTemplate(t)}
+            ) : (() => {
+              const q = templateSearch.trim().toLowerCase();
+              const filtered = q ? templates.filter(t => (t.name || "").toLowerCase().includes(q)) : templates;
+              const recents = recentTemplateIds
+                .map(id => templates.find(t => t.id === id))
+                .filter(Boolean);
+              const showRecents = !q && recents.length > 0;
+
+              return (
+                <>
+                  <input
+                    type="text"
+                    value={templateSearch}
+                    onChange={e => setTemplateSearch(e.target.value)}
+                    placeholder="Search templates…"
+                    className="w-full max-w-sm bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-5"
                   />
-                ))}
-              </div>
-            )}
+
+                  {showRecents && (
+                    <div className="mb-6">
+                      <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Recent</div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-4">
+                        {recents.map(t => (
+                          <TemplateCard
+                            key={t.id}
+                            template={t}
+                            selected={selectedTemplate?.id === t.id}
+                            onClick={() => handleSelectTemplate(t)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">
+                    {showRecents ? "All templates" : "Templates"}
+                    <span className="ml-2 text-zinc-600">({filtered.length})</span>
+                  </div>
+                  {filtered.length === 0 ? (
+                    <div className="py-8 text-center font-mono text-xs text-zinc-600">No templates match "{templateSearch}"</div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                      {filtered.map(t => (
+                        <TemplateCard
+                          key={t.id}
+                          template={t}
+                          selected={selectedTemplate?.id === t.id}
+                          onClick={() => handleSelectTemplate(t)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -888,9 +961,31 @@ export function VideoCreator() {
                                   </span>
                                   <span className="font-mono text-[10px] text-zinc-300 truncate">{c.name || c.drive_file_id}</span>
                                 </div>
-                                <button onClick={() => toggleClip(c)} className="text-zinc-600 hover:text-white ml-2 transition-colors flex-shrink-0">
-                                  <X size={10} />
-                                </button>
+                                <div className="flex items-center gap-0.5 ml-2 flex-shrink-0">
+                                  <button
+                                    onClick={() => reorderClip(i, -1)}
+                                    disabled={i === 0}
+                                    title="Move up"
+                                    className="p-1 text-zinc-600 hover:text-white disabled:opacity-30 disabled:hover:text-zinc-600 transition-colors"
+                                  >
+                                    <ChevronUp size={11} />
+                                  </button>
+                                  <button
+                                    onClick={() => reorderClip(i, 1)}
+                                    disabled={i === selectedClips.length - 1}
+                                    title="Move down"
+                                    className="p-1 text-zinc-600 hover:text-white disabled:opacity-30 disabled:hover:text-zinc-600 transition-colors"
+                                  >
+                                    <ChevronDown size={11} />
+                                  </button>
+                                  <button
+                                    onClick={() => toggleClip(c)}
+                                    title="Remove"
+                                    className="p-1 text-zinc-600 hover:text-white transition-colors"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
