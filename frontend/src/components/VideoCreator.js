@@ -8,6 +8,16 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 const FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
+const FILTER_CSS = {
+  greyscale: "grayscale(1)",
+  boost: "saturate(1.5) contrast(1.1)",
+  contrast: "contrast(1.4)",
+  darken: "brightness(0.7)",
+  lighten: "brightness(1.3)",
+  muted: "saturate(0.4)",
+  negative: "invert(1)",
+  blur: "blur(2px)",
+};
 
 function isVideo(url) {
   if (!url) return false;
@@ -15,7 +25,7 @@ function isVideo(url) {
 }
 
 // ── Step indicator ────────────────────────────────────────────────────────────
-function StepBar({ step }) {
+function StepBar({ step, onStepClick, canGoTo }) {
   const STEPS = ["Client", "Template", "Style", "Content", "Render"];
   return (
     <div className="flex items-center justify-center py-4 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
@@ -23,10 +33,18 @@ function StepBar({ step }) {
         const n = i + 1;
         const active = step === n;
         const done = step > n;
+        const clickable = canGoTo(n) && n !== step;
         return (
           <Fragment key={n}>
             {i > 0 && <div className={`w-10 h-px mx-1 transition-colors ${done ? "bg-zinc-500" : "bg-zinc-800"}`} />}
-            <div className="flex flex-col items-center gap-1 w-14">
+            <button
+              type="button"
+              onClick={clickable ? () => onStepClick(n) : undefined}
+              disabled={!clickable}
+              className={`flex flex-col items-center gap-1 w-14 bg-transparent border-0 p-0 transition-opacity ${
+                clickable ? "cursor-pointer hover:opacity-80" : "cursor-default"
+              }`}
+            >
               <div className={`w-7 h-7 flex items-center justify-center text-[11px] font-mono font-bold transition-colors ${
                 active ? "bg-white text-black" : done ? "bg-zinc-600 text-white" : "border border-zinc-700 text-zinc-600"
               }`}>
@@ -35,7 +53,7 @@ function StepBar({ step }) {
               <span className={`text-[9px] font-mono uppercase tracking-widest transition-colors ${active ? "text-white" : "text-zinc-600"}`}>
                 {label}
               </span>
-            </div>
+            </button>
           </Fragment>
         );
       })}
@@ -88,6 +106,132 @@ function TemplateCard({ template, selected, onClick }) {
         <div className="text-xs font-semibold text-white truncate leading-tight">{template.name}</div>
         <div className="text-[10px] font-mono text-zinc-500 mt-0.5">{template.merge_fields?.length ?? 0} fields</div>
       </div>
+    </div>
+  );
+}
+
+// ── Caption mock card (IG-style social feed preview) ─────────────────────────
+function CaptionMockCard({ client, caption, hashtags }) {
+  if (!caption && !hashtags) return null;
+  const allTags = (hashtags || "").split(",").map(t => t.trim().replace(/^#/, "")).filter(Boolean);
+  const tags = allTags.slice(0, 5);
+  const initials = (client?.avatar || (client?.name || "?").slice(0, 2)).toUpperCase();
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800">
+        {client?.profile_photo_url ? (
+          <img src={client.profile_photo_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+            {initials}
+          </div>
+        )}
+        <span className="text-xs font-semibold text-white truncate">{client?.name || "your_client"}</span>
+      </div>
+      <div className="px-3 py-2 text-[11px] text-zinc-300 whitespace-pre-wrap leading-relaxed line-clamp-5">
+        {caption || <span className="text-zinc-600 italic">Caption will appear here…</span>}
+      </div>
+      {tags.length > 0 && (
+        <div className="px-3 pb-2 flex flex-wrap gap-x-1.5 gap-y-1">
+          {tags.map(t => <span key={t} className="text-[10px] text-sky-400">#{t}</span>)}
+          {allTags.length > 5 && <span className="text-[10px] text-zinc-600">+{allTags.length - 5} more</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Preview pane — persistent video preview across steps 3-5 ─────────────────
+function PreviewPane({ step, selectedClient, selectedTemplate, filterName, caption, hashtags, rendering, pollAttempt, post, isSucceeded, isFailed }) {
+  const cssFilter = filterName ? FILTER_CSS[filterName] : "none";
+
+  // Step 5 — succeeded: real rendered MP4
+  if (step === 5 && isSucceeded && post?.r2_video_url) {
+    return (
+      <div className="p-6 flex flex-col gap-4">
+        <video src={post.r2_video_url} controls className="w-full bg-zinc-900 border border-zinc-800" />
+        <CaptionMockCard client={selectedClient} caption={caption} hashtags={hashtags} />
+      </div>
+    );
+  }
+
+  // Step 5 — rendering: shimmer skeleton with stage label
+  if (step === 5 && rendering) {
+    const stage = pollAttempt === 0 ? "Queued"
+      : pollAttempt < 5 ? "Fetching assets"
+      : pollAttempt < 15 ? "Rendering"
+      : "Saving";
+    return (
+      <div className="p-6 flex flex-col gap-4">
+        <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 animate-pulse" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+            <Loader2 size={24} className="text-zinc-500 animate-spin" />
+            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">{stage}…</span>
+          </div>
+        </div>
+        <CaptionMockCard client={selectedClient} caption={caption} hashtags={hashtags} />
+      </div>
+    );
+  }
+
+  // Step 5 — failed
+  if (step === 5 && isFailed) {
+    return (
+      <div className="p-6">
+        <div className="w-full aspect-[9/16] bg-zinc-900 border border-red-900/40 flex items-center justify-center p-6">
+          <div className="text-center text-xs font-mono text-red-400">
+            Render failed
+            <div className="text-[10px] text-zinc-500 mt-2 normal-case">{post?.error_message || post?.status}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No template yet
+  if (!selectedTemplate) {
+    return (
+      <div className="p-6">
+        <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 border-dashed flex flex-col items-center justify-center gap-3 text-zinc-600">
+          <Film size={32} />
+          <span className="text-[10px] font-mono uppercase tracking-widest">Pick a template →</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: template preview with live filter
+  const videoUrl = selectedTemplate.preview_url || (isVideo(selectedTemplate.thumbnail_url) ? selectedTemplate.thumbnail_url : null);
+  return (
+    <div className="p-6 flex flex-col gap-4">
+      <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 overflow-hidden">
+        {videoUrl ? (
+          <video
+            src={videoUrl}
+            autoPlay muted loop playsInline
+            className="w-full h-full object-cover"
+            style={{ filter: cssFilter }}
+          />
+        ) : selectedTemplate.thumbnail_url ? (
+          <img
+            src={selectedTemplate.thumbnail_url}
+            alt={selectedTemplate.name}
+            className="w-full h-full object-cover"
+            style={{ filter: cssFilter }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Film size={32} className="text-zinc-700" />
+          </div>
+        )}
+      </div>
+      <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest truncate">
+        {selectedTemplate.name}
+        {filterName && <span className="text-zinc-300"> · {filterName}</span>}
+      </div>
+      {step >= 4 && <CaptionMockCard client={selectedClient} caption={caption} hashtags={hashtags} />}
     </div>
   );
 }
@@ -332,14 +476,37 @@ export function VideoCreator() {
     : 30 + Math.min((pollAttempt / 70) * 60, 60);
 
   const canNext = { 1: !!selectedClient, 2: !!selectedTemplate, 3: true, 4: true };
+  const canGoTo = (n) => {
+    if (n === 1) return true;
+    if (n === 2) return !!selectedClient;
+    return !!selectedClient && !!selectedTemplate;
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-zinc-950 overflow-hidden">
-      <StepBar step={step} />
+      <StepBar step={step} canGoTo={canGoTo} onStepClick={setStep} />
 
-      {/* ── Main content ── */}
-      <div className="flex-1 overflow-y-auto">
+      {/* ── Main content (split: preview left, controls right for steps 3-5) ── */}
+      <div className="flex-1 flex overflow-hidden">
+        {step >= 3 && (
+          <div className="w-[400px] xl:w-[440px] flex-shrink-0 border-r border-zinc-800 overflow-y-auto bg-zinc-950">
+            <PreviewPane
+              step={step}
+              selectedClient={selectedClient}
+              selectedTemplate={selectedTemplate}
+              filterName={filterName}
+              caption={caption}
+              hashtags={hashtags}
+              rendering={rendering}
+              pollAttempt={pollAttempt}
+              post={post}
+              isSucceeded={isSucceeded}
+              isFailed={isFailed}
+            />
+          </div>
+        )}
+        <div className="flex-1 overflow-y-auto">
 
         {/* Step 1: Client */}
         {step === 1 && (
@@ -623,34 +790,20 @@ export function VideoCreator() {
               </div>
             )}
 
-            {/* Phase B: rendering */}
+            {/* Phase B: rendering — preview pane shows shimmer + stage; right pane shows just info */}
             {rendering && (
-              <div className="flex flex-col gap-5">
-                <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">
-                  {pollAttempt === 0 ? "Queued…"
-                    : pollAttempt < 5 ? "Fetching assets…"
-                    : pollAttempt < 15 ? "Rendering…"
-                    : "Saving…"}
-                </div>
-                <div className="w-full bg-zinc-800 h-1">
-                  <div
-                    className="bg-white h-1 transition-all duration-1000 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <div className="text-[10px] font-mono text-zinc-600">{Math.round(progress)}% — typically 20–90 seconds</div>
+              <div className="flex flex-col gap-3">
+                <div className="text-xs font-semibold text-white">Generating your video…</div>
+                <p className="text-[11px] font-mono text-zinc-500 leading-relaxed">
+                  Typical render takes 20–90 seconds. You can close this and come back — the video will be saved to this post.
+                </p>
               </div>
             )}
 
             {/* Phase C: success */}
             {isSucceeded && (
               <div className="flex flex-col gap-5">
-                {post.r2_video_url && (
-                  <video src={post.r2_video_url} controls className="w-full bg-zinc-900 border border-zinc-800" />
-                )}
-                {!post.r2_video_url && post.r2_snapshot_url && (
-                  <img src={post.r2_snapshot_url} alt="Snapshot" className="w-full border border-zinc-800" />
-                )}
+                <div className="text-xs font-semibold text-white">Video ready</div>
 
                 {/* Post actions */}
                 <div className="flex gap-2">
@@ -703,9 +856,6 @@ export function VideoCreator() {
             {/* Phase D: failed */}
             {isFailed && (
               <div className="flex flex-col gap-4">
-                <div className="border border-red-900/40 bg-red-900/10 px-4 py-3 text-xs font-mono text-red-400">
-                  Render failed: {post.error_message || post.status}
-                </div>
                 <button
                   onClick={() => { setPost(null); setPostId(null); setRendering(false); }}
                   className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-4 py-2"
@@ -716,6 +866,7 @@ export function VideoCreator() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Step navigation ── */}
