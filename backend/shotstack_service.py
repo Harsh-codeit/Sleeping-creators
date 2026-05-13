@@ -122,8 +122,16 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
         # Track asset types we saw, for diagnostic
         seen_types = []
         for track in timeline.get("tracks", []) or []:
+            if not isinstance(track, dict):
+                continue
             for clip in track.get("clips", []) or []:
-                asset = clip.get("asset", {}) or {}
+                if not isinstance(clip, dict):
+                    continue
+                raw_asset = clip.get("asset")
+                # Some hand-crafted JSON has `asset` as a bare string (the html
+                # markup or a placeholder). Skip those — they're not filterable
+                # anyway and would crash on .get() below.
+                asset = raw_asset if isinstance(raw_asset, dict) else {}
                 atype = asset.get("type", "") or ""
                 src = asset.get("src", "") or ""
                 seen_types.append(atype or "(none)")
@@ -148,8 +156,14 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
             soundtrack["src"] = audio_url
             applied = True
         for track in timeline.get("tracks", []) or []:
+            if not isinstance(track, dict):
+                continue
             for clip in track.get("clips", []) or []:
-                asset = clip.get("asset", {})
+                if not isinstance(clip, dict):
+                    continue
+                asset = clip.get("asset")
+                if not isinstance(asset, dict):
+                    continue
                 if asset.get("type") == "audio":
                     asset["src"] = audio_url
                     applied = True
@@ -189,12 +203,18 @@ def _apply_text_asset_overrides(timeline: dict, merge_values: dict, merge_defaul
         return
     swap_count = 0
     for track in timeline.get("tracks", []) or []:
+        if not isinstance(track, dict):
+            continue
         for clip in track.get("clips", []) or []:
-            asset = clip.get("asset", {}) or {}
+            if not isinstance(clip, dict):
+                continue
+            raw_asset = clip.get("asset")
+            if not isinstance(raw_asset, dict):
+                continue
             for key in ("text", "html", "src"):
-                v = asset.get(key)
+                v = raw_asset.get(key)
                 if isinstance(v, str) and v.strip() in overrides_by_default:
-                    asset[key] = overrides_by_default[v.strip()]
+                    raw_asset[key] = overrides_by_default[v.strip()]
                     swap_count += 1
     if swap_count:
         logger.info(f"_apply_text_asset_overrides: literal-substituted {swap_count} asset value(s)")
@@ -233,8 +253,14 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
     swap_count = 0
     used_keys = set()
     for track in timeline.get("tracks", []) or []:
+        if not isinstance(track, dict):
+            continue
         for clip in track.get("clips", []) or []:
-            asset = clip.get("asset") or {}
+            if not isinstance(clip, dict):
+                continue
+            asset = clip.get("asset")
+            if not isinstance(asset, dict):
+                continue
             atype = asset.get("type", "") or ""
             src = asset.get("src", "") or ""
             if atype not in {"video", "image", "luma"}:
@@ -336,12 +362,17 @@ async def submit_render(
     truncate = lambda v: (v[:60] + "…") if isinstance(v, str) and len(v) > 60 else v
     timeline_clips = []
     for track in body["timeline"].get("tracks", []) or []:
+        if not isinstance(track, dict):
+            continue
         for clip in track.get("clips", []) or []:
+            if not isinstance(clip, dict):
+                continue
             if clip.get("filter"):
                 clip_filter_count += 1
-            asset = clip.get("asset") or {}
+            raw_asset = clip.get("asset")
+            asset = raw_asset if isinstance(raw_asset, dict) else {}
             timeline_clips.append({
-                "type": asset.get("type"),
+                "type": asset.get("type") if asset else f"(non-dict: {type(raw_asset).__name__})",
                 "src": truncate(asset.get("src", "")) if asset.get("src") else None,
                 "text": truncate(asset.get("text", "")) if asset.get("text") else None,
                 "filter": clip.get("filter"),
