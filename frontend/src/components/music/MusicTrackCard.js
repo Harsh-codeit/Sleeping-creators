@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Pencil, Trash2, Music } from "lucide-react";
+import { Pencil, Trash2, Play, Pause } from "lucide-react";
 import WaveformEditor from "./WaveformEditor";
 import { MoodTagPicker } from "./MoodTagPicker";
 import { VideoField } from "./VideoField";
@@ -14,11 +14,27 @@ function fmtDuration(secs) {
   return `${m}:${String(Math.floor(secs % 60)).padStart(2, "0")}`;
 }
 
-export function MusicTrackCard({ track, onDeleted, onUpdated }) {
+export function MusicTrackCard({ track, onDeleted, onUpdated, isPlaying = false, onPlay, onPause }) {
   const [editing, setEditing] = useState(false);
   const [moodTags, setMoodTags] = useState(track.mood_tags || []);
   const [segments, setSegments] = useState(track.segments || []);
   const [saving, setSaving] = useState(false);
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (isPlaying) {
+      el.play().catch(() => onPause?.());
+    } else {
+      el.pause();
+    }
+  }, [isPlaying, onPause]);
+
+  const handleTogglePlay = () => {
+    if (isPlaying) onPause?.();
+    else onPlay?.();
+  };
 
   const handleDelete = async () => {
     if (!window.confirm(`Delete "${track.name}"?`)) return;
@@ -50,9 +66,25 @@ export function MusicTrackCard({ track, onDeleted, onUpdated }) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors">
       <div className="flex items-center gap-3 p-4">
-        <div className="flex-shrink-0 w-9 h-9 bg-zinc-800 border border-zinc-700 flex items-center justify-center">
-          <Music size={14} className="text-zinc-500" />
-        </div>
+        <button
+          type="button"
+          onClick={handleTogglePlay}
+          aria-label={isPlaying ? "Pause" : "Play"}
+          className="flex-shrink-0 w-9 h-9 bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:bg-zinc-700 hover:border-zinc-500 transition-colors"
+        >
+          {isPlaying ? (
+            <Pause size={14} className="text-white" />
+          ) : (
+            <Play size={14} className="text-zinc-300" />
+          )}
+        </button>
+        <audio
+          ref={audioRef}
+          src={track.r2_url}
+          preload="none"
+          onEnded={() => onPause?.()}
+        />
+
 
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{track.name}</p>

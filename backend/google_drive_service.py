@@ -129,6 +129,41 @@ def list_images(refresh_token: str, folder_id: str) -> list[dict]:
     ]
 
 
+_AUDIO_MIME_TYPES = {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg"}
+_AUDIO_MIME_QUERY = " or ".join(f"mimeType = '{m}'" for m in sorted(_AUDIO_MIME_TYPES))
+
+
+def list_audio(refresh_token: str, folder_id: str) -> list[dict]:
+    """Return audio file metadata from a Drive folder, ordered by name."""
+    service = _build_service(refresh_token)
+    all_files = []
+    page_token = None
+    while True:
+        kwargs = dict(
+            q=f"'{folder_id}' in parents and trashed=false and ({_AUDIO_MIME_QUERY})",
+            fields="nextPageToken,files(id,name,mimeType,size)",
+            orderBy="name",
+            pageSize=200,
+        )
+        if page_token:
+            kwargs["pageToken"] = page_token
+        result = service.files().list(**kwargs).execute()
+        all_files.extend(result.get("files", []))
+        page_token = result.get("nextPageToken")
+        if not page_token:
+            break
+    return [
+        {
+            "drive_file_id": f["id"],
+            "name": f["name"],
+            "mime_type": f["mimeType"],
+            "size": int(f.get("size", 0) or 0),
+        }
+        for f in all_files
+        if f.get("mimeType") in _AUDIO_MIME_TYPES
+    ]
+
+
 def download_clip(refresh_token: str, file_id: str, dest_path: str) -> str:
     """Download Drive file to dest_path. Returns dest_path."""
     service = _build_service(refresh_token)

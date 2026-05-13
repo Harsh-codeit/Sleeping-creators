@@ -13,7 +13,7 @@ from typing import List, Optional, Dict
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-import os, uuid, logging, random, secrets, asyncio, tempfile
+import os, uuid, logging, random, secrets, asyncio, tempfile, re
 import sheets_service
 import httpx
 import bundle_service
@@ -3329,6 +3329,14 @@ class MusicTrackUpdate(BaseModel):
     mood_tags: Optional[List[str]] = None
     segments: Optional[List[MusicSegment]] = None
 
+class DriveMusicImportRequest(BaseModel):
+    folder: str
+    drive_file_ids: List[str]
+    mood_tags: List[str] = Field(default_factory=list)
+
+class MusicTagCreate(BaseModel):
+    tag: str
+
 class CarouselPreviewRequest(BaseModel):
     template: str = "dark_card"
     slides: List[dict] = []
@@ -4293,6 +4301,219 @@ async def delete_music_track(track_id: str):
         raise HTTPException(status_code=404, detail="Track not found")
     await db.music_tracks.delete_one({"id": track_id})
     return {"status": "deleted"}
+
+
+_TAG_RE = re.compile(r"^[a-z0-9 _-]+$")
+
+
+async def _read_curated_music_tags() -> list[str]:
+    setting = await db.settings.find_one({"key": "music_tags"})
+    value = (setting or {}).get("value", [])
+    return [t for t in value if isinstance(t, str) and t]
+
+
+async def _read_all_music_tags() -> list[str]:
+    curated = await _read_curated_music_tags()
+    inferred = await db.music_tracks.distinct("mood_tags")
+    merged = sorted({t for t in (*curated, *inferred) if isinstance(t, str) and t})
+    return merged
+
+
+@api_router.get("/music/tags")
+async def list_music_tags():
+    return {"tags": await _read_all_music_tags()}
+
+
+@api_router.post("/music/tags", status_code=201)
+async def create_music_tag(data: MusicTagCreate):
+    tag = (data.tag or "").strip().lower()
+    if not tag:
+        raise HTTPException(status_code=400, detail="Tag must not be empty")
+    if len(tag) > 32:
+        raise HTTPException(status_code=400, detail="Tag must be 32 characters or fewer")
+    if not _TAG_RE.match(tag):
+        raise HTTPException(
+            status_code=400,
+            detail="Tag may only contain lowercase letters, digits, spaces, underscores, and hyphens",
+        )
+    await db.settings.update_one(
+        {"key": "music_tags"},
+        {"$addToSet": {"value": tag}, "$setOnInsert": {"key": "music_tags"}},
+        upsert=True,
+    )
+    return {"tags": await _read_all_music_tags()}
+
+
+@api_router.delete("/music/tags/{tag}")
+async def delete_music_tag(tag: str):
+    """Remove a tag from the curated catalog. Existing tracks keep the tag."""
+    tag = tag.strip().lower()
+    if not tag:
+        raise HTTPException(status_code=400, detail="Tag must not be empty")
+    await db.settings.update_one(
+        {"key": "music_tags"},
+        {"$pull": {"value": tag}},
+    )
+    return {"tags": await _read_all_music_tags()}
+
+
+@api_router.get("/music/drive/list")
+async def list_drive_music(folder: str):
+    """List audio files in a Drive folder, marking which are already imported."""
+    from google_drive_service import list_audio, extract_folder_id, GoogleTokenExpiredError
+
+    folder_id = extract_folder_id(folder)
+    if not folder_id:
+        raise HTTPException(status_code=400, detail=f"Could not parse a folder ID from: {folder!r}")
+
+    refresh_token = await _get_google_refresh_token()
+    if not refresh_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Google account not connected. Visit /api/auth/google/start to connect.",
+        )
+
+    loop = asyncio.get_event_loop()
+    try:
+        items = await loop.run_in_executor(None, list_audio, refresh_token, folder_id)
+    except GoogleTokenExpiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"[music-drive] list_audio failed for folder {folder_id}: {exc}")
+        raise HTTPException(status_code=502, detail=f"Drive API error: {exc}")
+
+    drive_ids = [item["drive_file_id"] for item in items]
+    existing_docs = await db.music_tracks.find(
+        {"drive_file_id": {"$in": drive_ids}},
+        {"drive_file_id": 1},
+    ).to_list(None)
+    existing_ids = {doc["drive_file_id"] for doc in existing_docs if doc.get("drive_file_id")}
+
+    for item in items:
+        item["already_imported"] = item["drive_file_id"] in existing_ids
+
+    return {"folder_id": folder_id, "items": items}
+
+
+@api_router.post("/music/drive/import", status_code=201)
+async def import_drive_music(data: DriveMusicImportRequest):
+    """Download selected Drive audio files and add them to the music library."""
+    import storage as _storage
+    from google_drive_service import (
+        list_audio,
+        extract_folder_id,
+        download_clip,
+        GoogleTokenExpiredError,
+    )
+
+    if not data.drive_file_ids:
+        raise HTTPException(status_code=400, detail="drive_file_ids is empty")
+
+    folder_id = extract_folder_id(data.folder)
+    if not folder_id:
+        raise HTTPException(status_code=400, detail=f"Could not parse a folder ID from: {data.folder!r}")
+
+    if not _storage.is_enabled():
+        raise HTTPException(status_code=503, detail="Storage is not configured")
+
+    refresh_token = await _get_google_refresh_token()
+    if not refresh_token:
+        raise HTTPException(
+            status_code=400,
+            detail="Google account not connected. Visit /api/auth/google/start to connect.",
+        )
+
+    loop = asyncio.get_event_loop()
+    try:
+        folder_items = await loop.run_in_executor(None, list_audio, refresh_token, folder_id)
+    except GoogleTokenExpiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error(f"[music-drive] list_audio failed for folder {folder_id}: {exc}")
+        raise HTTPException(status_code=502, detail=f"Drive API error: {exc}")
+
+    by_id = {item["drive_file_id"]: item for item in folder_items}
+
+    # Pre-fetch which IDs are already imported (single query)
+    existing_docs = await db.music_tracks.find(
+        {"drive_file_id": {"$in": data.drive_file_ids}},
+        {"drive_file_id": 1},
+    ).to_list(None)
+    existing_ids = {doc["drive_file_id"] for doc in existing_docs if doc.get("drive_file_id")}
+
+    parsed_default_tags = [
+        t.strip().lower() for t in data.mood_tags if isinstance(t, str) and t.strip()
+    ]
+
+    imported: list[dict] = []
+    skipped: list[dict] = []
+    failed: list[dict] = []
+
+    for drive_file_id in data.drive_file_ids:
+        if drive_file_id in existing_ids:
+            skipped.append({"drive_file_id": drive_file_id, "reason": "already_imported"})
+            continue
+
+        item = by_id.get(drive_file_id)
+        if not item:
+            failed.append({"drive_file_id": drive_file_id, "reason": "not_found_in_folder"})
+            continue
+
+        track_id = str(uuid.uuid4())
+        name = item["name"]
+        mime_type = item.get("mime_type") or "audio/mpeg"
+        ext = os.path.splitext(name)[1] or ".mp3"
+
+        fd, tmp_path = tempfile.mkstemp(suffix=ext)
+        os.close(fd)
+
+        try:
+            try:
+                await loop.run_in_executor(None, download_clip, refresh_token, drive_file_id, tmp_path)
+            except Exception as exc:
+                logger.error(f"[music-drive] download failed for {drive_file_id}: {exc}")
+                failed.append({"drive_file_id": drive_file_id, "reason": f"download_failed: {exc}"})
+                continue
+
+            duration = 0.0
+            try:
+                from mutagen import File as MutagenFile
+                probed = MutagenFile(tmp_path)
+                if probed is not None and probed.info is not None:
+                    duration = float(probed.info.length or 0.0)
+            except Exception as exc:
+                logger.warning(f"[music-drive] duration probe failed for {drive_file_id}: {exc}")
+
+            r2_key = f"music/{track_id}{ext}"
+            r2_url = _storage.upload_file(tmp_path, r2_key, content_type=mime_type)
+            if not r2_url:
+                failed.append({"drive_file_id": drive_file_id, "reason": "storage_upload_failed"})
+                continue
+
+            display_name = os.path.splitext(name)[0]
+            doc = {
+                "id": track_id,
+                "name": display_name,
+                "filename": name,
+                "r2_url": r2_url,
+                "r2_key": r2_key,
+                "duration": duration,
+                "mood_tags": list(parsed_default_tags),
+                "segments": [],
+                "drive_file_id": drive_file_id,
+                "source": "drive",
+                "uploaded_at": now_iso(),
+            }
+            await db.music_tracks.insert_one(doc)
+            inserted = await db.music_tracks.find_one({"id": track_id})
+            imported.append(clean_doc(inserted))
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
+
+    return {"imported": imported, "skipped": skipped, "failed": failed}
 
 
 # ─── Pipeline Routes ──────────────────────────────────────────────────────────
