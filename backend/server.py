@@ -1071,6 +1071,27 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             picked_clips = _random.sample(pool, required_clip_count)
         clip_drive_ids = [c.get("drive_file_id") or c.get("id") for c in picked_clips]
 
+        # Diagnostic — surfaces the actual selection in logs so "clips not
+        # changing" / "filter not applying" complaints can be debugged without
+        # opening the DB shell.
+        clip_role_count = sum(1 for f in template_doc.get("merge_fields", []) if f.get("role") == "clip")
+        ai_text_count = sum(1 for f in template_doc.get("merge_fields", []) if f.get("role") == "ai_text")
+        logger.info(
+            f"Pipeline {pipeline_id[:8]} video config: "
+            f"template={template_doc.get('name')!r} "
+            f"pool_size={len(pool)} required_clips={required_clip_count} picked={clip_drive_ids} "
+            f"strategy={clip_strategy} "
+            f"role_counts={{clip:{clip_role_count}, ai_text:{ai_text_count}}} "
+            f"filter={pipeline.get('video_filter_name')!r} "
+            f"audio_strategy={'tags' if pipeline.get('video_audio_tags') else ('url' if pipeline.get('video_audio_url') else 'default')}"
+        )
+        if clip_role_count == 0 and template_doc.get("merge_fields"):
+            logger.warning(
+                f"Pipeline {pipeline_id[:8]}: template '{template_doc.get('name')}' has merge fields but NONE "
+                f"are tagged role='clip' — clip picks will not be applied. Open the template in /video-templates "
+                f"and fix the field roles in the drawer."
+            )
+
         # Hook selection (rotate / random / none)
         hooks = (client.get("strategy") or {}).get("video_hooks") or []
         hook_strategy = pipeline.get("video_hook_strategy") or "rotate"
@@ -4016,6 +4037,34 @@ async def import_template_json(req: ImportTemplateJsonRequest):
     }
     await db.shotstack_templates.insert_one(doc)
     return clean_doc(await db.shotstack_templates.find_one({"id": doc["id"]}))
+
+
+@api_router.post("/shotstack-templates/{template_id}/reinfer-roles")
+async def reinfer_template_roles(template_id: str):
+    """Re-run the auto-infer logic for every merge field still marked
+    inferred=True. Fields the admin manually set (inferred=False) are left
+    alone. Useful after the inference rules get tightened (e.g. MEDIA_*
+    now maps to clip role) — without re-importing, existing rows stay on
+    the old inference output."""
+    from shotstack_template_importer import _infer_role
+    tpl = await db.shotstack_templates.find_one({"id": template_id})
+    if not tpl:
+        raise HTTPException(404, "template not found")
+    fields = tpl.get("merge_fields") or []
+    changed = []
+    for f in fields:
+        if not f.get("inferred", True):
+            continue  # admin pinned this one — don't touch
+        old = f.get("role")
+        new = _infer_role(f.get("find", ""))
+        if new != old:
+            f["role"] = new
+            changed.append({"find": f["find"], "old": old, "new": new})
+    if changed:
+        await db.shotstack_templates.update_one(
+            {"id": template_id}, {"$set": {"merge_fields": fields}},
+        )
+    return {"changed": changed, "count": len(changed)}
 
 
 @api_router.delete("/shotstack-templates/{template_id}")

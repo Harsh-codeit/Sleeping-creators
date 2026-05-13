@@ -333,6 +333,26 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
               {saving ? "Saving…" : "Save fields"}
             </button>
             <button
+              onClick={async () => {
+                try {
+                  const r = await axios.post(`${API}/shotstack-templates/${template.id}/reinfer-roles`);
+                  if (r.data.count === 0) {
+                    toast.info("No role changes — all roles already match the latest auto-infer rules");
+                  } else {
+                    const summary = r.data.changed.slice(0, 4).map(c => `${c.find}: ${c.old}→${c.new}`).join(", ");
+                    toast.success(`Updated ${r.data.count} role${r.data.count === 1 ? "" : "s"}${summary ? " · " + summary : ""}`);
+                    onChanged?.();
+                  }
+                } catch (e) {
+                  toast.error(e.response?.data?.detail || "Re-infer failed");
+                }
+              }}
+              title="Re-apply the latest auto-infer rules to fields still marked 'auto' (manually-set roles are preserved)"
+              className="px-3 py-1.5 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200"
+            >
+              Re-apply auto-roles
+            </button>
+            <button
               onClick={deleteTemplate}
               title="Remove from local registry (re-appears on next Sync)"
               className="flex items-center gap-1.5 px-3 py-1.5 border border-red-900/40 text-red-400 text-xs font-mono hover:bg-red-900/10 transition-colors duration-200"
