@@ -2408,13 +2408,18 @@ async def publish_post_now(post_id: str, local_fallback: bool = Query(False)):
             raise HTTPException(409, "Post is not in retrying_local state")
     else:
         # Claim the post atomically. Allow re-publishing "published" posts so the
-        # user can push updated content to Bundle after editing.
+        # user can push updated content to Bundle after editing. Video posts go
+        # through render-first states (succeeded / pending_approval / bundle_scheduled)
+        # before being publishable — include those for manual "Publish now" too.
+        claimable = ["draft", "scheduled", "failed", "published",
+                     "succeeded", "pending_approval", "bundle_scheduled"]
         claimed = await db.posts.update_one(
-            {"id": post_id, "status": {"$in": ["draft", "scheduled", "failed", "published"]}},
+            {"id": post_id, "status": {"$in": claimable}},
             {"$set": {"status": "publishing"}}
         )
         if claimed.modified_count == 0:
-            raise HTTPException(409, "Post is already being published")
+            current = await db.posts.find_one({"id": post_id}, {"status": 1, "_id": 0})
+            raise HTTPException(409, f"Cannot publish from status {current.get('status')!r}")
 
     # If this post was previously sent to Bundle, delete the old post first so
     # the re-publish creates a fresh one with the current content and timing.
