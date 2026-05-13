@@ -110,12 +110,35 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
     tpl = data.get("template", {})
     timeline = tpl.get("timeline", {})
 
-    # 1) Filter — apply to every video clip
+    # 1) Filter — apply to every visual clip in the timeline.
+    # Shotstack accepts `clip.filter` on visual assets (video, image, luma,
+    # html). Apply broadly — the renderer ignores filter on audio/title types
+    # so it's safe to spray it across anything visual. Heuristic: if asset.src
+    # looks like a video URL OR asset.type is one of the visual kinds, filter.
+    _VISUAL_ASSET_TYPES = {"video", "image", "luma", "html", "title", "caption"}
     if filter_name and filter_name in _FILTERS:
+        applied_count = 0
         for track in timeline.get("tracks", []) or []:
             for clip in track.get("clips", []) or []:
-                if clip.get("asset", {}).get("type") == "video":
+                asset = clip.get("asset", {}) or {}
+                atype = asset.get("type", "")
+                src = asset.get("src", "") or ""
+                is_visual = atype in _VISUAL_ASSET_TYPES or (
+                    # Fallback: a clip whose src is a {{MEDIA_*}} or {{*VIDEO*}}
+                    # placeholder is almost certainly a video slot even if
+                    # type is missing.
+                    isinstance(src, str) and re.search(r"\{\{\s*[A-Z0-9_]*(?:MEDIA|VIDEO|CLIP|IMG|IMAGE|PHOTO)[A-Z0-9_]*\s*\}\}", src) is not None
+                )
+                # Skip audio explicitly — filter would never apply there
+                if atype == "audio":
+                    continue
+                if is_visual:
                     clip["filter"] = filter_name
+                    applied_count += 1
+        logger.info(
+            f"_apply_filter_and_audio: filter={filter_name!r} applied to {applied_count} clip(s)"
+            + (" — template has no visual clips to filter" if applied_count == 0 else "")
+        )
 
     # 2) Audio override
     if audio_url:
