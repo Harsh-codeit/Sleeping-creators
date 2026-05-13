@@ -211,16 +211,52 @@ def _apply_text_asset_overrides(timeline: dict, merge_values: dict, merge_defaul
             raw_asset = clip.get("asset")
             if not isinstance(raw_asset, dict):
                 continue
+            atype = raw_asset.get("type", "") or ""
             for key in ("text", "html", "src"):
                 v = raw_asset.get(key)
-                if isinstance(v, str) and v.strip() in overrides_by_default:
-                    raw_asset[key] = overrides_by_default[v.strip()]
-                    swap_count += 1
+                if not isinstance(v, str) or v.strip() not in overrides_by_default:
+                    continue
+                new_val = overrides_by_default[v.strip()]
+                # For src specifically, refuse to write a URL whose extension
+                # doesn't match the asset's expected type — otherwise Shotstack
+                # 400s with "Unsupported file extension X for Y asset".
+                if key == "src" and not _is_compatible(atype, new_val):
+                    continue
+                raw_asset[key] = new_val
+                swap_count += 1
     if swap_count:
         logger.info(f"_apply_text_asset_overrides: literal-substituted {swap_count} asset value(s)")
 
 
 _CLIP_FIELD_RE = re.compile(r"^[A-Z0-9_]*(MEDIA|VIDEO|CLIP|IMG|IMAGE|PHOTO)[A-Z0-9_]*$")
+_VIDEO_EXT_RE = re.compile(r"\.(mp4|mov|webm|m4v|mkv|avi)(\?|$)", re.IGNORECASE)
+_IMAGE_EXT_RE = re.compile(r"\.(jpg|jpeg|png|gif|webp|bmp|tiff|avif|svg)(\?|$)", re.IGNORECASE)
+
+
+def _url_kind(url: str) -> str | None:
+    """Classify a URL by file extension. Returns 'video', 'image', or None."""
+    if not isinstance(url, str):
+        return None
+    if _VIDEO_EXT_RE.search(url):
+        return "video"
+    if _IMAGE_EXT_RE.search(url):
+        return "image"
+    return None
+
+
+def _is_compatible(asset_type: str, url: str) -> bool:
+    """True if putting `url` into an asset of `asset_type` makes sense.
+    Prevents Shotstack 400s like '.mp4 in image asset' / '.png in video asset'."""
+    url_kind = _url_kind(url)
+    if url_kind is None:
+        return True  # Unknown extension — let Shotstack decide
+    if asset_type == "video":
+        return url_kind == "video"
+    if asset_type == "image":
+        return url_kind == "image"
+    if asset_type == "luma":
+        return url_kind == "image"  # luma masks are images
+    return True
 
 
 def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> None:
@@ -289,10 +325,18 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
             # Don't double-substitute — skip if src is already one of our values
             if any(src == v for _, v in candidates):
                 continue
-            # Claim the next unused candidate
-            next_pair = next(((k, v) for k, v in candidates if k not in used_keys), None)
+            # Claim the next TYPE-COMPATIBLE candidate. Don't write a .mp4 URL
+            # into an image asset (or vice versa) — Shotstack rejects that as
+            # an unsupported file extension.
+            next_pair = next(
+                ((k, v) for (k, v) in candidates
+                 if k not in used_keys and _is_compatible(atype, v)),
+                None,
+            )
             if not next_pair:
-                break
+                # No type-compatible candidate left for this clip — leave it
+                # alone. Better an unrelated default than a 400-causing mismatch.
+                continue
             k, v = next_pair
             asset["src"] = v
             used_keys.add(k)
