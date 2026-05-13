@@ -248,6 +248,23 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
     if not candidates:
         return
 
+    # Pre-scan: drop any candidate whose {{KEY}} placeholder appears anywhere
+    # in the timeline JSON. Shotstack will substitute those natively — if we
+    # also swap them in positionally, we end up double-applying and can land
+    # the value in the WRONG clip type (e.g. a video URL written into an
+    # image asset, which Shotstack then rejects as invalid).
+    import json as _json
+    try:
+        timeline_str = _json.dumps(timeline)
+    except Exception:
+        timeline_str = ""
+    candidates = [
+        (k, v) for (k, v) in candidates
+        if f"{{{{{k}}}}}" not in timeline_str
+    ]
+    if not candidates:
+        return
+
     # Walk visual clips in order. For each, if src is a URL (not a placeholder)
     # and doesn't already equal any merge value, claim the next candidate.
     swap_count = 0
@@ -386,18 +403,30 @@ async def submit_render(
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{_base_url()}/render", headers=_headers(), json=body)
         if r.status_code >= 400:
-            # Surface Shotstack's actual error message (validation details, etc.)
-            # — raise_for_status() drops the response body, leaving a useless
-            # "400 Bad Request" with no clue what went wrong.
+            # Surface Shotstack's actual error. Their response shape varies:
+            # sometimes { response: { errors: [...], message } }, sometimes
+            # { response: "error string" }, sometimes a top-level message.
+            # Guard every step — this is the error path, can't have it crash.
             try:
                 err_body = r.json()
             except Exception:
                 err_body = {"raw": r.text}
-            # Shotstack puts the validation detail at one of these paths
-            errors_list = (err_body.get("response") or {}).get("errors") or []
-            specific = errors_list[0].get("message") if errors_list else None
-            top_level = (err_body.get("response") or {}).get("message") or err_body.get("message")
-            detail = specific or top_level or str(err_body)[:500]
+            if not isinstance(err_body, dict):
+                err_body = {"raw": str(err_body)}
+
+            resp_val = err_body.get("response")
+            detail = None
+            if isinstance(resp_val, dict):
+                errors_list = resp_val.get("errors")
+                if isinstance(errors_list, list) and errors_list and isinstance(errors_list[0], dict):
+                    detail = errors_list[0].get("message")
+                if not detail:
+                    detail = resp_val.get("message")
+            elif isinstance(resp_val, str):
+                detail = resp_val
+            if not detail:
+                detail = err_body.get("message") or str(err_body)[:500]
+
             logger.error(
                 f"Shotstack /render {r.status_code}: {detail} | full response: {err_body}"
             )
