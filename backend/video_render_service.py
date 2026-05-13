@@ -353,6 +353,15 @@ async def submit_render_for_post(
     filter_name = post.get("filter_name") or None
     audio_url_override = music_url or None
 
+    # Log the actual values being sent — useful when debugging "content not changing":
+    # if a placeholder doesn't appear in this dict, Shotstack will leak it through.
+    logger.info(
+        f"submit_render post={post.get('id', '')[:8]} template={template.get('name')!r} "
+        f"source={'inline' if ss_id.startswith('inline:') else 'shotstack'} "
+        f"merge_keys={list(merge_values.keys())} filter={filter_name!r} "
+        f"audio_override={'yes' if audio_url_override else 'no'}"
+    )
+
     shotstack_render_id = await submit_render(
         template_data=template_data,
         merge_values=merge_values,

@@ -271,7 +271,17 @@ export function VideoTemplateDetail({ template, onClose, onChanged }) {
 
         {/* Merge fields */}
         <div className="p-5 flex-1 overflow-auto">
-          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Merge Fields</div>
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Merge Fields</div>
+            {fields.some(f => f.inferred) && (
+              <span
+                title="Roles tagged 'auto' were guessed from field names. Review & change them if needed — picking the wrong role (e.g. ai_text for a clip slot) will skip the substitution at render time."
+                className="text-[9px] font-mono text-amber-400 uppercase tracking-widest"
+              >
+                {fields.filter(f => f.inferred).length} auto-inferred role{fields.filter(f => f.inferred).length === 1 ? "" : "s"} — review below
+              </span>
+            )}
+          </div>
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-zinc-800">

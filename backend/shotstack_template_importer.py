@@ -7,22 +7,28 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 # Fields whose names suggest they carry video clip URLs (not text)
-_CLIP_HINTS = {"VIDEO", "CLIP", "SRC", "SOURCE", "FOOTAGE", "SCENE", "BACKGROUND"}
-_AUDIO_HINTS = {"AUDIO", "MUSIC", "TRACK", "SOUND", "BGM"}
-_LOGO_HINTS = {"LOGO", "ICON", "BRAND_IMAGE", "WATERMARK"}
+# Order matters: more-specific hints (LOGO/BRAND) are checked first so a generic
+# IMAGE field doesn't get mis-classified as a clip when it's really a logo.
+_CLIP_HINTS = {
+    "VIDEO", "CLIP", "SRC", "SOURCE", "FOOTAGE", "SCENE", "BACKGROUND",
+    "MEDIA", "IMG", "IMAGE", "PHOTO", "PIC",
+}
+_AUDIO_HINTS = {"AUDIO", "MUSIC", "TRACK", "SOUND", "BGM", "SOUNDTRACK"}
+_LOGO_HINTS = {"LOGO", "ICON", "BRAND_IMAGE", "WATERMARK", "BRAND_LOGO"}
 
 
 def _infer_role(find: str) -> str:
     upper = find.upper()
-    for hint in _CLIP_HINTS:
-        if hint in upper:
-            return "clip"
-    for hint in _AUDIO_HINTS:
-        if hint in upper:
-            return "audio"
+    # Check LOGO before CLIP — "BRAND_IMAGE" / "LOGO_IMAGE" should be logo, not clip
     for hint in _LOGO_HINTS:
         if hint in upper:
             return "logo"
+    for hint in _AUDIO_HINTS:
+        if hint in upper:
+            return "audio"
+    for hint in _CLIP_HINTS:
+        if hint in upper:
+            return "clip"
     return "ai_text"
 
 
