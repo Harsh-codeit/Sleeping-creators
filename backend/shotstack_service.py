@@ -354,7 +354,23 @@ async def submit_render(
 
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{_base_url()}/render", headers=_headers(), json=body)
-        r.raise_for_status()
+        if r.status_code >= 400:
+            # Surface Shotstack's actual error message (validation details, etc.)
+            # — raise_for_status() drops the response body, leaving a useless
+            # "400 Bad Request" with no clue what went wrong.
+            try:
+                err_body = r.json()
+            except Exception:
+                err_body = {"raw": r.text}
+            # Shotstack puts the validation detail at one of these paths
+            errors_list = (err_body.get("response") or {}).get("errors") or []
+            specific = errors_list[0].get("message") if errors_list else None
+            top_level = (err_body.get("response") or {}).get("message") or err_body.get("message")
+            detail = specific or top_level or str(err_body)[:500]
+            logger.error(
+                f"Shotstack /render {r.status_code}: {detail} | full response: {err_body}"
+            )
+            raise RuntimeError(f"Shotstack render rejected ({r.status_code}): {detail}")
         data = r.json()
         render_id = data.get("response", {}).get("id")
         if not render_id:
