@@ -334,7 +334,13 @@ async def submit_render_for_post(
         raise RuntimeError(f"Client {post['client_id']} not found")
 
     # Re-fetch fresh template source every render (Shotstack rule: never cache timeline)
-    template_data = await get_template(template["shotstack_template_id"])
+    # — except for JSON-imported templates (shotstack_template_id starts with "inline:")
+    # which have no remote counterpart, so use the stored template_data directly.
+    ss_id = template.get("shotstack_template_id") or ""
+    if ss_id.startswith("inline:") and template.get("template_data"):
+        template_data = template["template_data"]
+    else:
+        template_data = await get_template(ss_id)
 
     merge_values = await build_merge_values(
         db=db, template=template, client=client, pipeline=pipeline,

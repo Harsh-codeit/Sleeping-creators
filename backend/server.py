@@ -3949,6 +3949,75 @@ async def sync_shotstack_templates():
     return await sync_templates(db)
 
 
+class ImportTemplateJsonRequest(BaseModel):
+    name: str = ""          # optional — falls back to JSON's `name` field
+    json_text: str          # raw pasted JSON
+
+
+@api_router.post("/shotstack-templates/import-json", status_code=201)
+async def import_template_json(req: ImportTemplateJsonRequest):
+    """Import a Shotstack template from pasted JSON. Stores the parsed JSON
+    locally; render time uses it directly without a get_template roundtrip
+    (Shotstack has no POST /templates so the JSON is never round-tripped
+    to their servers). Accepts three shapes:
+      • {"response": {...}}              — raw API response wrapper
+      • {"id":..., "name":..., "template":{...}} — single-template payload
+      • {"timeline":..., "output":..., "merge":[...]} — inner-only (editor export)
+    """
+    import json as _json
+    try:
+        parsed = _json.loads(req.json_text)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid JSON: {e}")
+    if not isinstance(parsed, dict):
+        raise HTTPException(400, "Invalid template — expected a JSON object")
+
+    # Normalize to the {id?, name?, template:{timeline,output,merge}} shape
+    if "response" in parsed and isinstance(parsed.get("response"), dict):
+        parsed = parsed["response"]
+    if "template" in parsed and isinstance(parsed.get("template"), dict):
+        template_data = parsed
+    elif "timeline" in parsed and "output" in parsed:
+        template_data = {"template": parsed}
+    else:
+        raise HTTPException(400, "Invalid template — expected timeline + output (or a wrapped response/template object)")
+
+    tpl_inner = template_data.get("template", {}) or {}
+    if not tpl_inner.get("timeline"):
+        raise HTTPException(400, "Invalid template — missing template.timeline")
+
+    from shotstack_service import extract_merge_fields, extract_audio_url, extract_preview_url
+    from shotstack_template_importer import _infer_role, _now_iso
+
+    raw_fields = extract_merge_fields(template_data)
+    merge_fields = [{
+        "find": mf["find"],
+        "replace": mf.get("replace", ""),
+        "role": _infer_role(mf["find"]),
+        "inferred": True,
+    } for mf in raw_fields]
+
+    synthetic_id = f"inline:{uuid.uuid4().hex}"
+    name = (req.name or "").strip() or template_data.get("name") or "Imported template"
+    now = _now_iso()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "shotstack_template_id": synthetic_id,   # `inline:` prefix marks JSON-imported
+        "template_data": template_data,          # stored verbatim, used at render time
+        "name": name,
+        "status": "draft",                       # require explicit Publish to activate
+        "merge_fields": merge_fields,
+        "audio_url": extract_audio_url(template_data),
+        "thumbnail_url": extract_preview_url(template_data),
+        "preview_url": None,
+        "source": "json_import",
+        "imported_at": now,
+        "last_synced_at": now,
+    }
+    await db.shotstack_templates.insert_one(doc)
+    return clean_doc(await db.shotstack_templates.find_one({"id": doc["id"]}))
+
+
 @api_router.delete("/shotstack-templates/{template_id}")
 async def delete_shotstack_template(template_id: str):
     """Hard-delete from the local registry. The next sync will re-import the
@@ -4029,7 +4098,12 @@ async def generate_template_preview(template_id: str, req: PreviewRenderRequest 
     if not tpl:
         raise HTTPException(404, "template not found")
 
-    template_data = await get_template(tpl["shotstack_template_id"])
+    # JSON-imported templates have no Shotstack counterpart — use stored data
+    ss_id = tpl.get("shotstack_template_id") or ""
+    if ss_id.startswith("inline:") and tpl.get("template_data"):
+        template_data = tpl["template_data"]
+    else:
+        template_data = await get_template(ss_id)
     merge_values = _preview_merge_values(tpl.get("merge_fields") or [])
     audio_override = (req.audio_url or "").strip() if req else ""
     render_id = await submit_render(

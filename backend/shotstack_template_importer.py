@@ -137,9 +137,16 @@ async def sync_templates(db) -> dict:
             )
             added.append({"id": doc["id"], "name": common["name"]})
 
-    # Delete templates that no longer exist in Shotstack
+    # Delete templates that no longer exist in Shotstack — but never touch
+    # JSON-imported ones (shotstack_template_id starts with "inline:") since
+    # they have no remote counterpart to disappear from.
     deactivated = []
-    async for row in db.shotstack_templates.find({"shotstack_template_id": {"$nin": list(seen_ids)}}):
+    async for row in db.shotstack_templates.find({
+        "shotstack_template_id": {
+            "$nin": list(seen_ids),
+            "$not": {"$regex": "^inline:"},
+        },
+    }):
         await db.shotstack_templates.delete_one({"id": row["id"]})
         deactivated.append({"id": row["id"], "name": row.get("name", "")})
 
