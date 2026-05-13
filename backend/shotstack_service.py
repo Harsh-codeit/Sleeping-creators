@@ -200,6 +200,69 @@ def _apply_text_asset_overrides(timeline: dict, merge_values: dict, merge_defaul
         logger.info(f"_apply_text_asset_overrides: literal-substituted {swap_count} asset value(s)")
 
 
+_CLIP_FIELD_RE = re.compile(r"^[A-Z0-9_]*(MEDIA|VIDEO|CLIP|IMG|IMAGE|PHOTO)[A-Z0-9_]*$")
+
+
+def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> None:
+    """When a clip-style merge value (MEDIA_*, VIDEO_*, CLIP_*, IMG_*, …)
+    has a URL replacement but neither Shotstack's {{}} substitution nor
+    _apply_text_asset_overrides will land it (because the timeline's
+    clip.asset.src is a hardcoded URL with no matching default), swap by
+    position: nth clip-style merge value → nth video-type clip whose src is
+    a URL that isn't a placeholder and isn't already the merge value.
+
+    Safe: only fires for visual asset types (video, image, luma); never
+    overwrites an existing {{}} placeholder; never overwrites if the src
+    already equals the merge value. Pipeline runs that already substituted
+    via the normal paths see this as a pure no-op.
+    """
+    if not merge_values:
+        return
+    # Pull URL-shaped values whose key matches a clip-style name
+    candidates = []
+    for k, v in merge_values.items():
+        if not isinstance(v, str) or not v.startswith("http"):
+            continue
+        if _CLIP_FIELD_RE.match(k or ""):
+            candidates.append((k, v))
+    if not candidates:
+        return
+
+    # Walk visual clips in order. For each, if src is a URL (not a placeholder)
+    # and doesn't already equal any merge value, claim the next candidate.
+    swap_count = 0
+    used_keys = set()
+    for track in timeline.get("tracks", []) or []:
+        for clip in track.get("clips", []) or []:
+            asset = clip.get("asset") or {}
+            atype = asset.get("type", "") or ""
+            src = asset.get("src", "") or ""
+            if atype not in {"video", "image", "luma"}:
+                continue
+            if not isinstance(src, str) or not src:
+                continue
+            if "{{" in src:  # already a placeholder — Shotstack handles it
+                continue
+            # Don't double-substitute — skip if src is already one of our values
+            if any(src == v for _, v in candidates):
+                continue
+            # Claim the next unused candidate
+            next_pair = next(((k, v) for k, v in candidates if k not in used_keys), None)
+            if not next_pair:
+                break
+            k, v = next_pair
+            asset["src"] = v
+            used_keys.add(k)
+            swap_count += 1
+        if len(used_keys) == len(candidates):
+            break
+    if swap_count:
+        logger.info(
+            f"_apply_clip_fallback_substitution: positionally swapped {swap_count} hardcoded clip URL(s) "
+            f"using merge keys={sorted(used_keys)}"
+        )
+
+
 def _normalize_placeholders(obj):
     """
     Strip whitespace inside {{ FIELD }} placeholders → {{FIELD}}.
@@ -241,6 +304,15 @@ async def submit_render(
         tpl.get("merge") or [],
     )
 
+    # Last-resort fallback for clip-role merge values: if a merge-field name
+    # looks like a video slot (MEDIA_*, VIDEO_*, CLIP_*, IMG_*, IMAGE_*) AND
+    # its replacement value is a URL, walk the timeline for video-type clips
+    # whose asset.src is a URL that doesn't already contain a placeholder
+    # AND doesn't already equal the merge value — and swap. This rescues
+    # templates whose author hardcoded a default video URL in the timeline
+    # without registering it via the merge `replace` default.
+    _apply_clip_fallback_substitution(tpl.get("timeline", {}), merge_values)
+
     merge_array = [
         {"find": k, "replace": v}
         for k, v in merge_values.items()
@@ -257,16 +329,28 @@ async def submit_render(
     # can be diagnosed from this single log line:
     #  - merge array shows EVERY value being sent to Shotstack
     #  - clips_with_filter counts how many filter properties survived to the body
+    #  - timeline_clips dumps the asset.type + truncated asset.src of every clip
+    #    so it's obvious whether a clip's src is a {{PLACEHOLDER}}, the
+    #    template's hardcoded default, or the staged R2 URL we wanted.
     clip_filter_count = 0
+    truncate = lambda v: (v[:60] + "…") if isinstance(v, str) and len(v) > 60 else v
+    timeline_clips = []
     for track in body["timeline"].get("tracks", []) or []:
         for clip in track.get("clips", []) or []:
             if clip.get("filter"):
                 clip_filter_count += 1
-    truncate = lambda v: (v[:60] + "…") if isinstance(v, str) and len(v) > 60 else v
+            asset = clip.get("asset") or {}
+            timeline_clips.append({
+                "type": asset.get("type"),
+                "src": truncate(asset.get("src", "")) if asset.get("src") else None,
+                "text": truncate(asset.get("text", "")) if asset.get("text") else None,
+                "filter": clip.get("filter"),
+            })
     logger.info(
         f"Shotstack render body: merge={[{'find':e['find'],'replace':truncate(e['replace'])} for e in merge_array]} "
         f"clips_with_filter={clip_filter_count}"
     )
+    logger.info(f"Shotstack timeline clips: {timeline_clips}")
 
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{_base_url()}/render", headers=_headers(), json=body)
