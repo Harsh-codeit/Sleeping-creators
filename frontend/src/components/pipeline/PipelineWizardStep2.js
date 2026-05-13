@@ -4,7 +4,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Music2, Upload, X, Play, Pause, Check, Loader2 } from "lucide-react";
 import {
-  API, BUILT_IN_TEMPLATES, TYPE_SETTINGS, SLIDE_FORMATS, buildCtaButtonText,
+  API, BUILT_IN_TEMPLATES, getStepSettings, SLIDE_FORMATS, buildCtaButtonText,
   VIDEO_FILTERS, VIDEO_HOOK_STRATEGIES,
 } from "./constants";
 import VideoTemplatePicker from "../VideoTemplatePicker";
@@ -99,7 +99,7 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
   }, []);
 
   const allTemplates = [...BUILT_IN_TEMPLATES, ...customTemplates];
-  const settings = TYPE_SETTINGS[form.pipeline_type] || TYPE_SETTINGS.standard;
+  const settings = getStepSettings(form);
   const ctaPreview = buildCtaButtonText(form.cta_keyword, form.cta_offer);
 
   if (settings.showVideoConfig) {

@@ -4,7 +4,7 @@ import {
   DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  PIPELINE_TYPE_MAP, STATUS_BORDER, SLIDE_FORMAT_LABELS,
+  PIPELINE_TYPE_MAP, CONTENT_TYPE_MAP, STATUS_BORDER, SLIDE_FORMAT_LABELS,
   formatRelative, scheduleLabel,
 } from "./constants";
 
@@ -18,7 +18,12 @@ export default function PipelineCard({
   onEdit,
   running,
 }) {
-  const typeConfig = PIPELINE_TYPE_MAP[pipeline.pipeline_type || "standard"] || PIPELINE_TYPE_MAP.standard;
+  // Video is now a content_type; if this pipeline produces video, prefer the
+  // video content-type display over the topic-strategy display.
+  const isVideo = pipeline.content_type === "video" || pipeline.pipeline_type === "video";
+  const typeConfig = isVideo
+    ? (CONTENT_TYPE_MAP.video || PIPELINE_TYPE_MAP.standard)
+    : (PIPELINE_TYPE_MAP[pipeline.pipeline_type || "standard"] || PIPELINE_TYPE_MAP.standard);
   const TypeIcon = typeConfig.icon;
   const borderClass = STATUS_BORDER[pipeline.status] || STATUS_BORDER.active;
 
@@ -30,11 +35,7 @@ export default function PipelineCard({
 
   // Metadata line: "Dark Card · Story · 6 slides"
   let metaLine = "";
-  if (pipeline.pipeline_type === "competitor") {
-    metaLine = "Competitor-matched slides";
-  } else if (pipeline.pipeline_type === "experimental") {
-    metaLine = "Random format each run";
-  } else if (pipeline.pipeline_type === "video") {
+  if (isVideo) {
     const parts = [];
     const hookStrat = pipeline.video_hook_strategy || "rotate";
     parts.push(hookStrat === "rotate" ? "Rotate hooks" : hookStrat === "random" ? "Random hook" : "No hooks");
@@ -47,6 +48,10 @@ export default function PipelineCard({
     if (pipeline.video_use_ai_content === false) parts.push("manual content");
     else parts.push("AI captions");
     metaLine = parts.join(" · ");
+  } else if (pipeline.pipeline_type === "competitor") {
+    metaLine = "Competitor-matched slides";
+  } else if (pipeline.pipeline_type === "experimental") {
+    metaLine = "Random format each run";
   } else {
     const parts = [];
     if (pipeline.carousel_template) parts.push(allLabels[pipeline.carousel_template] || pipeline.carousel_template);
