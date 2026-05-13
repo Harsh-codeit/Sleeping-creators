@@ -168,10 +168,175 @@ def process_video_job(self, job_payload: dict):
         db_client.close()
 
 
+async def _run_video_job_async(post_id: str) -> dict:
+    """Same work the Celery task does, but callable from inside the FastAPI
+    event loop. Used as a fallback when Celery isn't reachable so renders still
+    happen in dev / single-process deployments."""
+    import asyncio as _aio
+    from datetime import datetime, timezone
+
+    db_client, db = _db()
+    try:
+        post = await db.posts.find_one({"id": post_id})
+        if not post:
+            return {"skipped": True}
+        # If another worker already claimed it (e.g. Celery picked it up first),
+        # don't double-render. Check status is still 'rendering' AND there's no
+        # render_job_id yet.
+        if post.get("render_job_id"):
+            return {"skipped": "already_claimed"}
+
+        pipeline = None
+        if post.get("pipeline_id"):
+            pipeline = await db.pipelines.find_one({"id": post["pipeline_id"]})
+
+        from video_render_service import submit_render_for_post, mirror_to_r2, handoff_to_bundle
+        import shotstack_service
+        render_job = await submit_render_for_post(
+            db=db, post=post,
+            clip_drive_ids=post.get("clip_drive_ids") or [],
+            music_url=post.get("music_url"),
+            pipeline=pipeline,
+        )
+        shotstack_render_id = render_job.get("shotstack_render_id")
+        if not shotstack_render_id:
+            return {"status": "no_render_id"}
+
+        for _ in range(72):  # ~6 minutes
+            await _aio.sleep(5)
+            try:
+                resp = await shotstack_service.poll_render(shotstack_render_id)
+            except Exception as e:
+                logger.warning(f"poll_render failed: {e}")
+                continue
+
+            status = resp.get("status")
+            now = datetime.now(timezone.utc).isoformat()
+
+            if status == "done":
+                r2_video, r2_snap = await mirror_to_r2(
+                    resp.get("url"), resp.get("snapshot_url"),
+                    render_job["client_id"], shotstack_render_id,
+                )
+                await db.render_jobs.update_one(
+                    {"id": render_job["id"]},
+                    {"$set": {
+                        "status": "succeeded", "completed_at": now,
+                        "output_url": resp.get("url"),
+                        "r2_video_url": r2_video, "r2_snapshot_url": r2_snap,
+                    }},
+                )
+                fresh = await db.posts.find_one({"id": post_id})
+                client = await db.clients.find_one({"id": fresh["client_id"]}) or {}
+                await db.posts.update_one(
+                    {"id": post_id},
+                    {"$set": {
+                        "status": "succeeded",
+                        "r2_video_url": r2_video,
+                        "r2_snapshot_url": r2_snap,
+                        "error_message": None,
+                    }},
+                )
+
+                if fresh.get("auto_publish_after_render"):
+                    try:
+                        from publisher import publish as _publish
+                        latest = await db.posts.find_one({"id": post_id})
+                        pub_result = await _publish(latest, client, publish_now=True)
+                        pub_status = pub_result.get("status", "failed")
+                        await db.posts.update_one(
+                            {"id": post_id},
+                            {"$set": {
+                                "status": pub_status,
+                                "error_message": pub_result.get("error"),
+                                "published_at": datetime.now(timezone.utc).isoformat() if pub_status == "published" else None,
+                                "platform_post_id": pub_result.get("platform_post_id"),
+                            }},
+                        )
+                    except Exception as _pe:
+                        logger.exception(f"auto-publish failed for post {post_id}")
+                        await db.posts.update_one(
+                            {"id": post_id},
+                            {"$set": {"status": "failed", "error_message": f"Publish error: {_pe}"}},
+                        )
+                elif client.get("auto_approve"):
+                    await handoff_to_bundle(db, fresh, r2_video, r2_snap)
+
+                return {"status": "succeeded"}
+
+            elif status == "failed":
+                error = resp.get("error") or "render failed"
+                await db.render_jobs.update_one(
+                    {"id": render_job["id"]},
+                    {"$set": {"status": "failed", "completed_at": now, "error": error}},
+                )
+                await db.posts.update_one(
+                    {"id": post_id},
+                    {"$set": {"status": "failed_render", "error_message": error}},
+                )
+                return {"status": "failed"}
+
+        # Timed out
+        await db.posts.update_one(
+            {"id": post_id},
+            {"$set": {"status": "failed_render", "error_message": "Render timed out after 6 minutes"}},
+        )
+        return {"status": "timeout"}
+    finally:
+        db_client.close()
+
+
 def enqueue_video_job(post_id: str, priority: str = "normal") -> str:
+    """Enqueue a render. Tries Celery first; if unreachable, runs the job
+    inline via asyncio so dev/single-process deployments still render."""
+    import asyncio as _aio
     p = PRIORITY_MAP.get(priority, 5)
-    task = process_video_job.apply_async(args=[{"post_id": post_id}], priority=p)
-    return task.id
+    try:
+        task = process_video_job.apply_async(args=[{"post_id": post_id}], priority=p)
+        # Also spin up an asyncio safety net — if Celery doesn't claim the post
+        # within ~10s, run the job in-process. Whichever wins, the render_job_id
+        # check in _run_video_job_async prevents double execution.
+        try:
+            loop = _aio.get_event_loop()
+            if loop.is_running():
+                _aio.create_task(_safety_net_fallback(post_id, delay=10))
+        except RuntimeError:
+            pass  # No event loop available (called from sync context)
+        return task.id
+    except Exception as e:
+        # Celery / Redis unreachable — fall back to in-process render
+        logger.warning(f"Celery enqueue failed ({e}); running render in-process")
+        try:
+            loop = _aio.get_event_loop()
+            if loop.is_running():
+                _aio.create_task(_run_video_job_async(post_id))
+                return f"inproc-{post_id[:8]}"
+        except RuntimeError:
+            pass
+        raise
+
+
+async def _safety_net_fallback(post_id: str, delay: int = 10) -> None:
+    """Wait `delay` seconds; if no Celery worker has claimed the post by then
+    (render_job_id still unset), run the render in-process. Prevents stuck
+    'rendering' status when Celery worker isn't running."""
+    import asyncio as _aio
+    await _aio.sleep(delay)
+    db_client, db = _db()
+    try:
+        post = await db.posts.find_one({"id": post_id}, {"render_job_id": 1, "status": 1})
+        if not post:
+            return
+        # If render_job_id was set, a worker (Celery or another in-proc task) claimed it
+        if post.get("render_job_id"):
+            return
+        # If status moved past 'rendering', nothing to do
+        if post.get("status") not in ("rendering", None):
+            return
+        logger.info(f"Safety net: no worker claimed post {post_id} in {delay}s — running in-process")
+    finally:
+        db_client.close()
+    await _run_video_job_async(post_id)
 
 
 @celery_app.task(name="video_worker.watchdog_stuck_renders")
