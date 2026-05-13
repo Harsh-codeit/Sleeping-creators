@@ -1019,7 +1019,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         # Experimental always rotates format regardless of pipeline config
         slide_format = None
 
-    elif pipeline_type == "video" or pipeline.get("content_type") == "video":
+    elif pipeline_type == "video":
         # Autopilot video pipeline:
         # 1) Pick a hook from client.strategy.video_hooks per video_hook_strategy
         # 2) AI-generate caption/hashtags/ai_text merge values (if enabled)

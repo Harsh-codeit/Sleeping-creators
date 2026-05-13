@@ -48,19 +48,17 @@ export const PIPELINE_TYPES = [
     color: "amber",
     badgeClass: "border-amber-700 text-amber-400 bg-amber-950/40",
   },
+  {
+    value: "video",
+    label: "Video",
+    desc: "Pick a random clip from Drive, apply a video template, publish automatically",
+    icon: Film,
+    color: "cyan",
+    badgeClass: "border-cyan-800 text-cyan-400 bg-cyan-950/40",
+  },
 ];
 
 export const PIPELINE_TYPE_MAP = Object.fromEntries(PIPELINE_TYPES.map(t => [t.value, t]));
-
-// Content type — what kind of post the pipeline produces. Independent of
-// pipeline_type (which is the topic-picking strategy).
-export const CONTENT_TYPES = [
-  { value: "carousel",  label: "Carousel",  desc: "Multi-slide image post",                           icon: Layers, badgeClass: "border-zinc-700 text-zinc-400 bg-zinc-900" },
-  { value: "text_post", label: "Text Post", desc: "Caption-only post",                                icon: Target, badgeClass: "border-zinc-700 text-zinc-400 bg-zinc-900" },
-  { value: "video",     label: "Video",     desc: "Pick clips from Drive, apply template, auto-publish", icon: Film,  badgeClass: "border-cyan-800 text-cyan-400 bg-cyan-950/40" },
-];
-
-export const CONTENT_TYPE_MAP = Object.fromEntries(CONTENT_TYPES.map(c => [c.value, c]));
 
 export const STATUS_BORDER = {
   active: "border-l-emerald-500",
@@ -121,31 +119,14 @@ export const VIDEO_HOOK_STRATEGIES = [
   { value: "none",   label: "No hooks", desc: "Use fallback prompt below" },
 ];
 
-// Which content fields are shown per pipeline type.
-// NOTE: showVideoConfig is derived from content_type, not pipeline_type.
-// Use getStepSettings(form) to merge both fields correctly.
+// Which content fields are shown per pipeline type
 export const TYPE_SETTINGS = {
   standard:     { showTemplate: true,  showSlideCount: true,  showFormat: true,  showTopics: true,  showVideoConfig: false },
   trend:        { showTemplate: true,  showSlideCount: true,  showFormat: false, showTopics: false, showVideoConfig: false },
   competitor:   { showTemplate: true,  showSlideCount: false, showFormat: false, showTopics: false, showVideoConfig: false },
   strategy:     { showTemplate: true,  showSlideCount: true,  showFormat: true,  showTopics: false, showVideoConfig: false },
   experimental: { showTemplate: true,  showSlideCount: false, showFormat: false, showTopics: false, showVideoConfig: false },
-  // Backwards-compat: pipelines saved with the old pipeline_type="video" still work
   video:        { showTemplate: false, showSlideCount: false, showFormat: false, showTopics: false, showVideoConfig: true  },
-};
-
-/** True when this form represents a video pipeline (new content_type field
- * OR legacy pipeline_type="video"). */
-export const isVideoPipeline = (form) =>
-  form?.content_type === "video" || form?.pipeline_type === "video";
-
-/** Merge per-pipeline-type settings with the content-type override. */
-export const getStepSettings = (form) => {
-  const base = TYPE_SETTINGS[form?.pipeline_type] || TYPE_SETTINGS.standard;
-  if (isVideoPipeline(form)) {
-    return { ...base, showVideoConfig: true, showTemplate: false, showSlideCount: false, showFormat: false, showTopics: false };
-  }
-  return base;
 };
 
 

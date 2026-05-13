@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { EMPTY_FORM, isVideoPipeline } from "./constants";
+import { EMPTY_FORM } from "./constants";
 import PipelineWizardStep1 from "./PipelineWizardStep1";
 import PipelineWizardStep2 from "./PipelineWizardStep2";
 import PipelineWizardStep3 from "./PipelineWizardStep3";
@@ -78,7 +78,7 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
 
   const onChange = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
-  const isVideo = isVideoPipeline(form);
+  const isVideo = form.pipeline_type === "video";
   const STEPS = isVideo ? STEPS_VIDEO : STEPS_DEFAULT;
   const lastStep = STEPS.length - 1;
 
