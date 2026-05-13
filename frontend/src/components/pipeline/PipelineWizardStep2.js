@@ -91,6 +91,13 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
       .catch(() => setClientHooks([]));
   }, [clientId]);
 
+  // Pre-load music library so tag chips can render before opening the picker
+  useEffect(() => {
+    axios.get(`${API}/music`)
+      .then(r => setMusicTracks(r.data || []))
+      .catch(() => setMusicTracks([]));
+  }, []);
+
   const allTemplates = [...BUILT_IN_TEMPLATES, ...customTemplates];
   const settings = TYPE_SETTINGS[form.pipeline_type] || TYPE_SETTINGS.standard;
   const ctaPreview = buildCtaButtonText(form.cta_keyword, form.cta_offer);
@@ -204,47 +211,154 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
           </div>
         </div>
 
-        {/* Background music override */}
-        <div>
-          <label className="label-xs">Background Music (optional)</label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={openMusicPicker}
-              className="flex-1 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-2 min-w-0"
-            >
-              <Music2 size={12} className="flex-shrink-0" />
-              <span className="truncate">
-                {selectedTrackName || (form.video_audio_url ? "Custom URL set" : "Pick from library…")}
-              </span>
-            </button>
-            <input
-              ref={audioFileRef}
-              type="file"
-              accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp3,audio/ogg"
-              className="hidden"
-              onChange={e => handleUploadAudio(e.target.files?.[0])}
-            />
-            <button
-              type="button"
-              onClick={() => !uploadingAudio && audioFileRef.current?.click()}
-              disabled={uploadingAudio}
-              className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-40"
-            >
-              {uploadingAudio ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-              {uploadingAudio ? "Uploading…" : "Upload"}
-            </button>
-          </div>
-          {form.video_audio_url && (
-            <button
-              type="button"
-              onClick={() => { onChange("video_audio_url", ""); setSelectedTrackName(""); }}
-              className="mt-1.5 text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-              × Clear override (use template default)
-            </button>
-          )}
-        </div>
+        {/* Background music — tag-based / specific track / none */}
+        {(() => {
+          const audioTags = form.video_audio_tags || [];
+          const audioMode = audioTags.length > 0
+            ? "tags"
+            : form.video_audio_url
+              ? "url"
+              : "none";
+          const allTags = Array.from(new Set((musicTracks || []).flatMap(t => t.mood_tags || []))).sort();
+          const selSet = new Set(audioTags);
+          const matchCount = (musicTracks || []).filter(t => (t.mood_tags || []).some(tag => selSet.has(tag))).length;
+
+          const setAudioMode = (mode) => {
+            if (mode === "tags") { onChange("video_audio_url", ""); /* keep tags */ }
+            else if (mode === "url") { onChange("video_audio_tags", []); }
+            else { onChange("video_audio_url", ""); onChange("video_audio_tags", []); setSelectedTrackName(""); }
+          };
+
+          const toggleTag = (tag) => {
+            const next = selSet.has(tag) ? audioTags.filter(t => t !== tag) : [...audioTags, tag];
+            onChange("video_audio_tags", next);
+          };
+
+          return (
+            <div>
+              <div className="flex items-baseline justify-between mb-2">
+                <label className="label-xs mb-0">Background Music</label>
+                <span className="text-[10px] font-mono text-zinc-600">Optional</span>
+              </div>
+
+              {/* Mode pills */}
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {[
+                  { value: "tags", label: "By Tag",          desc: "Random track matching any selected tag each run" },
+                  { value: "url",  label: "Specific Track",  desc: "Pin one track for every run" },
+                  { value: "none", label: "None",            desc: "Use the template's default soundtrack" },
+                ].map(m => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setAudioMode(m.value)}
+                    title={m.desc}
+                    className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                      audioMode === m.value
+                        ? "bg-white text-black border-white"
+                        : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* By Tag panel */}
+              {audioMode === "tags" && (
+                musicTracks.length === 0 ? (
+                  <div className="text-[11px] font-mono text-zinc-500 border border-dashed border-zinc-700 px-3 py-2">
+                    Library is empty. Add tracks (with tags) on the Music page first.
+                  </div>
+                ) : allTags.length === 0 ? (
+                  <div className="text-[11px] font-mono text-zinc-500 border border-dashed border-zinc-700 px-3 py-2">
+                    No mood tags found on any track. Add tags when uploading music.
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {allTags.map(tag => {
+                        const selected = selSet.has(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => toggleTag(tag)}
+                            className={`py-1 px-2.5 text-[11px] font-mono border transition-colors duration-150 ${
+                              selected
+                                ? "border-white text-white bg-zinc-900"
+                                : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {audioTags.length > 0 && (
+                      <div className="text-[10px] font-mono mt-1.5">
+                        {matchCount === 0 ? (
+                          <span className="text-amber-400">No tracks match — pipeline will fall back to template default</span>
+                        ) : (
+                          <span className="text-zinc-500">{matchCount} track{matchCount === 1 ? "" : "s"} match — pipeline picks one at random per run</span>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )
+              )}
+
+              {/* Specific Track panel */}
+              {audioMode === "url" && (
+                <>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={openMusicPicker}
+                      className="flex-1 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-2 min-w-0"
+                    >
+                      <Music2 size={12} className="flex-shrink-0" />
+                      <span className="truncate">
+                        {selectedTrackName || (form.video_audio_url ? "Custom URL set" : "Pick from library…")}
+                      </span>
+                    </button>
+                    <input
+                      ref={audioFileRef}
+                      type="file"
+                      accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp3,audio/ogg"
+                      className="hidden"
+                      onChange={e => handleUploadAudio(e.target.files?.[0])}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => !uploadingAudio && audioFileRef.current?.click()}
+                      disabled={uploadingAudio}
+                      className="border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-2 flex items-center gap-1.5 flex-shrink-0 disabled:opacity-40"
+                    >
+                      {uploadingAudio ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      {uploadingAudio ? "Uploading…" : "Upload"}
+                    </button>
+                  </div>
+                  {form.video_audio_url && (
+                    <button
+                      type="button"
+                      onClick={() => { onChange("video_audio_url", ""); setSelectedTrackName(""); }}
+                      className="mt-1.5 text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors"
+                    >
+                      × Clear pin
+                    </button>
+                  )}
+                </>
+              )}
+
+              {audioMode === "none" && (
+                <div className="text-[10px] font-mono text-zinc-600">
+                  No override — each render uses whatever audio the template specifies.
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* AI content toggle */}
         <label className="flex items-start gap-2 cursor-pointer">

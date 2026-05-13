@@ -108,6 +108,7 @@ export const EMPTY_FORM = {
   video_use_ai_content: true,
   video_clip_ids: [],              // subset of client's drive clips, in order (empty = use all)
   video_clip_strategy: "random",   // random | sequential
+  video_audio_tags: [],            // pick random track whose mood_tags intersect any of these
 };
 
 export const VIDEO_FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];

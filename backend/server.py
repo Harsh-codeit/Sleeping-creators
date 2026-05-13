@@ -344,6 +344,7 @@ class PipelineCreate(BaseModel):
     video_clip_ids: List[str] = []                # subset of client's drive_clips to use (empty = use all)
     video_clip_strategy: Optional[str] = "random" # random | sequential
     next_clip_index: Optional[int] = 0            # sequential rotation cursor
+    video_audio_tags: List[str] = []              # pick random track whose mood_tags intersect any of these
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -370,6 +371,7 @@ class PipelineUpdate(BaseModel):
     video_use_ai_content: Optional[bool] = None
     video_clip_ids: Optional[List[str]] = None
     video_clip_strategy: Optional[str] = None
+    video_audio_tags: Optional[List[str]] = None
 
 class OnboardingCreate(BaseModel):
     # Step 1 – Basic Identity
@@ -1099,6 +1101,26 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             except Exception as _ge:
                 logger.warning(f"Pipeline {pipeline_id} AI content gen failed: {_ge}")
 
+        # Resolve audio override: pinned URL wins, else tag-pick, else template default
+        resolved_audio_url = pipeline.get("video_audio_url") or ""
+        audio_tags = pipeline.get("video_audio_tags") or []
+        audio_pick_strategy = "url" if resolved_audio_url else "default"
+        if not resolved_audio_url and audio_tags:
+            candidates = await db.music_tracks.find(
+                {"mood_tags": {"$in": audio_tags}},
+                {"_id": 0, "r2_url": 1, "name": 1, "id": 1, "mood_tags": 1},
+            ).to_list(500)
+            if candidates:
+                chosen_track = _random.choice(candidates)
+                resolved_audio_url = chosen_track.get("r2_url") or ""
+                audio_pick_strategy = "tags"
+                logger.info(
+                    f"Pipeline {pipeline_id}: tag-pick chose '{chosen_track.get('name')}' "
+                    f"from {len(candidates)} matches (tags={audio_tags})"
+                )
+            else:
+                logger.warning(f"Pipeline {pipeline_id}: no tracks match tags {audio_tags}")
+
         post_doc = {
             "id": str(uuid.uuid4()),
             "client_id": pipeline["client_id"],
@@ -1110,7 +1132,9 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             "template_id": video_template_id,
             "scheduled_at": scheduled_time.isoformat(),
             "status": "rendering",
-            "music_url": pipeline.get("video_audio_url"),
+            "music_url": resolved_audio_url or None,
+            "audio_tags": audio_tags,
+            "audio_pick_strategy": audio_pick_strategy,
             "filter_name": pipeline.get("video_filter_name"),
             "clip_drive_ids": clip_drive_ids,
             "generated_merge_values": generated_merge_values,
