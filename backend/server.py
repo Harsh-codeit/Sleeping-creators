@@ -2280,17 +2280,22 @@ async def delete_post(post_id: str):
 
 @api_router.post("/posts/{post_id}/retry-render")
 async def retry_video_render(post_id: str):
-    """Re-run Shotstack render for a failed_render post.
+    """Re-run Shotstack render for a failed_render or stuck-rendering post.
     Keeps the post's caption/hashtags/merge values/clip selection — only
     nukes the render artifacts and re-queues. Useful when a transient
-    Shotstack failure or temporary asset URL issue caused a render to fail."""
+    Shotstack failure caused a render to fail, OR when a render task died
+    silently and left the post in 'rendering' status with no worker watching."""
     post = await db.posts.find_one({"id": post_id}, {"_id": 0})
     if not post:
         raise HTTPException(404, "Post not found")
     if post.get("kind") != "video":
         raise HTTPException(400, "Only video posts can be re-rendered")
-    if post.get("status") not in ("failed_render",):
-        raise HTTPException(400, f"Can only retry from status 'failed_render' (current: {post.get('status')!r})")
+    # Allow force-retry from 'rendering' too — a stuck post is functionally
+    # indistinguishable from a failed one to the admin. The previous render
+    # task (if alive) will see the cleared artifacts and exit; the new one
+    # owns the post from here.
+    if post.get("status") not in ("failed_render", "rendering"):
+        raise HTTPException(400, f"Can only retry from status 'failed_render' or 'rendering' (current: {post.get('status')!r})")
 
     await db.posts.update_one(
         {"id": post_id},

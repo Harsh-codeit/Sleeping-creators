@@ -75,7 +75,8 @@ export function getPostActions(post) {
   const kind = post?.kind;
   const status = post?.status;
   if (kind === "video") {
-    if (status === "rendering")        return { cancel: true, delete: true };
+    // Allow force-retry on stuck 'rendering' posts (worker may have died silently)
+    if (status === "rendering")        return { retry: true, delete: true };
     if (status === "failed_render")    return { retry: true, delete: true };
     if (status === "succeeded")        return { postNow: true, schedule: true, delete: true };
     if (status === "pending_approval") return { approve: true, reject: true, delete: true };

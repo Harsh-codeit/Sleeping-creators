@@ -720,8 +720,12 @@ function DayCard({ post, color, onClick }) {
 
 function PostSidebar({ post, clientColor, onClose, onUpdate }) {
   const totalSlides = slideCount(post);
+  // Video posts store their text content as `caption`; carousel/text use `text`.
+  // The Content textarea binds to whichever field exists for this post kind.
+  const isVideo = post.kind === "video";
+  const initialText = isVideo ? (post.caption || "") : (post.text || "");
   const [form, setForm] = useState({
-    text: post.text || "",
+    text: initialText,
     platform: post.platform || "instagram",
     scheduled_at: post.scheduled_at ? format(parseISO(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : "",
     slideCount: totalSlides,
@@ -729,26 +733,28 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const publishingRef = useRef(false);
 
   // Sync form when post changes
   useEffect(() => {
     const sc = slideCount(post);
     setForm({
-      text: post.text || "",
+      text: isVideo ? (post.caption || "") : (post.text || ""),
       platform: post.platform || "instagram",
       scheduled_at: post.scheduled_at ? format(parseISO(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : "",
       slideCount: sc,
     });
-  }, [post]);
+  }, [post, isVideo]);
 
   const isViewOnly = post.status === "published";
 
   const savePost = async () => {
     setSaving(true);
     try {
+      // Video posts persist their content as `caption`; everything else uses `text`.
       const update = {
-        text: form.text,
+        ...(isVideo ? { caption: form.text } : { text: form.text }),
         scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : undefined,
       };
       // Trim slides if count changed
@@ -922,44 +928,33 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
           />
         </div>
 
-        {/* Video preview / status — video posts only */}
-        {post.kind === "video" && (
+        {/* Compact playable video — only when there's actually an MP4 to play */}
+        {post.kind === "video" && post.r2_video_url && (
           <div>
-            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Preview</label>
-            {post.r2_video_url ? (
-              <video
-                src={post.r2_video_url}
-                controls
-                poster={post.r2_snapshot_url}
-                className="w-full bg-black border border-zinc-800"
-              />
-            ) : post.status === "rendering" ? (
-              <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 animate-pulse" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                  <RefreshCw size={20} className="text-zinc-500 animate-spin" />
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">Rendering…</span>
-                </div>
-              </div>
-            ) : post.status === "failed_render" ? (
-              <div className="w-full aspect-[9/16] bg-zinc-900 border border-red-900/40 flex flex-col items-center justify-center gap-3 p-6">
-                <AlertTriangle size={20} className="text-red-400" />
-                <div className="text-center">
-                  <div className="text-[11px] font-mono text-red-400 uppercase tracking-widest mb-1">Render Failed</div>
-                  <div className="text-[10px] font-mono text-zinc-500">{post.error_message || "—"}</div>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 flex items-center justify-center">
-                <Film size={20} className="text-zinc-700" />
-              </div>
-            )}
-
-            {/* Hook + topic info */}
+            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Video</label>
+            <video
+              src={post.r2_video_url}
+              controls
+              poster={post.r2_snapshot_url}
+              className="w-full bg-black border border-zinc-800"
+            />
             {post.topic && (
               <div className="mt-2 text-[10px] font-mono text-zinc-500">
                 Hook: <span className="text-zinc-300">{post.topic}</span>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Inline error banner for video posts in failed_render */}
+        {post.kind === "video" && post.status === "failed_render" && (
+          <div className="border border-red-900/40 bg-red-950/20 px-3 py-2.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">
+              <AlertTriangle size={11} />
+              Render Failed
+            </div>
+            {post.error_message && (
+              <div className="text-[11px] font-mono text-zinc-400">{post.error_message}</div>
             )}
           </div>
         )}
@@ -1042,23 +1037,30 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
           </div>
         )}
         <div className="flex gap-2">
-          {/* Video retry-render button — only on failed_render */}
-          {post.kind === "video" && post.status === "failed_render" && (
+          {/* Video retry-render button — on failed_render OR on stuck 'rendering' */}
+          {post.kind === "video" && (post.status === "failed_render" || post.status === "rendering") && (
             <button
               onClick={async () => {
+                if (retrying) return;
+                setRetrying(true);
                 try {
                   await axios.post(`${API}/posts/${post.id}/retry-render`);
-                  toast.success("Re-rendering — refresh in ~30s");
+                  toast.success(post.status === "rendering"
+                    ? "Force-retried — should finish in ~30s"
+                    : "Re-rendering — refresh in ~30s");
                   onUpdate?.();
                   onClose();
                 } catch (e) {
                   toast.error(e?.response?.data?.detail || "Retry failed");
+                } finally {
+                  setRetrying(false);
                 }
               }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs border border-cyan-800 text-cyan-400 hover:bg-cyan-950 transition-colors"
+              disabled={retrying}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs border border-cyan-800 text-cyan-400 hover:bg-cyan-950 transition-colors disabled:opacity-50"
             >
-              <RefreshCw size={11} />
-              Retry render
+              <RefreshCw size={11} className={retrying ? "animate-spin" : ""} />
+              {post.status === "rendering" ? "Force retry" : "Retry render"}
             </button>
           )}
           {/* Hide Publish for video posts that aren't ready yet */}
