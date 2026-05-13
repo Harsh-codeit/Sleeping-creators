@@ -161,14 +161,21 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
 
 
 def _apply_text_asset_overrides(timeline: dict, merge_values: dict, merge_defaults: list) -> None:
-    """For each merge field whose `replace` default appears verbatim as a
-    text-asset's `text`/`html` in the timeline, substitute the override value.
+    """For each merge field whose `replace` default appears verbatim as an
+    asset's `text` / `html` / `src` in the timeline, substitute the override
+    value. Why this exists: some Shotstack templates register a merge field
+    (e.g. MAIN_TEXT / MEDIA_1) in template.merge but DON'T use the {{FIELD}}
+    placeholder in the timeline — the default text or default clip URL is
+    just baked in as a literal. The merge array Shotstack receives then has
+    nothing to substitute against and the override is silently dropped:
 
-    Why this exists: some Shotstack templates register a merge field (e.g.,
-    MAIN_TEXT) in `template.merge` but DON'T use the {{FIELD}} placeholder in
-    the timeline text — the default text is just baked in as a literal. The
-    merge array Shotstack receives then has nothing to substitute against and
-    the override is silently dropped. Mutates `timeline` in place.
+      • Text fields → caption stays as the template's default copy.
+      • Clip fields → the template's default video plays every render, so
+        the pipeline's randomly-staged clip URL is ignored and the user
+        sees the same clip in every output.
+
+    Handles all three asset keys (`text`, `html`, `src`) the same way. Mutates
+    `timeline` in place. Mutates audio src too as a bonus.
     """
     if not merge_values or not merge_defaults:
         return
@@ -180,13 +187,17 @@ def _apply_text_asset_overrides(timeline: dict, merge_values: dict, merge_defaul
             overrides_by_default[default] = override
     if not overrides_by_default:
         return
+    swap_count = 0
     for track in timeline.get("tracks", []) or []:
         for clip in track.get("clips", []) or []:
             asset = clip.get("asset", {}) or {}
-            for key in ("text", "html"):
+            for key in ("text", "html", "src"):
                 v = asset.get(key)
                 if isinstance(v, str) and v.strip() in overrides_by_default:
                     asset[key] = overrides_by_default[v.strip()]
+                    swap_count += 1
+    if swap_count:
+        logger.info(f"_apply_text_asset_overrides: literal-substituted {swap_count} asset value(s)")
 
 
 def _normalize_placeholders(obj):
