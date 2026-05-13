@@ -3,9 +3,10 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, X, Send, Trash2, CheckCircle,
-  Clock, GripVertical, Plus, Wand2, RefreshCw, Copy
+  Clock, GripVertical, Plus, Wand2, RefreshCw, Copy, Film, AlertTriangle, Play,
 } from "lucide-react";
 import GeneratePostModal from "../components/GeneratePostModal";
+import { StatusBadge, getPostActions } from "../lib/postStatus";
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
@@ -32,13 +33,11 @@ const PLATFORMS = [
   "tiktok", "youtube", "threads", "pinterest",
 ];
 
-const STATUS_BADGE = {
-  draft:      "border-zinc-700 text-zinc-400",
-  scheduled:  "border-amber-700 text-amber-400",
-  publishing: "border-blue-700 text-blue-400",
-  published:  "border-emerald-700 text-emerald-400",
-  failed:     "border-red-900 text-red-400",
-};
+const KIND_FILTERS = [
+  { value: "all",      label: "All" },
+  { value: "video",    label: "Videos" },
+  { value: "carousel", label: "Carousels" },
+];
 
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6AM to 11PM
 
@@ -76,6 +75,7 @@ export default function CalendarPage() {
   const [view, setView] = useState("month"); // month | week | day
   const [filterClient, setFilterClient] = useState("");
   const [filterPlatform, setFilterPlatform] = useState("");
+  const [filterKind, setFilterKind] = useState("all"); // all | video | carousel
   const [selectedPost, setSelectedPost] = useState(null);
   const [clientColorMap, setClientColorMap] = useState({});
 
@@ -132,6 +132,14 @@ export default function CalendarPage() {
     return () => clearInterval(id);
   }, [fetchData]);
 
+  // Faster refresh while any video is rendering — polls every 5s until none are mid-render
+  useEffect(() => {
+    const inFlight = posts.some(p => p.status === "rendering" || p.status === "publishing");
+    if (!inFlight) return;
+    const id = setInterval(() => { fetchData(); }, 5000);
+    return () => clearInterval(id);
+  }, [posts, fetchData]);
+
   const navigate = (dir) => {
     if (view === "month") setCurrentDate(d => dir === 1 ? addMonths(d, 1) : subMonths(d, 1));
     else if (view === "week") setCurrentDate(d => dir === 1 ? addWeeks(d, 1) : subWeeks(d, 1));
@@ -167,7 +175,12 @@ export default function CalendarPage() {
     }
   };
 
-  const postsByDate = groupPostsByDate(posts);
+  const visiblePosts = filterKind === "all"
+    ? posts
+    : filterKind === "carousel"
+      ? posts.filter(p => p.kind === "carousel" || (p.kind !== "video" && p.kind !== "text"))
+      : posts.filter(p => p.kind === filterKind);
+  const postsByDate = groupPostsByDate(visiblePosts);
 
   const headerLabel = view === "month"
     ? format(currentDate, "MMMM yyyy")
@@ -217,9 +230,25 @@ export default function CalendarPage() {
       </div>
 
       {/* Period label + filters */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="text-sm font-semibold text-zinc-300">{headerLabel}</div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Kind filter pills */}
+          <div className="flex items-center gap-1">
+            {KIND_FILTERS.map(k => (
+              <button
+                key={k.value}
+                onClick={() => setFilterKind(k.value)}
+                className={`px-2.5 py-1.5 text-[11px] font-mono border transition-colors duration-150 ${
+                  filterKind === k.value
+                    ? "border-white text-white bg-zinc-900"
+                    : "border-zinc-800 text-zinc-500 hover:border-zinc-600"
+                }`}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
           <select
             value={filterClient}
             onChange={e => setFilterClient(e.target.value)}
@@ -563,8 +592,9 @@ function MiniCard({ post, color, onClick }) {
     >
       <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: color }} />
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] text-zinc-300 font-mono truncate leading-tight">
-          {truncate(post.text, 22)}
+        <div className="text-[10px] text-zinc-300 font-mono truncate leading-tight flex items-center gap-1">
+          {post.kind === "video" && <Film size={9} className="text-zinc-500 flex-shrink-0" />}
+          {truncate(post.kind === "video" ? (post.topic || post.caption || "Video") : post.text, 22)}
         </div>
         <div className="text-[9px] text-zinc-500 font-mono truncate flex items-center gap-1">
           {post.client_name} · {PLATFORM_SHORT[post.platform] || post.platform}
@@ -573,9 +603,7 @@ function MiniCard({ post, color, onClick }) {
               {slides}sl
             </span>
           )}
-          <span className={`text-[7px] font-mono px-1 py-0 border leading-tight ${STATUS_BADGE[post.status] || "border-zinc-700 text-zinc-500"}`}>
-            {post.status?.toUpperCase()}
-          </span>
+          <StatusBadge status={post.status} />
         </div>
       </div>
     </div>
@@ -601,17 +629,21 @@ function TimeCard({ post, color, onClick }) {
     >
       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] text-zinc-300 font-mono truncate">{post.client_name}</div>
+        <div className="text-[10px] text-zinc-300 font-mono truncate flex items-center gap-1">
+          {post.kind === "video" && <Film size={9} className="text-zinc-500 flex-shrink-0" />}
+          {post.client_name}
+          {post.kind === "video" && post.topic && (
+            <span className="text-zinc-500"> — {truncate(post.topic, 28)}</span>
+          )}
+        </div>
         <div className="text-[9px] text-zinc-500 font-mono truncate flex items-center gap-1">
-          {PLATFORM_SHORT[post.platform] || post.platform} · {post.content_type === "carousel" ? "Carousel" : "Post"}
+          {PLATFORM_SHORT[post.platform] || post.platform} · {post.kind === "video" ? "Video" : post.content_type === "carousel" ? "Carousel" : "Post"}
           {slides > 0 && (
             <span className="text-[7px] font-mono px-1 py-0 border border-zinc-600 text-zinc-400 leading-tight">
               {slides} slides
             </span>
           )}
-          <span className={`text-[7px] font-mono px-1 py-0 border leading-tight ${STATUS_BADGE[post.status] || "border-zinc-700 text-zinc-500"}`}>
-            {post.status?.toUpperCase()}
-          </span>
+          <StatusBadge status={post.status} />
         </div>
       </div>
     </div>
@@ -637,8 +669,21 @@ function DayCard({ post, color, onClick }) {
     >
       {draggable && <GripVertical size={12} className="text-zinc-700 flex-shrink-0 mt-0.5" />}
       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style={{ backgroundColor: color }} />
+
+      {/* Mini video thumbnail (9:16) for video posts that have a snapshot */}
+      {post.kind === "video" && (post.r2_snapshot_url || post.r2_video_url) && (
+        <div className="w-8 h-14 bg-zinc-800 flex-shrink-0 overflow-hidden">
+          {post.r2_snapshot_url ? (
+            <img src={post.r2_snapshot_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <video src={post.r2_video_url} muted preload="metadata" className="w-full h-full object-cover" />
+          )}
+        </div>
+      )}
+
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          {post.kind === "video" && <Film size={11} className="text-zinc-500 flex-shrink-0" />}
           <span className="text-xs text-white font-mono truncate">{post.client_name}</span>
           <span className="text-[9px] font-mono text-zinc-500">{PLATFORM_SHORT[post.platform] || post.platform}</span>
           {slides > 0 && (
@@ -646,11 +691,20 @@ function DayCard({ post, color, onClick }) {
               {slides} slides
             </span>
           )}
-          <span className={`text-[8px] font-mono px-1 py-0.5 border ${STATUS_BADGE[post.status] || "border-zinc-700 text-zinc-500"}`}>
-            {post.status?.toUpperCase()}
-          </span>
+          <StatusBadge status={post.status} />
         </div>
-        <p className="text-[11px] text-zinc-400 font-mono line-clamp-2 leading-relaxed">{post.text}</p>
+        {post.kind === "video" && post.topic && (
+          <p className="text-[11px] text-white font-semibold line-clamp-1 leading-tight">{post.topic}</p>
+        )}
+        <p className="text-[11px] text-zinc-400 font-mono line-clamp-2 leading-relaxed">
+          {post.kind === "video" ? (post.caption || "—") : post.text}
+        </p>
+        {post.error_message && (
+          <div className="flex items-center gap-1 mt-1 text-[10px] font-mono text-red-400">
+            <AlertTriangle size={9} />
+            <span className="truncate">{post.error_message.slice(0, 80)}</span>
+          </div>
+        )}
         {post.scheduled_at && (
           <div className="flex items-center gap-1 mt-1">
             <Clock size={9} className="text-zinc-600" />
@@ -774,13 +828,13 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: clientColor }} />
             <span className="text-sm font-semibold text-white truncate">{post.client_name}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-mono text-zinc-500 uppercase">{post.platform}</span>
             <span className="text-[10px] font-mono text-zinc-600">·</span>
-            <span className="text-[10px] font-mono text-zinc-500 uppercase">{post.content_type === "carousel" ? "Carousel" : "Post"}</span>
-            <span className={`text-[8px] font-mono px-1 py-0.5 border ml-1 ${STATUS_BADGE[post.status] || "border-zinc-700 text-zinc-500"}`}>
-              {post.status?.toUpperCase()}
+            <span className="text-[10px] font-mono text-zinc-500 uppercase">
+              {post.kind === "video" ? "Video" : post.content_type === "carousel" ? "Carousel" : "Post"}
             </span>
+            <StatusBadge status={post.status} size="lg" className="ml-1" />
           </div>
         </div>
         <button onClick={onClose} className="p-1 text-zinc-500 hover:text-white transition-colors">
@@ -868,8 +922,50 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
           />
         </div>
 
-        {/* Image thumbnail */}
-        {post.image_url && (
+        {/* Video preview / status — video posts only */}
+        {post.kind === "video" && (
+          <div>
+            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Preview</label>
+            {post.r2_video_url ? (
+              <video
+                src={post.r2_video_url}
+                controls
+                poster={post.r2_snapshot_url}
+                className="w-full bg-black border border-zinc-800"
+              />
+            ) : post.status === "rendering" ? (
+              <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 animate-pulse" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <RefreshCw size={20} className="text-zinc-500 animate-spin" />
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">Rendering…</span>
+                </div>
+              </div>
+            ) : post.status === "failed_render" ? (
+              <div className="w-full aspect-[9/16] bg-zinc-900 border border-red-900/40 flex flex-col items-center justify-center gap-3 p-6">
+                <AlertTriangle size={20} className="text-red-400" />
+                <div className="text-center">
+                  <div className="text-[11px] font-mono text-red-400 uppercase tracking-widest mb-1">Render Failed</div>
+                  <div className="text-[10px] font-mono text-zinc-500">{post.error_message || "—"}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full aspect-[9/16] bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                <Film size={20} className="text-zinc-700" />
+              </div>
+            )}
+
+            {/* Hook + topic info */}
+            {post.topic && (
+              <div className="mt-2 text-[10px] font-mono text-zinc-500">
+                Hook: <span className="text-zinc-300">{post.topic}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Image thumbnail — carousel/text only */}
+        {post.kind !== "video" && post.image_url && (
           <div>
             <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Preview</label>
             <img
@@ -946,7 +1042,27 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
           </div>
         )}
         <div className="flex gap-2">
-          {post.status !== "publishing" && (
+          {/* Video retry-render button — only on failed_render */}
+          {post.kind === "video" && post.status === "failed_render" && (
+            <button
+              onClick={async () => {
+                try {
+                  await axios.post(`${API}/posts/${post.id}/retry-render`);
+                  toast.success("Re-rendering — refresh in ~30s");
+                  onUpdate?.();
+                  onClose();
+                } catch (e) {
+                  toast.error(e?.response?.data?.detail || "Retry failed");
+                }
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs border border-cyan-800 text-cyan-400 hover:bg-cyan-950 transition-colors"
+            >
+              <RefreshCw size={11} />
+              Retry render
+            </button>
+          )}
+          {/* Hide Publish for video posts that aren't ready yet */}
+          {post.status !== "publishing" && !(post.kind === "video" && ["rendering", "failed_render"].includes(post.status)) && (
             <button
               onClick={publishPost}
               disabled={publishing}

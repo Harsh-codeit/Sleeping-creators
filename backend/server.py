@@ -2278,6 +2278,40 @@ async def delete_post(post_id: str):
         raise HTTPException(404, "Post not found")
     return {"message": "Post deleted"}
 
+@api_router.post("/posts/{post_id}/retry-render")
+async def retry_video_render(post_id: str):
+    """Re-run Shotstack render for a failed_render post.
+    Keeps the post's caption/hashtags/merge values/clip selection — only
+    nukes the render artifacts and re-queues. Useful when a transient
+    Shotstack failure or temporary asset URL issue caused a render to fail."""
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("kind") != "video":
+        raise HTTPException(400, "Only video posts can be re-rendered")
+    if post.get("status") not in ("failed_render",):
+        raise HTTPException(400, f"Can only retry from status 'failed_render' (current: {post.get('status')!r})")
+
+    await db.posts.update_one(
+        {"id": post_id},
+        {
+            "$set": {"status": "rendering", "error_message": None},
+            "$unset": {"r2_video_url": "", "r2_snapshot_url": "", "video_url": "", "snapshot_url": ""},
+        },
+    )
+    try:
+        from video_worker import enqueue_video_job as _enqueue_video_job
+        _enqueue_video_job(post_id)
+    except Exception as e:
+        # Roll status back so the UI doesn't show stuck "Rendering"
+        await db.posts.update_one(
+            {"id": post_id},
+            {"$set": {"status": "failed_render", "error_message": f"Retry enqueue failed: {e}"}},
+        )
+        raise HTTPException(500, f"Failed to enqueue render: {e}")
+    return {"ok": True, "post_id": post_id, "status": "rendering"}
+
+
 @api_router.post("/posts/{post_id}/approve")
 async def approve_post_manual(post_id: str):
     post = await db.posts.find_one({"id": post_id}, {"_id": 0})

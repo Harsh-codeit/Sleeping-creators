@@ -2,19 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star } from "lucide-react";
+import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star, Film, Image } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
+import { StatusBadge, getPostActions } from "@/lib/postStatus";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
 const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Profile"];
 
 const STATUS_DOT = { active: "text-emerald-400", paused: "text-amber-400", error: "text-red-400" };
-const STATUS_BADGE = {
-  draft: "border-zinc-700 text-zinc-400", scheduled: "border-amber-700 text-amber-400",
-  published: "border-emerald-700 text-emerald-400", failed: "border-red-900 text-red-400",
-};
 
 // ─── Edit Profile helpers ─────────────────────────────────────────────────────
 
@@ -1415,6 +1412,9 @@ export default function ClientDetail() {
   const [showGenModal, setShowGenModal] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [postKindFilter, setPostKindFilter] = useState("all"); // all | video | carousel | text
+  const [retryingPostId, setRetryingPostId] = useState(null);
+  const [viewingVideoPost, setViewingVideoPost] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [], video_hooks: [] });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
@@ -1465,6 +1465,19 @@ export default function ClientDetail() {
       }
     }).catch(() => {});
   }, [activeTab, id]);
+
+  // Auto-refresh posts while any video is mid-render or publishing
+  useEffect(() => {
+    if (activeTab !== "Posts") return;
+    const inFlight = posts.some(p => p.status === "rendering" || p.status === "publishing");
+    if (!inFlight) return;
+    const iv = setInterval(() => {
+      axios.get(`${API}/posts?client_id=${id}&limit=50`)
+        .then(r => setPosts(r.data))
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(iv);
+  }, [activeTab, posts, id]);
 
   const saveEditProfile = async () => {
     if (!editForm) return;
@@ -1614,6 +1627,22 @@ export default function ClientDetail() {
       setPosts(prev => prev.filter(p => p.id !== postId));
       toast.success("Deleted");
     } catch { toast.error("Failed to delete"); }
+  };
+
+  const retryRender = async (post) => {
+    if (retryingPostId === post.id) return;
+    setRetryingPostId(post.id);
+    try {
+      await axios.post(`${API}/posts/${post.id}/retry-render`);
+      setPosts(prev => prev.map(p => p.id === post.id
+        ? { ...p, status: "rendering", error_message: null, r2_video_url: null, r2_snapshot_url: null }
+        : p));
+      toast.success("Re-rendering — refresh in ~30s");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Retry failed");
+    } finally {
+      setRetryingPostId(null);
+    }
   };
 
   const toggleWinner = async (post) => {
@@ -2055,61 +2084,209 @@ export default function ClientDetail() {
         </div>
       )}
 
-      {activeTab === "Posts" && (
-        <div className="bg-zinc-900 border border-zinc-800">
-          <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-zinc-800 text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
-            <div className="col-span-5">Content</div>
-            <div className="col-span-2">Platform</div>
-            <div className="col-span-2">Status</div>
-            <div className="col-span-2">Date</div>
-            <div className="col-span-1 text-right">Act.</div>
-          </div>
-          {posts.length === 0 ? (
-            <div className="px-4 py-8 text-center text-zinc-600 font-mono text-sm">
-              No posts yet. <button onClick={generateBulk} className="text-white underline ml-1">Generate with AI</button>
+      {activeTab === "Posts" && (() => {
+        const KINDS = [
+          { value: "all",      label: "All",      count: posts.length },
+          { value: "video",    label: "Video",    count: posts.filter(p => p.kind === "video").length },
+          { value: "carousel", label: "Carousel", count: posts.filter(p => p.kind === "carousel" || (p.kind !== "video" && p.kind !== "text")).length },
+          { value: "text",     label: "Text",     count: posts.filter(p => p.kind === "text").length },
+        ];
+        const filtered = postKindFilter === "all"
+          ? posts
+          : postKindFilter === "carousel"
+            ? posts.filter(p => p.kind === "carousel" || (p.kind !== "video" && p.kind !== "text"))
+            : posts.filter(p => p.kind === postKindFilter);
+
+        return (
+          <>
+            {/* Kind filter row */}
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              {KINDS.map(k => (
+                <button
+                  key={k.value}
+                  onClick={() => setPostKindFilter(k.value)}
+                  className={`px-2.5 py-1 text-[11px] font-mono border transition-colors duration-150 flex items-center gap-1.5 ${
+                    postKindFilter === k.value
+                      ? "border-white text-white bg-zinc-900"
+                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                  }`}
+                >
+                  {k.label}
+                  <span className={postKindFilter === k.value ? "text-zinc-400" : "text-zinc-600"}>{k.count}</span>
+                </button>
+              ))}
             </div>
-          ) : (
-            posts.map(post => (
-              <div key={post.id} className="grid grid-cols-12 gap-2 px-4 py-3 data-row" data-testid={`post-row-${post.id}`}>
-                <div className="col-span-5">
-                  <p className="text-xs text-zinc-300 font-mono line-clamp-2">{post.text}</p>
-                </div>
-                <div className="col-span-2 flex items-center text-xs font-mono text-zinc-500 capitalize">{post.platform}</div>
-                <div className="col-span-2 flex items-center">
-                  <span className={`text-[9px] font-mono px-1.5 py-0.5 border ${STATUS_BADGE[post.status] || "border-zinc-700 text-zinc-500"}`}>
-                    {post.status?.toUpperCase()}
-                  </span>
-                </div>
-                <div className="col-span-2 flex items-center text-[10px] font-mono text-zinc-600">
-                  {post.created_at ? new Date(post.created_at).toLocaleDateString() : "—"}
-                </div>
-                <div className="col-span-1 flex items-center justify-end gap-1">
-                  {(post.status === "draft" || post.status === "scheduled" || post.status === "failed") && (
-                    <button onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors duration-150 disabled:opacity-40">
-                      <Send size={11} />
-                    </button>
+
+            <div className="bg-zinc-900 border border-zinc-800">
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-zinc-800 text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
+                <div className="col-span-5">Content</div>
+                <div className="col-span-2">Platform</div>
+                <div className="col-span-2">Status</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-1 text-right">Act.</div>
+              </div>
+              {filtered.length === 0 ? (
+                <div className="px-4 py-8 text-center text-zinc-600 font-mono text-sm">
+                  {posts.length === 0 ? (
+                    <>No posts yet. <button onClick={generateBulk} className="text-white underline ml-1">Generate with AI</button></>
+                  ) : (
+                    <>No {postKindFilter} posts.</>
                   )}
-                  <button
-                    onClick={() => toggleWinner(post)}
-                    disabled={togglingWinner === post.id}
-                    aria-label={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
-                    title={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
-                    className={`p-1 transition-colors duration-150 disabled:opacity-40 ${post.is_winner ? "text-amber-400" : "text-zinc-600 hover:text-amber-400"}`}
-                  >
-                    <Star size={11} className={post.is_winner ? "fill-current" : ""} />
-                  </button>
-                  {post.is_winner && post.winner_source === "auto" && (
-                    <span className="text-[8px] font-mono text-zinc-600 uppercase">auto</span>
-                  )}
-                  <button onClick={() => deletePost(post.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors duration-150">
-                    <Trash2 size={11} />
-                  </button>
+                </div>
+              ) : (
+                filtered.map(post => {
+                  const isVideo = post.kind === "video";
+                  const actions = getPostActions(post);
+                  return (
+                    <div key={post.id} className="grid grid-cols-12 gap-2 px-4 py-3 data-row" data-testid={`post-row-${post.id}`}>
+                      <div className="col-span-5 flex items-center gap-3 min-w-0">
+                        {/* Thumbnail — 9:16 mini for video, 1:1 for carousel */}
+                        <div className={`flex-shrink-0 bg-zinc-800 overflow-hidden ${isVideo ? "w-8 h-14" : "w-12 h-12"}`}>
+                          {isVideo ? (
+                            post.r2_snapshot_url ? (
+                              <img src={post.r2_snapshot_url} alt="" className="w-full h-full object-cover" />
+                            ) : post.r2_video_url ? (
+                              <video src={post.r2_video_url} muted preload="metadata" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Film size={12} className="text-zinc-700" />
+                              </div>
+                            )
+                          ) : (
+                            post.image_url ? (
+                              <img src={post.image_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Image size={12} className="text-zinc-700" />
+                              </div>
+                            )
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-white font-semibold truncate leading-tight">
+                            {post.topic || post.title || (isVideo ? "Untitled video" : "Untitled")}
+                          </p>
+                          <p className="text-[10px] text-zinc-500 font-mono line-clamp-1 mt-0.5">
+                            {post.caption || post.text || "—"}
+                          </p>
+                          {post.error_message && (
+                            <p className="text-[10px] text-red-400 font-mono mt-0.5 truncate">⚠ {post.error_message.slice(0, 90)}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-span-2 flex items-center text-xs font-mono text-zinc-500 capitalize">{post.platform}</div>
+                      <div className="col-span-2 flex items-center">
+                        <StatusBadge status={post.status} />
+                      </div>
+                      <div className="col-span-2 flex items-center text-[10px] font-mono text-zinc-600">
+                        {post.created_at ? new Date(post.created_at).toLocaleDateString() : "—"}
+                      </div>
+                      <div className="col-span-1 flex items-center justify-end gap-1">
+                        {/* View — video posts with playable MP4 */}
+                        {isVideo && post.r2_video_url && (
+                          <button
+                            onClick={() => setViewingVideoPost(post)}
+                            title="Preview video"
+                            className="p-1 text-zinc-600 hover:text-white transition-colors duration-150"
+                          >
+                            <Eye size={11} />
+                          </button>
+                        )}
+                        {/* Retry — failed renders only */}
+                        {actions.retry && (
+                          <button
+                            onClick={() => retryRender(post)}
+                            disabled={retryingPostId === post.id}
+                            title="Retry render"
+                            className="p-1 text-zinc-600 hover:text-cyan-400 transition-colors duration-150 disabled:opacity-40"
+                          >
+                            <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
+                          </button>
+                        )}
+                        {/* Publish — carousel-only */}
+                        {actions.publish && (
+                          <button onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors duration-150 disabled:opacity-40">
+                            <Send size={11} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => toggleWinner(post)}
+                          disabled={togglingWinner === post.id}
+                          aria-label={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
+                          title={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
+                          className={`p-1 transition-colors duration-150 disabled:opacity-40 ${post.is_winner ? "text-amber-400" : "text-zinc-600 hover:text-amber-400"}`}
+                        >
+                          <Star size={11} className={post.is_winner ? "fill-current" : ""} />
+                        </button>
+                        {post.is_winner && post.winner_source === "auto" && (
+                          <span className="text-[8px] font-mono text-zinc-600 uppercase">auto</span>
+                        )}
+                        <button onClick={() => deletePost(post.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors duration-150">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Video preview modal */}
+            {viewingVideoPost && (
+              <div
+                className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6"
+                onClick={() => setViewingVideoPost(null)}
+              >
+                <div
+                  className="bg-zinc-950 border border-zinc-800 w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="h-12 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-white truncate">
+                        {viewingVideoPost.topic || "Video"}
+                      </div>
+                      <StatusBadge status={viewingVideoPost.status} />
+                    </div>
+                    <button onClick={() => setViewingVideoPost(null)} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+                  </div>
+                  <div className="overflow-y-auto">
+                    {viewingVideoPost.r2_video_url ? (
+                      <video src={viewingVideoPost.r2_video_url} controls autoPlay className="w-full bg-black" />
+                    ) : (
+                      <div className="aspect-[9/16] flex items-center justify-center text-zinc-600 font-mono text-xs">
+                        Video not yet rendered
+                      </div>
+                    )}
+                    {viewingVideoPost.caption && (
+                      <div className="px-4 py-3 border-t border-zinc-800">
+                        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Caption</div>
+                        <p className="text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">{viewingVideoPost.caption}</p>
+                      </div>
+                    )}
+                    {(viewingVideoPost.hashtags?.length > 0) && (
+                      <div className="px-4 py-3 border-t border-zinc-800">
+                        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Hashtags</div>
+                        <div className="flex flex-wrap gap-1">
+                          {viewingVideoPost.hashtags.map((t, i) => (
+                            <span key={i} className="text-[10px] font-mono text-sky-400 bg-sky-400/10 border border-sky-400/20 px-1.5 py-0.5">#{t}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {viewingVideoPost.error_message && (
+                      <div className="px-4 py-3 border-t border-red-900/40 bg-red-950/20">
+                        <div className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1.5">Error</div>
+                        <p className="text-xs text-red-300 font-mono">{viewingVideoPost.error_message}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      )}
+            )}
+          </>
+        );
+      })()}
 
       {activeTab === "Pipeline" && client && (
         <PipelineManager
