@@ -1056,7 +1056,9 @@ def _fit_to_limit(body: str, hashtags: list[str], limit: int) -> str:
 
 
 def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> dict:
-    body = post.get("text", "")
+    # Video posts store their text content as `caption`; carousel/text use `text`.
+    body = post.get("caption") if post.get("kind") == "video" else post.get("text", "")
+    body = body or ""
     hashtags = post.get("hashtags", [])
 
     limit = _PLATFORM_TEXT_LIMIT.get(platform)
@@ -1093,12 +1095,31 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
 
     upload_ids = []
     try:
+        is_video = post.get("kind") == "video"
         post_type = post.get("post_type", "carousel")
-        has_carousel = post_type != "single_image" and bool(
-            post.get("carousel_data", {}).get("slides") or post.get("slides")
+        has_carousel = (
+            not is_video
+            and post_type != "single_image"
+            and bool(post.get("carousel_data", {}).get("slides") or post.get("slides"))
         )
 
-        if has_carousel:
+        if is_video:
+            # Upload the rendered MP4 to Bundle. Prefer r2_video_url (mirrored
+            # to our R2 bucket); fall back to video_url / output_url if present.
+            video_url = post.get("r2_video_url") or post.get("video_url") or post.get("output_url")
+            if not video_url:
+                return {"status": "failed", "error": "Video post has no r2_video_url to upload", "metrics": {}}
+            try:
+                video_bytes = await _download_url(video_url)
+                fname = f"video_{post.get('id', 'render')[:8]}.mp4"
+                uid = await bundle_service.upload_file(api_key, team_id, video_bytes, fname, "video/mp4")
+                if uid:
+                    upload_ids.append(uid)
+            except Exception as e:
+                logger.error(f"Bundle video upload failed: {e}")
+                return {"status": "failed", "error": f"Video upload to Bundle failed: {str(e)[:200]}", "metrics": {}}
+
+        elif has_carousel:
             base_url = os.environ.get("FRONTEND_URL", "")
             from carousel_renderer import render_carousel_post_images
 
@@ -1169,11 +1190,13 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
     )
 
     try:
+        # Video posts hold their body on `caption`; carousel/text on `text`.
+        body_text = (post.get("caption") if post.get("kind") == "video" else post.get("text", "")) or ""
         result = await bundle_service.create_post(
             api_key=api_key,
             team_id=team_id,
             platforms=[platform],
-            text=post.get("text", ""),
+            text=body_text,
             post_date=effective_date,
             upload_ids=upload_ids,
             platform_overrides={bundle_platform: platform_data},
