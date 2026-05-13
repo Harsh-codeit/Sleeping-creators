@@ -22,6 +22,18 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+async def _get_drive_refresh_token(db, client: dict | None) -> str:
+    """Return a usable Google Drive refresh token, preferring the client's
+    own token but falling back to the shared agency token stored in
+    db.settings — same token Drive sync uses to list/download from the
+    client's configured drive_folder_id."""
+    per_client = (client or {}).get("google_drive_refresh_token") or ""
+    if per_client:
+        return per_client
+    setting = await db.settings.find_one({"key": "google_refresh_token"})
+    return (setting or {}).get("value", "") or ""
+
+
 async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     """Return a public R2 URL for the given Drive clip, staging it if not cached.
 
@@ -36,7 +48,7 @@ async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     cached = await db.clip_cache.find_one({"client_id": client_id, "drive_file_id": drive_file_id})
 
     client = await db.clients.find_one({"id": client_id})
-    refresh_token = (client or {}).get("google_drive_refresh_token", "")
+    refresh_token = await _get_drive_refresh_token(db, client)
     drive_mtime = await _drive_modified_time(refresh_token, drive_file_id) if refresh_token else None
 
     if cached and cached.get("r2_url") and (
@@ -52,7 +64,10 @@ async def _download_and_upload(db, client_id: str, drive_file_id: str, refresh_t
     import storage
 
     if not refresh_token:
-        raise RuntimeError(f"Client {client_id} missing google_drive_refresh_token")
+        raise RuntimeError(
+            "No Google Drive refresh token available — connect the agency "
+            "Google account at /api/auth/google/start and then re-sync clips."
+        )
 
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tf:
         local_path = tf.name
