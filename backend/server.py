@@ -890,7 +890,7 @@ async def _build_carousel_post_text(carousel_data: dict) -> tuple[str, dict]:
     return post_text, {"carousel_data": carousel_data}
 
 
-async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int = 0) -> int:
+async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int = 0, auto_publish: bool = False) -> int:
     import random as _random
 
     # Determine the intended publish time.
@@ -1119,6 +1119,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             "prompt": prompt_text,
             "topic": (chosen_hook or {}).get("title") or topic,
             "hook_id": (chosen_hook or {}).get("id"),
+            "auto_publish_after_render": bool(auto_publish),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -4236,12 +4237,15 @@ async def resume_pipeline(client_id: str, pipeline_id: str):
     return {"status": "active", "next_run_at": next_run}
 
 @api_router.post("/clients/{client_id}/pipelines/{pipeline_id}/run")
-async def run_pipeline_now(client_id: str, pipeline_id: str):
+async def run_pipeline_now(client_id: str, pipeline_id: str, publish: bool = Query(True)):
+    """Manually run a pipeline. By default the resulting post(s) auto-publish
+    once rendering is done (video pipelines). Set ?publish=false to only render
+    and leave the post in 'succeeded' status for manual publish."""
     pipeline = await db.pipelines.find_one({"id": pipeline_id, "client_id": client_id}, {"_id": 0})
     if not pipeline:
         raise HTTPException(404, "Pipeline not found")
-    count = await execute_pipeline(pipeline, datetime.now(timezone.utc))
-    return {"message": f"Pipeline executed: {count} posts created", "posts_created": count}
+    count = await execute_pipeline(pipeline, datetime.now(timezone.utc), auto_publish=publish)
+    return {"message": f"Pipeline executed: {count} posts created", "posts_created": count, "auto_publish": publish}
 
 # ─── Leads & Keyword Config ─────────────────────────────────────────────────
 

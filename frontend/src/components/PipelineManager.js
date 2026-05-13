@@ -79,9 +79,17 @@ export default function PipelineManager({ clientId, clientPlatforms = [], client
 
   const runNow = async (pipeline) => {
     setRunning(prev => ({ ...prev, [pipeline.id]: true }));
+    const isVideo = pipeline.pipeline_type === "video";
     try {
       const resp = await axios.post(`${API}/clients/${clientId}/pipelines/${pipeline.id}/run`);
-      toast.success(resp.data.message);
+      const postsCreated = resp.data.posts_created || 0;
+      if (postsCreated === 0) {
+        toast.error(resp.data.message || "Pipeline ran but created 0 posts — check logs");
+      } else if (isVideo) {
+        toast.success("Video render started — will auto-publish when done (~30–90s). Track in Calendar or Posts tab.", { duration: 8000 });
+      } else {
+        toast.success(resp.data.message);
+      }
       await fetchPipelines();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Run failed");

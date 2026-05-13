@@ -105,17 +105,44 @@ def process_video_job(self, job_payload: dict):
                     )
                     post = await db.posts.find_one({"id": job_payload["post_id"]})
                     client = await db.clients.find_one({"id": post["client_id"]}) or {}
-                    if client.get("auto_approve"):
+
+                    # Always persist the render artifacts first
+                    await db.posts.update_one(
+                        {"id": post["id"]},
+                        {"$set": {
+                            "status": "succeeded",
+                            "r2_video_url": r2_video,
+                            "r2_snapshot_url": r2_snap,
+                            "error_message": None,
+                        }},
+                    )
+
+                    # Auto-publish path — pipeline was run manually with publish=True
+                    if post.get("auto_publish_after_render"):
+                        try:
+                            from publisher import publish as _publish
+                            fresh_post = await db.posts.find_one({"id": post["id"]})
+                            pub_result = await _publish(fresh_post, client, publish_now=True)
+                            pub_status = pub_result.get("status", "failed")
+                            pub_update = {
+                                "status": pub_status,
+                                "error_message": pub_result.get("error"),
+                                "published_at": datetime.now(timezone.utc).isoformat() if pub_status == "published" else None,
+                                "platform_post_id": pub_result.get("platform_post_id"),
+                            }
+                            await db.posts.update_one({"id": post["id"]}, {"$set": pub_update})
+                            logger.info(f"auto-publish post_id={post['id']} → {pub_status}")
+                        except Exception as _pe:
+                            logger.exception(f"auto-publish failed for post {post['id']}")
+                            await db.posts.update_one(
+                                {"id": post["id"]},
+                                {"$set": {"status": "failed", "error_message": f"Publish error: {_pe}"}},
+                            )
+                    elif client.get("auto_approve"):
+                        # Existing flow: auto-approve clients go through Bundle scheduling
                         await handoff_to_bundle(db, post, r2_video, r2_snap)
-                    else:
-                        await db.posts.update_one(
-                            {"id": post["id"]},
-                            {"$set": {
-                                "status": "succeeded",
-                                "r2_video_url": r2_video,
-                                "r2_snapshot_url": r2_snap,
-                            }},
-                        )
+                    # else: stays at "succeeded" awaiting manual publish (default)
+
                     logger.info(f"render succeeded post_id={post['id']}")
                     return {"status": "succeeded", "r2_video_url": r2_video}
 
