@@ -110,34 +110,34 @@ def _apply_filter_and_audio(template_data: dict, filter_name: str | None, audio_
     tpl = data.get("template", {})
     timeline = tpl.get("timeline", {})
 
-    # 1) Filter — apply to every visual clip in the timeline.
-    # Shotstack accepts `clip.filter` on visual assets (video, image, luma,
-    # html). Apply broadly — the renderer ignores filter on audio/title types
-    # so it's safe to spray it across anything visual. Heuristic: if asset.src
-    # looks like a video URL OR asset.type is one of the visual kinds, filter.
-    _VISUAL_ASSET_TYPES = {"video", "image", "luma", "html", "title", "caption"}
+    # 1) Filter — apply only to clip types Shotstack actually supports filters on:
+    # `video`, `image`, and `luma`. Setting filter on `title`/`caption`/`html`
+    # could cause Shotstack to reject the body or silently ignore — keep to the
+    # safe set. Also apply to clips whose asset.src is a {{MEDIA_*}} placeholder
+    # (untyped clip slot — the type usually shows up after merge substitution).
+    _FILTERABLE_ASSET_TYPES = {"video", "image", "luma"}
+    _PLACEHOLDER_HINTS_RE = re.compile(r"\{\{\s*[A-Z0-9_]*(?:MEDIA|VIDEO|CLIP|IMG|IMAGE|PHOTO)[A-Z0-9_]*\s*\}\}")
     if filter_name and filter_name in _FILTERS:
         applied_count = 0
+        # Track asset types we saw, for diagnostic
+        seen_types = []
         for track in timeline.get("tracks", []) or []:
             for clip in track.get("clips", []) or []:
                 asset = clip.get("asset", {}) or {}
-                atype = asset.get("type", "")
+                atype = asset.get("type", "") or ""
                 src = asset.get("src", "") or ""
-                is_visual = atype in _VISUAL_ASSET_TYPES or (
-                    # Fallback: a clip whose src is a {{MEDIA_*}} or {{*VIDEO*}}
-                    # placeholder is almost certainly a video slot even if
-                    # type is missing.
-                    isinstance(src, str) and re.search(r"\{\{\s*[A-Z0-9_]*(?:MEDIA|VIDEO|CLIP|IMG|IMAGE|PHOTO)[A-Z0-9_]*\s*\}\}", src) is not None
+                seen_types.append(atype or "(none)")
+                is_filterable = (
+                    atype in _FILTERABLE_ASSET_TYPES
+                    or (isinstance(src, str) and bool(_PLACEHOLDER_HINTS_RE.search(src)))
                 )
-                # Skip audio explicitly — filter would never apply there
-                if atype == "audio":
-                    continue
-                if is_visual:
+                if is_filterable:
                     clip["filter"] = filter_name
                     applied_count += 1
         logger.info(
-            f"_apply_filter_and_audio: filter={filter_name!r} applied to {applied_count} clip(s)"
-            + (" — template has no visual clips to filter" if applied_count == 0 else "")
+            f"_apply_filter_and_audio: filter={filter_name!r} applied to {applied_count} clip(s); "
+            f"asset types seen={seen_types}"
+            + (" — template has no filterable visual clips" if applied_count == 0 else "")
         )
 
     # 2) Audio override
@@ -241,6 +241,21 @@ async def submit_render(
         "output": tpl.get("output", {}),
         "merge": merge_array,
     }
+
+    # Detailed log so "the filter isn't applying" / "the clip isn't changing"
+    # can be diagnosed from this single log line:
+    #  - merge array shows EVERY value being sent to Shotstack
+    #  - clips_with_filter counts how many filter properties survived to the body
+    clip_filter_count = 0
+    for track in body["timeline"].get("tracks", []) or []:
+        for clip in track.get("clips", []) or []:
+            if clip.get("filter"):
+                clip_filter_count += 1
+    truncate = lambda v: (v[:60] + "…") if isinstance(v, str) and len(v) > 60 else v
+    logger.info(
+        f"Shotstack render body: merge={[{'find':e['find'],'replace':truncate(e['replace'])} for e in merge_array]} "
+        f"clips_with_filter={clip_filter_count}"
+    )
 
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(f"{_base_url()}/render", headers=_headers(), json=body)
