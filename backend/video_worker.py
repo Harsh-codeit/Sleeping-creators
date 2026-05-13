@@ -174,116 +174,141 @@ async def _run_video_job_async(post_id: str) -> dict:
     happen in dev / single-process deployments."""
     import asyncio as _aio
     from datetime import datetime, timezone
+    import traceback as _tb
 
     db_client, db = _db()
     try:
-        post = await db.posts.find_one({"id": post_id})
-        if not post:
-            return {"skipped": True}
-        # If another worker already claimed it (e.g. Celery picked it up first),
-        # don't double-render. Check status is still 'rendering' AND there's no
-        # render_job_id yet.
-        if post.get("render_job_id"):
-            return {"skipped": "already_claimed"}
-
-        pipeline = None
-        if post.get("pipeline_id"):
-            pipeline = await db.pipelines.find_one({"id": post["pipeline_id"]})
-
-        from video_render_service import submit_render_for_post, mirror_to_r2, handoff_to_bundle
-        import shotstack_service
-        render_job = await submit_render_for_post(
-            db=db, post=post,
-            clip_drive_ids=post.get("clip_drive_ids") or [],
-            music_url=post.get("music_url"),
-            pipeline=pipeline,
-        )
-        shotstack_render_id = render_job.get("shotstack_render_id")
-        if not shotstack_render_id:
-            return {"status": "no_render_id"}
-
-        for _ in range(72):  # ~6 minutes
-            await _aio.sleep(5)
+        try:
+            return await _run_video_job_async_impl(db, post_id)
+        except Exception as _e:
+            # Capture the full traceback so cryptic errors like
+            # "'str' object has no attribute 'get'" are diagnosable
+            tb_text = _tb.format_exc()
+            logger.error(f"_run_video_job_async crashed for {post_id}:\n{tb_text}")
             try:
-                resp = await shotstack_service.poll_render(shotstack_render_id)
-            except Exception as e:
-                logger.warning(f"poll_render failed: {e}")
-                continue
-
-            status = resp.get("status")
-            now = datetime.now(timezone.utc).isoformat()
-
-            if status == "done":
-                r2_video, r2_snap = await mirror_to_r2(
-                    resp.get("url"), resp.get("snapshot_url"),
-                    render_job["client_id"], shotstack_render_id,
-                )
-                await db.render_jobs.update_one(
-                    {"id": render_job["id"]},
-                    {"$set": {
-                        "status": "succeeded", "completed_at": now,
-                        "output_url": resp.get("url"),
-                        "r2_video_url": r2_video, "r2_snapshot_url": r2_snap,
-                    }},
-                )
-                fresh = await db.posts.find_one({"id": post_id})
-                client = await db.clients.find_one({"id": fresh["client_id"]}) or {}
                 await db.posts.update_one(
                     {"id": post_id},
-                    {"$set": {
-                        "status": "succeeded",
-                        "r2_video_url": r2_video,
-                        "r2_snapshot_url": r2_snap,
-                        "error_message": None,
-                    }},
+                    {"$set": {"status": "failed_render", "error_message": f"{type(_e).__name__}: {_e}"}},
                 )
-
-                if fresh.get("auto_publish_after_render"):
-                    try:
-                        from publisher import publish as _publish
-                        latest = await db.posts.find_one({"id": post_id})
-                        pub_result = await _publish(latest, client, publish_now=True)
-                        pub_status = pub_result.get("status", "failed")
-                        await db.posts.update_one(
-                            {"id": post_id},
-                            {"$set": {
-                                "status": pub_status,
-                                "error_message": pub_result.get("error"),
-                                "published_at": datetime.now(timezone.utc).isoformat() if pub_status == "published" else None,
-                                "platform_post_id": pub_result.get("platform_post_id"),
-                            }},
-                        )
-                    except Exception as _pe:
-                        logger.exception(f"auto-publish failed for post {post_id}")
-                        await db.posts.update_one(
-                            {"id": post_id},
-                            {"$set": {"status": "failed", "error_message": f"Publish error: {_pe}"}},
-                        )
-                elif client.get("auto_approve"):
-                    await handoff_to_bundle(db, fresh, r2_video, r2_snap)
-
-                return {"status": "succeeded"}
-
-            elif status == "failed":
-                error = resp.get("error") or "render failed"
-                await db.render_jobs.update_one(
-                    {"id": render_job["id"]},
-                    {"$set": {"status": "failed", "completed_at": now, "error": error}},
-                )
-                await db.posts.update_one(
-                    {"id": post_id},
-                    {"$set": {"status": "failed_render", "error_message": error}},
-                )
-                return {"status": "failed"}
-
-        # Timed out
-        await db.posts.update_one(
-            {"id": post_id},
-            {"$set": {"status": "failed_render", "error_message": "Render timed out after 6 minutes"}},
-        )
-        return {"status": "timeout"}
+            except Exception:
+                pass
+            return {"status": "failed", "error": str(_e)}
     finally:
         db_client.close()
+
+
+async def _run_video_job_async_impl(db, post_id: str) -> dict:
+    """Inner implementation; wrapped above so any exception is captured to
+    the log with the full traceback AND surfaced as a failed_render status
+    instead of leaving the post stuck in 'rendering' forever."""
+    import asyncio as _aio
+    from datetime import datetime, timezone
+
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        return {"skipped": True}
+
+    # If another worker already claimed it (e.g. Celery picked it up first),
+    # don't double-render. render_job_id is set by submit_render_for_post.
+    if post.get("render_job_id"):
+        return {"skipped": "already_claimed"}
+
+    pipeline = None
+    if post.get("pipeline_id"):
+        pipeline = await db.pipelines.find_one({"id": post["pipeline_id"]})
+
+    from video_render_service import submit_render_for_post, mirror_to_r2, handoff_to_bundle
+    import shotstack_service
+    render_job = await submit_render_for_post(
+        db=db, post=post,
+        clip_drive_ids=post.get("clip_drive_ids") or [],
+        music_url=post.get("music_url"),
+        pipeline=pipeline,
+    )
+    shotstack_render_id = render_job.get("shotstack_render_id")
+    if not shotstack_render_id:
+        return {"status": "no_render_id"}
+
+    for _ in range(72):  # ~6 minutes
+        await _aio.sleep(5)
+        try:
+            resp = await shotstack_service.poll_render(shotstack_render_id)
+        except Exception as e:
+            logger.warning(f"poll_render failed: {e}")
+            continue
+
+        status = resp.get("status")
+        now = datetime.now(timezone.utc).isoformat()
+
+        if status == "done":
+            r2_video, r2_snap = await mirror_to_r2(
+                resp.get("url"), resp.get("snapshot_url"),
+                render_job["client_id"], shotstack_render_id,
+            )
+            await db.render_jobs.update_one(
+                {"id": render_job["id"]},
+                {"$set": {
+                    "status": "succeeded", "completed_at": now,
+                    "output_url": resp.get("url"),
+                    "r2_video_url": r2_video, "r2_snapshot_url": r2_snap,
+                }},
+            )
+            fresh = await db.posts.find_one({"id": post_id})
+            client = await db.clients.find_one({"id": fresh["client_id"]}) or {}
+            await db.posts.update_one(
+                {"id": post_id},
+                {"$set": {
+                    "status": "succeeded",
+                    "r2_video_url": r2_video,
+                    "r2_snapshot_url": r2_snap,
+                    "error_message": None,
+                }},
+            )
+
+            if fresh.get("auto_publish_after_render"):
+                try:
+                    from publisher import publish as _publish
+                    latest = await db.posts.find_one({"id": post_id})
+                    pub_result = await _publish(latest, client, publish_now=True)
+                    pub_status = pub_result.get("status", "failed")
+                    await db.posts.update_one(
+                        {"id": post_id},
+                        {"$set": {
+                            "status": pub_status,
+                            "error_message": pub_result.get("error"),
+                            "published_at": datetime.now(timezone.utc).isoformat() if pub_status == "published" else None,
+                            "platform_post_id": pub_result.get("platform_post_id"),
+                        }},
+                    )
+                except Exception as _pe:
+                    logger.exception(f"auto-publish failed for post {post_id}")
+                    await db.posts.update_one(
+                        {"id": post_id},
+                        {"$set": {"status": "failed", "error_message": f"Publish error: {_pe}"}},
+                    )
+            elif client.get("auto_approve"):
+                await handoff_to_bundle(db, fresh, r2_video, r2_snap)
+
+            return {"status": "succeeded"}
+
+        elif status == "failed":
+            error = resp.get("error") or "render failed"
+            await db.render_jobs.update_one(
+                {"id": render_job["id"]},
+                {"$set": {"status": "failed", "completed_at": now, "error": error}},
+            )
+            await db.posts.update_one(
+                {"id": post_id},
+                {"$set": {"status": "failed_render", "error_message": error}},
+            )
+            return {"status": "failed"}
+
+    # Timed out
+    await db.posts.update_one(
+        {"id": post_id},
+        {"$set": {"status": "failed_render", "error_message": "Render timed out after 6 minutes"}},
+    )
+    return {"status": "timeout"}
 
 
 def enqueue_video_job(post_id: str, priority: str = "normal") -> str:

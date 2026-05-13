@@ -5958,10 +5958,13 @@ async def create_video_post_route(req: VideoCreateRequest):
                     )
                     return
         except Exception as _e:
-            logging.error(f"_run_render failed for {post_id}: {_e}")
+            # Full traceback to the log so we can see WHERE the crash happened,
+            # not just the bare exception message. Especially important for
+            # generic AttributeError like "'str' object has no attribute 'get'".
+            logging.exception(f"_run_render failed for {post_id}")
             await db.posts.update_one(
                 {"id": post_id},
-                {"$set": {"status": "failed_render", "error_message": str(_e)}},
+                {"$set": {"status": "failed_render", "error_message": f"{type(_e).__name__}: {_e}"}},
             )
 
     import asyncio
