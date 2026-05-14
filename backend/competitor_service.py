@@ -99,37 +99,57 @@ def _normalize_post(raw: dict, competitor_id: str, client_id: str, platform: str
     return doc
 
 
-async def scrape_competitor(competitor: dict, db, results_limit: int = 10) -> int:
+async def scrape_competitor(
+    competitor: dict,
+    db,
+    results_limit: int = 10,
+    client_name: Optional[str] = None,
+) -> int:
     """
     Scrape one competitor. Inserts new posts into competitor_posts.
     Returns count of new posts inserted.
     """
-    from apify_service import trigger_scrape, poll_run_until_done, fetch_results
+    from apify_service import trigger_scrape, poll_run_until_done, fetch_results, ACTORS
+    from apify_usage_service import record_apify_usage
 
     handle = competitor["handle"]
     platform = competitor["platform"]
     competitor_id = competitor["id"]
     client_id = competitor["client_id"]
+    actor = ACTORS.get(platform, "")
 
     run_id = await trigger_scrape(handle, platform, results_limit=results_limit)
     if not run_id:
         logger.warning(f"Apify trigger_scrape returned no run_id for competitor {handle} ({platform})")
+        # Nothing was started — no Apify charge to record.
         return 0
 
-    success = await poll_run_until_done(run_id)
-    if not success:
+    run_data = await poll_run_until_done(run_id)
+    if not run_data:
         logger.warning(f"Apify poll_run_until_done failed for run {run_id} (competitor {handle})")
+        # Failed/aborted runs may still be billed — record with success=False.
+        await record_apify_usage(
+            db,
+            run_data={"id": run_id},
+            actor=actor,
+            competitor_id=competitor_id,
+            competitor_handle=handle,
+            client_id=client_id,
+            client_name=client_name,
+            platform=platform,
+            results_count=0,
+            results_limit=results_limit,
+            success=False,
+            error="poll_failed",
+        )
         return 0
 
     raw_posts = await fetch_results(run_id)
-    if not raw_posts:
-        logger.warning(f"Apify returned 0 posts for competitor {handle} ({platform}), run_id={run_id}")
-        return 0
 
     inserted = 0
     skipped_no_url = 0
     skipped_dup = 0
-    for raw in raw_posts:
+    for raw in raw_posts or []:
         post = _normalize_post(raw, competitor_id, client_id, platform)
         if not post["post_url"]:
             skipped_no_url += 1
@@ -146,6 +166,26 @@ async def scrape_competitor(competitor: dict, db, results_limit: int = 10) -> in
         {"id": competitor_id},
         {"$set": {"last_scraped_at": datetime.now(timezone.utc).isoformat()}}
     )
+
+    # Apify is billed regardless of our dedup — count what Apify actually returned.
+    await record_apify_usage(
+        db,
+        run_data=run_data,
+        actor=actor,
+        competitor_id=competitor_id,
+        competitor_handle=handle,
+        client_id=client_id,
+        client_name=client_name,
+        platform=platform,
+        results_count=len(raw_posts or []),
+        results_limit=results_limit,
+        success=True,
+    )
+
+    if not raw_posts:
+        logger.warning(f"Apify returned 0 posts for competitor {handle} ({platform}), run_id={run_id}")
+        return 0
+
     logger.info(
         f"Scraped {inserted} new posts for competitor {handle} "
         f"(raw={len(raw_posts)}, skipped_no_url={skipped_no_url}, skipped_dup={skipped_dup})"
@@ -274,12 +314,15 @@ async def run_weekly_scan(client_id: str, db) -> dict:
     settings_doc = await db.settings.find_one({"key": "global"}, {"competitor_scrape_limit": 1, "_id": 0}) or {}
     results_limit = settings_doc.get("competitor_scrape_limit") or 10
 
+    client_doc = await db.clients.find_one({"id": client_id}, {"name": 1, "_id": 0}) or {}
+    client_name = client_doc.get("name")
+
     total_scraped = 0
     for comp in competitors:
         scrape_error: Optional[str] = None
         n = 0
         try:
-            n = await scrape_competitor(comp, db, results_limit=results_limit)
+            n = await scrape_competitor(comp, db, results_limit=results_limit, client_name=client_name)
             if n == 0:
                 # scrape_competitor returns 0 both on Apify failure and when all posts are dupes;
                 # distinguish by checking whether Apify returned nothing vs. all-duplicate

@@ -1692,6 +1692,8 @@ async def lifespan(app: FastAPI):
     await db.clients.create_index([("status", 1), ("instagram_connected", 1)])
     await db.token_usage.create_index([("client_id", 1), ("created_at", -1)])
     await db.token_usage.create_index([("created_at", -1)])
+    await db.apify_usage.create_index([("client_id", 1), ("created_at", -1)])
+    await db.apify_usage.create_index([("created_at", -1)])
     # Analytics & logs query indexes
     await db.logs.create_index([("created_at", -1)])
     await db.logs.create_index([("client_id", 1), ("created_at", -1)])
@@ -5448,6 +5450,149 @@ async def usage_log(
     skip = (page - 1) * limit
     total = await db.token_usage.count_documents(query)
     items = await db.token_usage.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    import math
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit) if limit else 1,
+    }
+
+
+# ─── Apify Usage / Cost Tracking Routes ──────────────────────────────────────
+
+@api_router.get("/usage/apify/summary")
+async def apify_usage_summary(days: int = 30, client_id: Optional[str] = None):
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    match = {"created_at": {"$gte": cutoff}}
+    if client_id:
+        match["client_id"] = client_id
+
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id": {"actor": "$actor", "platform": "$platform"},
+            "cost":    {"$sum": "$cost_usd"},
+            "results": {"$sum": "$results_count"},
+            "runs":    {"$sum": 1},
+        }}
+    ]
+    rows = await db.apify_usage.aggregate(pipeline).to_list(None)
+
+    total_cost = 0.0
+    total_runs = 0
+    total_results = 0
+    by_actor: dict = {}
+    by_platform: dict = {}
+
+    for row in rows:
+        actor = row["_id"].get("actor") or "unknown"
+        platform = row["_id"].get("platform") or "unknown"
+        cost = row["cost"] or 0.0
+        runs = row["runs"] or 0
+        results = row["results"] or 0
+
+        total_cost += cost
+        total_runs += runs
+        total_results += results
+
+        if actor not in by_actor:
+            by_actor[actor] = {"runs": 0, "results": 0, "cost_usd": 0.0}
+        by_actor[actor]["runs"] += runs
+        by_actor[actor]["results"] += results
+        by_actor[actor]["cost_usd"] += cost
+
+        if platform not in by_platform:
+            by_platform[platform] = {"runs": 0, "results": 0, "cost_usd": 0.0}
+        by_platform[platform]["runs"] += runs
+        by_platform[platform]["results"] += results
+        by_platform[platform]["cost_usd"] += cost
+
+    for a in by_actor.values():
+        a["cost_usd"] = round(a["cost_usd"], 6)
+    for p in by_platform.values():
+        p["cost_usd"] = round(p["cost_usd"], 6)
+
+    return {
+        "period_days":    days,
+        "provider":       "apify",
+        "total_cost_usd": round(total_cost, 6),
+        "total_runs":     total_runs,
+        "total_results":  total_results,
+        "by_actor":       by_actor,
+        "by_platform":    by_platform,
+    }
+
+
+@api_router.get("/usage/apify/clients")
+async def apify_usage_by_client(days: int = 30):
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    pipeline = [
+        {"$match": {"created_at": {"$gte": cutoff}, "client_id": {"$ne": None}}},
+        {"$group": {
+            "_id": "$client_id",
+            "client_name":    {"$first": "$client_name"},
+            "total_runs":     {"$sum": 1},
+            "total_results":  {"$sum": "$results_count"},
+            "total_cost_usd": {"$sum": "$cost_usd"},
+        }},
+        {"$sort": {"total_cost_usd": -1}},
+    ]
+    rows = await db.apify_usage.aggregate(pipeline).to_list(None)
+    return [
+        {
+            "client_id":      r["_id"],
+            "client_name":    r.get("client_name"),
+            "total_runs":     r["total_runs"],
+            "total_results":  r["total_results"],
+            "total_cost_usd": round(r["total_cost_usd"], 6),
+        }
+        for r in rows
+    ]
+
+
+@api_router.get("/usage/apify/daily")
+async def apify_usage_daily(days: int = 30, client_id: Optional[str] = None):
+    from datetime import datetime, timezone, timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    match = {"created_at": {"$gte": cutoff}}
+    if client_id:
+        match["client_id"] = client_id
+
+    pipeline = [
+        {"$match": match},
+        {"$group": {
+            "_id": {"$substr": ["$created_at", 0, 10]},  # YYYY-MM-DD
+            "cost_usd": {"$sum": "$cost_usd"},
+            "runs":     {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    rows = await db.apify_usage.aggregate(pipeline).to_list(None)
+    return [
+        {"date": r["_id"], "runs": r["runs"], "cost_usd": round(r["cost_usd"], 6)}
+        for r in rows
+    ]
+
+
+@api_router.get("/usage/apify/log")
+async def apify_usage_log(
+    page: int = 1,
+    limit: int = 50,
+    client_id: Optional[str] = None,
+    platform: Optional[str] = None,
+):
+    query: dict = {}
+    if client_id:
+        query["client_id"] = client_id
+    if platform:
+        query["platform"] = platform
+
+    skip = (page - 1) * limit
+    total = await db.apify_usage.count_documents(query)
+    items = await db.apify_usage.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     import math
     return {
         "items": items,

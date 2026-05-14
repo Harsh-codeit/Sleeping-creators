@@ -63,15 +63,16 @@ async def trigger_scrape(handle: str, platform: str, results_limit: int = 10) ->
         return None
 
 
-async def poll_run_until_done(run_id: str, max_wait_seconds: int = 300) -> bool:
+async def poll_run_until_done(run_id: str, max_wait_seconds: int = 300) -> Optional[dict]:
     """
     Polls Apify until the run finishes or times out.
-    Returns True if succeeded, False otherwise.
+    Returns the run's `data` payload (incl. usageTotalUsd, usage breakdown) on SUCCEEDED,
+    or None on failure / timeout.
     """
     api_key = os.environ.get("APIFY_API_KEY", "")
     if not api_key:
         logger.warning("APIFY_API_KEY not set — skipping poll")
-        return False
+        return None
 
     url = f"{APIFY_BASE}/actor-runs/{run_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -83,16 +84,17 @@ async def poll_run_until_done(run_id: str, max_wait_seconds: int = 300) -> bool:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
-                data = resp.json()
-                status = data.get("data", {}).get("status")
+                payload = resp.json()
+                run_data = payload.get("data", {}) or {}
+                status = run_data.get("status")
                 if not status:
                     logger.error(f"No status in Apify response for run {run_id}")
-                    return False
+                    return None
                 if status == "SUCCEEDED":
-                    return True
+                    return run_data
                 if status in ("FAILED", "ABORTED", "TIMED-OUT"):
                     logger.error(f"Apify run {run_id} ended with status: {status}")
-                    return False
+                    return None
         except httpx.HTTPError as e:
             logger.warning(f"Apify HTTP error polling {run_id}: {e}")
         except KeyError as e:
@@ -102,7 +104,7 @@ async def poll_run_until_done(run_id: str, max_wait_seconds: int = 300) -> bool:
         waited += interval
 
     logger.error(f"Apify run {run_id} timed out after {max_wait_seconds}s")
-    return False
+    return None
 
 
 async def fetch_results(run_id: str) -> list[dict]:
