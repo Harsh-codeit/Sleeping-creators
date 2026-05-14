@@ -48,9 +48,9 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       const [ov, cl, ts] = await Promise.all([
-        axios.get(`${API}/analytics/overview`),
+        axios.get(`${API}/dashboard/overview`),
         axios.get(`${API}/clients`),
-        axios.get(`${API}/analytics/time-series?days=14`)
+        axios.get(`${API}/dashboard/time-series?days=14`)
       ]);
       setOverview(ov.data);
       setClients(cl.data);

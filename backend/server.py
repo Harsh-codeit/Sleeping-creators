@@ -2598,11 +2598,11 @@ async def bulk_generate(data: BulkGenerateRequest):
 
 # ─── Analytics Routes ─────────────────────────────────────────────────────────
 
-@api_router.get("/analytics/overview")
-async def analytics_overview():
+@api_router.get("/dashboard/overview")
+async def dashboard_overview():
+    """Command Center stats. Counts only — no engagement metrics (those live in Bundle now)."""
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-    # Single aggregation replaces 6 separate count_documents calls
     post_counts_raw, client_counts_raw, platform_raw, recent_logs = await asyncio.gather(
         db.posts.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]).to_list(None),
         db.clients.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]).to_list(None),
@@ -2645,85 +2645,9 @@ async def analytics_overview():
         "recent_activity": recent_logs,
     }
 
-@api_router.get("/analytics/clients/{client_id}")
-async def analytics_client(client_id: str):
-    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
-    if not client:
-        raise HTTPException(404, "Client not found")
-    pipeline = [
-        {"$match": {"client_id": client_id, "status": "published"}},
-        {"$group": {
-            "_id": "$platform",
-            "posts":       {"$sum": 1},
-            "likes":       {"$sum": "$performance.likes"},
-            "comments":    {"$sum": "$performance.comments"},
-            "shares":      {"$sum": "$performance.shares"},
-            "impressions": {"$sum": "$performance.impressions"},
-        }},
-    ]
-    rows = await db.posts.aggregate(pipeline).to_list(None)
-    total_published = total_likes = total_comments = total_shares = total_impressions = 0
-    platform_breakdown = {}
-    for r in rows:
-        plat = r["_id"] or "unknown"
-        total_published += r["posts"]
-        total_likes      += r["likes"] or 0
-        total_comments   += r["comments"] or 0
-        total_shares     += r["shares"] or 0
-        total_impressions += r["impressions"] or 0
-        platform_breakdown[plat] = {
-            "posts": r["posts"],
-            "likes": r["likes"] or 0,
-            "impressions": r["impressions"] or 0,
-        }
-    return {
-        "client": client,
-        "total_published": total_published,
-        "total_likes": total_likes,
-        "total_comments": total_comments,
-        "total_shares": total_shares,
-        "total_impressions": total_impressions,
-        "platform_breakdown": platform_breakdown,
-        "avg_engagement": round((total_likes + total_comments + total_shares) / max(total_published, 1), 1),
-    }
 
-@api_router.get("/analytics/all-clients")
-async def analytics_all_clients():
-    """Return per-client stats for all clients in a single DB round trip.
-
-    Replaces the N individual /analytics/clients/{id} calls made by Analytics.js.
-    """
-    pipeline = [
-        {"$match": {"status": "published"}},
-        {"$group": {
-            "_id": "$client_id",
-            "total_published": {"$sum": 1},
-            "total_likes":     {"$sum": "$performance.likes"},
-            "total_comments":  {"$sum": "$performance.comments"},
-            "total_shares":    {"$sum": "$performance.shares"},
-            "total_impressions": {"$sum": "$performance.impressions"},
-        }},
-    ]
-    rows = await db.posts.aggregate(pipeline).to_list(None)
-    result = {}
-    for r in rows:
-        cid = r["_id"]
-        likes    = r["total_likes"] or 0
-        comments = r["total_comments"] or 0
-        shares   = r["total_shares"] or 0
-        published = r["total_published"]
-        result[cid] = {
-            "total_published":  published,
-            "total_likes":      likes,
-            "total_comments":   comments,
-            "total_shares":     shares,
-            "total_impressions": r["total_impressions"] or 0,
-            "avg_engagement":   round((likes + comments + shares) / max(published, 1), 1),
-        }
-    return result
-
-@api_router.get("/analytics/time-series")
-async def analytics_time_series(days: int = 30):
+@api_router.get("/dashboard/time-series")
+async def dashboard_time_series(days: int = 14):
     start = (datetime.now(timezone.utc) - timedelta(days=days)).replace(
         hour=0, minute=0, second=0, microsecond=0
     ).isoformat()
@@ -2735,11 +2659,105 @@ async def analytics_time_series(days: int = 30):
     rows = await db.posts.aggregate(pipeline).to_list(None)
     by_date = {r["_id"]: r["posts"] for r in rows}
     result = []
-    for i in range(days, -1, -1):
+    for i in range(days - 1, -1, -1):
         day = datetime.now(timezone.utc) - timedelta(days=i)
-        count = by_date.get(day.strftime("%Y-%m-%d"), 0)
-        result.append({"date": day.strftime("%m/%d"), "posts": count, "impressions": count * random.randint(200, 800)})
+        result.append({"date": day.strftime("%m/%d"), "posts": by_date.get(day.strftime("%Y-%m-%d"), 0)})
     return result
+
+
+@api_router.get("/analytics/clients/{client_id}")
+async def analytics_client(client_id: str):
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    bundle = client.get("bundle") or {"socials": [], "socials_refreshed_at": None}
+    socials = bundle.get("socials") or []
+
+    totals = {"followers": 0, "impressions": 0, "likes": 0, "comments": 0, "post_count": 0}
+    platform_breakdown = {}
+    for s in socials:
+        plat = s.get("platform") or "unknown"
+        platform_breakdown[plat] = {
+            "followers":   s.get("followers", 0) or 0,
+            "impressions": s.get("impressions", 0) or 0,
+            "likes":       s.get("likes", 0) or 0,
+            "comments":    s.get("comments", 0) or 0,
+            "post_count":  s.get("post_count", 0) or 0,
+        }
+        for k in totals:
+            totals[k] += s.get(k, 0) or 0
+
+    return {
+        "client_id": client["id"],
+        "client_name": client.get("name"),
+        "bundle_connected": bool(client.get("bundle_team_id")),
+        "bundle": {
+            "socials": socials,
+            "socials_refreshed_at": bundle.get("socials_refreshed_at"),
+        },
+        "totals": totals,
+        "platform_breakdown": platform_breakdown,
+    }
+
+
+@api_router.post("/analytics/clients/{client_id}/refresh")
+async def analytics_client_refresh(client_id: str):
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    team_id = client.get("bundle_team_id")
+    platforms = client.get("bundle_platforms") or []
+    if not team_id:
+        raise HTTPException(400, "Client isn't connected to Bundle — set up Bundle on the client detail page first")
+    if not platforms:
+        raise HTTPException(400, "No connected social platforms — connect at least one in Bundle first")
+
+    settings = await get_settings()
+    api_key = settings.get("bundle_api_key", "")
+    if not api_key:
+        raise HTTPException(400, "Bundle API key not configured — go to Settings → Bundle.social")
+
+    refreshed_at = now_iso()
+    socials: list[dict] = []
+    for platform in platforms:
+        try:
+            data = await bundle_service.get_social_account_analytics(api_key, team_id, platform)
+        except Exception as e:
+            logger.warning("Analytics fetch failed for client=%s platform=%s: %s", client_id, platform, e)
+            continue
+
+        items = data.get("items") or []
+        acct = data.get("socialAccount") or {}
+        item = items[0] if items else {}
+        socials.append({
+            "platform":          platform,
+            "username":          acct.get("username"),
+            "avatar_url":        acct.get("avatarUrl"),
+            "followers":         item.get("followers", 0) or 0,
+            "following":         item.get("following", 0) or 0,
+            "impressions":       item.get("impressions", 0) or 0,
+            "impressions_unique": item.get("impressionsUnique", 0) or 0,
+            "views":             item.get("views", 0) or 0,
+            "views_unique":      item.get("viewsUnique", 0) or 0,
+            "likes":             item.get("likes", 0) or 0,
+            "comments":          item.get("comments", 0) or 0,
+            "post_count":        item.get("postCount", 0) or 0,
+            "refreshed_at":      refreshed_at,
+        })
+
+    if not socials:
+        raise HTTPException(502, "All platform fetches failed — previous data preserved")
+
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$set": {
+            "bundle.socials": socials,
+            "bundle.socials_refreshed_at": refreshed_at,
+        }},
+    )
+    return {"socials": socials, "socials_refreshed_at": refreshed_at}
 
 # ─── Logs Routes ─────────────────────────────────────────────────────────────
 

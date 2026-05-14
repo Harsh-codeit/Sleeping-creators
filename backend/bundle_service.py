@@ -214,6 +214,17 @@ async def list_posts(api_key: str, team_id: str, limit: int = 50, offset: int = 
     return data if isinstance(data, list) else data.get("data", data.get("posts", []))
 
 
+async def get_social_account_analytics(api_key: str, team_id: str, platform_type: str) -> dict:
+    """Fetch latest analytics snapshot for a single connected social account.
+
+    Returns the raw `{ items, socialAccount }` body; caller decides how to recover on errors.
+    `platform_type` may be a lowercase key (e.g. "instagram") or the Bundle constant
+    ("INSTAGRAM"). It's normalized here for convenience.
+    """
+    pt = PLATFORM_MAP.get(platform_type, platform_type).upper()
+    return await _get(api_key, "/analytics/social-account", {"teamId": team_id, "platformType": pt})
+
+
 def verify_webhook_signature(raw_body: bytes, signature: str, secret: str) -> bool:
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)

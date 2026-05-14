@@ -1424,6 +1424,22 @@ export default function ClientDetail() {
   const [hookGenLoading, setHookGenLoading] = useState(false);
   const [competitorInsight, setCompetitorInsight] = useState(null);
   const [togglingWinner, setTogglingWinner] = useState(null);
+  const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
+
+  const refreshAnalytics = async () => {
+    if (refreshingAnalytics) return;
+    setRefreshingAnalytics(true);
+    try {
+      await axios.post(`${API}/analytics/clients/${id}/refresh`);
+      const { data } = await axios.get(`${API}/analytics/clients/${id}`);
+      setAnalytics(data);
+      toast.success("Analytics refreshed");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to refresh analytics");
+    } finally {
+      setRefreshingAnalytics(false);
+    }
+  };
 
   const fetchClient = async () => {
     try {
@@ -1732,8 +1748,8 @@ export default function ClientDetail() {
             {[
               { label: "Posts Today", value: Math.max(publishedToday, client.posts_today ?? 0) },
               { label: "Posts Total", value: Math.max(publishedTotal, client.posts_total ?? 0) },
-              { label: "Published", value: analytics?.total_published ?? 0 },
-              { label: "Avg Engagement", value: analytics?.avg_engagement ?? 0 },
+              { label: "Followers", value: (analytics?.totals?.followers ?? 0).toLocaleString() },
+              { label: "Impressions", value: (analytics?.totals?.impressions ?? 0).toLocaleString() },
             ].map(s => (
               <div key={s.label} className="bg-zinc-900 border border-zinc-800 p-3">
                 <div className="text-[10px] font-mono text-zinc-500 uppercase">{s.label}</div>
@@ -1806,18 +1822,35 @@ export default function ClientDetail() {
             <DriveImagesFolderCard client={client} clientId={id} setClient={setClient} />
             <DriveVideosFolderCard client={client} clientId={id} setClient={setClient} />
             <div className="bg-zinc-900 border border-zinc-800 p-4">
-              <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Performance</div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] font-mono text-zinc-500 uppercase">Performance</div>
+                <button
+                  data-testid="refresh-analytics-btn"
+                  onClick={refreshAnalytics}
+                  disabled={refreshingAnalytics || !analytics?.bundle_connected}
+                  className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={analytics?.bundle_connected ? "Refresh analytics from Bundle" : "Connect to Bundle first"}
+                >
+                  <RefreshCw size={11} className={refreshingAnalytics ? "animate-spin" : ""} />
+                  {refreshingAnalytics ? "Refreshing…" : "Refresh"}
+                </button>
+              </div>
               {[
-                { label: "Impressions", value: (analytics?.total_impressions ?? 0).toLocaleString() },
-                { label: "Likes", value: (analytics?.total_likes ?? 0).toLocaleString() },
-                { label: "Comments", value: (analytics?.total_comments ?? 0).toLocaleString() },
-                { label: "Shares", value: (analytics?.total_shares ?? 0).toLocaleString() },
+                { label: "Followers", value: (analytics?.totals?.followers ?? 0).toLocaleString() },
+                { label: "Impressions", value: (analytics?.totals?.impressions ?? 0).toLocaleString() },
+                { label: "Likes", value: (analytics?.totals?.likes ?? 0).toLocaleString() },
+                { label: "Comments", value: (analytics?.totals?.comments ?? 0).toLocaleString() },
               ].map(f => (
                 <div key={f.label} className="flex justify-between py-1.5 border-b border-zinc-800 last:border-0">
                   <span className="text-xs font-mono text-zinc-500">{f.label}</span>
                   <span className="text-xs font-mono text-white">{f.value}</span>
                 </div>
               ))}
+              {analytics?.bundle_connected === false && (
+                <div className="text-[10px] text-zinc-600 font-mono mt-2">
+                  Connect this client to Bundle to see analytics.
+                </div>
+              )}
             </div>
             {competitorInsight && (
               <div className="bg-zinc-900 border border-zinc-800 p-4">
