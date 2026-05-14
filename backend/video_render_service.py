@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import re
 import uuid
 import tempfile
 from typing import Optional
@@ -197,23 +198,63 @@ async def generate_video_content(
         **_strategy_block(client),
     )
 
-    msg = _anthropic_client().messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1500,
-        messages=[{"role": "user", "content": full_prompt}],
-    )
-    raw = msg.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```", 2)[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.rsplit("```", 1)[0]
-    data = json.loads(raw)
+    data = _generate_content_json(full_prompt)
     return {
         "merge_values": data.get("merge_values") or {},
         "caption": data.get("caption") or "",
         "hashtags": data.get("hashtags") or [],
     }
+
+
+def _strip_fences(raw: str) -> str:
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
+    return raw.strip()
+
+
+def _parse_content_json(raw: str) -> Optional[dict]:
+    """Parse Claude's content JSON, trying to salvage truncated/fenced output."""
+    text = _strip_fences(raw)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Salvage: pull the outermost {...} and try once more.
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+def _generate_content_json(full_prompt: str) -> dict:
+    """Call Claude and parse the JSON response. Retries once with more tokens
+    if the first attempt returns malformed/truncated JSON."""
+    client = _anthropic_client()
+    last_raw = ""
+    for attempt, max_tokens in enumerate((4096, 8000), start=1):
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": full_prompt}],
+        )
+        last_raw = msg.content[0].text if msg.content else ""
+        data = _parse_content_json(last_raw)
+        if data is not None:
+            return data
+        logger.warning(
+            "video content JSON parse failed (attempt %d, max_tokens=%d, stop_reason=%s); raw head=%r",
+            attempt, max_tokens, getattr(msg, "stop_reason", None), last_raw[:300],
+        )
+    raise ValueError(
+        f"Claude returned unparseable JSON after retry; raw head: {last_raw[:300]!r}"
+    )
 
 
 def _now_iso() -> str:
