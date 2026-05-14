@@ -2964,6 +2964,31 @@ async def bundle_list_posts(client_id: str, limit: int = 50, offset: int = 0):
     posts = await bundle_service.list_posts(api_key, team_id, limit=limit, offset=offset)
     return {"posts": posts}
 
+@api_router.post("/clients/{client_id}/recount-counters")
+async def recount_client_counters(client_id: str):
+    """Recompute posts_today / posts_total / last_post_at from db.posts.
+    Use to fix counters after the Bundle webhook stopped incrementing them.
+    Idempotent — running twice is identical to running once."""
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    posts_total = await db.posts.count_documents({
+        "client_id": client_id, "status": "published",
+    })
+    posts_today = await db.posts.count_documents({
+        "client_id": client_id, "status": "published",
+        "published_at": {"$gte": today_start},
+    })
+    latest = await db.posts.find_one(
+        {"client_id": client_id, "status": "published"},
+        sort=[("published_at", -1)],
+    )
+    last_post_at = (latest or {}).get("published_at")
+    update = {"posts_today": posts_today, "posts_total": posts_total}
+    if last_post_at:
+        update["last_post_at"] = last_post_at
+    await db.clients.update_one({"id": client_id}, {"$set": update})
+    return {"client_id": client_id, **update}
+
+
 @api_router.get("/bundle/post/{bundle_post_id}/sync")
 async def bundle_sync_post(bundle_post_id: str):
     settings = await get_settings()
@@ -2979,10 +3004,28 @@ async def bundle_sync_post(bundle_post_id: str):
     if automonk_status == "published":
         update["published_at"] = bundle_post.get("publishedAt") or now_iso()
 
+    # Capture pre-update status so we know whether to increment client counters.
+    # If the post was already 'published' we MUST NOT increment again — sync is
+    # idempotent and a re-poll shouldn't double-count.
+    prev = await db.posts.find_one(
+        {"platform_post_id": bundle_post_id},
+        {"status": 1, "client_id": 1, "_id": 0},
+    )
     result = await db.posts.update_one(
         {"platform_post_id": bundle_post_id},
         {"$set": update}
     )
+    if (
+        automonk_status == "published"
+        and prev
+        and prev.get("status") != "published"
+        and prev.get("client_id")
+    ):
+        await db.clients.update_one(
+            {"id": prev["client_id"]},
+            {"$inc": {"posts_today": 1, "posts_total": 1},
+             "$set": {"last_post_at": now_iso()}},
+        )
     post = await db.posts.find_one({"platform_post_id": bundle_post_id}, {"_id": 0})
     return {"synced": result.modified_count > 0, "bundle_status": bundle_status, "post": post}
 
@@ -6137,14 +6180,28 @@ async def bundle_webhook(request: Request):
         return {"ok": True}
 
     if event_type == "post.published":
-        await db.posts.update_one(
-            {"platform_post_id": bundle_post_id},
+        # Atomic: flip ONLY if not already published. modified_count==1 means
+        # this is a real first-time publish, so it's safe to increment the
+        # client's counters. Guards against duplicate webhook deliveries.
+        result = await db.posts.update_one(
+            {"platform_post_id": bundle_post_id, "status": {"$ne": "published"}},
             {"$set": {
                 "status": "published",
                 "published_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat(),
             }}
         )
+        if result.modified_count:
+            post = await db.posts.find_one(
+                {"platform_post_id": bundle_post_id},
+                {"client_id": 1, "_id": 0},
+            )
+            if post and post.get("client_id"):
+                await db.clients.update_one(
+                    {"id": post["client_id"]},
+                    {"$inc": {"posts_today": 1, "posts_total": 1},
+                     "$set": {"last_post_at": now_iso()}},
+                )
     elif event_type == "post.failed":
         error_msg = data.get("errorMessage") or data.get("userFacingMessage") or "Bundle publish failed"
         await db.posts.update_one(

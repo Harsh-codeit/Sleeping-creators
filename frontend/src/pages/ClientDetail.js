@@ -1716,20 +1716,33 @@ export default function ClientDetail() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        {[
-          { label: "Posts Today", value: client.posts_today ?? 0 },
-          { label: "Posts Total", value: client.posts_total ?? 0 },
-          { label: "Published", value: analytics?.total_published ?? 0 },
-          { label: "Avg Engagement", value: analytics?.avg_engagement ?? 0 },
-        ].map(s => (
-          <div key={s.label} className="bg-zinc-900 border border-zinc-800 p-3">
-            <div className="text-[10px] font-mono text-zinc-500 uppercase">{s.label}</div>
-            <div className="text-2xl font-bold font-mono text-white mt-1">{s.value}</div>
+      {/* Stats — derive "Posts Today" from the loaded posts list so it stays
+          accurate even when the stored client.posts_today counter drifts
+          (e.g. Bundle webhook published a post but the increment was missed). */}
+      {(() => {
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const publishedToday = posts.filter(p => {
+          if (p.status !== "published") return false;
+          const ts = p.published_at || p.publishedAt;
+          return ts && new Date(ts) >= todayStart;
+        }).length;
+        const publishedTotal = posts.filter(p => p.status === "published").length;
+        return (
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            {[
+              { label: "Posts Today", value: Math.max(publishedToday, client.posts_today ?? 0) },
+              { label: "Posts Total", value: Math.max(publishedTotal, client.posts_total ?? 0) },
+              { label: "Published", value: analytics?.total_published ?? 0 },
+              { label: "Avg Engagement", value: analytics?.avg_engagement ?? 0 },
+            ].map(s => (
+              <div key={s.label} className="bg-zinc-900 border border-zinc-800 p-3">
+                <div className="text-[10px] font-mono text-zinc-500 uppercase">{s.label}</div>
+                <div className="text-2xl font-bold font-mono text-white mt-1">{s.value}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
       {/* Tabs */}
       <div className="flex border-b border-zinc-800 mb-6">
