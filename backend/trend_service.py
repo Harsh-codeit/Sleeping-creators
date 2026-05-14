@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 APIFY_BASE = "https://api.apify.com/v2"
 # Apify actor for Instagram hashtag search volume
 HASHTAG_ACTOR = "apify~instagram-hashtag-scraper"
-TREND_TTL_HOURS = 6
+TREND_TTL_HOURS = 24 * 7
 
 
 def _get_keywords_for_client(client: dict) -> List[str]:
@@ -228,7 +228,7 @@ async def fetch_apify_hashtag_trends(keywords: List[str]) -> List[dict]:
 async def fetch_trends_for_client(client: dict, db) -> List[dict]:
     """
     Fetch fresh trends for a client from pytrends + Apify.
-    Inserts results into db.trends with expires_at = now + 6h.
+    Inserts results into db.trends with expires_at = now + 1 week.
     Returns the list of inserted trend docs.
     """
     client_id = client.get("id") or ""

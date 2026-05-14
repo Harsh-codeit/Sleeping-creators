@@ -16,7 +16,7 @@ ACTORS = {
 }
 
 
-async def trigger_scrape(handle: str, platform: str) -> Optional[str]:
+async def trigger_scrape(handle: str, platform: str, results_limit: int = 10) -> Optional[str]:
     """
     Trigger an Apify actor run for the given handle/platform.
     Returns the run ID string, or None on failure.
@@ -31,11 +31,16 @@ async def trigger_scrape(handle: str, platform: str) -> Optional[str]:
         logger.warning(f"No Apify actor configured for platform: {platform}")
         return None
 
+    try:
+        results_limit = max(1, min(int(results_limit), 200))
+    except (TypeError, ValueError):
+        results_limit = 10
+
     username = handle.lstrip("@")
     input_payload = {
         "directUrls": [f"https://www.instagram.com/{username}/"],
         "resultsType": "posts",
-        "resultsLimit": 50,
+        "resultsLimit": results_limit,
     }
 
     url = f"{APIFY_BASE}/acts/{actor_id}/runs"

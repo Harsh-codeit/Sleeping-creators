@@ -156,6 +156,19 @@ export default function Settings() {
                 className="w-24 bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 font-mono"
               />
             </div>
+            <div>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Competitor Scrape Limit</label>
+              <input
+                data-testid="competitor-scrape-limit-input"
+                type="number"
+                min={1}
+                max={200}
+                value={form.competitor_scrape_limit ?? 10}
+                onChange={e => updateForm("competitor_scrape_limit", parseInt(e.target.value))}
+                className="w-24 bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 font-mono"
+              />
+              <div className="text-[10px] text-zinc-600 font-mono mt-1">Max posts Apify scrapes per competitor (1–200)</div>
+            </div>
           </div>
         </div>
 

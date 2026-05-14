@@ -99,7 +99,7 @@ def _normalize_post(raw: dict, competitor_id: str, client_id: str, platform: str
     return doc
 
 
-async def scrape_competitor(competitor: dict, db) -> int:
+async def scrape_competitor(competitor: dict, db, results_limit: int = 10) -> int:
     """
     Scrape one competitor. Inserts new posts into competitor_posts.
     Returns count of new posts inserted.
@@ -111,7 +111,7 @@ async def scrape_competitor(competitor: dict, db) -> int:
     competitor_id = competitor["id"]
     client_id = competitor["client_id"]
 
-    run_id = await trigger_scrape(handle, platform)
+    run_id = await trigger_scrape(handle, platform, results_limit=results_limit)
     if not run_id:
         logger.warning(f"Apify trigger_scrape returned no run_id for competitor {handle} ({platform})")
         return 0
@@ -271,12 +271,15 @@ async def run_weekly_scan(client_id: str, db) -> dict:
     if not competitors:
         return {"scraped": 0, "recreated": 0}
 
+    settings_doc = await db.settings.find_one({"key": "global"}, {"competitor_scrape_limit": 1, "_id": 0}) or {}
+    results_limit = settings_doc.get("competitor_scrape_limit") or 10
+
     total_scraped = 0
     for comp in competitors:
         scrape_error: Optional[str] = None
         n = 0
         try:
-            n = await scrape_competitor(comp, db)
+            n = await scrape_competitor(comp, db, results_limit=results_limit)
             if n == 0:
                 # scrape_competitor returns 0 both on Apify failure and when all posts are dupes;
                 # distinguish by checking whether Apify returned nothing vs. all-duplicate

@@ -194,6 +194,7 @@ class SettingsUpdate(BaseModel):
     require_approval: Optional[bool] = None
     posts_per_day_per_client: Optional[int] = None
     automation_enabled: Optional[bool] = None
+    competitor_scrape_limit: Optional[int] = None
     # Global video content-generation prompt. Used by generate_video_content
     # for every client unless that client overrides via strategy.video_prompt.
     # Empty string is meaningful — clears the global so renders fall back to
@@ -547,6 +548,7 @@ async def get_settings():
             "require_approval": True,
             "posts_per_day_per_client": 3,
             "automation_enabled": True,
+            "competitor_scrape_limit": 10,
             "created_at": now_iso()
         }
         await db.settings.insert_one({**s})
@@ -1645,12 +1647,12 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(
         _run_competitor_scans,
         'cron',
-        day_of_week='sun',
+        day=1,
         hour=0,
         minute=0,
-        id='competitor_weekly_scan'
+        id='competitor_monthly_scan'
     )
-    scheduler.add_job(refresh_all_trends, 'interval', hours=6, id='trend_refresh',
+    scheduler.add_job(refresh_all_trends, 'interval', weeks=1, id='trend_refresh',
                       start_date=_now + timedelta(seconds=270))
     scheduler.add_job(sync_all_sheets, 'interval', hours=6, id='sheets_outbound_sync',
                       start_date=_now + timedelta(seconds=330))
