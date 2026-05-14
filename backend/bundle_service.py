@@ -23,6 +23,23 @@ PLATFORM_MAP = {
     "google_business": "GOOGLE_BUSINESS",
 }
 
+# Per-platform text length caps enforced by Bundle. Keep conservative —
+# Bundle returns 400 if exceeded.
+PLATFORM_TEXT_LIMITS = {
+    "INSTAGRAM":       2000,
+    "FACEBOOK":        63206,
+    "TWITTER":         280,
+    "LINKEDIN":        3000,
+    "TIKTOK":          2200,
+    "YOUTUBE":         5000,
+    "THREADS":         500,
+    "PINTEREST":       500,
+    "REDDIT":          40000,
+    "DISCORD":         2000,
+    "BLUESKY":         300,
+    "GOOGLE_BUSINESS": 1500,
+}
+
 
 def _headers(api_key: str) -> dict:
     return {"x-api-key": api_key, "Content-Type": "application/json"}

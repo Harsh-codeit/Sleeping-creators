@@ -158,8 +158,8 @@ Generate all content in one response. Stay on-theme and on-tone. Never reference
 excluded topics. If brand hashtags are listed above, include them in the hashtag array.
 
 1. "merge_values" — text for each field that appears inside the video. Match each field's hint and max_chars exactly.
-2. "caption" — the social media post caption that accompanies the video. Engaging, matches brand voice, max 2200 chars.
-3. "hashtags" — array of 20 relevant hashtags without the # symbol.
+2. "caption" — the social media post caption that accompanies the video. Engaging, matches brand voice, max 2000 chars.
+3. "hashtags" — array of 5 to 6 relevant hashtags without the # symbol.
 
 Video fields:
 {fields}
@@ -199,10 +199,12 @@ async def generate_video_content(
     )
 
     data = _generate_content_json(full_prompt)
+    caption = (data.get("caption") or "")[:2000]
+    hashtags = [h for h in (data.get("hashtags") or []) if isinstance(h, str)][:6]
     return {
         "merge_values": data.get("merge_values") or {},
-        "caption": data.get("caption") or "",
-        "hashtags": data.get("hashtags") or [],
+        "caption": caption,
+        "hashtags": hashtags,
     }
 
 
@@ -491,18 +493,35 @@ async def _fetch_url_bytes(url: str) -> bytes:
         return r.content
 
 
+def _fit_text_to_limit(caption: str, hashtags: list[str], limit: int) -> str:
+    """Build caption + hashtags within `limit` chars. Drops hashtags first,
+    then truncates the caption if still over."""
+    tags = [t for t in hashtags if isinstance(t, str) and t]
+    while tags:
+        tag_block = "\n\n" + " ".join(f"#{t.lstrip('#')}" for t in tags)
+        if len(caption) + len(tag_block) <= limit:
+            return caption + tag_block
+        tags.pop()  # drop the least-important (last) tag and retry
+    if len(caption) <= limit:
+        return caption
+    return caption[: max(0, limit - 1)].rstrip() + "…"
+
+
 def _platform_overrides_for_video(post: dict, platforms: list[str]) -> dict:
     import bundle_service
-    caption = post.get("caption", "")
+    caption = post.get("caption", "") or ""
     hashtags = post.get("hashtags") or []
-    full_text = caption + ("\n\n" + " ".join(hashtags) if hashtags else "")
 
     out = {}
     for p in platforms:
         bp = bundle_service.PLATFORM_MAP.get(p)
         if not bp:
             continue
-        out[bp] = {"text": full_text, "uploadIds": post.get("_upload_ids", [])}
+        limit = bundle_service.PLATFORM_TEXT_LIMITS.get(bp, 2000)
+        out[bp] = {
+            "text": _fit_text_to_limit(caption, hashtags, limit),
+            "uploadIds": post.get("_upload_ids", []),
+        }
     return out
 
 
@@ -537,7 +556,7 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
         api_key=api_key,
         team_id=team_id,
         platforms=platforms,
-        text=(post.get("caption") or "")[:2200],
+        text=(post.get("caption") or "")[:2000],
         post_date=post["scheduled_at"],
         upload_ids=[upload_id],
         platform_overrides=platform_overrides,
