@@ -20,6 +20,7 @@ export default function Analytics() {
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(true);
   const [data, setData] = useState(null);
+  const [historyData, setHistoryData] = useState(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -52,17 +53,22 @@ export default function Analytics() {
     if (!id) return;
     setDataLoading(true);
     try {
-      const { data } = await axios.get(`${API}/analytics/clients/${id}`);
-      setData(data);
+      const [analyticsRes, histRes] = await Promise.all([
+        axios.get(`${API}/analytics/clients/${id}`),
+        axios.get(`${API}/analytics/clients/${id}/history`),
+      ]);
+      setData(analyticsRes.data);
+      setHistoryData(histRes.data);
     } catch {
       setData(null);
+      setHistoryData(null);
     } finally {
       setDataLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!selectedClientId) { setData(null); return; }
+    if (!selectedClientId) { setData(null); setHistoryData(null); return; }
     localStorage.setItem(LS_KEY, selectedClientId);
     fetchAnalytics(selectedClientId);
   }, [selectedClientId, fetchAnalytics]);
@@ -174,7 +180,7 @@ export default function Analytics() {
           </div>
         </div>
       ) : (
-        <ClientAnalyticsPanel data={data} />
+        <ClientAnalyticsPanel data={data} history={historyData} />
       )}
     </div>
   );

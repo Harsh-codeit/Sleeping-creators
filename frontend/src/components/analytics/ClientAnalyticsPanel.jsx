@@ -6,6 +6,7 @@ import {
   Users, Eye, PlayCircle, Heart, MessageCircle,
   UserCheck, EyeOff, Film, LayoutGrid, TrendingUp,
 } from "lucide-react";
+import MonthlyTrendChart from "./MonthlyTrendChart";
 
 export const PLATFORM_COLORS = {
   instagram: "#E1306C",
@@ -147,7 +148,7 @@ const TABLE_COLS = [
   { label: "Refreshed",        key: null,                  cls: "min-w-[80px] text-right" },
 ];
 
-export default function ClientAnalyticsPanel({ data, compact = false }) {
+export default function ClientAnalyticsPanel({ data, history, compact = false }) {
   const totals = data?.totals || {};
   const socials = data?.bundle?.socials || [];
   const breakdown = data?.platform_breakdown || {};
@@ -184,6 +185,8 @@ export default function ClientAnalyticsPanel({ data, compact = false }) {
           </div>
         ))}
       </div>
+
+      <MonthlyTrendChart history={history} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <PerformanceChart chartData={chartData} />
