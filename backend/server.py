@@ -2769,64 +2769,14 @@ async def analytics_client_refresh(client_id: str):
     if not socials:
         raise HTTPException(502, "All platform fetches failed — previous data preserved")
 
-    history_entries = []
-    for s in socials:
-        followers = s.get("followers") or 0
-        likes = s.get("likes") or 0
-        comments = s.get("comments") or 0
-        history_entries.append({
-            **s,
-            "engagement_rate": round((likes + comments) / followers * 100, 2) if followers else 0,
-        })
-
     await db.clients.update_one(
         {"id": client_id},
-        {
-            "$set": {
-                "bundle.socials": socials,
-                "bundle.socials_refreshed_at": refreshed_at,
-            },
-            "$push": {
-                "bundle.history": {
-                    "$each": history_entries,
-                    "$slice": -500,
-                }
-            },
-        },
+        {"$set": {
+            "bundle.socials": socials,
+            "bundle.socials_refreshed_at": refreshed_at,
+        }},
     )
     return {"socials": socials, "socials_refreshed_at": refreshed_at}
-
-
-@api_router.get("/analytics/clients/{client_id}/history")
-async def analytics_client_history(client_id: str):
-    client = await db.clients.find_one({"id": client_id}, {"_id": 0, "bundle.history": 1, "name": 1})
-    if not client:
-        raise HTTPException(404, "Client not found")
-
-    raw = (client.get("bundle") or {}).get("history") or []
-
-    from collections import defaultdict
-    monthly: dict = defaultdict(lambda: defaultdict(dict))
-    for entry in raw:
-        ts = entry.get("refreshed_at") or ""
-        month = ts[:7]
-        if not month:
-            continue
-        platform = entry.get("platform") or "unknown"
-        monthly[platform][month] = {
-            k: entry.get(k, 0) or 0
-            for k in ("followers", "following", "impressions", "impressions_unique",
-                      "views", "views_unique", "likes", "comments", "post_count", "engagement_rate")
-        }
-
-    all_months = sorted({m for plat_data in monthly.values() for m in plat_data})
-
-    return {
-        "client_id": client_id,
-        "client_name": client.get("name"),
-        "months": all_months,
-        "by_platform": {plat: dict(data) for plat, data in monthly.items()},
-    }
 
 # ─── Logs Routes ─────────────────────────────────────────────────────────────
 
