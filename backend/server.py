@@ -2674,19 +2674,38 @@ async def analytics_client(client_id: str):
     bundle = client.get("bundle") or {"socials": [], "socials_refreshed_at": None}
     socials = bundle.get("socials") or []
 
-    totals = {"followers": 0, "impressions": 0, "likes": 0, "comments": 0, "post_count": 0}
+    totals = {
+        "followers": 0, "following": 0,
+        "impressions": 0, "impressions_unique": 0,
+        "views": 0, "views_unique": 0,
+        "likes": 0, "comments": 0,
+        "post_count": 0,
+    }
     platform_breakdown = {}
     for s in socials:
         plat = s.get("platform") or "unknown"
+        followers = s.get("followers", 0) or 0
+        likes = s.get("likes", 0) or 0
+        comments = s.get("comments", 0) or 0
+        engagement_rate = round((likes + comments) / followers * 100, 2) if followers > 0 else 0
         platform_breakdown[plat] = {
-            "followers":   s.get("followers", 0) or 0,
-            "impressions": s.get("impressions", 0) or 0,
-            "likes":       s.get("likes", 0) or 0,
-            "comments":    s.get("comments", 0) or 0,
-            "post_count":  s.get("post_count", 0) or 0,
+            "followers":          followers,
+            "following":          s.get("following", 0) or 0,
+            "impressions":        s.get("impressions", 0) or 0,
+            "impressions_unique": s.get("impressions_unique", 0) or 0,
+            "views":              s.get("views", 0) or 0,
+            "views_unique":       s.get("views_unique", 0) or 0,
+            "likes":              likes,
+            "comments":           comments,
+            "post_count":         s.get("post_count", 0) or 0,
+            "engagement_rate":    engagement_rate,
         }
-        for k in totals:
+        for k in ("followers", "following", "impressions", "impressions_unique",
+                  "views", "views_unique", "likes", "comments", "post_count"):
             totals[k] += s.get(k, 0) or 0
+    totals["engagement_rate"] = round(
+        (totals["likes"] + totals["comments"]) / totals["followers"] * 100, 2
+    ) if totals["followers"] > 0 else 0
 
     return {
         "client_id": client["id"],
