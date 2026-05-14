@@ -1214,12 +1214,20 @@ export function VideoCreator() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleStartOver}
-                  className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors duration-200 text-left"
-                >
-                  ← Start over
-                </button>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => { setPost(null); setPostId(null); setRendering(false); setStep(4); }}
+                    className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors duration-200 text-left"
+                  >
+                    ← Make changes &amp; re-render
+                  </button>
+                  <button
+                    onClick={handleStartOver}
+                    className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 transition-colors duration-200 text-left"
+                  >
+                    ← Start over
+                  </button>
+                </div>
               </div>
             )}
 
