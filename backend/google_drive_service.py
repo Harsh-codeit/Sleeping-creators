@@ -83,14 +83,23 @@ def list_clips(refresh_token: str, folder_id: str) -> list[dict]:
 
     clips = []
     for i, f in enumerate(all_files):
-        duration = 0.0
-        if f.get("videoMediaMetadata"):
-            duration = float(f["videoMediaMetadata"].get("durationMillis", 0)) / 1000
+        meta = f.get("videoMediaMetadata") or {}
+        duration = float(meta.get("durationMillis") or 0) / 1000
+        # Drive's videoMediaMetadata reports raw pixel dimensions. There is no
+        # rotation field, so vertical detection is purely height > width.
+        # Phone-shot vertical clips that store as 1920x1080 with rotation
+        # metadata will mis-detect — but Drive doesn't expose that, so the
+        # tradeoff is deliberate. Manual override via UI can fix outliers later.
+        width = int(meta.get("width") or 0)
+        height = int(meta.get("height") or 0)
         clips.append({
             "drive_file_id": f["id"],
             "name": f["name"],
             "mime_type": f.get("mimeType", "video/mp4"),
             "duration": duration,
+            "width": width,
+            "height": height,
+            "is_vertical": bool(width and height and height > width),
             "sequence_number": i + 1,
             "thumbnail_url": f"https://drive.google.com/thumbnail?id={f['id']}&sz=w320",
         })

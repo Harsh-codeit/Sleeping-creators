@@ -12,15 +12,30 @@ def _template(merge_fields):
     }
 
 
+def _db_with_drive_clips(by_id: dict | None = None):
+    """MagicMock db whose drive_clips.find_one returns the doc keyed by drive_file_id.
+    Pass {} to make every lookup return None (default — non-vertical / unknown)."""
+    by_id = by_id or {}
+    db = MagicMock()
+    async def find_one(query):
+        return by_id.get(query.get("drive_file_id"))
+    db.drive_clips.find_one = find_one
+    return db
+
+
 @pytest.mark.asyncio
-async def test_build_merge_values_static_role_is_omitted():
+async def test_build_merge_values_static_role_uses_template_default():
+    # static_text fields receive no user override, but the template's `replace`
+    # default is still emitted so the literal {{FIELD}} placeholder doesn't
+    # leak through Shotstack's merge step.
     template = _template([{"find": "TAGLINE", "replace": "Frozen brand line", "role": "static_text", "inferred": True}])
     client = {"id": "c1", "brand_overrides": {}}
-    values = await video_render_service.build_merge_values(
-        db=MagicMock(), template=template, client=client, pipeline=None,
+    values, rotation = await video_render_service.build_merge_values(
+        db=_db_with_drive_clips(), template=template, client=client, pipeline=None,
         ai_text_overrides=None, music_url=None, clip_drive_ids=None,
     )
-    assert "TAGLINE" not in values
+    assert values["TAGLINE"] == "Frozen brand line"
+    assert rotation == {}
 
 
 @pytest.mark.asyncio
@@ -38,13 +53,40 @@ async def test_build_merge_values_clip_role_calls_stage_clip(monkeypatch):
         return f"https://r2.x/{fid}.mp4"
     monkeypatch.setattr(clip_staging_service, "stage_clip", fake_stage)
 
-    values = await video_render_service.build_merge_values(
-        db=MagicMock(), template=template, client=client, pipeline=None,
+    values, rotation = await video_render_service.build_merge_values(
+        db=_db_with_drive_clips(), template=template, client=client, pipeline=None,
         ai_text_overrides=None, music_url=None, clip_drive_ids=["drive-1", "drive-2"],
     )
     assert values["CLIP_A"] == "https://r2.x/drive-1.mp4"
     assert values["CLIP_B"] == "https://r2.x/drive-2.mp4"
     assert calls == [("c1", "drive-1"), ("c1", "drive-2")]
+    assert rotation == {}
+
+
+@pytest.mark.asyncio
+async def test_build_merge_values_vertical_clip_schedules_rotation(monkeypatch):
+    template = _template([
+        {"find": "MEDIA_1", "replace": "", "role": "clip", "inferred": True},
+        {"find": "MEDIA_2", "replace": "", "role": "clip", "inferred": True},
+    ])
+    client = {"id": "c1", "brand_overrides": {}}
+
+    import clip_staging_service
+    monkeypatch.setattr(clip_staging_service, "stage_clip",
+                        AsyncMock(side_effect=lambda db, cid, fid: f"https://r2.x/{fid}.mp4"))
+
+    db = _db_with_drive_clips({
+        "drive-horizontal": {"is_vertical": False, "width": 1920, "height": 1080},
+        "drive-vertical":   {"is_vertical": True,  "width": 1080, "height": 1920},
+    })
+
+    values, rotation = await video_render_service.build_merge_values(
+        db=db, template=template, client=client, pipeline=None,
+        ai_text_overrides=None, music_url=None,
+        clip_drive_ids=["drive-horizontal", "drive-vertical"],
+    )
+    assert "MEDIA_1" not in rotation
+    assert rotation["MEDIA_2"] == -90
 
 
 @pytest.mark.asyncio
@@ -52,8 +94,8 @@ async def test_build_merge_values_audio_request_wins():
     template = _template([{"find": "MUSIC", "replace": "", "role": "audio", "inferred": True}])
     client = {"id": "c1", "brand_overrides": {"default_music_url": "https://x/client.mp3"}}
     pipeline = {"music_url": "https://x/pipeline.mp3"}
-    values = await video_render_service.build_merge_values(
-        db=MagicMock(), template=template, client=client, pipeline=pipeline,
+    values, _ = await video_render_service.build_merge_values(
+        db=_db_with_drive_clips(), template=template, client=client, pipeline=pipeline,
         ai_text_overrides=None, music_url="https://x/request.mp3", clip_drive_ids=None,
     )
     assert values["MUSIC"] == "https://x/request.mp3"
@@ -64,8 +106,8 @@ async def test_build_merge_values_audio_pipeline_wins_over_client():
     template = _template([{"find": "MUSIC", "replace": "", "role": "audio", "inferred": True}])
     client = {"id": "c1", "brand_overrides": {"default_music_url": "https://x/client.mp3"}}
     pipeline = {"music_url": "https://x/pipeline.mp3"}
-    values = await video_render_service.build_merge_values(
-        db=MagicMock(), template=template, client=client, pipeline=pipeline,
+    values, _ = await video_render_service.build_merge_values(
+        db=_db_with_drive_clips(), template=template, client=client, pipeline=pipeline,
         ai_text_overrides=None, music_url=None, clip_drive_ids=None,
     )
     assert values["MUSIC"] == "https://x/pipeline.mp3"
@@ -75,8 +117,8 @@ async def test_build_merge_values_audio_pipeline_wins_over_client():
 async def test_build_merge_values_logo_from_brand_overrides():
     template = _template([{"find": "LOGO_URL", "replace": "", "role": "logo", "inferred": True}])
     client = {"id": "c1", "brand_overrides": {"logo_url": "https://x/logo.png"}}
-    values = await video_render_service.build_merge_values(
-        db=MagicMock(), template=template, client=client, pipeline=None,
+    values, _ = await video_render_service.build_merge_values(
+        db=_db_with_drive_clips(), template=template, client=client, pipeline=None,
         ai_text_overrides=None, music_url=None, clip_drive_ids=None,
     )
     assert values["LOGO_URL"] == "https://x/logo.png"
@@ -113,6 +155,7 @@ async def test_submit_render_for_post_creates_render_job(monkeypatch):
     db = MagicMock()
     db.shotstack_templates.find_one = AsyncMock(return_value=template)
     db.clients.find_one = AsyncMock(return_value=client)
+    db.drive_clips.find_one = AsyncMock(return_value=None)
     db.render_jobs.insert_one = AsyncMock()
     db.posts.update_one = AsyncMock()
     db.logs.insert_one = AsyncMock()

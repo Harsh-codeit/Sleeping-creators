@@ -350,6 +350,49 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
         )
 
 
+def _apply_clip_rotation(timeline: dict, rotation_overrides: dict | None) -> None:
+    """Add `transform.rotate.angle` on every timeline clip whose asset.src
+    references a `{{KEY}}` in `rotation_overrides`. Used to rotate vertical
+    Drive clips into the horizontal canvas without distorting them.
+
+    Must run BEFORE `_normalize_placeholders` and BEFORE Shotstack does its
+    merge substitution — we identify the target clip by the literal placeholder
+    in `asset.src`, which is gone once the URL is substituted in.
+
+    Idempotent + non-destructive: preserves any existing `clip.transform`
+    (scale/skew) and only sets the `rotate` sub-key. No-op when overrides
+    is empty.
+    """
+    if not rotation_overrides:
+        return
+    placeholder_re = {
+        key: re.compile(r"\{\{\s*" + re.escape(key) + r"\s*\}\}")
+        for key in rotation_overrides
+    }
+    rotated = 0
+    for track in timeline.get("tracks", []) or []:
+        if not isinstance(track, dict):
+            continue
+        for clip in track.get("clips", []) or []:
+            if not isinstance(clip, dict):
+                continue
+            asset = clip.get("asset")
+            src = asset.get("src", "") if isinstance(asset, dict) else ""
+            if not isinstance(src, str) or "{{" not in src:
+                continue
+            for key, angle in rotation_overrides.items():
+                if placeholder_re[key].search(src):
+                    transform = clip.setdefault("transform", {})
+                    if isinstance(transform, dict):
+                        transform["rotate"] = {"angle": angle}
+                        rotated += 1
+                    break  # one key per clip src
+    if rotated:
+        logger.info(
+            f"_apply_clip_rotation: rotated {rotated} clip(s) using overrides={rotation_overrides}"
+        )
+
+
 def _normalize_placeholders(obj):
     """
     Strip whitespace inside {{ FIELD }} placeholders → {{FIELD}}.
@@ -370,15 +413,24 @@ async def submit_render(
     merge_values: dict,
     filter_name: str | None = None,
     audio_url: str | None = None,
+    rotation_overrides: dict | None = None,
 ) -> str:
     """
     Build the render payload, apply mutations, submit to Shotstack.
     Returns the Shotstack render_id.
 
-    merge_values: {FIELD_NAME: value} — keys must match the find values exactly.
+    merge_values:       {FIELD_NAME: value} — keys must match find values exactly.
+    rotation_overrides: {FIELD_NAME: angle} — adds transform.rotate to each timeline
+                        clip whose asset.src is `{{FIELD_NAME}}`. Used to fix
+                        vertical Drive clips that render sideways otherwise.
     """
     mutated = _apply_filter_and_audio(template_data, filter_name, audio_url)
     tpl = mutated.get("template", {})
+
+    # Apply per-clip rotation BEFORE the substitution fallbacks run — they may
+    # rewrite asset.src into an R2 URL, after which we can no longer find the
+    # clip by its `{{KEY}}` placeholder.
+    _apply_clip_rotation(tpl.get("timeline", {}), rotation_overrides)
 
     # Belt-and-suspenders: substitute merge values directly into text-asset
     # content where the asset's literal text matches the merge field's default.
@@ -437,6 +489,7 @@ async def submit_render(
                 "src": truncate(asset.get("src", "")) if asset.get("src") else None,
                 "text": truncate(asset.get("text", "")) if asset.get("text") else None,
                 "filter": clip.get("filter"),
+                "transform": clip.get("transform"),
             })
     logger.info(
         f"Shotstack render body: merge={[{'find':e['find'],'replace':truncate(e['replace'])} for e in merge_array]} "

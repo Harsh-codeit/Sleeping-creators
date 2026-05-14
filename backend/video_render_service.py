@@ -285,9 +285,15 @@ async def build_merge_values(
     music_url: Optional[str] = None,
     clip_drive_ids: Optional[list[str]] = None,
     generated_merge_values: Optional[dict] = None,
-) -> dict:
+) -> tuple[dict, dict]:
     """
-    Build the merge_values dict {FIELD_NAME: value} for a Shotstack render.
+    Build merge_values + per-clip rotation_overrides for a Shotstack render.
+
+    Returns (values, rotation_overrides):
+      values:             {FIELD_NAME: value} for the Shotstack `merge` array
+      rotation_overrides: {FIELD_NAME: angle} for clip-role fields whose source
+                          Drive clip is vertical — applied as clip.transform.rotate
+                          on the timeline clip whose asset.src is `{{FIELD_NAME}}`.
 
     Merge order per field role:
       ai_text:      ai_text_overrides[find] OR Claude-generated
@@ -316,6 +322,7 @@ async def build_merge_values(
             logger.warning("AI text generation failed: %s", e)
 
     values: dict = {}
+    rotation_overrides: dict = {}
     for field in template.get("merge_fields", []):
         find = field["find"]
         role = field.get("role", "ai_text")
@@ -329,6 +336,21 @@ async def build_merge_values(
                 drive_id = next(clip_iter)
                 from clip_staging_service import stage_clip
                 user_value = await stage_clip(db, client["id"], drive_id)
+                # If the source Drive clip is vertical, schedule a -90° rotate
+                # on the timeline clip that consumes this merge key. The Drive
+                # video itself is portrait; the Shotstack canvas is landscape,
+                # so without rotation the player shows the clip on its side.
+                # Skip silently when the doc is missing width/height (older
+                # syncs predate the orientation fields — render proceeds
+                # un-rotated, same as today).
+                try:
+                    drive_doc = await db.drive_clips.find_one({
+                        "client_id": client["id"], "drive_file_id": drive_id,
+                    })
+                    if drive_doc and drive_doc.get("is_vertical"):
+                        rotation_overrides[find] = -90
+                except Exception as e:
+                    logger.warning("orientation lookup failed for %s: %s", drive_id, e)
             except StopIteration:
                 user_value = None
         elif role == "logo":
@@ -344,7 +366,7 @@ async def build_merge_values(
         if final:
             values[find] = final
 
-    return values
+    return values, rotation_overrides
 
 
 async def submit_render_for_post(
@@ -385,7 +407,7 @@ async def submit_render_for_post(
     else:
         template_data = await get_template(ss_id)
 
-    merge_values = await build_merge_values(
+    merge_values, rotation_overrides = await build_merge_values(
         db=db, template=template, client=client, pipeline=pipeline,
         ai_text_overrides=post.get("ai_text_overrides") or {},
         music_url=music_url,
@@ -402,7 +424,8 @@ async def submit_render_for_post(
         f"submit_render post={post.get('id', '')[:8]} template={template.get('name')!r} "
         f"source={'inline' if ss_id.startswith('inline:') else 'shotstack'} "
         f"merge_keys={list(merge_values.keys())} filter={filter_name!r} "
-        f"audio_override={'yes' if audio_url_override else 'no'}"
+        f"audio_override={'yes' if audio_url_override else 'no'} "
+        f"rotation_overrides={rotation_overrides or '{}'}"
     )
 
     shotstack_render_id = await submit_render(
@@ -410,6 +433,7 @@ async def submit_render_for_post(
         merge_values=merge_values,
         filter_name=filter_name,
         audio_url=audio_url_override,
+        rotation_overrides=rotation_overrides,
     )
 
     job = {
