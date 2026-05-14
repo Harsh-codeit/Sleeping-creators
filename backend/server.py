@@ -194,6 +194,11 @@ class SettingsUpdate(BaseModel):
     require_approval: Optional[bool] = None
     posts_per_day_per_client: Optional[int] = None
     automation_enabled: Optional[bool] = None
+    # Global video content-generation prompt. Used by generate_video_content
+    # for every client unless that client overrides via strategy.video_prompt.
+    # Empty string is meaningful — clears the global so renders fall back to
+    # the built-in _CONTENT_PROMPT.
+    global_video_prompt: Optional[str] = None
 
 class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None

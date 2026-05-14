@@ -159,6 +159,45 @@ export default function Settings() {
           </div>
         </div>
 
+        {/* Video Generation Prompt */}
+        <div className="bg-zinc-900 border border-zinc-800 p-5">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
+            <Bot size={14} className="text-zinc-400" />
+            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Video Generation Prompt</div>
+          </div>
+          <div className="space-y-2">
+            <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
+              Global voice/style instructions used when generating video captions and on-screen text.
+              Each client can override via their Strategy page. Leave empty to use the built-in default prompt.
+            </div>
+            <div className="text-[10px] font-mono text-zinc-600 leading-relaxed">
+              Supported placeholders: <code className="text-zinc-400">[TARGET AUDIENCE]</code>, <code className="text-zinc-400">[WHAT THEY TEACH OR SELL OR SOLVE]</code> — replaced with each client's data at render time.
+            </div>
+            <textarea
+              data-testid="global-video-prompt-input"
+              value={form.global_video_prompt || ""}
+              onChange={e => updateForm("global_video_prompt", e.target.value)}
+              rows={10}
+              placeholder="e.g. Write a scroll-stopping B Roll Reel hook between 15 to 20 words..."
+              className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono leading-relaxed resize-y"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-zinc-600">
+                {(form.global_video_prompt || "").length} chars
+              </span>
+              <button
+                data-testid="save-global-video-prompt"
+                onClick={save}
+                disabled={saving}
+                className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 text-white text-[11px] font-semibold hover:bg-zinc-700 disabled:opacity-50 transition-colors border border-zinc-700"
+              >
+                <Save size={11} />
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Google Sheets */}
         <div className="bg-zinc-900 border border-zinc-800 p-5">
           <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">

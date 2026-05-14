@@ -172,12 +172,52 @@ Return ONLY valid JSON — no explanation, no markdown fences:
 }}"""
 
 
+async def _resolve_custom_video_prompt(client: dict) -> Optional[str]:
+    """Return a custom video content prompt if one is configured, else None.
+    Priority: client.strategy.video_prompt > settings.global_video_prompt.
+    None means use the built-in _CONTENT_PROMPT — the existing default path."""
+    client_override = ((client or {}).get("strategy") or {}).get("video_prompt") or ""
+    if client_override.strip():
+        return client_override.strip()
+    try:
+        from server import get_settings
+        settings = await get_settings()
+        global_prompt = ((settings or {}).get("global_video_prompt") or "").strip()
+        if global_prompt:
+            return global_prompt
+    except Exception as e:
+        logger.warning("global_video_prompt lookup failed: %s", e)
+    return None
+
+
+def _substitute_client_placeholders(text: str, client: dict) -> str:
+    """Fill the [BRACKET]-style placeholders the user writes into custom prompts.
+    Only substitutes the documented set — anything else (e.g. [Random WORD]) is
+    instructions for Claude and must pass through verbatim."""
+    target_audience = (client.get("target_audience") or "").strip() or "general audience"
+    niche = (client.get("niche") or client.get("industry") or "").strip() or "general"
+    themes_list = (client.get("strategy") or {}).get("themes") or []
+    teach_solve = ", ".join(themes_list).strip() or niche
+    return (
+        text
+        .replace("[TARGET AUDIENCE]", target_audience)
+        .replace("[WHAT THEY TEACH OR SELL OR SOLVE]", teach_solve)
+    )
+
+
 async def generate_video_content(
     prompt: str,
     client: dict,
     ai_text_fields: list[dict],
 ) -> dict:
-    """One Claude call → {merge_values: {FIELD: text}, caption: str, hashtags: [str]}."""
+    """One Claude call → {merge_values: {FIELD: text}, caption: str, hashtags: [str]}.
+
+    Uses a custom prompt (per-client override or global setting) when configured,
+    otherwise falls back to the built-in _CONTENT_PROMPT. The custom prompt is
+    treated as the style/voice spec; we always append the structured-output
+    addendum so the per-template merge_values come back in the shape the
+    render pipeline expects.
+    """
     client_name = client.get("name", "the brand")
     niche = client.get("niche") or client.get("industry") or "general"
     brand_voice = client.get("brand_voice", "neutral")
@@ -191,12 +231,40 @@ async def generate_video_content(
 
     example_kv = ", ".join(f'"{f["find"]}": "..."' for f in ai_text_fields) if ai_text_fields else ""
 
-    full_prompt = _CONTENT_PROMPT.format(
-        client_name=client_name, niche=niche, brand_voice=brand_voice,
-        platforms=platforms, prompt=prompt,
-        fields=fields_json, merge_values_example=example_kv,
-        **_strategy_block(client),
-    )
+    custom_template = await _resolve_custom_video_prompt(client)
+    if custom_template:
+        # Custom prompt drives voice/style/length rules. We append a JSON output
+        # contract so merge_values land in the per-field shape the render
+        # pipeline expects regardless of how the user phrased their prompt.
+        custom_filled = _substitute_client_placeholders(custom_template, client)
+        topic_line = (
+            f"\n\nTopic / angle for this run (use to vary the message): {prompt}"
+            if (prompt or "").strip() else ""
+        )
+        full_prompt = (
+            f"{custom_filled}{topic_line}\n\n"
+            f"Apply the writing rules above to fill these video text fields "
+            f"(each field's hint and max_chars define what it represents and its length budget):\n"
+            f"{fields_json}\n\n"
+            f"Return ONLY valid JSON — no explanation, no markdown fences:\n"
+            f"{{\n"
+            f'  "merge_values": {{{example_kv}}},\n'
+            f'  "caption": "...",\n'
+            f'  "hashtags": ["tag1", "tag2", "tag3", "tag4"]\n'
+            f"}}"
+        )
+        source = "client" if ((client.get("strategy") or {}).get("video_prompt") or "").strip() else "global"
+        logger.info(
+            "generate_video_content: custom prompt source=%s (%d chars)",
+            source, len(custom_filled),
+        )
+    else:
+        full_prompt = _CONTENT_PROMPT.format(
+            client_name=client_name, niche=niche, brand_voice=brand_voice,
+            platforms=platforms, prompt=prompt,
+            fields=fields_json, merge_values_example=example_kv,
+            **_strategy_block(client),
+        )
 
     data = _generate_content_json(full_prompt)
     caption = (data.get("caption") or "")[:2000]

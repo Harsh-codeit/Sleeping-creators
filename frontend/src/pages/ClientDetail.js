@@ -1416,7 +1416,7 @@ export default function ClientDetail() {
   const [retryingPostId, setRetryingPostId] = useState(null);
   const [viewingVideoPost, setViewingVideoPost] = useState(null);
   const [editForm, setEditForm] = useState(null);
-  const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [], video_hooks: [] });
+  const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [], video_hooks: [], video_prompt: "" });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
   const [topicExcludeInput, setTopicExcludeInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
@@ -1443,7 +1443,8 @@ export default function ClientDetail() {
         hashtags: (s.hashtags || []).join(", "),
         topics_include: s.topics_include || [],
         topics_exclude: s.topics_exclude || [],
-        video_hooks: s.video_hooks || []
+        video_hooks: s.video_hooks || [],
+        video_prompt: s.video_prompt || ""
       });
     } catch { toast.error("Failed to load client"); }
     finally { setLoading(false); }
@@ -1535,7 +1536,8 @@ export default function ClientDetail() {
         hashtags: strategyForm.hashtags.split(",").map(h => h.trim().replace(/^#/, "").replace(/^/, "#")).filter(h => h !== "#"),
         topics_include: strategyForm.topics_include,
         topics_exclude: strategyForm.topics_exclude,
-        video_hooks: strategyForm.video_hooks.filter(h => h.title.trim() || h.prompt.trim())
+        video_hooks: strategyForm.video_hooks.filter(h => h.title.trim() || h.prompt.trim()),
+        video_prompt: (strategyForm.video_prompt || "").trim()
       };
       const resp = await axios.put(`${API}/clients/${id}`, { strategy });
       setClient(resp.data);
@@ -2064,6 +2066,34 @@ export default function ClientDetail() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Video Prompt Override */}
+          <div className="bg-zinc-900 border border-zinc-800 p-4">
+            <div className="flex items-baseline justify-between mb-3">
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                Video Prompt Override
+              </span>
+              <span className="text-[10px] font-mono text-zinc-600">
+                {strategyForm.video_prompt ? "active" : "using global"}
+              </span>
+            </div>
+            <p className="text-[10px] font-mono text-zinc-600 leading-relaxed mb-2">
+              Override the global video-generation prompt just for {client?.name || "this client"}.
+              Leave empty to use whatever is set in <span className="text-zinc-400">Settings → Video Generation Prompt</span>.
+              Placeholders <code className="text-zinc-400">[TARGET AUDIENCE]</code> and <code className="text-zinc-400">[WHAT THEY TEACH OR SELL OR SOLVE]</code> are auto-filled from this client.
+            </p>
+            <textarea
+              data-testid="client-video-prompt-input"
+              value={strategyForm.video_prompt}
+              onChange={e => setStrategyForm(f => ({ ...f, video_prompt: e.target.value }))}
+              rows={8}
+              placeholder="(empty — falls back to global)"
+              className="w-full bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 resize-y transition-colors duration-200 font-mono leading-relaxed"
+            />
+            <div className="text-[10px] font-mono text-zinc-600 mt-1.5">
+              {(strategyForm.video_prompt || "").length} chars
+            </div>
           </div>
 
           <button
