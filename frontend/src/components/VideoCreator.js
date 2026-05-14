@@ -245,6 +245,7 @@ export function VideoCreator() {
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientSearch, setClientSearch] = useState("");
+  const [globalVideoPrompt, setGlobalVideoPrompt] = useState("");
 
   // Step 2
   const [templates, setTemplates] = useState([]);
@@ -300,7 +301,16 @@ export function VideoCreator() {
     axios.get(`${API}/clients`)
       .then(r => setClients(r.data))
       .catch(() => toast.error("Failed to load clients"));
+    axios.get(`${API}/settings`)
+      .then(r => setGlobalVideoPrompt(r.data.global_video_prompt || ""))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!selectedClient) return;
+    const clientPrompt = selectedClient.strategy?.video_prompt || "";
+    setPrompt(clientPrompt || globalVideoPrompt);
+  }, [selectedClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (step === 2) {
