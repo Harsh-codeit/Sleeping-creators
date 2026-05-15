@@ -310,7 +310,7 @@ export function VideoCreator() {
     if (!selectedClient) return;
     const clientPrompt = selectedClient.strategy?.video_prompt || "";
     setPrompt(clientPrompt || globalVideoPrompt);
-  }, [selectedClient]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedClient, globalVideoPrompt]); // re-fire when global prompt loads (settings/clients race)
 
   useEffect(() => {
     if (step === 2) {

@@ -53,15 +53,40 @@ Return ONLY valid JSON, no markdown fences, no explanation:
 
 
 async def generate_video_hook(client: dict, keyword: str = "") -> dict:
-    """One Claude call → {title: str, prompt: str} for a reusable hook."""
-    prompt = _HOOK_PROMPT.format(
-        client_name=client.get("name", "the brand"),
-        niche=client.get("niche") or client.get("industry") or "general",
-        brand_voice=client.get("brand_voice", "neutral"),
-        target_audience=client.get("target_audience") or "—",
-        keyword=(keyword or "").strip() or "—",
-        **_strategy_block(client),
-    )
+    """One Claude call → {title: str, prompt: str} for a reusable hook.
+
+    Uses a custom prompt (per-client override or global setting) when configured
+    as the style/voice spec; the hook output contract is always appended.
+    Falls back to the built-in _HOOK_PROMPT when no custom prompt is set.
+    """
+    seed = (keyword or "").strip() or "—"
+    custom_template = await _resolve_custom_video_prompt(client)
+    if custom_template:
+        custom_filled = _substitute_client_placeholders(custom_template, client)
+        prompt = (
+            f"{custom_filled}\n\n"
+            f"Seed keyword / angle from the user (may be empty — invent something on-strategy if so): {seed}\n\n"
+            f"Using the writing rules above, design ONE reusable \"video hook\" — a short content brief that a social-media manager will reuse to generate many different videos for this client.\n\n"
+            f"Generate ONE hook with:\n"
+            f"1. \"title\" — a short, scannable label (max 60 chars). Concrete, specific, in the brand voice. NOT a hashtag.\n"
+            f"2. \"prompt\" — one or two sentences describing the kind of video to create. This will be fed back to an AI to generate caption/hashtags/on-screen text. Be specific about angle, audience pain, and outcome.\n\n"
+            f"Return ONLY valid JSON, no markdown fences, no explanation:\n"
+            f"{{\"title\": \"...\", \"prompt\": \"...\"}}"
+        )
+        source = "client" if ((client.get("strategy") or {}).get("video_prompt") or "").strip() else "global"
+        logger.info(
+            "generate_video_hook: custom prompt source=%s (%d chars)",
+            source, len(custom_filled),
+        )
+    else:
+        prompt = _HOOK_PROMPT.format(
+            client_name=client.get("name", "the brand"),
+            niche=client.get("niche") or client.get("industry") or "general",
+            brand_voice=client.get("brand_voice", "neutral"),
+            target_audience=client.get("target_audience") or "—",
+            keyword=seed,
+            **_strategy_block(client),
+        )
     msg = _anthropic_client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=400,
@@ -105,24 +130,54 @@ Fields:
 
 
 async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str) -> dict:
-    """Call Claude once to fill all ai_text fields. Returns {find_name: text}."""
+    """Call Claude once to fill all ai_text fields. Returns {find_name: text}.
+
+    Uses a custom prompt (per-client override or global setting) when configured,
+    otherwise falls back to the built-in _AI_TEXT_PROMPT. The custom prompt is
+    treated as the style/voice spec; the per-field JSON contract is always
+    appended so callers receive {find_name: text} regardless of phrasing.
+    """
     if not ai_text_fields:
         return {}
 
-    client_name = client.get("name", "the brand")
-    niche = client.get("niche") or client.get("industry") or "general"
-    brand_voice = client.get("brand_voice", "neutral")
     fields_for_prompt = [{
         "key": f["find"],
         "hint": f.get("ai_hint") or "short caption",
         "max_chars": f.get("max_chars") or 80,
     } for f in ai_text_fields]
+    fields_json = json.dumps(fields_for_prompt, indent=2)
+    example_kv = ", ".join(f'"{f["key"]}": "..."' for f in fields_for_prompt)
 
-    prompt = _AI_TEXT_PROMPT.format(
-        client_name=client_name, niche=niche, brand_voice=brand_voice,
-        topic=topic, fields=json.dumps(fields_for_prompt, indent=2),
-        **_strategy_block(client),
-    )
+    custom_template = await _resolve_custom_video_prompt(client)
+    if custom_template:
+        custom_filled = _substitute_client_placeholders(custom_template, client)
+        topic_line = (
+            f"\n\nTopic / angle for this run (use to vary the message): {topic}"
+            if (topic or "").strip() else ""
+        )
+        prompt = (
+            f"{custom_filled}{topic_line}\n\n"
+            f"Apply the writing rules above to write text for these video fields "
+            f"(each field's hint and max_chars define what it represents and its length budget):\n"
+            f"{fields_json}\n\n"
+            f"Return ONLY valid JSON — no explanation, no markdown fences:\n"
+            f"{{{example_kv}}}"
+        )
+        source = "client" if ((client.get("strategy") or {}).get("video_prompt") or "").strip() else "global"
+        logger.info(
+            "generate_ai_text: custom prompt source=%s (%d chars)",
+            source, len(custom_filled),
+        )
+    else:
+        client_name = client.get("name", "the brand")
+        niche = client.get("niche") or client.get("industry") or "general"
+        brand_voice = client.get("brand_voice", "neutral")
+        prompt = _AI_TEXT_PROMPT.format(
+            client_name=client_name, niche=niche, brand_voice=brand_voice,
+            topic=topic, fields=fields_json,
+            **_strategy_block(client),
+        )
+
     msg = _anthropic_client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1000,
@@ -158,7 +213,7 @@ Generate all content in one response. Stay on-theme and on-tone. Never reference
 excluded topics. If brand hashtags are listed above, include them in the hashtag array.
 
 1. "merge_values" — text for each field that appears inside the video. Match each field's hint and max_chars exactly.
-2. "caption" — the social media post caption that accompanies the video. Engaging, matches brand voice, max 2000 chars.
+2. "caption" — the social media post caption that accompanies the video. Engaging, matches brand voice. Target 1400-1800 chars, hard ceiling 2000. The caption MUST end on a complete sentence with proper punctuation — never cut off mid-thought, mid-word, or mid-sentence. If you are running out of room, wrap up naturally with a short closing line rather than continuing.
 3. "hashtags" — array of 5 to 6 relevant hashtags without the # symbol.
 
 Video fields:
@@ -246,6 +301,10 @@ async def generate_video_content(
             f"Apply the writing rules above to fill these video text fields "
             f"(each field's hint and max_chars define what it represents and its length budget):\n"
             f"{fields_json}\n\n"
+            f"The \"caption\" field is the social media post caption. Target 1400-1800 chars, "
+            f"hard ceiling 2000. It MUST end on a complete sentence with proper punctuation — "
+            f"never cut off mid-thought, mid-word, or mid-sentence. If you are running out of "
+            f"room, wrap up naturally with a short closing line rather than continuing.\n\n"
             f"Return ONLY valid JSON — no explanation, no markdown fences:\n"
             f"{{\n"
             f'  "merge_values": {{{example_kv}}},\n'
@@ -267,13 +326,34 @@ async def generate_video_content(
         )
 
     data = _generate_content_json(full_prompt)
-    caption = (data.get("caption") or "")[:2000]
+    caption = _smart_truncate_caption(data.get("caption") or "", 2000)
     hashtags = [h for h in (data.get("hashtags") or []) if isinstance(h, str)][:6]
     return {
         "merge_values": data.get("merge_values") or {},
         "caption": caption,
         "hashtags": hashtags,
     }
+
+
+def _smart_truncate_caption(text: str, max_chars: int = 2000) -> str:
+    """Cap caption length without cutting mid-sentence. Snips at the latest
+    sentence terminator (., !, ?, or paragraph break) inside the window;
+    falls back to the last word boundary if no terminator sits past the
+    halfway mark."""
+    text = (text or "").rstrip()
+    if len(text) <= max_chars:
+        return text
+    window = text[:max_chars]
+    end = max(
+        window.rfind("."), window.rfind("!"), window.rfind("?"),
+        window.rfind("\n\n"),
+    )
+    if end >= max_chars // 2:
+        return window[: end + 1].rstrip()
+    space = window.rfind(" ")
+    if space > 0:
+        return window[:space].rstrip()
+    return window.rstrip()
 
 
 def _strip_fences(raw: str) -> str:
