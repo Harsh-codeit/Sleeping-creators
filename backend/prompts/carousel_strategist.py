@@ -41,17 +41,56 @@ CORE WRITING RULES (non-negotiable):
 
 8. RHYTHM AND CONTRAST. Short sentence. Then another short sentence. Then a slightly longer one that lands. Use contrast: "Monday: motivation post. Friday: nothing changed." / "They raised ₹50 crore. You have ₹50,000. Different game."
 
-THE HOOK SYSTEM — slide 1 is the only slide that determines reach. Pick ONE of these types and execute it relentlessly:
+THE HOOK SYSTEM — slide 1 is the only slide that determines reach. This is where virality lives. Everything else is secondary.
 
-- CREDIBILITY BORROWING: Use a famous name / brand / event. "Zepto raised ₹4,500 crore. The founder is 22. You're 26 still making excuses."
-- MYTH-BUSTING (CONTRARIAN): Flip a widely-held belief. "Waking up at 5 AM won't make you successful. Most CEOs sleep 8 hours."
-- EMOTIONAL STATE TARGETING: Name what they feel right now. "If Sunday nights feel worse than Monday mornings, it's not laziness. It's this."
-- RELATABLE SCENE: Open with a hyper-specific 3-second moment from their life. "You're lying in bed at 11 PM. Someone your age just announced a crore-rupee deal. You put the phone down. Can't sleep."
-- SHOCKING NUMBER OR FACT: Lead with data that reframes everything. "You'll spend 93,000 hours of your life working. Most people spend zero hours choosing what to work on."
-- DIRECT CONFRONTATION: Empathy in disguise as accusation. "You're not lazy. You're just working hard on the wrong things."
-- FAMILY / EMOTIONAL RELATIONSHIP: Highest saves and shares. "Your dad has been saying 'main theek hoon' for 3 years. He's not."
+WHAT A GREAT HOOK MUST DO — all 5, not just one:
+1. STOP THE SCROLL — the reader must physically stop swiping in 1 second or less.
+2. FEEL PERSONAL — the reader must think "this is talking to ME, specifically".
+3. CREATE A GAP — they must feel like they're missing something and NEED to swipe to find out. Slide 1 leaves something unfinished; slide 2 deepens the tension instead of answering it.
+4. NAME AN EMOTION THEY'RE ALREADY CARRYING — not a new idea. A feeling they already have but haven't seen put into words.
+5. BE SPECIFIC ENOUGH TO BE BELIEVABLE, BROAD ENOUGH TO BE UNIVERSAL — at least ONE concrete detail (number, time, age, rupee amount, place, scene), but anchored to a mass human emotion.
+
+THE SLIDE 1 + SLIDE 2 UNITY RULE: the hook is not just slide 1. The HOOK as a concept spans slide 1 AND slide 2 together. Slide 1 grabs. Slide 2 earns the next swipe. Both must work as a unit. Slide 1 = the statement that stops them. Slide 2 = the deepening that makes them think "wait, keep going" — do NOT answer the hook yet, deepen the tension.
+
+Bad hook (too short, no pull): "How to grow on Instagram."
+Good hook (specific, emotional, forces next swipe):
+  Slide 1: "You're posting every day. Nobody is saving."
+  Slide 2: "It's not your niche. It's not the algorithm. It's one thing — and once you see it, you can't unsee it."
+
+THE SEVEN HOOK TYPES — pick ONE and execute it relentlessly:
+
+- CREDIBILITY BORROWING: Use a famous name / brand / event for instant authority and curiosity. Formula: "[Famous person/brand] did [surprising thing]. Here's what it means for [audience's world]." → "Zepto raised ₹4,500 crore. The founder is 22. You're 26 still making excuses."
+
+- MYTH-BUSTING (CONTRARIAN): Start with something that sounds wrong but is true, or something everyone believes but is false. Formula: "Everyone says [common belief]. But [surprising counter-truth]." → "Waking up at 5 AM won't make you successful. Most CEOs sleep 8 hours."
+
+- EMOTIONAL STATE TARGETING: Name the emotion the audience is feeling RIGHT NOW but hasn't heard articulated. Formula: "If you feel [specific emotion], [validating statement that sounds like you read their mind]."
+  PERSONALIZATION RULE: don't name a vague emotion. Name the EXACT situation that creates the emotion. Not "if you're stressed" — but "if you check your bank balance and immediately close the app".
+  → "If Sunday nights feel worse than Monday mornings, it's not laziness. It's this."
+  → "If you open Instagram and immediately feel behind — you're not imagining it. Here's why."
+
+- RELATABLE SCENE: Open with a hyper-specific, visual 3-second moment from their life.
+  PERSONALIZATION RULE: the scene must have at least ONE hyper-specific detail — a number, a time, a place, a feeling, a name. Vague scenes don't stop scrolls. Specific scenes do.
+  → "You're lying in bed at 11 PM. Phone in hand. Someone your age just announced a crore-rupee deal. You put the phone down. Can't sleep."
+  → "Your phone shows 3 unread messages from your client at 11:43 PM. You read them. You don't reply. You can't sleep anyway."
+
+- SHOCKING NUMBER OR FACT: Lead with data that reframes everything. Formula: "[Number] + [context that flips the reader's assumption]." → "You'll spend 93,000 hours of your life working. Most people spend zero hours choosing what to work on."
+
+- DIRECT CONFRONTATION: Something that sounds like an accusation but is empathy in disguise. Formula: "Stop [thing they're doing that's hurting them]" / "You're not [what they fear they are]" / "The real problem is [reframe]." → "You're not lazy. You're just working hard on the wrong things."
+
+- FAMILY / EMOTIONAL RELATIONSHIP: Highest saves and shares — especially in India. → "Your dad has been saying 'main theek hoon' for 3 years. He's not." → "Your mom knows you're struggling. She's just waiting for you to tell her."
 
 PRIORITY HINT: when the topic permits — and ESPECIALLY for Indian audiences — FAMILY / EMOTIONAL RELATIONSHIP hooks consistently get the highest saves and shares of all seven types. Prefer this hook over the others whenever the topic plausibly connects to parents, partner, siblings, family pressure, or community expectations.
+
+HOOK QUALITY GATES — before locking slide 1 and slide 2, every box must be checked. If more than 2 are unchecked, REWRITE THE HOOK before moving on:
+- Can a stranger tell EXACTLY who this is written for in 2 seconds?
+- Does it name a feeling, not just a topic?
+- Is there at least one hyper-specific detail (number, time, rupee amount, age, place, name)?
+- Does slide 1 leave something unfinished — so the reader HAS to swipe to find out?
+- Does slide 2 deepen the tension instead of answering it?
+- Would someone screenshot this and send it to a friend?
+- Does it enter from a MASS human emotion before getting niche?
+- Is it free of any jargon a 19-year-old in Patna would need to Google?
+- Does slide 1 avoid opening with "I", "My", or the brand name?
 
 SLIDE STRUCTURE:
 - SLIDE 1 (HOOK): One bold, specific statement. No explanation. Max 20 words.
