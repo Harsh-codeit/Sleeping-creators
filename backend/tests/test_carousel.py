@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import requests
@@ -207,17 +207,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 if "anthropic" not in sys.modules:
     sys.modules["anthropic"] = MagicMock()
 
-from ai_service import _pass4_format_refine
+from ai_service import (
+    _build_content_memory_context,
+    _generate_carousel_single_pass,
+    _is_indian_audience,
+    _safe_for_prompt,
+)
 
 
-def _make_draft(slide_count=5):
-    return {
-        "title": "Test Carousel",
-        "author_name": "Acme",
-        "author_handle": "@acme",
-        "author_title": "Tech",
-        "slides": [{"slide_number": i + 1, "content": f"Slide {i+1}"} for i in range(slide_count)],
-    }
+def _make_slides(slide_count=5):
+    return [{"slide_number": i + 1, "content": f"Slide {i+1}"} for i in range(slide_count)]
 
 
 def _mock_client(response_dict):
@@ -233,48 +232,287 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-_PASS4_CLIENT = {"name": "Acme", "strategy": {"tone": "bold"}}
+_CAROUSEL_CLIENT = {"name": "Acme", "industry": "Tech", "strategy": {"tone": "bold"}}
+_CAROUSEL_ONBOARDING = {"language": "English"}
+
+
+def _carousel_response(slide_count=5, fmt="tips"):
+    return {
+        "title": "Test Carousel",
+        "strategy": {
+            "topic": "t", "format": fmt, "hook_type": "emotional_state",
+            "angle": "fresh angle", "emotions": ["aspiration", "guilt"],
+            "virality_angle": "v", "audience_pain": "p",
+            "mirror_slide_number": 3, "slide_arc": "a -> b -> c",
+        },
+        "author_name": "Acme",
+        "author_handle": "@acme",
+        "author_title": "Tech",
+        "slides": _make_slides(slide_count),
+    }
 
 
 @pytest.mark.parametrize("fmt,keyword", [
-    ("tips",          "WHAT / WHY / HOW"),
-    ("story",         "narrative arc"),
+    ("tips",          "WHAT"),
+    ("story",         "tension"),
     ("myth_bust",     "MYTH"),
     ("case_study",    "PROBLEM"),
-    ("step_by_step",  "step"),
+    ("step_by_step",  "Step N"),
 ])
-def test_pass4_prompt_contains_format_keyword(fmt, keyword):
-    draft = _make_draft()
-    expected = {**draft, "slides": draft["slides"]}
-    mock_client = _mock_client(expected)
-
-    result = _run(_pass4_format_refine(mock_client, _PASS4_CLIENT, draft, fmt, 5))
+def test_single_pass_prompt_contains_format_keyword(fmt, keyword):
+    """Locked format must inject its format-specific guidance into the system prompt."""
+    mock_client = _mock_client(_carousel_response(fmt=fmt))
+    result = _run(_generate_carousel_single_pass(
+        mock_client, _CAROUSEL_CLIENT, _CAROUSEL_ONBOARDING,
+        topic="Test topic", slide_count=5, slide_format=fmt, platform="instagram",
+        cta_keyword=None, cta_offer=None,
+        hook_inspiration=None, global_instructions=None, trend_context="",
+    ))
 
     call_args = mock_client.messages.create.call_args
     system_prompt = call_args.kwargs.get("system") or call_args.args[0]
     assert keyword.lower() in system_prompt.lower(), (
-        f"Expected '{keyword}' in system prompt for format '{fmt}'"
+        f"Expected '{keyword}' in single-pass prompt for format '{fmt}'"
     )
     assert "slides" in result
 
 
-def test_pass4_falls_back_to_draft_on_bad_json():
-    draft = _make_draft()
+def test_single_pass_prompt_contains_strategist_persona():
+    """The world-class strategist persona must be baked into every call."""
+    mock_client = _mock_client(_carousel_response())
+    _run(_generate_carousel_single_pass(
+        mock_client, _CAROUSEL_CLIENT, _CAROUSEL_ONBOARDING,
+        topic="Test", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None,
+        hook_inspiration=None, global_instructions=None, trend_context="",
+    ))
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "world-class Instagram content strategist" in system_prompt
+    assert "mass-relatable" in system_prompt.lower() or "mass first" in system_prompt.lower()
+    assert "unspoken" in system_prompt.lower() or "never say out loud" in system_prompt.lower()
+
+
+def test_single_pass_competitor_hook_constraint_injected():
+    """When hook_inspiration is set, the 80/20 rebuild block must appear in the prompt."""
+    mock_client = _mock_client(_carousel_response())
+    _run(_generate_carousel_single_pass(
+        mock_client, _CAROUSEL_CLIENT, _CAROUSEL_ONBOARDING,
+        topic="Test", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None,
+        hook_inspiration="The 22-year-old founder raised $50M", global_instructions=None, trend_context="",
+    ))
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "competitor hook rebuild" in system_prompt.lower()
+    assert "80% of the original words" in system_prompt
+
+
+def test_single_pass_india_framing_conditional_on_language():
+    """Indian framing block must only appear when language signals an Indian audience."""
+    mock_client = _mock_client(_carousel_response())
+    _run(_generate_carousel_single_pass(
+        mock_client, _CAROUSEL_CLIENT, {"language": "Hinglish"},
+        topic="Test", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None,
+        hook_inspiration=None, global_instructions=None, trend_context="",
+    ))
+    indian_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "Indian audience" in indian_prompt or "Hinglish" in indian_prompt
+
+    mock_client = _mock_client(_carousel_response())
+    _run(_generate_carousel_single_pass(
+        mock_client, _CAROUSEL_CLIENT, {"language": "English"},
+        topic="Test", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None,
+        hook_inspiration=None, global_instructions=None, trend_context="",
+    ))
+    english_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "Hinglish" not in english_prompt
+    assert "INDIAN AUDIENCE FRAMING" not in english_prompt
+
+
+def test_is_indian_audience_detection():
+    assert _is_indian_audience({"language": "Hindi"}, {}) is True
+    assert _is_indian_audience({"language": "Hinglish"}, {}) is True
+    assert _is_indian_audience({}, {"target_audience": "Indian millennials"}) is True
+    assert _is_indian_audience({"language": "English"}, {"target_audience": "US founders"}) is False
+    assert _is_indian_audience({}, {}) is False
+
+
+# ─── Phase 4 — gap-coverage tests ─────────────────────────────────────────────
+
+def _call_single_pass(mock_client, *, slide_count=5, slide_format="tips",
+                      cta_keyword=None, cta_offer=None, hook_inspiration=None,
+                      global_instructions=None, onboarding=None, client=None, db=None):
+    """Convenience wrapper — runs _generate_carousel_single_pass with sensible defaults."""
+    return _run(_generate_carousel_single_pass(
+        mock_client, client or _CAROUSEL_CLIENT, onboarding or _CAROUSEL_ONBOARDING,
+        topic="Test topic", slide_count=slide_count, slide_format=slide_format,
+        platform="instagram",
+        cta_keyword=cta_keyword, cta_offer=cta_offer,
+        hook_inspiration=hook_inspiration, global_instructions=global_instructions,
+        trend_context="", db=db,
+    ))
+
+
+def test_single_pass_raises_on_bad_json():
+    """Model returns non-JSON → function raises (caller must handle)."""
     msg = MagicMock()
     msg.content = [MagicMock(text="NOT JSON AT ALL")]
     mock_client = MagicMock()
     mock_client.messages.create.return_value = msg
+    with pytest.raises(Exception):
+        _call_single_pass(mock_client)
 
-    result = _run(_pass4_format_refine(mock_client, _PASS4_CLIENT, draft, "tips", 5))
-    assert result == draft
+
+def test_single_pass_cta_injected_into_prompt():
+    """When cta_keyword + cta_offer are set, the CTA REQUIREMENT block appears in prompt."""
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(mock_client, cta_keyword="DEMO", cta_offer="free trial")
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "CTA REQUIREMENT" in system_prompt
+    assert "DEMO" in system_prompt
+    assert "free trial" in system_prompt
 
 
-def test_pass4_unknown_format_still_runs():
-    """An unknown format value must not crash — falls through to a generic specialist."""
-    draft = _make_draft()
-    expected = {**draft}
-    mock_client = _mock_client(expected)
+def test_single_pass_global_instructions_appended():
+    """global_instructions argument lands under GLOBAL INSTRUCTIONS: in the system prompt."""
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(mock_client, global_instructions="Always mention our podcast")
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "GLOBAL INSTRUCTIONS:" in system_prompt
+    assert "Always mention our podcast" in system_prompt
 
-    result = _run(_pass4_format_refine(mock_client, _PASS4_CLIENT, draft, "unknown_format", 5))
-    mock_client.messages.create.assert_called_once()
-    assert "slides" in result
+
+def test_single_pass_format_auto_pick_branch():
+    """slide_format=None should produce the auto-pick prompt with all format guides + picker guide."""
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(mock_client, slide_format=None)
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "FORMAT — choose one" in system_prompt
+    # Auto-pick schema is descriptive, not a locked literal
+    assert "<one of: tips, story, myth_bust, case_study, step_by_step>" in system_prompt
+
+
+def test_single_pass_large_slide_count_word_budget_clamps():
+    """slide_count=12 → max(35, 85-12*5) = 35 — the middle-slides budget clamps at 35."""
+    mock_client = _mock_client(_carousel_response(slide_count=12))
+    _call_single_pass(mock_client, slide_count=12)
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    # Word budgets line: "Middle slides: {min}-{max} words" where max = 35 when slide_count >= 10
+    assert "35 words" in system_prompt or "Middle slides: 25-35" in system_prompt
+
+
+def test_india_framing_via_target_audience():
+    """target_audience containing 'India' should fire the India block even when language is English."""
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(
+        mock_client,
+        client={**_CAROUSEL_CLIENT, "target_audience": "Indian millennials in tier-2 cities"},
+        onboarding={"language": "English"},
+    )
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "INDIAN AUDIENCE FRAMING" in system_prompt or "Hinglish" in system_prompt
+
+
+def test_single_pass_unknown_format_passes_through():
+    """Unknown slide_format should not crash — falls back to tips guidance."""
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(mock_client, slide_format="unknown_format")
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    # Locked-format header still appears with the unknown name
+    assert "FORMAT — unknown_format (locked by caller)" in system_prompt
+    # And the tips guidance text (WHAT/WHY/HOW) is what got injected as the fallback
+    assert "WHAT" in system_prompt
+
+
+def test_word_budget_no_contradiction_for_slide_one():
+    """Regression guard for Phase 1.3 — slide-1 budget must say 20, never 25."""
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(mock_client)
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    # Slide 1 is mentioned with the 20-word budget in the WORD BUDGETS section
+    assert "Slide 1 (hook): max 20 words" in system_prompt
+    # The persona quality gates also say slide 1 ≤ 20
+    assert "Slide 1 ≤ 20 words" in system_prompt
+    # The old 25-word rule must NOT appear next to slide 1 anywhere
+    assert "Slide 1 (hook): max 25 words" not in system_prompt
+    assert "Slide 1 ≤ 25 words" not in system_prompt
+
+
+# ─── Phase 6.6 — content memory tests ────────────────────────────────────────
+
+def _fake_memory_db(rows):
+    """Build a fake Mongo-like db whose posts.find()…to_list() returns the given rows."""
+    fake_db = MagicMock()
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.to_list = AsyncMock(return_value=rows)
+    fake_db.posts.find.return_value = cursor
+    # record_usage path: db.token_usage.insert_one must be awaitable
+    fake_db.token_usage.insert_one = AsyncMock(return_value=None)
+    return fake_db
+
+
+def test_memory_context_empty_when_no_history():
+    """No DB rows → helper returns the empty string (and never raises)."""
+    fake_db = _fake_memory_db([])
+    block = _run(_build_content_memory_context("client-1", fake_db))
+    assert block == ""
+
+
+def test_memory_context_empty_when_inputs_missing():
+    """No client_id or no db → helper returns empty string without querying."""
+    assert _run(_build_content_memory_context(None, MagicMock())) == ""
+    assert _run(_build_content_memory_context("client-1", None)) == ""
+
+
+def test_memory_context_formats_recent_strategies():
+    """A recent post produces a RECENT CONTENT MEMORY block with topic / hook / format / MEMORY RULES."""
+    fake_rows = [{
+        "carousel_data": {"strategy": {
+            "topic": "5 SIP mistakes", "angle": "ego over math",
+            "hook_type": "shocking_number", "format": "myth_bust",
+        }},
+        "created_at": "2026-05-12T00:00:00Z",
+    }]
+    fake_db = _fake_memory_db(fake_rows)
+    block = _run(_build_content_memory_context("client-1", fake_db))
+    assert "RECENT CONTENT MEMORY" in block
+    assert "5 SIP mistakes" in block
+    assert "shocking_number" in block
+    assert "MEMORY RULES" in block
+
+
+def test_single_pass_injects_memory_block_when_db_provided():
+    """When db returns past strategies, the system prompt must include the forbidden list."""
+    fake_rows = [{
+        "carousel_data": {"strategy": {
+            "topic": "Old topic about budgeting", "angle": "guilt trap",
+            "hook_type": "emotional_state", "format": "tips",
+        }},
+        "created_at": "2026-05-12T00:00:00Z",
+    }]
+    fake_db = _fake_memory_db(fake_rows)
+    mock_client = _mock_client(_carousel_response())
+    _call_single_pass(
+        mock_client,
+        client={**_CAROUSEL_CLIENT, "id": "client-1"},
+        db=fake_db,
+    )
+    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    assert "RECENT CONTENT MEMORY" in system_prompt
+    assert "Old topic about budgeting" in system_prompt
+    assert "MEMORY RULES" in system_prompt
+
+
+def test_safe_for_prompt_strips_quotes_and_newlines():
+    """_safe_for_prompt is a small but important sanitizer — exercise its contract."""
+    assert _safe_for_prompt(None) == ""
+    assert _safe_for_prompt("") == ""
+    assert _safe_for_prompt('  hello "world"  ') == "hello 'world'"
+    # newlines collapse to spaces — input can't inject new directives
+    assert "\n" not in _safe_for_prompt("line1\nline2")
+    # truncation
+    long = "x" * 500
+    assert len(_safe_for_prompt(long, max_len=100)) <= 100

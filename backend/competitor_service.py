@@ -244,6 +244,7 @@ async def recreate_post(competitor_post: dict, client: dict, db) -> Optional[str
             topic=None,
             slide_count=slide_count,
             hook_inspiration=caption or None,
+            db=db,
         )
     except Exception as e:
         logger.error(f"generate_carousel failed for competitor_post {competitor_post.get('id')}: {e}")

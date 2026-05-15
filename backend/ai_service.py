@@ -306,6 +306,12 @@ _AI_TELLS: list[tuple[str, str]] = [
     (r"\bpivot(?:ing)?\b", "shift"),
     (r"\bnarrative\b", "story"),
     (r"\becosystem\b", "world"),
+    # Additional consultant-speak the new strategist brief explicitly bans
+    (r"\bcircle back\b", "follow up"),
+    (r"\btouch base\b", "check in"),
+    (r"\bbest practices\b", "what works"),
+    (r"\bunlock your potential\b", "get there"),
+    (r"\bpain points?\b", "what keeps them up at night"),
 ]
 
 
@@ -353,6 +359,107 @@ def _humanize_content(text: str) -> str:
     return text.strip()
 
 
+async def _build_content_memory_context(client_id: str | None, db, limit: int = 12) -> str:
+    """Fetch the last N posts for this client and format their strategies as a forbidden list.
+
+    Reads `carousel_data.strategy` from the most recent posts, then builds a "RECENT CONTENT
+    MEMORY" block + MEMORY RULES that the LLM sees and must avoid repeating from. Returns
+    "" gracefully when client_id or db is missing, when no posts have strategy metadata, or
+    when the query fails — so generation never blocks on memory recall.
+    """
+    if not client_id or db is None:
+        return ""
+    try:
+        cursor = db.posts.find(
+            {"client_id": client_id, "carousel_data.strategy": {"$exists": True}},
+            {"_id": 0, "carousel_data.strategy": 1, "created_at": 1, "title": 1},
+        ).sort("created_at", -1).limit(limit)
+        rows = await cursor.to_list(length=limit)
+    except Exception as e:
+        logger.warning(f"Memory context fetch failed ({e}), skipping memory injection")
+        return ""
+
+    if not rows:
+        return ""
+
+    lines = []
+    for i, row in enumerate(rows, 1):
+        s = (row.get("carousel_data") or {}).get("strategy") or {}
+        topic = (s.get("topic") or "")[:60]
+        angle = (s.get("angle") or "")[:60]
+        hook  = s.get("hook_type") or "?"
+        fmt   = s.get("format") or "?"
+        date  = (row.get("created_at") or "")[:10]
+        lines.append(f"{i}. Topic: \"{topic}\" | Angle: {angle} | Hook: {hook} | Format: {fmt} | {date}")
+
+    return (
+        "\n\nRECENT CONTENT MEMORY — last "
+        f"{len(rows)} posts for this client. DO NOT repeat these topics, angles, or hook types:\n"
+        + "\n".join(lines)
+        + "\n\nMEMORY RULES:\n"
+        "- If you would pick a topic that appears in this list, change the angle so the entry point is completely different.\n"
+        "- Vary the hook_type — do not use the same hook type as posts 1 or 2 above.\n"
+        "- Vary the format — if the last 3 posts above used the same format, pick a different one.\n"
+        "- No two consecutive posts may share the same primary emotion.\n"
+        "- A new topic/angle pair must have minimal overlap with any entry above. If it overlaps, write a different angle."
+    )
+
+
+def _safe_for_prompt(s: str | None, max_len: int = 300) -> str:
+    """Sanitize a free-form string for safe interpolation into a system prompt.
+
+    - Strips whitespace and truncates to ``max_len`` chars.
+    - Replaces double-quotes with single quotes (so the value can't break JSON examples in the prompt).
+    - Collapses newlines to spaces so multi-line user input can't accidentally introduce
+      new directives the model treats as system instructions.
+    Returns an empty string for None / empty input.
+    """
+    if not s:
+        return ""
+    cleaned = str(s).strip()
+    if not cleaned:
+        return ""
+    cleaned = cleaned.replace('"', "'").replace("\r", " ").replace("\n", " ")
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip()
+    return cleaned
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# World-class carousel strategist prompt — drives the single-pass generator.
+# Universal block applies to every client. India block is appended conditionally
+# by _is_indian_audience() based on language / target_audience signals.
+#
+# The actual prompt-string constants live in backend/prompts/carousel_strategist.py
+# so they're easy to find, diff, and edit in isolation. Imported here with the
+# leading-underscore aliases the rest of this module has always used.
+# ─────────────────────────────────────────────────────────────────────────────
+from prompts.carousel_strategist import (
+    CAROUSEL_STRATEGIST_PERSONA as _CAROUSEL_STRATEGIST_PERSONA,
+    CAROUSEL_INDIA_FRAMING as _CAROUSEL_INDIA_FRAMING,
+    SLIDE_FORMAT_GUIDANCE as _SLIDE_FORMAT_GUIDANCE,
+    FORMAT_PICKER_GUIDE as _FORMAT_PICKER_GUIDE,
+    PLATFORM_VOICE as _PLATFORM_VOICE,
+)
+
+
+
+
+
+
+
+
+def _is_indian_audience(onboarding: dict, client: dict) -> bool:
+    """True when the client's audience is Indian-focused, based on language or audience text."""
+    lang = (onboarding.get("language") or "").strip().lower()
+    if lang in ("hindi", "hinglish", "hindi-english", "english-hindi"):
+        return True
+    audience = (client.get("target_audience") or "").lower()
+    if "india" in audience or "indian" in audience or "bharat" in audience:
+        return True
+    return False
+
+
 def _build_brand_context(client: dict, onboarding: dict) -> str:
     """Build a rich brand context block from all available client data."""
     lines = []
@@ -398,43 +505,40 @@ async def _generate_single_image_hook(
 
     topic_line = f"Topic: {topic}" if topic else f"Choose the most scroll-stopping topic from: {', '.join(themes)}"
 
-    _PLATFORM_VOICE = {
-        "instagram": "Visual-first. Short punchy sentences. Hook in 3-5 words. High emotional temperature.",
-        "linkedin":  "Authoritative but human. Lead with a hard-won insight. Subtle credibility signals.",
-        "twitter":   "Ultra-terse. Every word is load-bearing. Wit over volume.",
-        "threads":   "Conversational and direct. Like talking to a smart friend. No corporate speak.",
-        "facebook":  "Warm, community tone. Invite dialogue. Make the reader feel seen.",
-    }
+    # Use the module-level _PLATFORM_VOICE (defined further down) — same dict for both code paths.
     platform_voice = _PLATFORM_VOICE.get(platform, "Clear and engaging.")
 
-    system_msg = f"""You are a world-class single-image post copywriter for {name} ({industry}).
+    # The single-image path uses the SAME 7-hook strategist persona as the carousel path, plus
+    # the India framing when relevant. Slide structure / format guidance / memory recall do not
+    # apply (there's only one card), so we skip those and add a single-card word budget.
+    india_block = _CAROUSEL_INDIA_FRAMING if _is_indian_audience(onboarding, client) else ""
+
+    system_msg = f"""{_CAROUSEL_STRATEGIST_PERSONA}
+{india_block}
+CLIENT CONTEXT:
+You are writing for {name} ({industry}).
 Brand voice: {tone} | Language: {language} | Platform: {platform}
 Platform voice: {platform_voice}
 {brand_ctx}
 
-Your job: write ONE piece of hook-based content for a single image card.
+ASSIGNMENT:
+Write ONE single-image post — exactly one card, not a carousel. Pick the strongest hook from the 7-hook system above and execute it as the entire post.
 
-HOOK TYPES (pick the strongest for the topic):
-- Bold claim: A single counter-intuitive statement that reframes what the audience believes
-- Provocative question: A question that creates an instant curiosity gap
-- Pattern interrupt: An unexpected opening that breaks the scroll trance
-- Hard truth: A blunt, uncomfortable insight the audience knows but ignores
-- Specific stat/number: A concrete, surprising fact that anchors credibility instantly
-
-RULES:
-- Maximum 40 words. Every word must earn its place.
+SINGLE-CARD RULES (override the carousel-specific rules above):
+- Maximum 40 words total. Every word must earn its place.
+- This is one card, not a list — do NOT use bullet lists or "Step N:" markers.
 - No filler. No generic motivational language.
-- Do NOT use colons to introduce lists — this is one card, not a list.
-- Write in {language}.
 - Make it specific to {industry} — not a generic life lesson.
-- It must stop a {platform} scroll cold.{avoid_block}"""
+- It must stop a {platform} scroll cold.{avoid_block}
+
+LANGUAGE LOCK: Write the content in {language}. Do NOT use English unless {language} is English."""
 
     user_msg = f"""{topic_line}
 
 Return ONLY this JSON (no markdown, no explanation):
 {{
   "title": "short internal title for this post",
-  "hook_type": "bold_claim|question|pattern_interrupt|hard_truth|stat",
+  "hook_type": "<one of: credibility_borrow | myth_bust | emotional_state | relatable_scene | shocking_number | direct_confront | family_relationship>",
   "content": "the hook text — max 40 words, {language}, {industry}-specific",
   "author_name": "{name}",
   "author_handle": "@{name.lower().replace(' ', '')}",
@@ -478,19 +582,32 @@ Return ONLY this JSON (no markdown, no explanation):
     }
 
 
-async def _pass1_strategy(
+
+
+
+
+async def _generate_carousel_single_pass(
     ai_client,
     client: dict,
     onboarding: dict,
     topic: str | None,
     slide_count: int,
     slide_format: str | None,
+    platform: str,
     cta_keyword: str | None,
     cta_offer: str | None,
+    hook_inspiration: str | None,
+    global_instructions: str | None,
     trend_context: str,
     db=None,
 ) -> dict:
-    """Pass 1: Build a content strategy outline using Haiku (fast + cheap)."""
+    """Generate a full carousel in a single Sonnet call driven by the world-class strategist prompt.
+
+    Replaces the old 4-pass pipeline (strategy → draft → refine → format specialist) with one
+    LLM call whose system prompt bakes in: the strategist persona, the 7 hook system, mass-first
+    rule, unspoken-truth requirement, emotion mapping, format-specific guidance, competitor-hook
+    80/20 rebuild, CTA injection, language lock, per-slide word budgets, and quality gates.
+    """
     import time
     t0 = time.time()
 
@@ -500,133 +617,57 @@ async def _pass1_strategy(
     language = (onboarding.get("language") or "English").strip()
     themes   = client.get("strategy", {}).get("themes", ["business insights"])
     brand_ctx = _build_brand_context(client, onboarding)
-
-    topic_line = f"Topic requested: {topic}" if topic else f"Choose the most compelling topic from: {', '.join(themes)}"
-    cta_line = ""
-    if _clean_cta_value(cta_keyword) or _clean_cta_value(cta_offer):
-        cta_line = f"\nCTA to drive: {_build_cta_button_text(cta_keyword, cta_offer)}"
-
-    not_to_do = onboarding.get("not_to_do_list") or []
-    avoid_line = ("\nNEVER do: " + "; ".join(not_to_do)) if not_to_do else ""
-
-    # If caller locked a format, tell Pass 1; otherwise ask it to choose the best one
-    if slide_format:
-        format_instruction = f"Use the {slide_format} carousel format."
-        format_field = f'"best_format": "{slide_format}"'
-    else:
-        format_instruction = (
-            "Select ONE format from this list. Each has a STRICT trigger — pick myth_bust ONLY if the "
-            "trigger is literally true for the topic. When multiple fit, prefer the one lower in this list "
-            "(tips and step_by_step are the safest defaults for most topics):\n"
-            "- tips: topic is a list of tactics, habits, or practical advice. Default when in doubt.\n"
-            "- step_by_step: topic is a sequential process or framework with a clear order of operations.\n"
-            "- case_study: topic centers on a specific, concrete result, client win, or measurable outcome.\n"
-            "- story: topic is a personal journey, transformation, lesson learned, or behind-the-scenes arc.\n"
-            "- myth_bust: ONLY when the topic explicitly contradicts a widely held, nameable belief or piece "
-            "of conventional advice. If you cannot state the specific myth in one sentence using phrasing like "
-            "\"Most people think X, but actually Y\", DO NOT pick this format. Do not default to myth_bust "
-            "just to be provocative — most topics are NOT myth-busts.\n"
-            "Before answering, state the format you picked and why in one sentence to yourself, then output the JSON."
-        )
-        format_field = '"best_format": "the format you chose (tips|story|myth_bust|case_study|step_by_step)"'
-
-    system_msg = f"""You are a senior content strategist for {name} ({industry}).
-Tone: {tone} | Language: {language}
-IMPORTANT: Write the key_insights, angle, audience_pain, hook_strategy, and cta_strategy fields in {language}. Do NOT use English for these fields unless {language} is English.
-{brand_ctx}
-
-Your job is to build a razor-sharp strategy for a {slide_count}-slide carousel that gets saved and shared.
-{topic_line}{cta_line}{avoid_line}
-
-{format_instruction}
-
-Think like a viral content architect:
-- What is the ONE emotion this carousel must trigger? (curiosity, aspiration, validation, fear of missing out, relief)
-- What is the narrative arc — where does the reader START emotionally vs where they END?
-- What makes this worth saving, not just scrolling past?
-
-Respond ONLY with valid JSON (no markdown):
-{{
-  "topic": "concise topic title",
-  {format_field},
-  "angle": "the contrarian or unexpected angle that makes {name}'s take different from everyone else",
-  "audience_pain": "the specific pain, fear or desire that makes this impossible to ignore",
-  "emotional_driver": "the single dominant emotion this carousel must trigger (e.g. curiosity, aspiration, relief)",
-  "slide_arc": "3-word narrative journey across all slides (e.g. 'struggle → insight → transformation')",
-  "key_insights": ["one sharp, specific, non-obvious insight per content slide — {slide_count - 2} items"],
-  "hook_strategy": "the exact psychological trigger slide 1 uses — pattern interrupt, bold claim, counter-intuitive stat, or visceral question",
-  "cta_strategy": "the specific action and the emotional reason the reader will take it right now",
-  "virality_angle": "what makes this worth sharing or saving — the 'I need to send this to someone' moment"
-}}"""
-
-    trend_user = (trend_context.strip() + "\n\n") if trend_context.strip() else ""
-    message = ai_client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1000,
-        system=system_msg,
-        messages=[{"role": "user", "content": f"{trend_user}Build the strategy outline now."}],
-    )
-    strategy = _parse_json_response(message.content[0].text)
-    if db is not None:
-        await record_usage(db, message, generation_type="carousel_pass1",
-                           client_id=client.get("id"), client_name=client.get("name"))
-    logger.info(f"Pass 1 (strategy) done in {time.time()-t0:.1f}s — topic: {strategy.get('topic')}")
-    return strategy
-
-
-async def _pass2_draft(
-    ai_client,
-    client: dict,
-    onboarding: dict,
-    strategy: dict,
-    slide_count: int,
-    slide_format: str,
-    platform: str,
-    cta_keyword: str | None,
-    cta_offer: str | None,
-    hook_inspiration: str | None,
-    global_instructions: str | None,
-    db=None,
-) -> dict:
-    """Pass 2: Write full slide content guided by the Pass 1 strategy."""
-    import time
-    t0 = time.time()
-
-    name     = client.get("name", "Brand")
-    industry = client.get("industry", "business")
-    tone     = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
-    language = (onboarding.get("language") or "English").strip()
-    brand_ctx = _build_brand_context(client, onboarding)
+    platform_voice = _PLATFORM_VOICE.get(platform, "Clear and engaging.")
 
     not_to_do = onboarding.get("not_to_do_list") or []
     avoid_block = ("\n\nNEVER DO:\n" + "\n".join(f"- {x}" for x in not_to_do if x)) if not_to_do else ""
 
-    _SLIDE_FORMAT_PROMPTS = {
-        "tips":
-            "Slide 1: Hook — powerful claim or question that stops the scroll\n"
-            f"Slides 2 to {slide_count-1}: One tip per slide — what it is, WHY it works, HOW to apply it\n"
-            "Last slide: CTA",
-        "story":
-            "Slide 1: Hook — relatable struggle or bold moment\n"
-            "Slides 2-3: Rising tension — the journey unfolds\n"
-            f"Slides 4 to {slide_count-1}: Turning point — insight and transformation\n"
-            "Last slide: CTA",
-        "myth_bust":
-            "Slide 1: Hook — boldly challenge a belief\n"
-            f"Slides 2 to {slide_count-1}: Myth → Truth with evidence\n"
-            "Last slide: CTA",
-        "case_study":
-            "Slide 1: Hook — tease the result\n"
-            "Slide 2: The starting problem\n"
-            f"Slides 3 to {slide_count-1}: Key steps with specifics\n"
-            "Last slide: CTA",
-        "step_by_step":
-            "Slide 1: Hook — promise the outcome\n"
-            f"Slides 2 to {slide_count-1}: Step N — action + how to execute\n"
-            "Last slide: CTA",
-    }
-    format_block = _SLIDE_FORMAT_PROMPTS.get(slide_format, _SLIDE_FORMAT_PROMPTS["tips"])
+    # Sanitize free-form user input before it lands in the system prompt
+    safe_topic = _safe_for_prompt(topic, max_len=300)
+    safe_hook_inspiration = _safe_for_prompt(hook_inspiration, max_len=300)
 
+    topic_line = (
+        f'Topic: "{safe_topic}"' if safe_topic
+        else f"Choose the most compelling topic from: {', '.join(themes)}"
+    )
+
+    # Format selection — caller-locked or model-picked
+    if slide_format:
+        format_block = (
+            f"FORMAT — {slide_format} (locked by caller):\n"
+            f"{_SLIDE_FORMAT_GUIDANCE.get(slide_format, _SLIDE_FORMAT_GUIDANCE['tips'])}"
+        )
+        chosen_format_field = f'"format": "{slide_format}"'
+    else:
+        # Include ALL format guidance blocks so the model can pick the right one
+        all_formats = "\n\n".join(
+            f"-- {fmt} --\n{guide}" for fmt, guide in _SLIDE_FORMAT_GUIDANCE.items()
+        )
+        format_block = (
+            f"FORMAT — choose one:\n{_FORMAT_PICKER_GUIDE}\n\n"
+            f"Once you pick the format, follow ITS guidance below:\n\n{all_formats}"
+        )
+        chosen_format_field = '"format": "<one of: tips, story, myth_bust, case_study, step_by_step>"'
+
+    # Competitor hook 80/20 rebuild — slides 1 and 2 override the format template
+    hook_block = ""
+    if safe_hook_inspiration:
+        hook_block = (
+            f'\n\nSLIDE CONSTRAINT (competitor hook rebuild — overrides the format template for slides 1 and 2):\n'
+            f"Source hook: '{safe_hook_inspiration}'\n"
+            f"1. Identify the psychological trigger in the source (curiosity gap / bold claim / controversy).\n"
+            f"2. SLIDE 1 content in your JSON MUST be the rebuilt hook: keep ~80% of the original words intact —"
+            f" do NOT paraphrase or restructure. Only swap out brand-specific names/products and lightly adjust tone"
+            f" to fit {name}'s voice (20% adjustment max). Preserve the original phrasing, rhythm, and structure. Max 20 words.\n"
+            f"3. SLIDE 2 content in your JSON MUST be the tension builder: escalate the pain or curiosity opened by"
+            f" slide 1 — do not resolve it yet, deepen it.\n"
+            f"Do NOT use slides 1 or 2 for introductions, context, or brand mentions."
+        )
+
+    # Content memory — last 12 posts for this client become a forbidden list the model must vary from.
+    memory_block = await _build_content_memory_context(client.get("id"), db, limit=12)
+
+    # CTA requirement
     cta_block = ""
     if _clean_cta_value(cta_keyword) or _clean_cta_value(cta_offer):
         cta_block = (
@@ -635,313 +676,93 @@ async def _pass2_draft(
         if _clean_cta_value(cta_keyword):
             cta_block += f'\nMention the keyword "{_clean_cta_value(cta_keyword)}" explicitly.'
 
-    hook_block = ""
-    if hook_inspiration and hook_inspiration.strip():
-        hook_block = (
-            f'\n\nSLIDE CONSTRAINT (competitor hook rebuild — overrides the format template for slides 1 and 2):\n'
-            f'Source hook: "{hook_inspiration.strip()[:300]}"\n'
-            f"1. Identify the psychological trigger in the source (curiosity gap / pain point / bold claim / controversy).\n"
-            f"2. SLIDE 1 content in your JSON MUST be the rebuilt hook: keep ~80% of the original words intact —"
-            f" do NOT paraphrase or restructure. Only swap out brand-specific names/products and lightly adjust tone"
-            f" to fit {name}'s voice (20% adjustment max). Preserve the original phrasing, rhythm, and structure. Max 20 words.\n"
-            f"3. SLIDE 2 content in your JSON MUST be the tension builder: escalate the pain or curiosity opened by"
-            f" slide 1 — do not resolve it yet, deepen it. (e.g. 'Here's why that's costing you everything')\n"
-            f"Do NOT use slides 1 or 2 for introductions, context, or brand mentions."
-        )
+    # Per-slide word budget scales down as slide count grows so each card stays minimal
+    content_word_budget = max(35, 85 - slide_count * 5)
+    min_budget = max(25, content_word_budget - 20)
+
+    india_block = _CAROUSEL_INDIA_FRAMING if _is_indian_audience(onboarding, client) else ""
 
     _slides_example = ", ".join(
         '{{"slide_number": {n}, "content": "text"}}'.format(n=i + 1)
         for i in range(slide_count)
     )
 
-    # Per-slide word budget scales down as slide count grows so each card stays minimal
-    content_word_budget = max(35, 85 - slide_count * 5)
-
-    _PLATFORM_VOICE = {
-        "instagram": "Visual-first. Short punchy sentences. Hook in 3 words. High emotional temperature.",
-        "linkedin":  "Authoritative but human. Lead with a hard-won insight. Subtle credibility signals.",
-        "twitter":   "Ultra-terse. Every word is load-bearing. Wit over volume.",
-        "threads":   "Conversational and direct. Like talking to a smart friend. No corporate speak.",
-        "facebook":  "Warm, community tone. Invite dialogue. Make the reader feel seen.",
-        "tiktok":    "Fast, energetic, trend-aware. Speak to the scroll.",
-    }
-    platform_voice = _PLATFORM_VOICE.get(platform, "Clear and engaging.")
-
-    system_msg = f"""You are a world-class carousel copywriter for {name} ({industry}).
+    system_msg = f"""{_CAROUSEL_STRATEGIST_PERSONA}
+{india_block}
+CLIENT CONTEXT:
+You are writing for {name} ({industry}).
 Brand voice: {tone} | Language: {language} | Platform: {platform}
 Platform voice: {platform_voice}
 {brand_ctx}
 
-CONTENT STRATEGY:
-Topic: {strategy.get('topic', '')}
-Angle: {strategy.get('angle', '')}
-Audience pain: {strategy.get('audience_pain', '')}
-Emotional driver: {strategy.get('emotional_driver', '')}
-Narrative arc: {strategy.get('slide_arc', '')}
-Key insights: {', '.join(strategy.get('key_insights', []))}
-Hook strategy: {strategy.get('hook_strategy', '')}
-CTA strategy: {strategy.get('cta_strategy', '')}
-Virality angle: {strategy.get('virality_angle', '')}
+ASSIGNMENT:
+Write a {slide_count}-slide {platform} carousel.
+{topic_line}
 
-Write a {slide_count}-slide {platform} carousel that follows this arc and triggers this emotion.
-
-FORMAT:
 {format_block}
-{cta_block}{hook_block}{avoid_block}
+{hook_block}
+{cta_block}{avoid_block}
+{memory_block}
 
-WRITING RULES:
-- LANGUAGE: Write ALL slide content in {language}. Every word, every slide, including the title. Do NOT use English unless {language} is English. This is the single most important rule.
-- Every slide must serve the narrative arc — reader should feel the journey
-- Trigger the emotional driver on every slide, not just the hook
-- Use - for bullet lists when listing items
-- Use \\n for paragraph breaks within a slide
-- Hook slide (slide 1): max 25 words, one pattern interrupt or visceral claim, nothing more
-- CTA slide (last): max 25 words, one action, one benefit, zero filler
-- Content slides: {max(25, content_word_budget - 20)}-{content_word_budget} words each, one idea stated sharply then done. Never go below the minimum.
-- Whitespace is intentional. Resist the urge to explain.
-- Concrete beats vague: use numbers, names, and specific outcomes
+LANGUAGE LOCK: Write ALL slide content (including the title) in {language}. Every word, every slide. Do NOT use English unless {language} is English. This rule overrides everything else.
 
-HUMAN WRITING RULES (these are non-negotiable):
-- NEVER use em-dashes (—) or en-dashes (–). Use commas or periods instead.
-- NEVER use these AI buzzwords: leverage, utilize, synergy, game-changer, paradigm shift, delve into, dive deep, seamless, robust, comprehensive, innovative, cutting-edge, holistic, empower, foster, cultivate, actionable, impactful, transformative
-- NEVER use these filler openers: "In today's world", "It's important to note", "As we navigate", "Moving forward", "At the end of the day", "In conclusion", "That being said", "Needless to say"
-- NEVER use: Moreover, Furthermore, Nevertheless, Consequently as sentence starters
-- Write like a real person texting a smart friend, not a consultant writing a report
-- Use plain words. Shorter is smarter. Direct is better than polished.
+WORD BUDGETS:
+- Slide 1 (hook): max 20 words. One pattern interrupt or visceral claim.
+- Last slide (CTA): max 25 words. One action. One benefit tied to something specific in the earlier slides.
+- Middle slides: {min_budget}-{content_word_budget} words each. One idea per slide stated sharply, then done.
 
-Respond ONLY with valid JSON:
-{{"title": "carousel title (max 60 chars)", "author_name": "{name}", "author_handle": "@{name.lower().replace(' ', '')}", "author_title": "{industry}", "slides": [{_slides_example}]}}"""
+FORMATTING:
+- Use \\n for paragraph breaks within a slide. White space is intentional.
+- Use - for bullet items (plain hyphens only). No markdown bold/italic. No Unicode bullets (•, →, ✓).
+- No em-dashes (—) or en-dashes (–). Use commas or periods.
+
+Respond ONLY with valid JSON (no markdown, no commentary):
+{{
+  "title": "carousel title (max 60 chars, in {language})",
+  "strategy": {{
+    "topic": "concise topic title",
+    {chosen_format_field},
+    "hook_type": "one of: credibility_borrow | myth_bust | emotional_state | relatable_scene | shocking_number | direct_confront | family_relationship",
+    "angle": "the contrarian or unexpected angle that makes this take different",
+    "emotions": ["primary emotion (pick from: validation, aspiration, anger, frustration, guilt, hope, nostalgia, fomo, pride)", "secondary emotion from same list"],
+    "virality_angle": "what makes this worth sharing or saving",
+    "audience_pain": "the specific pain or desire that makes this impossible to ignore",
+    "mirror_slide_number": "REQUIRED integer: the slide number (1-{slide_count}) that contains the 'unspoken truth' the audience thinks but never says out loud",
+    "slide_arc": "3-word narrative journey (e.g. 'struggle -> insight -> transformation')"
+  }},
+  "author_name": "{name}",
+  "author_handle": "@{name.lower().replace(' ', '')}",
+  "author_title": "{industry}",
+  "slides": [{_slides_example}]
+}}"""
 
     if global_instructions and global_instructions.strip():
         system_msg += f"\n\nGLOBAL INSTRUCTIONS:\n{global_instructions.strip()}"
 
+    trend_user = (trend_context.strip() + "\n\n") if trend_context and trend_context.strip() else ""
+
+    # Dynamic token budget: ~200 tokens per slide for body + ~500 for title/strategy/metadata.
+    # Caps at Sonnet 4.5's 8192 ceiling. Saves cost on small carousels, preserves headroom on large ones.
+    dynamic_max_tokens = min(8192, 500 + slide_count * 200)
+
     message = ai_client.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=8000,
+        max_tokens=dynamic_max_tokens,
         system=system_msg,
-        messages=[{"role": "user", "content": f"Write the {slide_count} slides now. Make it viral-worthy for {platform}."}],
+        messages=[{
+            "role": "user",
+            "content": f"{trend_user}Write the {slide_count} slides now. Make it scroll-stopping for {platform}. Satisfy every quality gate before you stop.",
+        }],
     )
     data = _parse_json_response(message.content[0].text)
     if db is not None:
-        await record_usage(db, message, generation_type="carousel_pass2",
+        await record_usage(db, message, generation_type="carousel_single_pass",
                            client_id=client.get("id"), client_name=client.get("name"))
-    logger.info(f"Pass 2 (draft) done in {time.time()-t0:.1f}s — {len(data.get('slides', []))} slides")
+    logger.info(
+        f"Carousel single-pass done in {time.time()-t0:.1f}s — "
+        f"{len(data.get('slides', []))} slides, format: {data.get('strategy', {}).get('format', slide_format)}"
+    )
     return data
-
-
-async def _pass3_refine(
-    ai_client,
-    client: dict,
-    onboarding: dict,
-    draft: dict,
-    strategy: dict,
-    slide_count: int,
-    platform: str = "instagram",
-    hook_inspiration: str = None,
-    db=None,
-) -> dict:
-    """Pass 3: Refine — sharpen hook, tighten CTA, enforce specificity and save-worthiness."""
-    import time, json
-    t0 = time.time()
-
-    name             = client.get("name", "Brand")
-    tone             = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
-    language         = (onboarding.get("language") or "English").strip()
-    emotional_driver = strategy.get("emotional_driver", "")
-    virality_angle   = strategy.get("virality_angle", "")
-    slides_json      = json.dumps(draft.get("slides", []), ensure_ascii=False)
-
-    system_msg = f"""You are a senior carousel editor for {name} on {platform}.
-Brand voice: {tone} | Language: {language}
-CRITICAL: All slide content MUST remain in {language}. Do NOT translate or switch languages.
-Emotional driver to maintain: {emotional_driver}
-Virality angle to reinforce: {virality_angle}
-
-You are given {slide_count} draft slides. Apply these editorial passes in order:
-
-PASS A — HOOK (slide 1):
-  - If it doesn't stop a scroll in under 2 seconds, rewrite it
-  - Use a pattern interrupt: unexpected number, counter-intuitive claim, or visceral "you" statement
-  - Maximum 25 words. No throat-clearing.
-  - EXCEPTION: if slide 1 is a competitor hook adaptation, do NOT rewrite it — keep ~80% of the words intact, only tighten rhythm or fix grammar.
-
-PASS B — CTA (last slide):
-  - One action. One benefit. Done.
-  - The benefit must connect directly to the audience pain from the earlier slides
-  - Maximum 25 words.
-
-PASS C — SPECIFICITY (all slides):
-  - Replace vague with concrete: "improve results" → "cut cost by 40%", "many brands" → "7 out of 10 brands"
-  - Replace weak verbs: "help" → "drive", "do" → "execute"
-  - Cut filler words: just, very, really, basically, actually, simply, kind of
-  - If a slide has a claim without evidence or example, add one short, specific one
-
-PASS D — SAVE-WORTHINESS (all slides):
-  - Each middle slide must deliver a standalone insight — if someone screenshots just that slide, it must make sense and be worth keeping
-  - If a slide is just transition or setup with no actionable takeaway, sharpen it to deliver a real insight
-
-PASS E — EMOTIONAL ARC:
-  - Slide 1 should trigger {emotional_driver or 'curiosity'}
-  - Middle slides should deepen that emotion through specifics
-  - Last slide should resolve it with a clear path forward
-
-PASS F — HUMANIZE (all slides, mandatory):
-  - Replace every em-dash (—) and en-dash (–) with a comma or period
-  - Replace every Unicode bullet symbol (•, ●, →, ✓, ►) with a plain hyphen (-)
-  - Remove markdown bold/italic markers (**text** or *text* → text)
-  - Replace any AI buzzwords found: leverage→use, utilize→use, synergy→teamwork, seamless→smooth, robust→strong, comprehensive→complete, holistic→full, actionable→practical, impactful→effective, transformative→powerful, empower→help, foster→build, cultivate→build
-  - Remove filler openers: "In today's world", "It's important to note", "Moving forward", "That being said", "Moreover", "Furthermore", "Nevertheless"
-  - Output must read like a real person wrote it, not an AI
-
-CONSTRAINTS:
-  - Do NOT change the topic, structure, or slide count
-  - Preserve \\n paragraph breaks
-  - Preserve - bullet markers (no bold or markdown)
-  - Keep brand voice: {tone}
-  - Write ALL content in {language} — never translate or switch to another language
-
-Respond ONLY with valid JSON — same shape as input but with improved content:
-{{"title": "{draft.get('title', '')}", "author_name": "{draft.get('author_name', name)}", "author_handle": "{draft.get('author_handle', '')}", "author_title": "{draft.get('author_title', '')}", "slides": [same array, improved content]}}"""
-
-    message = ai_client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=8000,
-        system=system_msg,
-        messages=[{"role": "user", "content": f"Here are the draft slides:\n{slides_json}\n\nRefine them now."}],
-    )
-    refined = _parse_json_response(message.content[0].text)
-    if db is not None:
-        await record_usage(db, message, generation_type="carousel_pass3",
-                           client_id=client.get("id"), client_name=client.get("name"))
-    logger.info(f"Pass 3 (refine) done in {time.time()-t0:.1f}s")
-    return refined
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Format-specific specialist prompts for Pass 4
-# ─────────────────────────────────────────────────────────────────────────────
-_FORMAT_SPECIALIST_PROMPTS: dict[str, str] = {
-    "tips": """You are a Tips carousel specialist.
-Each value slide (not hook or CTA) must follow the WHAT / WHY / HOW structure:
-- WHAT: name the tip clearly in the first sentence
-- WHY: explain the outcome or benefit — make the reader feel the impact
-- HOW: give one concrete, actionable step they can take today
-
-Check every middle slide and rewrite any that skip WHY or HOW.
-Hook and CTA slides: leave structure intact — only sharpen language.""",
-
-    "story": """You are a Story carousel specialist.
-A great story carousel has a tight narrative arc:
-- Slide 1 (Hook): Drop into the moment — sensory, specific, relatable struggle or bold claim
-- Rising slides: Tension builds — what went wrong, what was at stake, the turning point
-- Resolution slides: The insight or transformation — what changed and why it matters
-- CTA: Invite the reader into their own story
-
-Check every slide for narrative momentum. Cut exposition. Add sensory detail.
-Make the reader feel they are living it, not watching it.""",
-
-    "myth_bust": """You are a Myth-Bust carousel specialist.
-Each middle slide must follow this structure:
-- MYTH: State the false belief boldly ("Most people think…", "The common advice is…")
-- TRUTH: Flip it with evidence, data, or a counter-example
-- SO WHAT: One sentence on why the truth matters for the reader
-
-Hook: The myth that will grab most people — state it provocatively.
-CTA: Invite the reader to question one more assumption.
-Check every myth slide and rewrite any that are vague or missing the TRUTH/SO WHAT.""",
-
-    "case_study": """You are a Case Study carousel specialist.
-The carousel must flow as a clear PROBLEM → PROCESS → RESULT story:
-- Hook: Tease the final result (a number, a transformation) to create immediate curiosity
-- Problem slide: Make the starting situation visceral — what was broken, lost, or stuck
-- Process slides: Each step must be specific (name the tool, the decision, the action taken)
-- Result slide: Quantify the outcome — numbers, time saved, revenue, lives changed
-- CTA: Show the reader how they can achieve the same result
-
-Check every slide for vagueness. Replace "improved performance" with real numbers.""",
-
-    "step_by_step": """You are a Step-by-Step carousel specialist.
-Each step slide must:
-- Open with "Step N:" so the reader always knows where they are
-- Name one concrete action (not a concept)
-- Explain HOW to execute it — not just what to do but the specific method
-- End with a micro-result: "Once done, you will have X"
-
-Hook: Promise the exact outcome the steps deliver — be specific about the end state.
-CTA: Recap the journey in one line then make the ask.
-Check every step slide — rewrite any that are abstract or missing the HOW.""",
-}
-
-
-async def _pass4_format_refine(
-    ai_client,
-    client: dict,
-    onboarding: dict,
-    draft: dict,
-    slide_format: str,
-    slide_count: int,
-    platform: str = "instagram",
-    db=None,
-) -> dict:
-    """Pass 4: Format-specialist refinement — applies format-specific quality rules."""
-    import time, json
-    t0 = time.time()
-
-    name = client.get("name", "Brand")
-    tone = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
-    language = (onboarding.get("language") or "English").strip()
-    slides_json = json.dumps(draft.get("slides", []), ensure_ascii=False)
-
-    specialist_instructions = _FORMAT_SPECIALIST_PROMPTS.get(
-        slide_format,
-        "You are a carousel quality specialist. Make every slide sharper, clearer, and more actionable.",
-    )
-
-    _PLATFORM_VOICE = {
-        "instagram": "Visual-first. Short punchy sentences. High emotional temperature.",
-        "linkedin":  "Authoritative but human. Subtle credibility signals.",
-        "twitter":   "Ultra-terse. Every word is load-bearing.",
-        "threads":   "Conversational, no corporate speak.",
-        "facebook":  "Warm, community tone.",
-    }
-    platform_voice = _PLATFORM_VOICE.get(platform, "Clear and engaging.")
-
-    system_msg = f"""You are an expert {slide_format} carousel specialist for {name} on {platform}.
-Brand voice: {tone} | Platform voice: {platform_voice} | Language: {language}
-CRITICAL: All slide content MUST remain in {language}. Do NOT translate or switch languages.
-
-{specialist_instructions}
-
-UNIVERSAL RULES:
-- Do NOT change the topic or overall structure
-- Preserve \\n paragraph breaks
-- Preserve - bullet lists (no bold or markdown markers)
-- Keep brand voice: {tone}
-- Write ALL content in {language} — never translate or switch to another language
-- Every edit must make the slide more specific, more emotionally resonant, or more action-driving
-
-Respond ONLY with valid JSON — same shape as input:
-{{"title": "{draft.get('title', '')}", "author_name": "{draft.get('author_name', name)}", "author_handle": "{draft.get('author_handle', '')}", "author_title": "{draft.get('author_title', '')}", "slides": [improved slides array]}}"""
-
-    try:
-        message = ai_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=8000,
-            system=system_msg,
-            messages=[{
-                "role": "user",
-                "content": f"Here are the {slide_count} slides ({slide_format} format):\n{slides_json}\n\nApply your specialist refinement now.",
-            }],
-        )
-        result = _parse_json_response(message.content[0].text)
-        if db is not None:
-            await record_usage(db, message, generation_type="carousel_pass4",
-                               client_id=client.get("id"), client_name=client.get("name"))
-        logger.info(f"Pass 4 ({slide_format} specialist) done in {time.time()-t0:.1f}s")
-        return result
-    except Exception as e:
-        logger.warning(f"Pass 4 failed ({e}), using Pass 3 result")
-        return draft
 
 
 async def _generate_carousel_caption(
@@ -1057,10 +878,10 @@ Respond ONLY with valid JSON:
 async def generate_carousel(
     client: dict,
     platform: str,
-    template: str,
+    template: str,  # noqa: ARG001 — kept for positional-caller compat in server.py; callers store this on the post, not on generation.
     topic: str = None,
     slide_count: int = 5,
-    settings: dict = None,
+    settings: dict = None,  # noqa: ARG001 — reserved for future per-call overrides; positional caller in server.py still passes it.
     cta_keyword: str | None = None,
     cta_offer: str | None = None,
     trends: list = None,
@@ -1089,63 +910,56 @@ async def generate_carousel(
 
     ai_client = anthropic.Anthropic(api_key=api_key)
 
-    # ── Pass 1: Strategy ──────────────────────────────────────────────────────
-    # Pass slide_format=None when not specified so Pass 1 picks the best format for the topic
+    # ── Single-pass generation (world-class strategist prompt) ────────────────
+    # NOTE: RateLimitError / APIConnectionError / APITimeoutError intentionally propagate —
+    # they are transient infra failures the caller (or a retry layer) should see, not silently
+    # degrade to fallback copy. Only soft errors (parse failures, validation issues, generic
+    # APIError) fall back to _fallback_carousel.
+    import json as _json
     try:
-        strategy = await _pass1_strategy(
+        result_data = await _generate_carousel_single_pass(
             ai_client, client, onboarding, topic, slide_count,
-            slide_format, cta_keyword, cta_offer, trend_context,
+            slide_format, platform, cta_keyword, cta_offer,
+            hook_inspiration, global_instructions, trend_context,
             db=db,
         )
-    except Exception as e:
-        logger.warning(f"Pass 1 failed ({e}), using minimal strategy")
-        strategy = {
-            "topic": topic or "Brand insights",
-            "best_format": slide_format or "story",
-            "angle": "Direct value delivery",
-            "audience_pain": "Needs actionable advice",
-            "key_insights": [f"Insight {i}" for i in range(1, slide_count - 1)],
-            "hook_strategy": "Bold opening claim",
-            "cta_strategy": "Follow for more",
-        }
+    except (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.APITimeoutError):
+        # Propagate — caller decides whether to retry / surface to user.
+        raise
+    except (anthropic.APIError, ValueError, KeyError, _json.JSONDecodeError) as e:
+        logger.warning(f"Carousel single-pass failed ({e}), using fallback")
+        return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
 
-    # Use Pass 1's chosen format if caller didn't lock one
-    resolved_format = slide_format or strategy.get("best_format") or "story"
-    logger.info(f"Carousel format: {resolved_format} ({'locked by caller' if slide_format else 'chosen by Pass 1'})")
-
-    # ── Pass 2: Draft ─────────────────────────────────────────────────────────
-    draft = await _pass2_draft(
-        ai_client, client, onboarding, strategy, slide_count,
-        resolved_format, platform, cta_keyword, cta_offer,
-        hook_inspiration, global_instructions,
-        db=db,
+    resolved_format = (
+        slide_format
+        or (result_data.get("strategy") or {}).get("format")
+        or "tips"
+    )
+    logger.info(
+        f"Carousel single-pass complete in {time.time()-t_total:.1f}s — "
+        f"'{result_data.get('title')}' (format: {resolved_format})"
     )
 
-    # ── Pass 3: Refine ────────────────────────────────────────────────────────
-    try:
-        result_data = await _pass3_refine(ai_client, client, onboarding, draft, strategy, slide_count, platform, hook_inspiration=hook_inspiration, db=db)
-        # Keep title/author from draft if refine drops them
-        for key in ("title", "author_name", "author_handle", "author_title"):
-            if not result_data.get(key):
-                result_data[key] = draft.get(key, "")
-    except Exception as e:
-        logger.warning(f"Pass 3 failed ({e}), using Pass 2 draft")
-        result_data = draft
-
-    # ── Pass 4: Format-Specialist Refinement ──────────────────────────────────
-    try:
-        result_data = await _pass4_format_refine(
-            ai_client, client, onboarding, result_data, resolved_format, slide_count, platform, db=db
-        )
-        # Preserve metadata fields if Pass 4 drops them
-        for key in ("title", "author_name", "author_handle", "author_title"):
-            if not result_data.get(key):
-                result_data[key] = draft.get(key, "")
-    except Exception as e:
-        logger.warning(f"Pass 4 failed ({e}), using Pass 3 result")
-        # result_data already holds Pass 3 output — no change needed
-
-    logger.info(f"Carousel 4-pass complete in {time.time()-t_total:.1f}s — '{result_data.get('title')}'")
+    # Soft hook-type variety check — warn if the new post repeats the last post's hook type.
+    # The prompt-level memory rules in _build_content_memory_context do the heavy lifting; this
+    # is just an observability signal so drift becomes visible in logs.
+    new_hook_type = (result_data.get("strategy") or {}).get("hook_type")
+    client_id = client.get("id")
+    if new_hook_type and client_id and db is not None:
+        try:
+            prev = await db.posts.find_one(
+                {"client_id": client_id, "carousel_data.strategy.hook_type": {"$exists": True}},
+                {"_id": 0, "carousel_data.strategy.hook_type": 1},
+                sort=[("created_at", -1)],
+            )
+            prev_hook = ((prev or {}).get("carousel_data") or {}).get("strategy", {}).get("hook_type")
+            if prev_hook and prev_hook == new_hook_type:
+                logger.warning(
+                    f"Hook-type variety drift: this carousel uses '{new_hook_type}' same as the "
+                    f"previous post for client {client_id}. Memory prompt should have varied it."
+                )
+        except Exception as e:
+            logger.debug(f"Hook-type variety check failed ({e}), skipping")
 
     # Post-process: strip AI-telltale symbols and phrasing from every slide
     for slide in result_data.get("slides", []):
