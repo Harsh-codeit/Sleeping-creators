@@ -641,8 +641,9 @@ async def _pass2_draft(
             f'\n\nSLIDE CONSTRAINT (competitor hook rebuild — overrides the format template for slides 1 and 2):\n'
             f'Source hook: "{hook_inspiration.strip()[:300]}"\n'
             f"1. Identify the psychological trigger in the source (curiosity gap / pain point / bold claim / controversy).\n"
-            f"2. SLIDE 1 content in your JSON MUST be the rebuilt hook: destroy the original words entirely and rewrite"
-            f" it in {name}'s voice — same punch, zero trace of the source. Max 20 words.\n"
+            f"2. SLIDE 1 content in your JSON MUST be the rebuilt hook: keep ~80% of the original words intact —"
+            f" do NOT paraphrase or restructure. Only swap out brand-specific names/products and lightly adjust tone"
+            f" to fit {name}'s voice (20% adjustment max). Preserve the original phrasing, rhythm, and structure. Max 20 words.\n"
             f"3. SLIDE 2 content in your JSON MUST be the tension builder: escalate the pain or curiosity opened by"
             f" slide 1 — do not resolve it yet, deepen it. (e.g. 'Here's why that's costing you everything')\n"
             f"Do NOT use slides 1 or 2 for introductions, context, or brand mentions."
