@@ -5863,15 +5863,38 @@ async def upload_clip(client_id: str, request: Request, file: UploadFile = File(
         loop = asyncio.get_running_loop()
         width = 0
         height = 0
+        rotation = 0
         try:
             probe = await loop.run_in_executor(None, _ffmpeg.probe, tmp_path)
             duration = float(probe["format"]["duration"])
             video_stream = next((s for s in probe.get("streams", []) if s.get("codec_type") == "video"), None)
             if video_stream:
-                width = int(video_stream.get("width") or 0)
-                height = int(video_stream.get("height") or 0)
+                raw_w = int(video_stream.get("width") or 0)
+                raw_h = int(video_stream.get("height") or 0)
+                # Phone-shot clips are often stored as landscape pixels + a rotation
+                # tag. ffprobe surfaces it as either tags.rotate (string) or
+                # side_data_list[].rotation (signed int). Drive's API hides this
+                # by returning already-rotated dims, so Drive sync doesn't need it.
+                tag_rot = (video_stream.get("tags") or {}).get("rotate")
+                if tag_rot is not None:
+                    try: rotation = int(tag_rot)
+                    except (TypeError, ValueError): pass
+                for sd in video_stream.get("side_data_list") or []:
+                    r = sd.get("rotation")
+                    if r is not None:
+                        try: rotation = int(r); break
+                        except (TypeError, ValueError): pass
+                # Display dims swap when rotation is ±90 / ±270.
+                if abs(rotation) % 180 == 90:
+                    width, height = raw_h, raw_w
+                else:
+                    width, height = raw_w, raw_h
         except Exception:
             duration = 0.0
+        logger.info(
+            f"upload_clip probe: file={file.filename!r} mime={file.content_type!r} "
+            f"width={width} height={height} rotation={rotation} duration={duration}"
+        )
 
         if duration > _MAX_DURATION_SEC:
             raise HTTPException(400, f"Video must be 60 seconds or shorter (this clip is {duration:.0f}s)")

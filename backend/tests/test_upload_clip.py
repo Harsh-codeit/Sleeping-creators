@@ -226,6 +226,94 @@ def test_upload_clip_no_video_stream_yields_zero_dims(
 @patch("ffmpeg.probe")
 @patch("storage.upload_file")
 @patch("storage.is_enabled", return_value=True)
+def test_upload_clip_phone_rotation_tag_treated_as_vertical(
+    _is_enabled, mock_upload, mock_probe, mock_db, _token,
+):
+    """Phone-shot clips: raw 1920x1080 + tags.rotate='90' → effectively
+    portrait. Display dims must be swapped and is_vertical=True so the
+    render service applies -90 rotation."""
+    _wire_db(mock_db)
+    mock_probe.return_value = {
+        "format": {"duration": "10.0"},
+        "streams": [{
+            "codec_type": "video", "width": 1920, "height": 1080,
+            "tags": {"rotate": "90"},
+        }],
+    }
+    mock_upload.return_value = "https://r2.example/clips/c1/phone.mp4"
+
+    resp = _post_upload(filename="phone.mp4", content_type="video/mp4")
+
+    assert resp.status_code == 201, resp.text
+    doc = _inserted_doc(mock_db)
+    assert doc["width"] == 1080
+    assert doc["height"] == 1920
+    assert doc["is_vertical"] is True
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+@patch("ffmpeg.probe")
+@patch("storage.upload_file")
+@patch("storage.is_enabled", return_value=True)
+def test_upload_clip_side_data_rotation_treated_as_vertical(
+    _is_enabled, mock_upload, mock_probe, mock_db, _token,
+):
+    """Newer ffprobe surfaces rotation via side_data_list[].rotation as a
+    signed int (e.g. -90 for portrait phone clips). Same swap should apply."""
+    _wire_db(mock_db)
+    mock_probe.return_value = {
+        "format": {"duration": "10.0"},
+        "streams": [{
+            "codec_type": "video", "width": 1920, "height": 1080,
+            "side_data_list": [{"side_data_type": "Display Matrix", "rotation": -90}],
+        }],
+    }
+    mock_upload.return_value = "https://r2.example/clips/c1/phone2.mp4"
+
+    resp = _post_upload(filename="phone2.mp4", content_type="video/mp4")
+
+    assert resp.status_code == 201, resp.text
+    doc = _inserted_doc(mock_db)
+    assert doc["width"] == 1080
+    assert doc["height"] == 1920
+    assert doc["is_vertical"] is True
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+@patch("ffmpeg.probe")
+@patch("storage.upload_file")
+@patch("storage.is_enabled", return_value=True)
+def test_upload_clip_180_rotation_keeps_landscape(
+    _is_enabled, mock_upload, mock_probe, mock_db, _token,
+):
+    """180° rotation is upside-down landscape, not portrait. Dims must not
+    swap; is_vertical stays False."""
+    _wire_db(mock_db)
+    mock_probe.return_value = {
+        "format": {"duration": "10.0"},
+        "streams": [{
+            "codec_type": "video", "width": 1920, "height": 1080,
+            "tags": {"rotate": "180"},
+        }],
+    }
+    mock_upload.return_value = "https://r2.example/clips/c1/flipped.mp4"
+
+    resp = _post_upload(filename="flipped.mp4", content_type="video/mp4")
+
+    assert resp.status_code == 201, resp.text
+    doc = _inserted_doc(mock_db)
+    assert doc["width"] == 1920
+    assert doc["height"] == 1080
+    assert doc["is_vertical"] is False
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+@patch("ffmpeg.probe")
+@patch("storage.upload_file")
+@patch("storage.is_enabled", return_value=True)
 def test_upload_clip_schema_matches_drive_sync(
     _is_enabled, mock_upload, mock_probe, mock_db, _token,
 ):
