@@ -5861,9 +5861,15 @@ async def upload_clip(client_id: str, request: Request, file: UploadFile = File(
         tmp_path = tmp.name
     try:
         loop = asyncio.get_running_loop()
+        width = 0
+        height = 0
         try:
             probe = await loop.run_in_executor(None, _ffmpeg.probe, tmp_path)
             duration = float(probe["format"]["duration"])
+            video_stream = next((s for s in probe.get("streams", []) if s.get("codec_type") == "video"), None)
+            if video_stream:
+                width = int(video_stream.get("width") or 0)
+                height = int(video_stream.get("height") or 0)
         except Exception:
             duration = 0.0
 
@@ -5875,14 +5881,19 @@ async def upload_clip(client_id: str, request: Request, file: UploadFile = File(
             r2_url = storage.upload_file(tmp_path, r2_key, content_type=file.content_type or "video/mp4")
         else:
             raise HTTPException(status_code=503, detail="File storage (R2/S3) is not configured on this server.")
+        # Mirror Drive sync schema so video_render_service rotation logic works for uploads.
         clip = {
             "drive_file_id": clip_id,
             "client_id": client_id,
             "name": file.filename or f"clip_{clip_id[:8]}{suffix}",
             "source": "upload",
+            "mime_type": file.content_type or "video/mp4",
             "r2_url": r2_url,
             "thumbnail_url": None,
             "duration": duration,
+            "width": width,
+            "height": height,
+            "is_vertical": bool(width and height and height > width),
             "sequence_number": 9999,
             "synced_at": now_iso(),
         }
