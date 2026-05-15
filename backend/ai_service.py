@@ -638,10 +638,14 @@ async def _pass2_draft(
     hook_block = ""
     if hook_inspiration and hook_inspiration.strip():
         hook_block = (
-            f'\n\nHOOK TO STEAL: "{hook_inspiration.strip()[:300]}"\n'
-            f"Identify the psychological trigger (curiosity gap / pain point / bold claim / controversy)."
-            f" Then destroy the original words entirely and rebuild the hook from zero in {name}'s voice."
-            f" The output hook must feel like {name} wrote it — same punch, zero trace of the original."
+            f'\n\nSLIDE CONSTRAINT (competitor hook rebuild — overrides the format template for slides 1 and 2):\n'
+            f'Source hook: "{hook_inspiration.strip()[:300]}"\n'
+            f"1. Identify the psychological trigger in the source (curiosity gap / pain point / bold claim / controversy).\n"
+            f"2. SLIDE 1 content in your JSON MUST be the rebuilt hook: destroy the original words entirely and rewrite"
+            f" it in {name}'s voice — same punch, zero trace of the source. Max 20 words.\n"
+            f"3. SLIDE 2 content in your JSON MUST be the tension builder: escalate the pain or curiosity opened by"
+            f" slide 1 — do not resolve it yet, deepen it. (e.g. 'Here's why that's costing you everything')\n"
+            f"Do NOT use slides 1 or 2 for introductions, context, or brand mentions."
         )
 
     _slides_example = ", ".join(
@@ -732,6 +736,7 @@ async def _pass3_refine(
     strategy: dict,
     slide_count: int,
     platform: str = "instagram",
+    hook_inspiration: str = None,
     db=None,
 ) -> dict:
     """Pass 3: Refine — sharpen hook, tighten CTA, enforce specificity and save-worthiness."""
@@ -757,6 +762,7 @@ PASS A — HOOK (slide 1):
   - If it doesn't stop a scroll in under 2 seconds, rewrite it
   - Use a pattern interrupt: unexpected number, counter-intuitive claim, or visceral "you" statement
   - Maximum 25 words. No throat-clearing.
+  - EXCEPTION: if slide 1 is already a rebuilt competitor hook, preserve its core idea — only sharpen the language, do NOT replace the concept.
 
 PASS B — CTA (last slide):
   - One action. One benefit. Done.
@@ -1116,7 +1122,7 @@ async def generate_carousel(
 
     # ── Pass 3: Refine ────────────────────────────────────────────────────────
     try:
-        result_data = await _pass3_refine(ai_client, client, onboarding, draft, strategy, slide_count, platform, db=db)
+        result_data = await _pass3_refine(ai_client, client, onboarding, draft, strategy, slide_count, platform, hook_inspiration=hook_inspiration, db=db)
         # Keep title/author from draft if refine drops them
         for key in ("title", "author_name", "author_handle", "author_title"):
             if not result_data.get(key):
