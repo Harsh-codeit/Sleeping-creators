@@ -449,7 +449,11 @@ export function VideoCreator() {
     setMusicUrl("");
     setSelectedTrack(null);
     setFilterName(null);
-    setPrompt("");
+    // Reset prompt to the client/global default, not blank — otherwise the
+    // user hits step 4 with an empty AI Prompt even though a global prompt
+    // is configured. The useEffect on selectedClient won't re-fire here.
+    const clientPrompt = selectedClient?.strategy?.video_prompt || "";
+    setPrompt(clientPrompt || globalVideoPrompt || "");
     setCaption("");
     setHashtags("");
     setPost(null);
