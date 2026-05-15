@@ -2248,6 +2248,11 @@ export default function ClientDetail() {
                           {post.error_message && (
                             <p className="text-[10px] text-red-400 font-mono mt-0.5 truncate">⚠ {post.error_message.slice(0, 90)}</p>
                           )}
+                          {post.competitor_hook_text && (
+                            <div className="text-[10px] font-mono text-zinc-500 mt-1 truncate" title={post.competitor_hook_text}>
+                              Hook from {post.competitor_username ? `@${post.competitor_username}` : "competitor"}: "{post.competitor_hook_text}"
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="col-span-2 flex items-center text-xs font-mono text-zinc-500 capitalize">{post.platform}</div>

@@ -1282,6 +1282,10 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
                 "drive_image_index": drive_image_index_for_post,
                 "engagement_score": 0,
                 "created_at": now_iso(),
+                **({"competitor_post_id": competitor_post.get("id"),
+                    "competitor_hook_text": hook_inspiration[:200] if hook_inspiration else None,
+                    "competitor_username": competitor_post.get("username") or competitor_post.get("account_username"),
+                    } if pipeline_type == "competitor" and competitor_post else {}),
                 **extra
             }
             await db.posts.insert_one({**post})
