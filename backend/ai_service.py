@@ -763,7 +763,7 @@ PASS A — HOOK (slide 1):
   - If it doesn't stop a scroll in under 2 seconds, rewrite it
   - Use a pattern interrupt: unexpected number, counter-intuitive claim, or visceral "you" statement
   - Maximum 25 words. No throat-clearing.
-  - EXCEPTION: if slide 1 is already a rebuilt competitor hook, preserve its core idea — only sharpen the language, do NOT replace the concept.
+  - EXCEPTION: if slide 1 is a competitor hook adaptation, do NOT rewrite it — keep ~80% of the words intact, only tighten rhythm or fix grammar.
 
 PASS B — CTA (last slide):
   - One action. One benefit. Done.
