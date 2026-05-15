@@ -416,7 +416,11 @@ async def build_merge_values(
                         "client_id": client["id"], "drive_file_id": drive_id,
                     })
                     if drive_doc and drive_doc.get("is_vertical"):
-                        rotation_overrides[find] = -90
+                        # .mov files store orientation metadata differently — Shotstack
+                        # reads their EXIF rotation tag and pre-applies it, so our
+                        # correction must go the opposite direction (+90 instead of -90).
+                        is_mov = drive_doc.get("mime_type") == "video/quicktime"
+                        rotation_overrides[find] = 90 if is_mov else -90
                 except Exception as e:
                     logger.warning("orientation lookup failed for %s: %s", drive_id, e)
             except StopIteration:
