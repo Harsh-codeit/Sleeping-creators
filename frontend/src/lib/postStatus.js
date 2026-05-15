@@ -78,8 +78,8 @@ export function getPostActions(post) {
     // Allow force-retry on stuck 'rendering' posts (worker may have died silently)
     if (status === "rendering")        return { retry: true, delete: true };
     if (status === "failed_render")    return { retry: true, delete: true };
-    if (status === "succeeded")        return { postNow: true, schedule: true, delete: true };
-    if (status === "pending_approval") return { approve: true, reject: true, delete: true };
+    if (status === "succeeded")        return { postNow: true, schedule: true, rerender: true, delete: true };
+    if (status === "pending_approval") return { approve: true, reject: true, rerender: true, delete: true };
     if (status === "bundle_scheduled") return { delete: true };
     if (status === "published")        return { delete: true };
     return { delete: true };

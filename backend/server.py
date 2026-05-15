@@ -992,13 +992,19 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         pipeline_content_type = "carousel"
 
     elif pipeline_type == "competitor":
-        hook_inspiration = competitor_post.get("caption", "") or None
-        # Bug fix: pass slide_texts as reference context so AI recreates the structure
         slide_texts = competitor_post.get("slide_texts", [])
-        if slide_texts:
+        graphic_texts = [t for t in slide_texts if t and t.strip()]
+        # Use the actual graphic hook (slide 1 text) — more accurate than the caption
+        hook_inspiration = (
+            graphic_texts[0] if graphic_texts
+            else (competitor_post.get("caption", "") or None)
+        )
+        if graphic_texts:
             extra_global_instructions += (
-                "\n\nCOMPETITOR REFERENCE — recreate the structure and depth, not the words:\n"
-                + "\n".join(f"Slide {i+1}: {t}" for i, t in enumerate(slide_texts[:7]))
+                "\n\nCOMPETITOR HOOK ARSENAL — these are real hooks that drove engagement."
+                " Study the psychological trigger in each (curiosity gap, pain, controversy, bold claim)."
+                " Rebuild every one of them from scratch in " + (client.get("name") or "the client") + "'s voice:\n"
+                + "\n".join(f"Hook {i+1}: {t}" for i, t in enumerate(graphic_texts[:6]))
             )
         pipeline_content_type = "carousel"
 
@@ -2349,8 +2355,8 @@ async def retry_video_render(post_id: str):
     # indistinguishable from a failed one to the admin. The previous render
     # task (if alive) will see the cleared artifacts and exit; the new one
     # owns the post from here.
-    if post.get("status") not in ("failed_render", "rendering"):
-        raise HTTPException(400, f"Can only retry from status 'failed_render' or 'rendering' (current: {post.get('status')!r})")
+    if post.get("status") not in ("failed_render", "rendering", "succeeded", "pending_approval"):
+        raise HTTPException(400, f"Can only re-render from status 'failed_render', 'rendering', 'succeeded', or 'pending_approval' (current: {post.get('status')!r})")
 
     await db.posts.update_one(
         {"id": post_id},

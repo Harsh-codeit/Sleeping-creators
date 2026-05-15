@@ -26,6 +26,11 @@ docs/superpowers/plans/
 /.agents
 AGENTS.md
 
+# Ruflo / claude-flow runtime
+/.claude-flow/
+/data/memory/
+/data/swarm/
+
 # Claude plan files
 *_PLAN.md
 MASTER_PLAN.md

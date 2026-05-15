@@ -638,8 +638,10 @@ async def _pass2_draft(
     hook_block = ""
     if hook_inspiration and hook_inspiration.strip():
         hook_block = (
-            f'\n\nHOOK INSPIRATION: "{hook_inspiration.strip()[:300]}"\n'
-            f"Match the energy and curiosity gap. Do NOT copy words. Make it {name}\'s own."
+            f'\n\nHOOK TO STEAL: "{hook_inspiration.strip()[:300]}"\n'
+            f"Identify the psychological trigger (curiosity gap / pain point / bold claim / controversy)."
+            f" Then destroy the original words entirely and rebuild the hook from zero in {name}'s voice."
+            f" The output hook must feel like {name} wrote it — same punch, zero trace of the original."
         )
 
     _slides_example = ", ".join(

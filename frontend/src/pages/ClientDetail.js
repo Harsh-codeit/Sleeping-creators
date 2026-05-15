@@ -2279,6 +2279,17 @@ export default function ClientDetail() {
                             <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
                           </button>
                         )}
+                        {/* Re-render — succeeded / pending_approval posts */}
+                        {actions.rerender && (
+                          <button
+                            onClick={() => retryRender(post)}
+                            disabled={retryingPostId === post.id}
+                            title="Re-render video"
+                            className="p-1 text-zinc-600 hover:text-violet-400 transition-colors duration-150 disabled:opacity-40"
+                          >
+                            <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
+                          </button>
+                        )}
                         {/* Publish — carousel-only */}
                         {actions.publish && (
                           <button onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors duration-150 disabled:opacity-40">
