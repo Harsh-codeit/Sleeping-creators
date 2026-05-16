@@ -1416,9 +1416,10 @@ export default function ClientDetail() {
   const [retryingPostId, setRetryingPostId] = useState(null);
   const [viewingVideoPost, setViewingVideoPost] = useState(null);
   const [editForm, setEditForm] = useState(null);
-  const [strategyForm, setStrategyForm] = useState({ themes: "", tone: "", hashtags: "", topics_include: [], topics_exclude: [], video_hooks: [], video_prompt: "" });
+  // tone and topics_exclude removed — they are canonical at onboarding_data.brand_vibe /
+  // onboarding_data.not_to_do_list. Editable only in Profile tab; this tab shows read-only mirrors.
+  const [strategyForm, setStrategyForm] = useState({ themes: "", hashtags: "", topics_include: [], video_hooks: [], video_prompt: "" });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
-  const [topicExcludeInput, setTopicExcludeInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
   const [hookGenKeyword, setHookGenKeyword] = useState("");
   const [hookGenLoading, setHookGenLoading] = useState(false);
@@ -1455,10 +1456,8 @@ export default function ClientDetail() {
       const s = clientResp.data.strategy || {};
       setStrategyForm({
         themes: (s.themes || []).join(", "),
-        tone: s.tone || clientResp.data.brand_voice || "",
         hashtags: (s.hashtags || []).join(", "),
         topics_include: s.topics_include || [],
-        topics_exclude: s.topics_exclude || [],
         video_hooks: s.video_hooks || [],
         video_prompt: s.video_prompt || ""
       });
@@ -1546,12 +1545,13 @@ export default function ClientDetail() {
   const saveStrategy = async () => {
     setSaving(true);
     try {
+      // tone and topics_exclude intentionally omitted — canonical at
+      // onboarding_data.brand_vibe / onboarding_data.not_to_do_list, derived to
+      // strategy.tone / strategy.topics_exclude server-side by _recompute_derived.
       const strategy = {
         themes: strategyForm.themes.split(",").map(t => t.trim()).filter(Boolean),
-        tone: strategyForm.tone,
         hashtags: strategyForm.hashtags.split(",").map(h => h.trim().replace(/^#/, "").replace(/^/, "#")).filter(h => h !== "#"),
         topics_include: strategyForm.topics_include,
-        topics_exclude: strategyForm.topics_exclude,
         video_hooks: strategyForm.video_hooks.filter(h => h.title.trim() || h.prompt.trim()),
         video_prompt: (strategyForm.video_prompt || "").trim()
       };
@@ -1898,14 +1898,16 @@ export default function ClientDetail() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Tone of Voice</label>
-                  <input
-                    data-testid="strategy-tone-input"
-                    value={strategyForm.tone}
-                    onChange={e => setStrategyForm(f => ({ ...f, tone: e.target.value }))}
-                    placeholder="Professional, data-driven"
-                    className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                  />
+                  <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">
+                    Tone of Voice <span className="text-zinc-700 normal-case tracking-normal">— mirror</span>
+                  </label>
+                  <div className="w-full bg-zinc-950/50 border border-dashed border-zinc-800 px-3 py-2 text-sm text-zinc-400" data-testid="strategy-tone-mirror">
+                    {(() => {
+                      const v = client?.onboarding_data?.brand_vibe;
+                      const s = Array.isArray(v) ? v.join(", ") : (v || "");
+                      return s || <span className="text-zinc-700 italic">Set in Profile → Brand Vibe</span>;
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Brand Hashtags</label>
@@ -1963,42 +1965,25 @@ export default function ClientDetail() {
                 />
               </div>
 
-              {/* Exclude */}
-              <div className="border border-zinc-800 p-3 space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                  <span className="text-[10px] font-mono text-rose-500 uppercase">Never Cover</span>
+              {/* Exclude — read-only mirror of onboarding_data.not_to_do_list */}
+              <div className="border border-dashed border-zinc-800 bg-zinc-950/50 p-3 space-y-2" data-testid="strategy-topics-exclude-mirror">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500/50" />
+                    <span className="text-[10px] font-mono text-rose-500/70 uppercase">Never Cover</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-zinc-600 normal-case tracking-normal">mirror — edit in Profile</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 min-h-[32px]">
-                  {strategyForm.topics_exclude.map((tag, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-950 border border-rose-800 text-rose-400 text-xs">
+                  {(client?.onboarding_data?.not_to_do_list || []).filter(Boolean).map((tag, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-950/40 border border-rose-900/60 text-rose-400/80 text-xs">
                       {tag}
-                      <button
-                        onClick={() => setStrategyForm(f => ({ ...f, topics_exclude: f.topics_exclude.filter((_, j) => j !== i) }))}
-                        className="text-rose-600 hover:text-rose-300 transition-colors"
-                      >
-                        <X size={10} />
-                      </button>
                     </span>
                   ))}
+                  {(!client?.onboarding_data?.not_to_do_list || client.onboarding_data.not_to_do_list.filter(Boolean).length === 0) && (
+                    <span className="text-[10px] text-zinc-700 italic font-mono">Set in Profile → Topics to AVOID</span>
+                  )}
                 </div>
-                <input
-                  data-testid="strategy-topics-exclude-input"
-                  value={topicExcludeInput}
-                  onChange={e => setTopicExcludeInput(e.target.value)}
-                  onKeyDown={e => {
-                    if ((e.key === "Enter" || e.key === ",") && topicExcludeInput.trim()) {
-                      e.preventDefault();
-                      const val = topicExcludeInput.trim().replace(/,$/, "");
-                      if (val && !strategyForm.topics_exclude.includes(val)) {
-                        setStrategyForm(f => ({ ...f, topics_exclude: [...f.topics_exclude, val] }));
-                      }
-                      setTopicExcludeInput("");
-                    }
-                  }}
-                  placeholder="Type and press Enter"
-                  className="w-full bg-zinc-950 border border-zinc-700 px-2 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-rose-800"
-                />
               </div>
             </div>
           </div>

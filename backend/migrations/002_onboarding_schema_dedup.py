@@ -1,6 +1,7 @@
 """Recompute derived mirrors and stamp schema_version: 2 on every client doc.
 
-Run once at deploy time:  python -m migrations.002_onboarding_schema_dedup
+Run once at deploy time (from repo root):
+    python backend/migrations/002_onboarding_schema_dedup.py
 
 Properties:
 - Idempotent: re-running has no effect after the first pass.
@@ -12,11 +13,16 @@ Pre-flight: take a mongodump of the clients collection before running on prod.
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 # Make backend/ importable so we can use the shared pure utility
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from client_utils import _recompute_derived
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_BACKEND_DIR))
 
+from dotenv import load_dotenv
+load_dotenv(_BACKEND_DIR / ".env")
+
+from client_utils import _recompute_derived
 from motor.motor_asyncio import AsyncIOMotorClient
 
 
