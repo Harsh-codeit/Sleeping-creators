@@ -1,0 +1,255 @@
+import {
+  Label,
+  Input,
+  MultiInput,
+  SubsectionHeader,
+  YesNoToggle,
+  PrefixedInput,
+} from "../primitives";
+
+export default function Step1({ form, set }) {
+  return (
+    <div className="space-y-8">
+      {/* ── 1A — Personal & Contact Details ─────────────────────────── */}
+      <div>
+        <SubsectionHeader id="1A" label="Personal & Contact Details" />
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Full Name</Label>
+              <Input
+                testid="ob-name"
+                type="text"
+                value={form.name ?? ""}
+                onChange={(e) => set("name", e.target.value)}
+                placeholder="Rahul Sharma"
+              />
+            </div>
+            <div>
+              <Label optional>Brand Name</Label>
+              <Input
+                testid="ob-brand-name"
+                type="text"
+                value={form.brand_name ?? ""}
+                onChange={(e) => set("brand_name", e.target.value)}
+                placeholder="FitWithRahul"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label optional>Email</Label>
+              <Input
+                testid="ob-email"
+                type="email"
+                value={form.email ?? ""}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="rahul@gmail.com"
+              />
+            </div>
+            <div>
+              <Label optional>WhatsApp</Label>
+              <Input
+                testid="ob-whatsapp"
+                type="tel"
+                value={form.whatsapp ?? ""}
+                onChange={(e) => set("whatsapp", e.target.value)}
+                placeholder="+91 98000 00000"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label optional>City, Country</Label>
+            <Input
+              testid="ob-city-country"
+              type="text"
+              value={form.city_country ?? ""}
+              onChange={(e) => set("city_country", e.target.value)}
+              placeholder="Mumbai, India"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── 1B — Social Media & Online Presence ─────────────────────── */}
+      <div>
+        <SubsectionHeader id="1B" label="Social Media & Online Presence" />
+
+        <div className="mb-4 border border-zinc-800 bg-zinc-900/30 px-3 py-2">
+          <p className="text-[10px] font-mono text-zinc-400 leading-relaxed">
+            We never store your password — we'll send a Meta Business access
+            invite. Paste the invite link below once received.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <Label>Instagram Handle</Label>
+            <PrefixedInput
+              prefix="@"
+              testid="ob-instagram-handle"
+              value={form.instagram_handle ?? ""}
+              onChange={(e) => set("instagram_handle", e.target.value)}
+              placeholder="rahulsharma"
+            />
+          </div>
+
+          <div>
+            <Label>Instagram Profile URL</Label>
+            <Input
+              testid="ob-instagram-profile-url"
+              type="url"
+              value={form.instagram_profile_url ?? ""}
+              onChange={(e) => set("instagram_profile_url", e.target.value)}
+              placeholder="instagram.com/rahulsharma"
+            />
+          </div>
+
+          <div>
+            <Label optional>Instagram Access Link</Label>
+            <Input
+              testid="ob-instagram-access-link"
+              type="text"
+              value={form.instagram_access_link ?? ""}
+              onChange={(e) => set("instagram_access_link", e.target.value)}
+              placeholder="Paste the Meta Business invite link"
+            />
+          </div>
+
+          <div>
+            <Label optional>Website URL</Label>
+            <Input
+              testid="ob-website-url"
+              type="url"
+              value={form.website_url ?? ""}
+              onChange={(e) => set("website_url", e.target.value)}
+              placeholder="www.rahulsharma.com"
+            />
+          </div>
+
+          <div>
+            <Label optional>LinkedIn URL</Label>
+            <Input
+              testid="ob-linkedin-url"
+              type="url"
+              value={form.linkedin_url ?? ""}
+              onChange={(e) => set("linkedin_url", e.target.value)}
+              placeholder="linkedin.com/in/rahulsharma"
+            />
+          </div>
+
+          <div>
+            <Label optional>YouTube URL</Label>
+            <Input
+              testid="ob-youtube-url"
+              type="url"
+              value={form.youtube_url ?? ""}
+              onChange={(e) => set("youtube_url", e.target.value)}
+              placeholder="Paste link or write NA"
+            />
+          </div>
+
+          <div>
+            <Label optional>Twitter / X URL</Label>
+            <Input
+              testid="ob-twitter-url"
+              type="url"
+              value={form.twitter_url ?? ""}
+              onChange={(e) => set("twitter_url", e.target.value)}
+              placeholder="Paste link or write NA"
+            />
+          </div>
+
+          <MultiInput
+            label="PR / Media Links"
+            values={Array.isArray(form.pr_links) && form.pr_links.length ? form.pr_links : [""]}
+            onChange={(v) => set("pr_links", v)}
+            placeholder="https://..."
+            testid="ob-pr"
+            optional
+          />
+        </div>
+      </div>
+
+      {/* ── 1C — Assets Upload ──────────────────────────────────────── */}
+      <div>
+        <SubsectionHeader
+          id="1C"
+          label="Assets Upload"
+          hint="Use Google Drive — share with view access."
+        />
+
+        <div className="space-y-4">
+          <div>
+            <Label optional>Profile Photo (Drive Link)</Label>
+            <Input
+              testid="ob-profile-photo-link"
+              type="url"
+              value={form.profile_photo_link ?? ""}
+              onChange={(e) => set("profile_photo_link", e.target.value)}
+              placeholder="Drive link to 1:1 close-up profile photo"
+            />
+          </div>
+
+          <div>
+            <Label optional>Logo (Drive Link)</Label>
+            <Input
+              testid="ob-logo-link"
+              type="url"
+              value={form.logo_link ?? ""}
+              onChange={(e) => set("logo_link", e.target.value)}
+              placeholder="Drive link to logo PNG (transparent bg)"
+            />
+          </div>
+
+          <div>
+            <Label optional>Photo Library (Drive Link)</Label>
+            <Input
+              testid="ob-google-drive-images"
+              type="url"
+              value={form.google_drive_images ?? ""}
+              onChange={(e) => set("google_drive_images", e.target.value)}
+              placeholder="Drive link to 20+ high-quality photos"
+            />
+          </div>
+
+          <div>
+            <Label optional>Video Clips (Drive Link)</Label>
+            <Input
+              testid="ob-google-drive-videos"
+              type="url"
+              value={form.google_drive_videos ?? ""}
+              onChange={(e) => set("google_drive_videos", e.target.value)}
+              placeholder="Drive link to 20+ short video clips"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── 1D — Instagram Account Health Check ─────────────────────── */}
+      <div>
+        <SubsectionHeader id="1D" label="Instagram Account Health" />
+
+        <div className="space-y-4">
+          <YesNoToggle
+            label="Has the account been suspended, shadowbanned, or seen a sudden reach drop?"
+            value={form.account_suspended ?? false}
+            onChange={(v) => set("account_suspended", v)}
+            testid="ob-suspended"
+            optional
+          />
+          <YesNoToggle
+            label="Have you run paid ads from this Instagram account?"
+            value={form.paid_ads_run ?? false}
+            onChange={(v) => set("paid_ads_run", v)}
+            testid="ob-paid-ads"
+            optional
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
