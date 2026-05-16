@@ -273,6 +273,8 @@ export function VideoCreator() {
   const [texts, setTexts] = useState({});
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
+  // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
+  const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState(64);
   const [generating, setGenerating] = useState(false);
   const [clips, setClips] = useState([]);
   const [selectedClips, setSelectedClips] = useState([]);
@@ -382,13 +384,14 @@ export function VideoCreator() {
         filterName, musicUrl,
         selectedTrack,
         prompt, texts, caption, hashtags,
+        thumbnailOffsetMs,
         selectedClips,
       };
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(payload)); } catch {}
     }, 400);
     return () => clearTimeout(t);
   }, [step, selectedClient, selectedTemplate, filterName, musicUrl, selectedTrack,
-      prompt, texts, caption, hashtags, selectedClips, post, rendering]);
+      prompt, texts, caption, hashtags, thumbnailOffsetMs, selectedClips, post, rendering]);
 
   const clearDraft = () => {
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
@@ -423,6 +426,9 @@ export function VideoCreator() {
       setTexts(draft.texts || {});
       setCaption(draft.caption || "");
       setHashtags(draft.hashtags || "");
+      setThumbnailOffsetMs(
+        typeof draft.thumbnailOffsetMs === "number" ? draft.thumbnailOffsetMs : 64
+      );
       setSelectedClips(draft.selectedClips || []);
       setStep(Math.min(draft.step || 1, template ? 5 : 2));
       setDraft(null);  // hide banner
@@ -498,6 +504,7 @@ export function VideoCreator() {
         caption: caption.trim() || undefined,
         hashtags: hashtagArr.length ? hashtagArr : undefined,
         generated_merge_values: Object.keys(filled).length ? filled : undefined,
+        instagram_thumbnail_offset_ms: Number.isFinite(thumbnailOffsetMs) ? thumbnailOffsetMs : 64,
       };
       const r = await axios.post(`${API}/videos/create`, body);
       setPostId(r.data.post_id);
@@ -1102,6 +1109,27 @@ export function VideoCreator() {
                           ))}
                         </div>
                       )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <div className="text-xs font-semibold text-white">Instagram Reel Cover Offset</div>
+                        <span className="text-[10px] font-mono text-zinc-600">ms</span>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={thumbnailOffsetMs}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setThumbnailOffsetMs(v === "" ? 0 : Math.max(0, parseInt(v, 10) || 0));
+                        }}
+                        className="w-32 bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
+                      />
+                      <div className="text-[10px] font-mono text-zinc-500 mt-1.5">
+                        Frame timestamp used as the Reel cover photo. Default 64ms picks just past the first frame.
+                      </div>
                     </div>
                   </div>
                 )}

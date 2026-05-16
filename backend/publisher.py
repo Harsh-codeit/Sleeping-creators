@@ -1057,7 +1057,8 @@ def _fit_to_limit(body: str, hashtags: list[str], limit: int) -> str:
 
 def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> dict:
     # Video posts store their text content as `caption`; carousel/text use `text`.
-    body = post.get("caption") if post.get("kind") == "video" else post.get("text", "")
+    is_video = post.get("kind") == "video"
+    body = post.get("caption") if is_video else post.get("text", "")
     body = body or ""
     hashtags = post.get("hashtags", [])
 
@@ -1070,7 +1071,18 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
 
     base = {"text": text, "uploadIds": upload_ids}
     if platform == "instagram":
-        base["autoFitImage"] = True
+        if is_video:
+            # Publish Instagram videos as Reels (Bundle defaults to POST type).
+            # thumbnailOffset is in ms — picks the cover frame at that timestamp.
+            base["type"] = "REEL"
+            offset_raw = post.get("instagram_thumbnail_offset_ms")
+            try:
+                offset_ms = int(offset_raw) if offset_raw is not None else 64
+            except (TypeError, ValueError):
+                offset_ms = 64
+            base["thumbnailOffset"] = max(0, offset_ms)
+        else:
+            base["autoFitImage"] = True
     elif platform == "youtube":
         base["title"] = post.get("title") or post.get("text", "")[:100]
         base["madeForKids"] = False

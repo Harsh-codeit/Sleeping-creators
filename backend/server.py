@@ -265,6 +265,7 @@ class VideoCreateRequest(BaseModel):
     hashtags: Optional[List[str]] = None
     prompt: Optional[str] = None
     filter_name: Optional[str] = None  # greyscale|boost|contrast|darken|lighten|muted|negative|blur
+    instagram_thumbnail_offset_ms: Optional[int] = 64  # Reel cover frame timestamp in ms
 
 class VideoGenerateTextRequest(BaseModel):
     template_id: str
@@ -351,6 +352,7 @@ class PipelineCreate(BaseModel):
     video_clip_strategy: Optional[str] = "random" # random | sequential
     next_clip_index: Optional[int] = 0            # sequential rotation cursor
     video_audio_tags: List[str] = []              # pick random track whose mood_tags intersect any of these
+    instagram_thumbnail_offset_ms: Optional[int] = 64  # Reel cover frame timestamp in ms
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -378,6 +380,7 @@ class PipelineUpdate(BaseModel):
     video_clip_ids: Optional[List[str]] = None
     video_clip_strategy: Optional[str] = None
     video_audio_tags: Optional[List[str]] = None
+    instagram_thumbnail_offset_ms: Optional[int] = None
 
 class OnboardingCreate(BaseModel):
     # Step 1 – Basic Identity
@@ -1178,6 +1181,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             "topic": (chosen_hook or {}).get("title") or topic,
             "hook_id": (chosen_hook or {}).get("id"),
             "auto_publish_after_render": bool(auto_publish),
+            "instagram_thumbnail_offset_ms": pipeline.get("instagram_thumbnail_offset_ms", 64),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -4653,6 +4657,7 @@ async def create_pipeline(client_id: str, data: PipelineCreate):
         "drive_folder_id": data.drive_folder_id,
         "overlay_text": data.overlay_text,
         "video_cta_text": data.video_cta_text,
+        "instagram_thumbnail_offset_ms": data.instagram_thumbnail_offset_ms,
         "strategy_pillar_index": 0,
         "format_rotation_index": 0,
         "format_rotation_order": random.sample(
@@ -6169,6 +6174,11 @@ async def create_video_post_route(req: VideoCreateRequest):
         "prompt": req.prompt,
         "filter_name": req.filter_name,
         "topic": req.prompt or (pipeline or {}).get("topic") if pipeline else req.prompt,
+        "instagram_thumbnail_offset_ms": (
+            req.instagram_thumbnail_offset_ms
+            if req.instagram_thumbnail_offset_ms is not None
+            else (pipeline or {}).get("instagram_thumbnail_offset_ms", 64)
+        ),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.posts.insert_one(post_doc)

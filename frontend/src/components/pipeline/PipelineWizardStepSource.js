@@ -223,6 +223,25 @@ export default function PipelineWizardStepSource({ form, onChange, clientId }) {
           )}
         </div>
       </div>
+
+      {/* Instagram Reel cover offset */}
+      <div>
+        <label className="label-xs">Instagram Reel Cover Offset (ms)</label>
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={form.instagram_thumbnail_offset_ms ?? 64}
+          onChange={e => {
+            const v = e.target.value;
+            onChange("instagram_thumbnail_offset_ms", v === "" ? 0 : Math.max(0, parseInt(v, 10) || 0));
+          }}
+          className="w-32 bg-zinc-900 border border-zinc-800 px-2 py-1.5 text-xs font-mono text-white focus:border-zinc-600 focus:outline-none"
+        />
+        <div className="text-[10px] font-mono text-zinc-600 mt-1">
+          Timestamp of the frame used as the Reel cover photo. Default 64ms picks just after the first frame.
+        </div>
+      </div>
     </div>
   );
 }
