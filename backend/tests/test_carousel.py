@@ -402,6 +402,28 @@ def test_single_pass_large_slide_count_word_budget_clamps():
     assert "35 words" in system_prompt or "Middle slides: 25-35" in system_prompt
 
 
+def test_single_pass_truncates_llm_overflow_to_slide_count():
+    """If Sonnet returns more slides than requested, the result must be truncated to slide_count.
+
+    Regression for the bug where 13 slides reached Bundle/Creatomate and triggered HTTP 400.
+    """
+    # Model returns 13 slides but caller asked for 7 — must be cut to 7.
+    mock_client = _mock_client(_carousel_response(slide_count=13))
+    result = _call_single_pass(mock_client, slide_count=7)
+    assert len(result["slides"]) == 7, (
+        f"Expected truncation to 7 slides, got {len(result['slides'])}"
+    )
+
+
+def test_single_pass_caps_llm_overflow_at_max_carousel_slides():
+    """If slide_count is at the cap and LLM still overshoots, output must cap at MAX_CAROUSEL_SLIDES (10)."""
+    from ai_service import MAX_CAROUSEL_SLIDES
+    mock_client = _mock_client(_carousel_response(slide_count=13))
+    result = _call_single_pass(mock_client, slide_count=10)
+    assert len(result["slides"]) <= MAX_CAROUSEL_SLIDES
+    assert len(result["slides"]) == 10
+
+
 def test_india_framing_via_target_audience():
     """target_audience containing 'India' should fire the India block even when language is English."""
     mock_client = _mock_client(_carousel_response())

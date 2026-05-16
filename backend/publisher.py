@@ -1123,6 +1123,17 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
             base_url = os.environ.get("FRONTEND_URL", "")
             from carousel_renderer import render_carousel_post_images
 
+            # Mirror the L218/L525 guard — Instagram allows at most 10 carousel items.
+            # Without this, Bundle returns a confusing HTTP 400 deep in create_post.
+            raw_slides = post.get("carousel_data", {}).get("slides") or post.get("slides") or []
+            if len(raw_slides) > 10:
+                logger.error(f"Carousel post {post.get('id','')[:8]} has {len(raw_slides)} slides — Instagram allows max 10")
+                return {
+                    "status": "failed",
+                    "error": f"Instagram carousels support max 10 slides (this post has {len(raw_slides)}). Edit the carousel and retry.",
+                    "metrics": {},
+                }
+
             pre_rendered = post.get("carousel_data", {}).get("exported_images", [])
             if pre_rendered:
                 image_urls = pre_rendered

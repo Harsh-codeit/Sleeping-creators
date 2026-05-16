@@ -3394,7 +3394,7 @@ class CarouselGenerateRequest(BaseModel):
     platform: str = "instagram"
     template: Optional[str] = None          # None = AI decides
     topic: Optional[str] = None
-    slide_count: Optional[int] = None       # None = AI decides
+    slide_count: Optional[int] = Field(default=None, ge=1, le=10)  # Instagram cap; None = AI decides
     global_instructions: Optional[str] = None
     slide_format: Optional[str] = None    # None = AI picks best format for topic
     cta_keyword: Optional[str] = None
@@ -3409,7 +3409,7 @@ class CarouselCreate(BaseModel):
     author_handle: str = ""
     author_title: str = ""
     profile_photo_url: str = ""
-    slides: List[dict] = []
+    slides: List[dict] = Field(default_factory=list, max_length=10)  # Instagram carousel cap
     design_context: Optional[dict] = None
     slide_previews: Optional[List[dict]] = None  # [{index, url, content_hash}]
     drive_image_index: Optional[int] = None      # pre-assigned at generate time

@@ -12,6 +12,8 @@ load_dotenv(ROOT_DIR / '.env')
 
 logger = logging.getLogger(__name__)
 
+MAX_CAROUSEL_SLIDES = 10  # Instagram hard cap; Bundle/Creatomate 400 if exceeded.
+
 PLATFORM_LIMITS = {
     "twitter": 280,
     "threads": 500,
@@ -513,6 +515,25 @@ async def _generate_single_image_hook(
     # apply (there's only one card), so we skip those and add a single-card word budget.
     india_block = _CAROUSEL_INDIA_FRAMING if _is_indian_audience(onboarding, client) else ""
 
+    # Hook anchor — forces the model to build the hook from THIS client's onboarding details
+    # instead of recycling the persona's example phrasings across every client.
+    _anchor_parts = []
+    if onboarding.get("niche"):          _anchor_parts.append(f"- Specific niche: {onboarding['niche']}")
+    if onboarding.get("problem_solved"): _anchor_parts.append(f"- Exact pain this client solves: {onboarding['problem_solved']}")
+    if client.get("target_audience"):    _anchor_parts.append(f"- Audience: {client['target_audience']}")
+    if onboarding.get("brand_vibe"):     _anchor_parts.append(f"- Brand vibe: {onboarding['brand_vibe']}")
+    if client.get("bio"):                _anchor_parts.append(f"- Client intro: {client['bio']}")
+    hook_anchor_block = ""
+    if _anchor_parts:
+        hook_anchor_block = (
+            "\n\nHOOK ANCHOR — the post MUST be built from these client-specific details, not from "
+            "the persona's example hooks:\n"
+            + "\n".join(_anchor_parts)
+            + "\nAt least ONE concrete noun, number, scene, profession, or place from the lines above "
+            "MUST appear in the content. If the hook could be moved to a different client's post without "
+            "changing a word, REWRITE it. Do not reuse phrasings from the persona examples."
+        )
+
     system_msg = f"""{_CAROUSEL_STRATEGIST_PERSONA}
 {india_block}
 CLIENT CONTEXT:
@@ -520,7 +541,7 @@ You are writing for {name} ({industry}).
 Brand voice: {tone} | Language: {language} | Platform: {platform}
 Platform voice: {platform_voice}
 {brand_ctx}
-
+{hook_anchor_block}
 ASSIGNMENT:
 Write ONE single-image post — exactly one card, not a carousel. Pick the strongest hook from the 7-hook system above and execute it as the entire post.
 
@@ -619,6 +640,29 @@ async def _generate_carousel_single_pass(
     brand_ctx = _build_brand_context(client, onboarding)
     platform_voice = _PLATFORM_VOICE.get(platform, "Clear and engaging.")
 
+    # Hook anchor — pull the highest-signal client-specific fields so the model can't fall back
+    # on the persona's generic example hooks. Every client gets a slightly different anchor block
+    # built from their own onboarding, which is what stops "same hook for every client" drift.
+    _anchor_parts = []
+    if onboarding.get("niche"):          _anchor_parts.append(f"- Specific niche: {onboarding['niche']}")
+    if onboarding.get("problem_solved"): _anchor_parts.append(f"- Exact pain this client solves: {onboarding['problem_solved']}")
+    if client.get("target_audience"):    _anchor_parts.append(f"- Audience: {client['target_audience']}")
+    if onboarding.get("brand_vibe"):     _anchor_parts.append(f"- Brand vibe: {onboarding['brand_vibe']}")
+    if onboarding.get("bio_template"):   _anchor_parts.append(f"- Brand positioning: {onboarding['bio_template']}")
+    if client.get("bio"):                _anchor_parts.append(f"- Client intro: {client['bio']}")
+    hook_anchor_block = ""
+    if _anchor_parts:
+        hook_anchor_block = (
+            "\n\nHOOK ANCHOR — slide 1 and slide 2 MUST be built from these client-specific details, "
+            "not from the persona's example hooks:\n"
+            + "\n".join(_anchor_parts)
+            + "\nAt least ONE concrete noun, number, scene, profession, or place from the lines above "
+            "MUST appear inside slide 1 or slide 2. If your hook could be moved to a different client's "
+            "carousel without changing a single word, REWRITE it — it is too generic. Do not copy or "
+            "lightly rephrase the example hooks shown in the persona (Zepto, main theek hoon, Sunday "
+            "nights, 93,000 hours, etc.) — those are illustrations of the PATTERN, not phrases to reuse."
+        )
+
     not_to_do = onboarding.get("not_to_do_list") or []
     avoid_block = ("\n\nNEVER DO:\n" + "\n".join(f"- {x}" for x in not_to_do if x)) if not_to_do else ""
 
@@ -700,6 +744,7 @@ Write a {slide_count}-slide {platform} carousel.
 {topic_line}
 
 {format_block}
+{hook_anchor_block}
 {hook_block}
 {cta_block}{avoid_block}
 {memory_block}
@@ -755,6 +800,16 @@ Respond ONLY with valid JSON (no markdown, no commentary):
         }],
     )
     data = _parse_json_response(message.content[0].text)
+    # Sonnet occasionally overshoots the requested slide_count under the hook quality
+    # gates added in 4a03ad5. The downstream Instagram/Bundle path hard-caps at 10, so
+    # truncate here rather than let it 400 at publish time.
+    target = min(slide_count, MAX_CAROUSEL_SLIDES) if isinstance(slide_count, int) and slide_count > 0 else MAX_CAROUSEL_SLIDES
+    returned_slides = data.get("slides") or []
+    if len(returned_slides) > target:
+        logger.warning(
+            f"LLM returned {len(returned_slides)} slides, truncating to {target} (requested {slide_count})"
+        )
+        data["slides"] = returned_slides[:target]
     if db is not None:
         await record_usage(db, message, generation_type="carousel_single_pass",
                            client_id=client.get("id"), client_name=client.get("name"))
@@ -896,6 +951,14 @@ async def generate_carousel(
 
     import time
     t_total = time.time()
+
+    # Clamp at the boundary — callers (pipeline rows, /carousel/generate, retries)
+    # may pass values outside [1, MAX_CAROUSEL_SLIDES]. Instagram caps carousels at 10.
+    if not isinstance(slide_count, int) or slide_count < 1:
+        slide_count = 1
+    elif slide_count > MAX_CAROUSEL_SLIDES:
+        logger.warning(f"slide_count={slide_count} exceeds cap, clamping to {MAX_CAROUSEL_SLIDES}")
+        slide_count = MAX_CAROUSEL_SLIDES
 
     onboarding = client.get("onboarding_data", {})
 
