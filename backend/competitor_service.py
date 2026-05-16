@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 from usage_service import record_usage
+from client_utils import _get_tone
 
 logger = logging.getLogger(__name__)
 
@@ -451,12 +452,7 @@ async def generate_competitor_strategy(client_id: str, db) -> Optional[dict]:
 
     onboarding = client.get("onboarding_data", {})
     niche = onboarding.get("niche") or client.get("industry", "general")
-    brand_voice = (
-        client.get("strategy", {}).get("tone")
-        or client.get("brand_voice")
-        or onboarding.get("brand_vibe")
-        or "professional"
-    )
+    brand_voice = _get_tone(client)
 
     # 3. Build structured post list for the prompt
     post_lines = []

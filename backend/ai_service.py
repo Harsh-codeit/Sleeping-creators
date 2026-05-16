@@ -6,6 +6,7 @@ import anthropic
 from dotenv import load_dotenv
 from pathlib import Path
 from usage_service import record_usage
+from client_utils import _get_tone
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -150,7 +151,7 @@ async def generate_content(client: dict, platform: str, content_type: str, topic
         import json
         strategy = client.get("strategy", {})
         themes = strategy.get("themes", ["general content"])
-        tone = strategy.get("tone", client.get("brand_voice", "professional"))
+        tone = _get_tone(client)
         hashtags_base = strategy.get("hashtags", [])
         limit = PLATFORM_LIMITS.get(platform)
         tips = PLATFORM_TIPS.get(platform, "")
@@ -497,7 +498,7 @@ async def _generate_single_image_hook(
 
     name     = client.get("name", "Brand")
     industry = client.get("industry", "business")
-    tone     = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
+    tone     = _get_tone(client)
     language = (onboarding.get("language") or "English").strip()
     themes   = client.get("strategy", {}).get("themes", ["business insights"])
     brand_ctx = _build_brand_context(client, onboarding)
@@ -634,7 +635,7 @@ async def _generate_carousel_single_pass(
 
     name     = client.get("name", "Brand")
     industry = client.get("industry", "business")
-    tone     = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
+    tone     = _get_tone(client)
     language = (onboarding.get("language") or "English").strip()
     themes   = client.get("strategy", {}).get("themes", ["business insights"])
     brand_ctx = _build_brand_context(client, onboarding)
@@ -835,7 +836,7 @@ async def _generate_carousel_caption(
 
     name     = client.get("name", "Brand")
     industry = client.get("industry", "business")
-    tone     = client.get("strategy", {}).get("tone", client.get("brand_voice", "professional"))
+    tone     = _get_tone(client)
     language = (onboarding.get("language") or "English").strip()
     brand_hashtags = client.get("strategy", {}).get("hashtags", [])
 

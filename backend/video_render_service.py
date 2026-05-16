@@ -6,6 +6,7 @@ import uuid
 import tempfile
 from typing import Optional
 from datetime import datetime, timezone
+from client_utils import _get_tone
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +22,13 @@ def _strategy_block(client: dict) -> dict:
     strategy = client.get("strategy") or {}
     return {
         "themes":         ", ".join(strategy.get("themes") or []) or "—",
-        "tone":           strategy.get("tone") or client.get("brand_voice") or "neutral",
+        "tone":           _get_tone(client) or "neutral",
         "topics_include": ", ".join(strategy.get("topics_include") or []) or "—",
-        "topics_exclude": ", ".join(strategy.get("topics_exclude") or []) or "—",
+        "topics_exclude": ", ".join(
+            client.get("onboarding_data", {}).get("not_to_do_list")
+            or strategy.get("topics_exclude")
+            or []
+        ) or "—",
         "brand_hashtags": ", ".join(strategy.get("hashtags") or []) or "—",
     }
 

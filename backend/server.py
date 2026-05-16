@@ -9,7 +9,8 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
+from client_utils import _recompute_derived, _get_tone, _expand_derived_into_doc
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -127,10 +128,10 @@ class ClientUpdate(BaseModel):
     instagram_access_link: Optional[str] = None
     niche: Optional[str] = None
     problem_solved: Optional[str] = None
-    brand_vibe: Optional[str] = None
+    brand_vibe: Optional[Union[str, List[str]]] = None
     account_goals: Optional[str] = None
     cta_link: Optional[str] = None
-    language: Optional[str] = None
+    language: Optional[Union[str, List[str]]] = None
     branding_assets_link: Optional[str] = None
     google_drive_images: Optional[str] = None
     google_drive_videos: Optional[str] = None
@@ -143,6 +144,42 @@ class ClientUpdate(BaseModel):
     not_to_do_list: Optional[List[str]] = None
     preferred_carousel_template: Optional[str] = None
     preferred_video_template: Optional[str] = None
+    # New onboarding fields (added with schema v2)
+    brand_name: Optional[str] = None
+    city_country: Optional[str] = None
+    instagram_profile_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    youtube_url: Optional[str] = None
+    twitter_url: Optional[str] = None
+    profile_photo_link: Optional[str] = None
+    logo_link: Optional[str] = None
+    account_suspended: Optional[bool] = None
+    paid_ads_run: Optional[bool] = None
+    personal_story: Optional[str] = None
+    business_description: Optional[str] = None
+    industry_label: Optional[str] = None
+    daily_life: Optional[str] = None
+    target_audience_description: Optional[str] = None
+    audience_age_range: Optional[str] = None
+    audience_emotional_state: Optional[List[str]] = None
+    solutions_provided: Optional[List[str]] = None
+    audience_problems: Optional[List[str]] = None
+    audience_desires: Optional[List[str]] = None
+    audience_myths: Optional[List[str]] = None
+    audience_failed_attempts: Optional[List[str]] = None
+    unique_selling_points: Optional[List[str]] = None
+    frequent_questions: Optional[List[str]] = None
+    love_topics: Optional[List[str]] = None
+    has_case_studies: Optional[bool] = None
+    case_study_1: Optional[str] = None
+    case_study_2: Optional[str] = None
+    signature_topic: Optional[str] = None
+    niche_working_topics: Optional[str] = None
+    niche_oversaturated_topics: Optional[str] = None
+    niche_underserved_topics: Optional[str] = None
+    disliked_content: Optional[str] = None
+    next_step_after_view: Optional[str] = None
+    lead_magnet_link: Optional[str] = None
     # Google Drive fields
     drive_folder_id: Optional[str] = None
     video_sequence_mode: Optional[str] = None   # "sequential" | "random"
@@ -383,39 +420,100 @@ class PipelineUpdate(BaseModel):
     instagram_thumbnail_offset_ms: Optional[int] = None
 
 class OnboardingCreate(BaseModel):
-    # Step 1 – Basic Identity
+    model_config = ConfigDict(extra="ignore")
+
+    # — Step 1A: Personal & Contact —
     name: str
-    username: str = ""
-    whatsapp: str = ""
+    brand_name: str = ""
     email: str = ""
-    # Step 2 – Client Assets
-    website_url: str = ""
-    pr_links: List[str] = []
+    whatsapp: str = ""
+    city_country: str = ""
+
+    # — Step 1B: Social & Online —
     instagram_handle: str = ""
+    instagram_profile_url: str = ""
     instagram_access_link: str = ""
-    # Step 3 – Brand Profile
-    niche: str = ""
-    problem_solved: str = ""
-    brand_vibe: str = ""
-    account_goals: str = "followers"   # followers | leads | both
-    cta_link: str = ""
-    language: str = "English"
-    # Step 4 – Content Assets
-    branding_assets_link: str = ""
+    website_url: str = ""
+    linkedin_url: str = ""
+    youtube_url: str = ""
+    twitter_url: str = ""
+    pr_links: List[str] = []
+
+    # — Step 1C: Assets (Drive links) —
+    profile_photo_link: str = ""
+    logo_link: str = ""
     google_drive_images: str = ""
     google_drive_videos: str = ""
-    lead_magnets: List[str] = []
-    # Step 5 – Automation Setup
-    automation_keywords: List[str] = []
+    branding_assets_link: str = ""
+
+    # — Step 1D: Account Health —
+    account_suspended: bool = False
+    paid_ads_run: bool = False
+
+    # — Step 2A: Story & Business —
+    personal_story: str = ""
+    business_description: str = ""
+    niche: str = ""
+    industry_label: str = ""
+    daily_life: str = ""
+
+    # — Step 2B: Audience —
+    target_audience_description: str = ""
+    audience_age_range: str = ""
+    audience_emotional_state: List[str] = []
+
+    # — Step 2C: Deep Audience Intelligence (cap 5 each) —
+    solutions_provided: List[str] = []
+    audience_problems: List[str] = []
+    audience_desires: List[str] = []
+    audience_myths: List[str] = []
+    audience_failed_attempts: List[str] = []
+    unique_selling_points: List[str] = []
+    frequent_questions: List[str] = []
+    love_topics: List[str] = []
+    problem_solved: str = ""
+
+    # — Step 2D: Case Studies —
+    has_case_studies: bool = False
+    case_study_1: str = ""
+    case_study_2: str = ""
+
+    # — Step 3A: Positioning —
+    signature_topic: str = ""
+    brand_vibe: Union[str, List[str]] = ""
+    language: Union[str, List[str]] = "English"
+
+    # — Step 3B: Competitive Landscape —
+    niche_working_topics: str = ""
+    niche_oversaturated_topics: str = ""
+    niche_underserved_topics: str = ""
+
+    # — Step 3C: Competitors —
     competitor_accounts: List[str] = []
+
+    # — Step 3D: Boundaries —
+    disliked_content: str = ""
+    not_to_do_list: List[str] = []
+
+    # — Step 4A: Goal & Next Step —
+    account_goals: str = "followers"
+    next_step_after_view: str = ""
+
+    # — Step 4B: Lead Magnet & Funnel —
+    lead_magnets: List[str] = []
+    lead_magnet_link: str = ""
+    cta_link: str = ""
+
+    # — Deprecated but kept for backward compat —
+    username: str = ""
     lead_sheet_link: str = ""
     bio_template: str = ""
-    # Step 6 – Voice & Training
     voice_notes_link: str = ""
-    not_to_do_list: List[str] = []
-    # Step 7 – Templates & Platforms
+    automation_keywords: List[str] = []
     preferred_carousel_template: str = "full_white"
     preferred_video_template: str = ""
+
+    # Platforms (root field, not stored in onboarding_data)
     platforms: List[str] = []
 
 class KeywordConfigCreate(BaseModel):
@@ -1807,6 +1905,7 @@ async def get_client(client_id: str):
     return client
 
 _ONBOARDING_KEYS = frozenset({
+    # Existing fields
     "username", "whatsapp", "email", "website_url", "pr_links",
     "instagram_handle", "instagram_access_link", "niche", "problem_solved",
     "brand_vibe", "account_goals", "cta_link", "language", "branding_assets_link",
@@ -1814,6 +1913,17 @@ _ONBOARDING_KEYS = frozenset({
     "automation_keywords", "competitor_accounts", "lead_sheet_link", "bio_template",
     "voice_notes_link", "not_to_do_list", "preferred_carousel_template",
     "preferred_video_template",
+    # New fields (schema v2)
+    "brand_name", "city_country", "instagram_profile_url", "linkedin_url",
+    "youtube_url", "twitter_url", "profile_photo_link", "logo_link",
+    "account_suspended", "paid_ads_run", "personal_story", "business_description",
+    "industry_label", "daily_life", "target_audience_description", "audience_age_range",
+    "audience_emotional_state", "solutions_provided", "audience_problems",
+    "audience_desires", "audience_myths", "audience_failed_attempts",
+    "unique_selling_points", "frequent_questions", "love_topics",
+    "has_case_studies", "case_study_1", "case_study_2", "signature_topic",
+    "niche_working_topics", "niche_oversaturated_topics", "niche_underserved_topics",
+    "disliked_content", "next_step_after_view", "lead_magnet_link",
 })
 
 @api_router.put("/clients/{client_id}")
@@ -1824,20 +1934,27 @@ async def update_client(client_id: str, data: ClientUpdate):
     for k, v in raw.items():
         if v is None:
             continue
-        if k in _ONBOARDING_KEYS:
+        if k == "strategy" and isinstance(v, dict):
+            # dot-path so we don't trample sibling strategy.* keys
+            for sk, sv in v.items():
+                set_doc[f"strategy.{sk}"] = sv
+        elif k in _ONBOARDING_KEYS:
             set_doc[f"onboarding_data.{k}"] = v
         else:
             set_doc[k] = v
 
-    # Derive root fields from onboarding fields when provided
-    if raw.get("niche") is not None and "industry" not in set_doc:
-        set_doc["industry"] = raw["niche"]
-    if raw.get("niche") is not None and "target_audience" not in set_doc:
-        set_doc["target_audience"] = raw["niche"]
-    if raw.get("brand_vibe") is not None and "brand_voice" not in set_doc:
-        set_doc["brand_voice"] = raw["brand_vibe"]
+    # Derive avatar from name (root field, not an onboarding mirror)
     if raw.get("name") is not None and "avatar" not in set_doc:
         set_doc["avatar"] = raw["name"][:2].upper()
+
+    # Recompute all derived mirrors from whatever onboarding fields are in this update
+    in_memory_ob = {
+        k.removeprefix("onboarding_data."): v
+        for k, v in set_doc.items()
+        if k.startswith("onboarding_data.")
+    }
+    if in_memory_ob:
+        set_doc.update(_recompute_derived({"onboarding_data": in_memory_ob}))
 
     if not set_doc:
         raise HTTPException(400, "No fields to update")
@@ -1845,6 +1962,16 @@ async def update_client(client_id: str, data: ClientUpdate):
     await db.clients.update_one({"id": client_id}, {"$set": set_doc})
     client = await db.clients.find_one({"id": client_id}, {"_id": 0})
     return client
+
+@api_router.post("/clients/{client_id}/recompute-derived")
+async def recompute_derived_endpoint(client_id: str):
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    updates = _recompute_derived(client)
+    if updates:
+        await db.clients.update_one({"id": client_id}, {"$set": updates})
+    return {"updated_keys": list(updates.keys())}
 
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str):
@@ -2163,49 +2290,23 @@ async def resume_client(client_id: str):
 
 @api_router.post("/clients/onboard", status_code=201)
 async def onboard_client(data: OnboardingCreate):
-    onboarding_data = {
-        "username": data.username,
-        "whatsapp": data.whatsapp,
-        "email": data.email,
-        "website_url": data.website_url,
-        "pr_links": data.pr_links,
-        "instagram_handle": data.instagram_handle,
-        "instagram_access_link": data.instagram_access_link,
-        "niche": data.niche,
-        "problem_solved": data.problem_solved,
-        "brand_vibe": data.brand_vibe,
-        "account_goals": data.account_goals,
-        "cta_link": data.cta_link,
-        "language": data.language,
-        "branding_assets_link": data.branding_assets_link,
-        "google_drive_images": data.google_drive_images,
-        "google_drive_videos": data.google_drive_videos,
-        "lead_magnets": data.lead_magnets,
-        "automation_keywords": data.automation_keywords,
-        "competitor_accounts": data.competitor_accounts,
-        "lead_sheet_link": data.lead_sheet_link,
-        "bio_template": data.bio_template,
-        "voice_notes_link": data.voice_notes_link,
-        "not_to_do_list": data.not_to_do_list,
-        "preferred_carousel_template": data.preferred_carousel_template,
-        "preferred_video_template": data.preferred_video_template,
-    }
+    # All onboarding concepts in one place — the SSOT
+    onboarding_data = data.model_dump(exclude={"name", "platforms"})
+
     client = {
         "id": str(uuid.uuid4()),
         "name": data.name,
-        "industry": data.niche,
-        "brand_voice": data.brand_vibe or "professional and engaging",
-        "target_audience": data.niche,
+        "industry": "",         # populated by _recompute_derived below
+        "brand_voice": "",      # populated by _recompute_derived below
+        "target_audience": "",  # populated by _recompute_derived below
         "platforms": data.platforms,
         "avatar": data.name[:2].upper(),
         "status": "active",
         "strategy": {
             "themes": [],
-            "tone": data.brand_vibe or "professional",
             "hashtags": [],
-            "goals": data.account_goals,
-            "cta_link": data.cta_link,
-            "language": data.language,
+            # tone/topics_exclude populated by _recompute_derived below
+            # goals/cta_link/language intentionally NOT written (orphans per §2.2)
         },
         "platform_configs": {p: {"enabled": True, "posts_per_day": 2, "posting_times": ["09:00", "17:00"]} for p in data.platforms},
         "onboarding_data": onboarding_data,
@@ -2216,6 +2317,10 @@ async def onboard_client(data: OnboardingCreate):
         "last_post_at": None,
         "created_at": now_iso()
     }
+
+    # Recompute all derived mirrors and expand dot-path keys into nested doc
+    _expand_derived_into_doc(client, _recompute_derived(client))
+
     await db.clients.insert_one({**client})
     await add_log("success", f"Client '{data.name}' onboarded via wizard", None, data.name)
     return client
