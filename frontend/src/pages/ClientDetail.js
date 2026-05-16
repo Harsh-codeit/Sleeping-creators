@@ -30,10 +30,10 @@ function initEditForm(client) {
     instagram_access_link: ob.instagram_access_link || "",
     niche: ob.niche || client.industry || "",
     problem_solved: ob.problem_solved || "",
-    brand_vibe: ob.brand_vibe || client.brand_voice || "",
+    brand_vibe: Array.isArray(ob.brand_vibe) ? ob.brand_vibe : (ob.brand_vibe ? [ob.brand_vibe] : []),
     account_goals: ob.account_goals || "followers",
     cta_link: ob.cta_link || "",
-    language: ob.language || "English",
+    language: Array.isArray(ob.language) ? ob.language : (ob.language ? [ob.language] : ["English"]),
     branding_assets_link: ob.branding_assets_link || "",
     google_drive_images: ob.google_drive_images || "",
     google_drive_videos: ob.google_drive_videos || "",
@@ -47,6 +47,54 @@ function initEditForm(client) {
     not_to_do_list: ob.not_to_do_list?.length ? ob.not_to_do_list : [""],
     preferred_carousel_template: ob.preferred_carousel_template || "full_white",
     preferred_video_template: ob.preferred_video_template || "",
+    // Step 1A additions
+    brand_name: ob.brand_name || "",
+    city_country: ob.city_country || "",
+    // Step 1B additions
+    instagram_profile_url: ob.instagram_profile_url || "",
+    linkedin_url: ob.linkedin_url || "",
+    youtube_url: ob.youtube_url || "",
+    twitter_url: ob.twitter_url || "",
+    // Step 1C additions
+    profile_photo_link: ob.profile_photo_link || "",
+    logo_link: ob.logo_link || "",
+    // Step 1D additions
+    account_suspended: ob.account_suspended ?? false,
+    paid_ads_run: ob.paid_ads_run ?? false,
+    // Step 2A additions
+    personal_story: ob.personal_story || "",
+    business_description: ob.business_description || "",
+    industry_label: ob.industry_label || "",
+    daily_life: ob.daily_life || "",
+    // Step 2B additions
+    target_audience_description: ob.target_audience_description || "",
+    audience_age_range: ob.audience_age_range || "",
+    audience_emotional_state: Array.isArray(ob.audience_emotional_state) ? ob.audience_emotional_state : [],
+    // Step 2C additions (8 capped-5 lists)
+    solutions_provided: ob.solutions_provided?.length ? ob.solutions_provided : [""],
+    audience_problems: ob.audience_problems?.length ? ob.audience_problems : [""],
+    audience_desires: ob.audience_desires?.length ? ob.audience_desires : [""],
+    audience_myths: ob.audience_myths?.length ? ob.audience_myths : [""],
+    audience_failed_attempts: ob.audience_failed_attempts?.length ? ob.audience_failed_attempts : [""],
+    unique_selling_points: ob.unique_selling_points?.length ? ob.unique_selling_points : [""],
+    frequent_questions: ob.frequent_questions?.length ? ob.frequent_questions : [""],
+    love_topics: ob.love_topics?.length ? ob.love_topics : [""],
+    // Step 2D additions
+    has_case_studies: ob.has_case_studies ?? false,
+    case_study_1: ob.case_study_1 || "",
+    case_study_2: ob.case_study_2 || "",
+    // Step 3A additions
+    signature_topic: ob.signature_topic || "",
+    // Step 3B additions
+    niche_working_topics: ob.niche_working_topics || "",
+    niche_oversaturated_topics: ob.niche_oversaturated_topics || "",
+    niche_underserved_topics: ob.niche_underserved_topics || "",
+    // Step 3D additions
+    disliked_content: ob.disliked_content || "",
+    // Step 4A additions
+    next_step_after_view: ob.next_step_after_view || "",
+    // Step 4B additions
+    lead_magnet_link: ob.lead_magnet_link || "",
   };
 }
 
@@ -108,6 +156,16 @@ const EDIT_CAROUSEL_TEMPLATES = [
   { value: "floating_card_rich", label: "Floating (Rich)" },
 ];
 const EDIT_ALL_PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
+const EDIT_BRAND_VIBES = ["Professional", "Rude/Bold", "Funny", "Inspirational", "Creative", "Straight-talking", "Funky"];
+const EDIT_LANGUAGE_CHIPS = ["Hindi", "English", "Hinglish", "Other"];
+const EDIT_EMOTIONAL_STATES = ["Ambitious", "Stressed", "Confused", "Motivated", "Depressed", "Directionless", "Lonely"];
+const EDIT_NEXT_STEPS = [
+  { value: "dm", label: "DM Me" },
+  { value: "link", label: "Visit Link" },
+  { value: "call", label: "Book Call" },
+  { value: "enrol", label: "Enrol Now" },
+  { value: "other", label: "Other" },
+];
 
 function DriveVideosFolderCard({ client, clientId, setClient }) {
   const [value, setValue] = useState(client.drive_folder_id || "");
@@ -247,6 +305,10 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
             <EInput value={editForm.name} onChange={e => set("name", e.target.value)} placeholder="Acme Corp" data-testid="edit-name" />
           </div>
           <div>
+            <ELabel optional>Brand Name</ELabel>
+            <EInput value={editForm.brand_name} onChange={e => set("brand_name", e.target.value)} placeholder="The public-facing brand name" data-testid="edit-brand-name" />
+          </div>
+          <div>
             <ELabel optional>About the Client</ELabel>
             <ETextarea value={editForm.bio} onChange={e => set("bio", e.target.value)} placeholder="Tell us about yourself — your brand story, what makes you unique, your goals..." rows={4} data-testid="edit-bio-intro" />
           </div>
@@ -267,6 +329,44 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
             <div>
               <ELabel optional>Email</ELabel>
               <EInput value={editForm.email} onChange={e => set("email", e.target.value)} placeholder="hello@acme.com" type="email" data-testid="edit-email" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <ELabel optional>City / Country</ELabel>
+              <EInput value={editForm.city_country} onChange={e => set("city_country", e.target.value)} placeholder="e.g. Mumbai, India" data-testid="edit-city-country" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <ELabel>Account Previously Suspended?</ELabel>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => set("account_suspended", true)}
+                  data-testid="edit-account-suspended-yes"
+                  className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.account_suspended === true ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                  Yes
+                </button>
+                <button type="button" onClick={() => set("account_suspended", false)}
+                  data-testid="edit-account-suspended-no"
+                  className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.account_suspended === false ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                  No
+                </button>
+              </div>
+            </div>
+            <div>
+              <ELabel>Paid Ads Run?</ELabel>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => set("paid_ads_run", true)}
+                  data-testid="edit-paid-ads-run-yes"
+                  className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.paid_ads_run === true ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                  Yes
+                </button>
+                <button type="button" onClick={() => set("paid_ads_run", false)}
+                  data-testid="edit-paid-ads-run-no"
+                  className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.paid_ads_run === false ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                  No
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -297,6 +397,36 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
               <EInput value={editForm.instagram_access_link} onChange={e => set("instagram_access_link", e.target.value)} placeholder="Shared login or grant link" data-testid="edit-ig-access" />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <ELabel optional>Instagram Profile URL</ELabel>
+              <EInput value={editForm.instagram_profile_url} onChange={e => set("instagram_profile_url", e.target.value)} placeholder="https://instagram.com/acmecorp" type="url" data-testid="edit-instagram-profile-url" />
+            </div>
+            <div>
+              <ELabel optional>Profile Photo Link</ELabel>
+              <EInput value={editForm.profile_photo_link} onChange={e => set("profile_photo_link", e.target.value)} placeholder="Drive / Dropbox / direct image URL" type="url" data-testid="edit-profile-photo-link" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <ELabel optional>LinkedIn URL</ELabel>
+              <EInput value={editForm.linkedin_url} onChange={e => set("linkedin_url", e.target.value)} placeholder="https://linkedin.com/in/..." type="url" data-testid="edit-linkedin-url" />
+            </div>
+            <div>
+              <ELabel optional>YouTube URL</ELabel>
+              <EInput value={editForm.youtube_url} onChange={e => set("youtube_url", e.target.value)} placeholder="https://youtube.com/@channel" type="url" data-testid="edit-youtube-url" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <ELabel optional>Twitter / X URL</ELabel>
+              <EInput value={editForm.twitter_url} onChange={e => set("twitter_url", e.target.value)} placeholder="https://twitter.com/handle" type="url" data-testid="edit-twitter-url" />
+            </div>
+            <div>
+              <ELabel optional>Logo Link</ELabel>
+              <EInput value={editForm.logo_link} onChange={e => set("logo_link", e.target.value)} placeholder="Drive / Dropbox / direct image URL" type="url" data-testid="edit-logo-link" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -313,8 +443,53 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
             <ETextarea value={editForm.problem_solved} onChange={e => set("problem_solved", e.target.value)} placeholder="Describe what their product/service helps customers achieve..." data-testid="edit-problem" />
           </div>
           <div>
-            <ELabel optional>Brand Vibe / Tone of Voice</ELabel>
-            <ETextarea rows={2} value={editForm.brand_vibe} onChange={e => set("brand_vibe", e.target.value)} placeholder="e.g. Professional yet approachable, uses data and storytelling..." data-testid="edit-vibe" />
+            <ELabel>Brand Vibe / Tone of Voice</ELabel>
+            <div className="grid grid-cols-3 gap-2">
+              {EDIT_BRAND_VIBES.map(v => {
+                const selected = (editForm.brand_vibe || []).includes(v);
+                return (
+                  <button key={v} type="button"
+                    onClick={() => {
+                      const cur = Array.isArray(editForm.brand_vibe) ? editForm.brand_vibe : [];
+                      const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v];
+                      set("brand_vibe", next);
+                    }}
+                    data-testid={`edit-brand-vibe-${v.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                    className={`relative py-2.5 px-3 border text-xs font-mono text-left transition-all duration-150 ${selected ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                    {selected && (<span className="absolute top-1 right-1"><Check size={8} /></span>)}
+                    {v}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <ELabel optional>Personal Story</ELabel>
+            <ETextarea rows={6} value={editForm.personal_story} onChange={e => set("personal_story", e.target.value)} placeholder="When did you start? Why? What failures, achievements, vision? Be real — this becomes content." data-testid="edit-personal-story" />
+          </div>
+          <div>
+            <ELabel optional>Business Description</ELabel>
+            <ETextarea rows={4} value={editForm.business_description} onChange={e => set("business_description", e.target.value)} placeholder="What do you do? How do you help people?" data-testid="edit-business-description" />
+          </div>
+          <div>
+            <ELabel optional>Industry Label</ELabel>
+            <EInput value={editForm.industry_label} onChange={e => set("industry_label", e.target.value)} placeholder="Short category label, e.g. Fitness" data-testid="edit-industry-label" />
+          </div>
+          <div>
+            <ELabel optional>Daily Life</ELabel>
+            <ETextarea rows={3} value={editForm.daily_life} onChange={e => set("daily_life", e.target.value)} placeholder="Morning to night — what's a typical day?" data-testid="edit-daily-life" />
+          </div>
+          <div>
+            <ELabel optional>Signature Topic</ELabel>
+            <ETextarea rows={2} value={editForm.signature_topic} onChange={e => set("signature_topic", e.target.value)} placeholder="The ONE topic your account is known for" data-testid="edit-signature-topic" />
+          </div>
+          <div>
+            <ELabel optional>Target Audience Description</ELabel>
+            <ETextarea rows={3} value={editForm.target_audience_description} onChange={e => set("target_audience_description", e.target.value)} placeholder="Job title, life situation, struggles" data-testid="edit-target-audience-description" />
+          </div>
+          <div>
+            <ELabel optional>Audience Age Range</ELabel>
+            <EInput value={editForm.audience_age_range} onChange={e => set("audience_age_range", e.target.value)} placeholder="25-40 years" data-testid="edit-audience-age-range" />
           </div>
           <div>
             <ELabel>Account Goals</ELabel>
@@ -335,12 +510,82 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
             </div>
             <div>
               <ELabel>Language</ELabel>
-              <select value={editForm.language} onChange={e => set("language", e.target.value)} data-testid="edit-language"
-                className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150">
-                {EDIT_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                {EDIT_LANGUAGE_CHIPS.map(l => {
+                  const selected = (editForm.language || []).includes(l);
+                  return (
+                    <button key={l} type="button"
+                      onClick={() => {
+                        const cur = Array.isArray(editForm.language) ? editForm.language : [];
+                        const next = cur.includes(l) ? cur.filter(x => x !== l) : [...cur, l];
+                        set("language", next);
+                      }}
+                      data-testid={`edit-language-${l.toLowerCase()}`}
+                      className={`relative py-2 px-3 border text-xs font-mono text-left transition-all duration-150 ${selected ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                      {selected && (<span className="absolute top-1 right-1"><Check size={8} /></span>)}
+                      {l}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
+          <div>
+            <ELabel>Next Step After View</ELabel>
+            <div className="grid grid-cols-5 gap-2">
+              {EDIT_NEXT_STEPS.map(s => (
+                <button key={s.value} type="button" onClick={() => set("next_step_after_view", s.value)}
+                  data-testid={`edit-next-step-after-view-${s.value}`}
+                  className={`py-2 px-2 border text-xs font-mono transition-all duration-150 ${editForm.next_step_after_view === s.value ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3.5 Audience Intelligence */}
+      <div className="bg-zinc-900 border border-zinc-800 p-5">
+        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Audience Intelligence</div>
+        <div className="space-y-4">
+          <div>
+            <ELabel>Audience Emotional State</ELabel>
+            <div className="grid grid-cols-3 gap-2">
+              {EDIT_EMOTIONAL_STATES.map(s => {
+                const selected = (editForm.audience_emotional_state || []).includes(s);
+                return (
+                  <button key={s} type="button"
+                    onClick={() => {
+                      const cur = Array.isArray(editForm.audience_emotional_state) ? editForm.audience_emotional_state : [];
+                      const next = cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s];
+                      set("audience_emotional_state", next);
+                    }}
+                    data-testid={`edit-audience-emotional-state-${s.toLowerCase()}`}
+                    className={`relative py-2.5 px-3 border text-xs font-mono text-left transition-all duration-150 ${selected ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                    {selected && (<span className="absolute top-1 right-1"><Check size={8} /></span>)}
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <EMultiInput label="Solutions You Provide" values={editForm.solutions_provided} onChange={v => set("solutions_provided", v)}
+            placeholder="e.g. 1-on-1 coaching, signature framework..." optional />
+          <EMultiInput label="Problems Your Audience Faces" values={editForm.audience_problems} onChange={v => set("audience_problems", v)}
+            placeholder="e.g. Can't stick to a routine" optional />
+          <EMultiInput label="Desires / Dream Outcomes" values={editForm.audience_desires} onChange={v => set("audience_desires", v)}
+            placeholder="e.g. Effortless 6-figure business" optional />
+          <EMultiInput label="Myths Your Audience Believes" values={editForm.audience_myths} onChange={v => set("audience_myths", v)}
+            placeholder="e.g. You need to post 3x a day" optional />
+          <EMultiInput label="Things They Tried That Didn't Work" values={editForm.audience_failed_attempts} onChange={v => set("audience_failed_attempts", v)}
+            placeholder="e.g. Random viral hacks" optional />
+          <EMultiInput label="Unique Selling Points (USPs)" values={editForm.unique_selling_points} onChange={v => set("unique_selling_points", v)}
+            placeholder="What makes you different?" optional />
+          <EMultiInput label="Frequently Asked Questions" values={editForm.frequent_questions} onChange={v => set("frequent_questions", v)}
+            placeholder="What do people always ask you?" optional />
+          <EMultiInput label="Topics You Love To Talk About" values={editForm.love_topics} onChange={v => set("love_topics", v)}
+            placeholder="Topics that energise you" optional />
         </div>
       </div>
 
@@ -348,9 +593,15 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
       <div className="bg-zinc-900 border border-zinc-800 p-5">
         <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Content Assets</div>
         <div className="space-y-4">
-          <div>
-            <ELabel optional>Branding Assets Link</ELabel>
-            <EInput value={editForm.branding_assets_link} onChange={e => set("branding_assets_link", e.target.value)} placeholder="Google Drive / Dropbox link to logos, brand kit..." type="url" data-testid="edit-branding" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <ELabel optional>Branding Assets Link</ELabel>
+              <EInput value={editForm.branding_assets_link} onChange={e => set("branding_assets_link", e.target.value)} placeholder="Google Drive / Dropbox link to logos, brand kit..." type="url" data-testid="edit-branding" />
+            </div>
+            <div>
+              <ELabel optional>Lead Magnet Link</ELabel>
+              <EInput value={editForm.lead_magnet_link} onChange={e => set("lead_magnet_link", e.target.value)} placeholder="Drive link for the lead magnet asset" type="url" data-testid="edit-lead-magnet-link" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -371,10 +622,60 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
         </div>
       </div>
 
-      {/* 5. Automation */}
+      {/* 4.5 Case Studies */}
       <div className="bg-zinc-900 border border-zinc-800 p-5">
-        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Automation</div>
+        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Case Studies</div>
         <div className="space-y-4">
+          <div>
+            <ELabel>Do You Have Case Studies?</ELabel>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => set("has_case_studies", true)}
+                data-testid="edit-has-case-studies-yes"
+                className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.has_case_studies === true ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                Yes
+              </button>
+              <button type="button" onClick={() => set("has_case_studies", false)}
+                data-testid="edit-has-case-studies-no"
+                className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.has_case_studies === false ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                No
+              </button>
+            </div>
+          </div>
+          {editForm.has_case_studies === true && (
+            <>
+              <div>
+                <ELabel optional>Case Study 1</ELabel>
+                <ETextarea rows={4} value={editForm.case_study_1} onChange={e => set("case_study_1", e.target.value)} placeholder="Client situation → Problem → Result" data-testid="edit-case-study-1" />
+              </div>
+              <div>
+                <ELabel optional>Case Study 2</ELabel>
+                <ETextarea rows={4} value={editForm.case_study_2} onChange={e => set("case_study_2", e.target.value)} placeholder="Client situation → Problem → Result" data-testid="edit-case-study-2" />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 5. Competitors & Boundaries */}
+      <div className="bg-zinc-900 border border-zinc-800 p-5">
+        <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Competitors & Boundaries</div>
+        <div className="space-y-4">
+          <div>
+            <ELabel optional>Disliked Content</ELabel>
+            <ETextarea rows={3} value={editForm.disliked_content} onChange={e => set("disliked_content", e.target.value)} placeholder="What formats/tones/topics do you NOT want?" data-testid="edit-disliked-content" />
+          </div>
+          <div>
+            <ELabel optional>Niche — Working Topics</ELabel>
+            <ETextarea rows={3} value={editForm.niche_working_topics} onChange={e => set("niche_working_topics", e.target.value)} placeholder="Topics in your niche that are working right now" data-testid="edit-niche-working-topics" />
+          </div>
+          <div>
+            <ELabel optional>Niche — Over-saturated Topics</ELabel>
+            <ETextarea rows={3} value={editForm.niche_oversaturated_topics} onChange={e => set("niche_oversaturated_topics", e.target.value)} placeholder="Topics that are OVER-SATURATED" data-testid="edit-niche-oversaturated-topics" />
+          </div>
+          <div>
+            <ELabel optional>Niche — Under-served Topics</ELabel>
+            <ETextarea rows={3} value={editForm.niche_underserved_topics} onChange={e => set("niche_underserved_topics", e.target.value)} placeholder="Topics that are UNDER-SERVED" data-testid="edit-niche-underserved-topics" />
+          </div>
           <EMultiInput label="Automation Keywords" values={editForm.automation_keywords} onChange={v => set("automation_keywords", v)}
             placeholder="e.g. pricing, book, demo, interested" optional />
           <EMultiInput label="Competitor Accounts" values={editForm.competitor_accounts} onChange={v => set("competitor_accounts", v)}
