@@ -121,7 +121,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="What problems do you actually solve?"
           testid="ob-solutions"
-          optional
         />
 
         <CappedMultiInput
@@ -131,7 +130,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="What keeps them up at night?"
           testid="ob-problems"
-          optional
         />
 
         <CappedMultiInput
@@ -141,7 +139,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="What do they secretly wish for?"
           testid="ob-desires"
-          optional
         />
 
         <CappedMultiInput
@@ -151,7 +148,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="e.g. You need 10k followers before making money"
           testid="ob-myths"
-          optional
         />
 
         <CappedMultiInput
@@ -161,7 +157,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="What failed solutions have they already tried?"
           testid="ob-failed-attempts"
-          optional
         />
 
         <CappedMultiInput
@@ -171,7 +166,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="What makes YOU different?"
           testid="ob-usps"
-          optional
         />
 
         <CappedMultiInput
@@ -181,7 +175,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="In DMs, calls, real life — what do they ask?"
           testid="ob-faqs"
-          optional
         />
 
         <CappedMultiInput
@@ -191,7 +184,6 @@ export default function Step2({ form, set }) {
           cap={5}
           placeholder="e.g. sales, cold call, closing, onboarding"
           testid="ob-love-topics"
-          optional
         />
       </section>
 
@@ -204,7 +196,6 @@ export default function Step2({ form, set }) {
           value={form.has_case_studies ?? false}
           onChange={(v) => set("has_case_studies", v)}
           testid="ob-has-case"
-          optional
         />
 
         {form.has_case_studies === true && (

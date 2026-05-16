@@ -27,7 +27,7 @@ export default function Step1({ form, set }) {
               />
             </div>
             <div>
-              <Label optional>Brand Name</Label>
+              <Label>Brand Name</Label>
               <Input
                 testid="ob-brand-name"
                 type="text"
@@ -40,7 +40,7 @@ export default function Step1({ form, set }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label optional>Email</Label>
+              <Label>Email</Label>
               <Input
                 testid="ob-email"
                 type="email"
@@ -50,7 +50,7 @@ export default function Step1({ form, set }) {
               />
             </div>
             <div>
-              <Label optional>WhatsApp</Label>
+              <Label>WhatsApp</Label>
               <Input
                 testid="ob-whatsapp"
                 type="tel"
@@ -62,7 +62,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>City, Country</Label>
+            <Label>City, Country</Label>
             <Input
               testid="ob-city-country"
               type="text"
@@ -117,7 +117,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>Website URL</Label>
+            <Label>Website URL</Label>
             <Input
               testid="ob-website-url"
               type="url"
@@ -128,7 +128,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>LinkedIn URL</Label>
+            <Label>LinkedIn URL</Label>
             <Input
               testid="ob-linkedin-url"
               type="url"
@@ -139,7 +139,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>YouTube URL</Label>
+            <Label>YouTube URL</Label>
             <Input
               testid="ob-youtube-url"
               type="url"
@@ -150,7 +150,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>Twitter / X URL</Label>
+            <Label>Twitter / X URL</Label>
             <Input
               testid="ob-twitter-url"
               type="url"
@@ -166,7 +166,6 @@ export default function Step1({ form, set }) {
             onChange={(v) => set("pr_links", v)}
             placeholder="https://..."
             testid="ob-pr"
-            optional
           />
         </div>
       </div>
@@ -181,7 +180,7 @@ export default function Step1({ form, set }) {
 
         <div className="space-y-4">
           <div>
-            <Label optional>Profile Photo (Drive Link)</Label>
+            <Label>Profile Photo (Drive Link)</Label>
             <Input
               testid="ob-profile-photo-link"
               type="url"
@@ -192,7 +191,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>Logo (Drive Link)</Label>
+            <Label>Logo (Drive Link)</Label>
             <Input
               testid="ob-logo-link"
               type="url"
@@ -203,7 +202,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>Photo Library (Drive Link)</Label>
+            <Label>Photo Library (Drive Link)</Label>
             <Input
               testid="ob-google-drive-images"
               type="url"
@@ -214,7 +213,7 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>Video Clips (Drive Link)</Label>
+            <Label>Video Clips (Drive Link)</Label>
             <Input
               testid="ob-google-drive-videos"
               type="url"
@@ -236,14 +235,12 @@ export default function Step1({ form, set }) {
             value={form.account_suspended ?? false}
             onChange={(v) => set("account_suspended", v)}
             testid="ob-suspended"
-            optional
           />
           <YesNoToggle
             label="Have you run paid ads from this Instagram account?"
             value={form.paid_ads_run ?? false}
             onChange={(v) => set("paid_ads_run", v)}
             testid="ob-paid-ads"
-            optional
           />
         </div>
       </div>

@@ -11,6 +11,7 @@ import Step1 from "./onboarding/steps/Step1";
 import Step2 from "./onboarding/steps/Step2";
 import Step3 from "./onboarding/steps/Step3";
 import Step4 from "./onboarding/steps/Step4";
+import { STEP_VALIDATORS, validateAll } from "./onboarding/validators";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -200,12 +201,11 @@ export default function Onboarding() {
   const totalSteps = STEPS.length + 1; // 4 steps + Review = 5
 
   const validateStep = () => {
-    if (step === 1 && !form.name.trim()) {
-      toast.error("Client name is required");
-      return false;
-    }
-    if (step === STEPS.length && form.platforms.length === 0) {
-      toast.error("Select at least one platform before submitting");
+    const validator = STEP_VALIDATORS[step];
+    if (!validator) return true;
+    const err = validator(form);
+    if (err) {
+      toast.error(err);
       return false;
     }
     return true;
@@ -219,8 +219,8 @@ export default function Onboarding() {
   const back = () => setStep(s => Math.max(s - 1, 1));
 
   const submit = async () => {
-    if (!form.name.trim()) return toast.error("Client name is required");
-    if (form.platforms.length === 0) return toast.error("Select at least one platform");
+    const err = validateAll(form);
+    if (err) return toast.error(err);
     setSubmitting(true);
     try {
       const payload = { ...form };

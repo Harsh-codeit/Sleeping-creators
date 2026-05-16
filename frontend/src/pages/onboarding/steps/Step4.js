@@ -100,7 +100,6 @@ export default function Step4({ form, set }) {
           onChange={(v) => set("lead_magnets", v)}
           placeholder="e.g. Free 7-day plan PDF"
           testid="ob-lead-magnets"
-          optional
         />
 
         <div>
