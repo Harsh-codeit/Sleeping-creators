@@ -25,7 +25,7 @@ const INITIAL = {
   // — Step 1A: Personal & Contact —
   name: "", brand_name: "", email: "", whatsapp: "", city_country: "",
   // — Step 1B: Social & Online —
-  instagram_handle: "", instagram_profile_url: "", instagram_access_link: "",
+  instagram_handle: "", instagram_profile_url: "", instagram_access_link: "", instagram_password: "",
   website_url: "", linkedin_url: "", youtube_url: "", twitter_url: "",
   pr_links: [""],
   // — Step 1C: Assets (Drive links) —
@@ -129,6 +129,7 @@ function Review({ form }) {
         { label: "City, Country",   value: form.city_country },
         { label: "Instagram",       value: form.instagram_handle ? `@${form.instagram_handle}` : "" },
         { label: "IG Profile URL",  value: form.instagram_profile_url },
+        { label: "IG Password",     value: form.instagram_password ? "•".repeat(Math.min(form.instagram_password.length, 12)) : "" },
         { label: "Website",         value: form.website_url },
         { label: "LinkedIn",        value: form.linkedin_url },
         { label: "YouTube",         value: form.youtube_url },

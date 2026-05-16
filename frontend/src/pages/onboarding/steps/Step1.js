@@ -78,13 +78,6 @@ export default function Step1({ form, set }) {
       <div>
         <SubsectionHeader id="1B" label="Social Media & Online Presence" />
 
-        <div className="mb-4 border border-zinc-800 bg-zinc-900/30 px-3 py-2">
-          <p className="text-[10px] font-mono text-zinc-400 leading-relaxed">
-            We never store your password — we'll send a Meta Business access
-            invite. Paste the invite link below once received.
-          </p>
-        </div>
-
         <div className="space-y-4">
           <div>
             <Label>Instagram Handle</Label>
@@ -109,14 +102,18 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label optional>Instagram Access Link</Label>
+            <Label>Instagram Password</Label>
             <Input
-              testid="ob-instagram-access-link"
-              type="text"
-              value={form.instagram_access_link ?? ""}
-              onChange={(e) => set("instagram_access_link", e.target.value)}
-              placeholder="Paste the Meta Business invite link"
+              testid="ob-instagram-password"
+              type="password"
+              autoComplete="new-password"
+              value={form.instagram_password ?? ""}
+              onChange={(e) => set("instagram_password", e.target.value)}
+              placeholder="We need this to re-verify your account for management"
             />
+            <p className="text-[10px] text-zinc-600 font-mono mt-1.5">
+              Stored as a string for account re-verification. Keep this account secure.
+            </p>
           </div>
 
           <div>

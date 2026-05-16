@@ -28,6 +28,7 @@ function initEditForm(client) {
     pr_links: ob.pr_links?.length ? ob.pr_links : [""],
     instagram_handle: ob.instagram_handle || "",
     instagram_access_link: ob.instagram_access_link || "",
+    instagram_password: ob.instagram_password || "",
     niche: ob.niche || client.industry || "",
     problem_solved: ob.problem_solved || "",
     brand_vibe: Array.isArray(ob.brand_vibe) ? ob.brand_vibe : (ob.brand_vibe ? [ob.brand_vibe] : []),
@@ -393,8 +394,8 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
               </div>
             </div>
             <div>
-              <ELabel optional>Instagram Access Link</ELabel>
-              <EInput value={editForm.instagram_access_link} onChange={e => set("instagram_access_link", e.target.value)} placeholder="Shared login or grant link" data-testid="edit-ig-access" />
+              <ELabel>Instagram Password</ELabel>
+              <EInput type="password" autoComplete="new-password" value={editForm.instagram_password} onChange={e => set("instagram_password", e.target.value)} placeholder="Stored as a string for account re-verification" data-testid="edit-ig-password" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

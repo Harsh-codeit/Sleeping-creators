@@ -126,6 +126,7 @@ class ClientUpdate(BaseModel):
     pr_links: Optional[List[str]] = None
     instagram_handle: Optional[str] = None
     instagram_access_link: Optional[str] = None
+    instagram_password: Optional[str] = None  # WARNING: stored as plaintext per user decision
     niche: Optional[str] = None
     problem_solved: Optional[str] = None
     brand_vibe: Optional[Union[str, List[str]]] = None
@@ -433,6 +434,7 @@ class OnboardingCreate(BaseModel):
     instagram_handle: str = ""
     instagram_profile_url: str = ""
     instagram_access_link: str = ""
+    instagram_password: str = ""  # WARNING: stored as plaintext per user decision
     website_url: str = ""
     linkedin_url: str = ""
     youtube_url: str = ""
@@ -1907,7 +1909,7 @@ async def get_client(client_id: str):
 _ONBOARDING_KEYS = frozenset({
     # Existing fields
     "username", "whatsapp", "email", "website_url", "pr_links",
-    "instagram_handle", "instagram_access_link", "niche", "problem_solved",
+    "instagram_handle", "instagram_access_link", "instagram_password", "niche", "problem_solved",
     "brand_vibe", "account_goals", "cta_link", "language", "branding_assets_link",
     "google_drive_images", "google_drive_videos", "lead_magnets",
     "automation_keywords", "competitor_accounts", "lead_sheet_link", "bio_template",
