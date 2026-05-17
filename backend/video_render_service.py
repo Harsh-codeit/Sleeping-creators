@@ -493,7 +493,7 @@ async def build_merge_values(
                     from clip_staging_service import get_probe_rotation
                     probe_rot = await get_probe_rotation(db, client["id"], drive_id, user_value)
                     if probe_rot:
-                        rotation_overrides[find] = -probe_rot
+                        rotation_overrides[find] = -abs(probe_rot)
                 except Exception as e:
                     logger.warning("probe rotation lookup failed for %s: %s", drive_id, e)
             except StopIteration:
