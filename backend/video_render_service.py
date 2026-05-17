@@ -475,7 +475,6 @@ async def build_merge_values(
             logger.warning("AI text generation failed: %s", e)
 
     values: dict = {}
-    rotation_overrides: dict = {}
     for field in template.get("merge_fields", []):
         find = field["find"]
         role = field.get("role", "ai_text")
@@ -489,13 +488,6 @@ async def build_merge_values(
                 drive_id = next(clip_iter)
                 from clip_staging_service import stage_clip
                 user_value = await stage_clip(db, client["id"], drive_id)
-                try:
-                    from clip_staging_service import get_probe_rotation
-                    probe_rot = await get_probe_rotation(db, client["id"], drive_id, user_value)
-                    if probe_rot:
-                        rotation_overrides[find] = -abs(probe_rot)
-                except Exception as e:
-                    logger.warning("probe rotation lookup failed for %s: %s", drive_id, e)
             except StopIteration:
                 user_value = None
         elif role == "logo":
@@ -511,7 +503,7 @@ async def build_merge_values(
         if final:
             values[find] = final
 
-    return values, rotation_overrides
+    return values
 
 
 async def submit_render_for_post(
@@ -552,7 +544,7 @@ async def submit_render_for_post(
     else:
         template_data = await get_template(ss_id)
 
-    merge_values, rotation_overrides = await build_merge_values(
+    merge_values = await build_merge_values(
         db=db, template=template, client=client, pipeline=pipeline,
         ai_text_overrides=post.get("ai_text_overrides") or {},
         music_url=music_url,
@@ -563,14 +555,11 @@ async def submit_render_for_post(
     filter_name = post.get("filter_name") or None
     audio_url_override = music_url or None
 
-    # Log the actual values being sent — useful when debugging "content not changing":
-    # if a placeholder doesn't appear in this dict, Shotstack will leak it through.
     logger.info(
         f"submit_render post={post.get('id', '')[:8]} template={template.get('name')!r} "
         f"source={'inline' if ss_id.startswith('inline:') else 'shotstack'} "
         f"merge_keys={list(merge_values.keys())} filter={filter_name!r} "
-        f"audio_override={'yes' if audio_url_override else 'no'} "
-        f"rotation_overrides={rotation_overrides or '{}'}"
+        f"audio_override={'yes' if audio_url_override else 'no'}"
     )
 
     shotstack_render_id = await submit_render(
@@ -578,7 +567,6 @@ async def submit_render_for_post(
         merge_values=merge_values,
         filter_name=filter_name,
         audio_url=audio_url_override,
-        rotation_overrides=rotation_overrides,
     )
 
     job = {

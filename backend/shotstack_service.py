@@ -379,26 +379,15 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
         )
 
 
-def _apply_clip_rotation(timeline: dict, rotation_overrides: dict | None) -> None:
-    """Add `transform.rotate.angle` on every timeline clip whose asset.src
-    references a `{{KEY}}` in `rotation_overrides`. Used to rotate vertical
-    Drive clips into the horizontal canvas without distorting them.
+def _apply_video_transcode(timeline: dict) -> None:
+    """Set `asset.transcode = true` on every video-type clip in the timeline.
 
-    Must run BEFORE `_normalize_placeholders` and BEFORE Shotstack does its
-    merge substitution — we identify the target clip by the literal placeholder
-    in `asset.src`, which is gone once the URL is substituted in.
-
-    Idempotent + non-destructive: preserves any existing `clip.transform`
-    (scale/skew) and only sets the `rotate` sub-key. No-op when overrides
-    is empty.
+    Shotstack's transcode flag causes it to read and honour the rotation
+    metadata embedded in the source file (Display Matrix / EXIF), so the
+    rendered output is always correctly oriented regardless of how the clip
+    was shot. Idempotent — safe to call even if already set.
     """
-    if not rotation_overrides:
-        return
-    placeholder_re = {
-        key: re.compile(r"\{\{\s*" + re.escape(key) + r"\s*\}\}")
-        for key in rotation_overrides
-    }
-    rotated = 0
+    transcoded = 0
     for track in timeline.get("tracks", []) or []:
         if not isinstance(track, dict):
             continue
@@ -406,20 +395,11 @@ def _apply_clip_rotation(timeline: dict, rotation_overrides: dict | None) -> Non
             if not isinstance(clip, dict):
                 continue
             asset = clip.get("asset")
-            src = asset.get("src", "") if isinstance(asset, dict) else ""
-            if not isinstance(src, str) or "{{" not in src:
-                continue
-            for key, angle in rotation_overrides.items():
-                if placeholder_re[key].search(src):
-                    transform = clip.setdefault("transform", {})
-                    if isinstance(transform, dict):
-                        transform["rotate"] = {"angle": angle}
-                        rotated += 1
-                    break  # one key per clip src
-    if rotated:
-        logger.info(
-            f"_apply_clip_rotation: rotated {rotated} clip(s) using overrides={rotation_overrides}"
-        )
+            if isinstance(asset, dict) and asset.get("type") == "video":
+                asset["transcode"] = True
+                transcoded += 1
+    if transcoded:
+        logger.info("_apply_video_transcode: set transcode=true on %d video clip(s)", transcoded)
 
 
 def _normalize_placeholders(obj):
@@ -442,24 +422,20 @@ async def submit_render(
     merge_values: dict,
     filter_name: str | None = None,
     audio_url: str | None = None,
-    rotation_overrides: dict | None = None,
 ) -> str:
     """
     Build the render payload, apply mutations, submit to Shotstack.
     Returns the Shotstack render_id.
 
-    merge_values:       {FIELD_NAME: value} — keys must match find values exactly.
-    rotation_overrides: {FIELD_NAME: angle} — adds transform.rotate to each timeline
-                        clip whose asset.src is `{{FIELD_NAME}}`. Used to fix
-                        vertical Drive clips that render sideways otherwise.
+    merge_values: {FIELD_NAME: value} — keys must match find values exactly.
     """
     mutated = _apply_filter_and_audio(template_data, filter_name, audio_url)
     tpl = mutated.get("template", {})
 
-    # Apply per-clip rotation BEFORE the substitution fallbacks run — they may
-    # rewrite asset.src into an R2 URL, after which we can no longer find the
-    # clip by its `{{KEY}}` placeholder.
-    _apply_clip_rotation(tpl.get("timeline", {}), rotation_overrides)
+    # Instruct Shotstack to honour the rotation metadata embedded in each video
+    # file (Display Matrix / EXIF). Without this flag Shotstack ignores rotation
+    # tags and renders the raw pixels, causing portrait clips to appear sideways.
+    _apply_video_transcode(tpl.get("timeline", {}))
 
     # Belt-and-suspenders: substitute merge values directly into text-asset
     # content where the asset's literal text matches the merge field's default.
