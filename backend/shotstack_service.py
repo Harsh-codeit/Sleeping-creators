@@ -7,7 +7,8 @@ logger = logging.getLogger(__name__)
 
 _STAGE_BASE = "https://api.shotstack.io/stage"
 _PROD_BASE = "https://api.shotstack.io/edit/v1"
-_PROBE_BASE = "https://api.shotstack.io/v1/probe"
+_PROBE_STAGE = "https://api.shotstack.io/stage/probe"
+_PROBE_PROD  = "https://api.shotstack.io/v1/probe"
 
 _FILTERS = {"greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"}
 
@@ -24,20 +25,30 @@ def _headers() -> dict:
     return {"x-api-key": key, "Content-Type": "application/json"}
 
 
+def _probe_base_url() -> str:
+    env = os.environ.get("SHOTSTACK_ENV", "stage").lower()
+    return _PROBE_PROD if env == "production" else _PROBE_STAGE
+
+
 async def probe_clip(media_url: str) -> int:
     """Call Shotstack Probe API on a staged media URL. Returns rotation degrees (0 = none)."""
     import urllib.parse
     encoded = urllib.parse.quote(media_url, safe="")
+    url = f"{_probe_base_url()}/{encoded}"
+    logger.info("probe_clip: GET %s", url)
     async with httpx.AsyncClient(timeout=30) as c:
-        r = await c.get(f"{_PROBE_BASE}/{encoded}", headers=_headers())
+        r = await c.get(url, headers=_headers())
         r.raise_for_status()
-    streams = r.json().get("response", {}).get("metadata", {}).get("streams", [])
+    body = r.json()
+    streams = body.get("response", {}).get("metadata", {}).get("streams", [])
     for s in streams:
         if s.get("codec_type") == "video":
             for sd in s.get("side_data_list") or []:
                 rot = sd.get("rotation")
                 if rot is not None:
+                    logger.info("probe_clip: found rotation=%s in side_data_list", rot)
                     return int(rot)
+    logger.info("probe_clip: no rotation tag found (url=%s)", media_url)
     return 0
 
 

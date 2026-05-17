@@ -46,8 +46,9 @@ async def get_probe_rotation(db, client_id: str, drive_file_id: str, r2_url: str
     from shotstack_service import probe_clip
     try:
         rotation = await probe_clip(r2_url)
+        logger.info("get_probe_rotation: drive_file_id=%s url=%s → rotation=%s", drive_file_id, r2_url, rotation)
     except Exception as e:
-        logger.warning("Shotstack probe failed for %s: %s", drive_file_id, e)
+        logger.error("get_probe_rotation: Shotstack probe FAILED for %s (%s): %s", drive_file_id, r2_url, e)
         return 0
 
     if doc:
