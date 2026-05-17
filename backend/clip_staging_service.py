@@ -34,6 +34,36 @@ async def _get_drive_refresh_token(db, client: dict | None) -> str:
     return (setting or {}).get("value", "") or ""
 
 
+async def get_probe_rotation(db, client_id: str, drive_file_id: str, r2_url: str) -> int:
+    """Return Shotstack-probed rotation degrees for a clip, caching the result."""
+    doc = await db.drive_clips.find_one({"client_id": client_id, "drive_file_id": drive_file_id})
+    if doc and "probe_rotation" in doc:
+        return doc["probe_rotation"]
+    cached = await db.clip_cache.find_one({"client_id": client_id, "drive_file_id": drive_file_id})
+    if cached and "probe_rotation" in cached:
+        return cached["probe_rotation"]
+
+    from shotstack_service import probe_clip
+    try:
+        rotation = await probe_clip(r2_url)
+    except Exception as e:
+        logger.warning("Shotstack probe failed for %s: %s", drive_file_id, e)
+        return 0
+
+    if doc:
+        await db.drive_clips.update_one(
+            {"client_id": client_id, "drive_file_id": drive_file_id},
+            {"$set": {"probe_rotation": rotation}},
+        )
+    else:
+        await db.clip_cache.update_one(
+            {"client_id": client_id, "drive_file_id": drive_file_id},
+            {"$set": {"probe_rotation": rotation}},
+            upsert=True,
+        )
+    return rotation
+
+
 async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     """Return a public R2 URL for the given Drive clip, staging it if not cached.
 

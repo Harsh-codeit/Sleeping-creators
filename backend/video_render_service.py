@@ -489,25 +489,13 @@ async def build_merge_values(
                 drive_id = next(clip_iter)
                 from clip_staging_service import stage_clip
                 user_value = await stage_clip(db, client["id"], drive_id)
-                # If the source Drive clip is vertical, schedule a -90° rotate
-                # on the timeline clip that consumes this merge key. The Drive
-                # video itself is portrait; the Shotstack canvas is landscape,
-                # so without rotation the player shows the clip on its side.
-                # Skip silently when the doc is missing width/height (older
-                # syncs predate the orientation fields — render proceeds
-                # un-rotated, same as today).
                 try:
-                    drive_doc = await db.drive_clips.find_one({
-                        "client_id": client["id"], "drive_file_id": drive_id,
-                    })
-                    if drive_doc and drive_doc.get("is_vertical"):
-                        # .mov files store orientation metadata differently — Shotstack
-                        # reads their EXIF rotation tag and pre-applies it, so our
-                        # correction must go the opposite direction (+90 instead of -90).
-                        is_mov = drive_doc.get("mime_type") == "video/quicktime"
-                        rotation_overrides[find] = 90 if is_mov else -90
+                    from clip_staging_service import get_probe_rotation
+                    probe_rot = await get_probe_rotation(db, client["id"], drive_id, user_value)
+                    if probe_rot:
+                        rotation_overrides[find] = -probe_rot
                 except Exception as e:
-                    logger.warning("orientation lookup failed for %s: %s", drive_id, e)
+                    logger.warning("probe rotation lookup failed for %s: %s", drive_id, e)
             except StopIteration:
                 user_value = None
         elif role == "logo":

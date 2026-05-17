@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 _STAGE_BASE = "https://api.shotstack.io/stage"
 _PROD_BASE = "https://api.shotstack.io/edit/v1"
+_PROBE_BASE = "https://api.shotstack.io/v1/probe"
 
 _FILTERS = {"greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"}
 
@@ -21,6 +22,23 @@ def _headers() -> dict:
     if not key:
         raise RuntimeError("SHOTSTACK_KEY not set")
     return {"x-api-key": key, "Content-Type": "application/json"}
+
+
+async def probe_clip(media_url: str) -> int:
+    """Call Shotstack Probe API on a staged media URL. Returns rotation degrees (0 = none)."""
+    import urllib.parse
+    encoded = urllib.parse.quote(media_url, safe="")
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.get(f"{_PROBE_BASE}/{encoded}", headers=_headers())
+        r.raise_for_status()
+    streams = r.json().get("response", {}).get("metadata", {}).get("streams", [])
+    for s in streams:
+        if s.get("codec_type") == "video":
+            for sd in s.get("side_data_list") or []:
+                rot = sd.get("rotation")
+                if rot is not None:
+                    return int(rot)
+    return 0
 
 
 async def list_templates() -> list[dict]:
