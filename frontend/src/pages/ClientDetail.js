@@ -2154,6 +2154,34 @@ export default function ClientDetail() {
                 </div>
               )}
             </div>
+            <div className="bg-zinc-900 border border-zinc-800 p-4">
+              <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Story Automation</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-mono text-zinc-300">Auto-publish story</div>
+                  <div className="text-[10px] font-mono text-zinc-600 mt-0.5">Post a story with every Instagram publish</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const next = !(client.auto_story_enabled ?? true);
+                    setClient(c => ({ ...c, auto_story_enabled: next }));
+                    try {
+                      await axios.put(`${API}/clients/${id}`, { auto_story_enabled: next });
+                    } catch {
+                      setClient(c => ({ ...c, auto_story_enabled: !next }));
+                      toast.error("Failed to update story setting");
+                    }
+                  }}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    (client.auto_story_enabled ?? true) ? "bg-emerald-600" : "bg-zinc-700"
+                  }`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                    (client.auto_story_enabled ?? true) ? "translate-x-4" : "translate-x-1"
+                  }`} />
+                </button>
+              </div>
+            </div>
             {competitorInsight && (
               <div className="bg-zinc-900 border border-zinc-800 p-4">
                 <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Top Competitor Post</div>

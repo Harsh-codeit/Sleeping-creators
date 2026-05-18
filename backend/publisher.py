@@ -1229,6 +1229,24 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
         logger.error(f"Bundle create_post failed: {e}")
         return {"status": "failed", "error": f"Bundle API error: {str(e)[:200]}", "metrics": {}}
 
+    # Auto-story: publish a companion Instagram Story using the first uploaded
+    # media item. Runs only for Instagram posts that have media. Story failure
+    # never affects the main post result — it's best-effort only.
+    if platform == "instagram" and upload_ids and client.get("auto_story_enabled", True):
+        try:
+            await bundle_service.create_post(
+                api_key=api_key,
+                team_id=team_id,
+                platforms=[platform],
+                text="",
+                post_date=effective_date,
+                upload_ids=[upload_ids[0]],
+                platform_overrides={"INSTAGRAM": {"type": "STORY", "uploadIds": [upload_ids[0]]}},
+            )
+            logger.info("Auto-story created for post %s", post.get("id", "")[:8])
+        except Exception as e:
+            logger.warning("Auto-story failed (main post unaffected) for post %s: %s", post.get("id", "")[:8], e)
+
     return {
         "status": "published",
         "platform_post_id": result.get("id") or result.get("_id", ""),

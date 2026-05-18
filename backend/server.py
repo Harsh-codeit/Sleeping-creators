@@ -190,6 +190,7 @@ class ClientUpdate(BaseModel):
     drive_images_folder_id: Optional[str] = None   # Drive folder for image rotation
     auto_approve: Optional[bool] = None
     brand_overrides: Optional[dict] = None
+    auto_story_enabled: Optional[bool] = None
 
 class PostCreate(BaseModel):
     client_id: str
