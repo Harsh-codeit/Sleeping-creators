@@ -454,7 +454,8 @@ from prompts.carousel_strategist import (
 
 def _is_indian_audience(onboarding: dict, client: dict) -> bool:
     """True when the client's audience is Indian-focused, based on language or audience text."""
-    lang = (onboarding.get("language") or "").strip().lower()
+    _l = onboarding.get("language") or ""
+    lang = (_l[0] if isinstance(_l, list) else _l or "").strip().lower()
     if lang in ("hindi", "hinglish", "hindi-english", "english-hindi"):
         return True
     audience = (client.get("target_audience") or "").lower()
