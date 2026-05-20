@@ -499,7 +499,8 @@ async def _generate_single_image_hook(
     name     = client.get("name", "Brand")
     industry = client.get("industry", "business")
     tone     = _get_tone(client)
-    language = (onboarding.get("language") or "English").strip()
+    _lang_raw = onboarding.get("language") or "English"
+    language = (_lang_raw[0] if isinstance(_lang_raw, list) else _lang_raw or "English").strip()
     themes   = client.get("strategy", {}).get("themes", ["business insights"])
     brand_ctx = _build_brand_context(client, onboarding)
 
@@ -636,7 +637,8 @@ async def _generate_carousel_single_pass(
     name     = client.get("name", "Brand")
     industry = client.get("industry", "business")
     tone     = _get_tone(client)
-    language = (onboarding.get("language") or "English").strip()
+    _lang_raw = onboarding.get("language") or "English"
+    language = (_lang_raw[0] if isinstance(_lang_raw, list) else _lang_raw or "English").strip()
     themes   = client.get("strategy", {}).get("themes", ["business insights"])
     brand_ctx = _build_brand_context(client, onboarding)
     platform_voice = _PLATFORM_VOICE.get(platform, "Clear and engaging.")
@@ -837,7 +839,8 @@ async def _generate_carousel_caption(
     name     = client.get("name", "Brand")
     industry = client.get("industry", "business")
     tone     = _get_tone(client)
-    language = (onboarding.get("language") or "English").strip()
+    _lang_raw = onboarding.get("language") or "English"
+    language = (_lang_raw[0] if isinstance(_lang_raw, list) else _lang_raw or "English").strip()
     brand_hashtags = client.get("strategy", {}).get("hashtags", [])
 
     title      = carousel_data.get("title", "")
