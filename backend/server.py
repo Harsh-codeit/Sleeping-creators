@@ -2343,7 +2343,7 @@ async def calendar_posts(start: str, end: str, client_id: Optional[str] = None, 
         query["client_id"] = client_id
     if platform:
         query["platform"] = platform
-    posts = await db.posts.find(query, {"_id": 0}).sort("scheduled_at", 1).to_list(500)
+    posts = await db.posts.find(query, {"_id": 0}).sort("scheduled_at", 1).to_list(5000)
     return {"posts": posts}
 
 @api_router.get("/posts")
