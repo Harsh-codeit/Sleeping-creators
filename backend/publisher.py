@@ -1095,6 +1095,36 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
     return base
 
 
+_STORY_W, _STORY_H = 1080, 1920
+
+
+async def _make_story_upload(api_key: str, team_id: str, image_url: str) -> str | None:
+    """Download image_url, letterbox to 1080×1920, upload to Bundle, return upload ID."""
+    import io
+    from PIL import Image
+    try:
+        img_bytes = await _download_url(image_url)
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        w, h = img.size
+        ratio = w / h if h else 1
+        if abs(ratio - 9 / 16) < 0.02:
+            # Already close enough to 9:16 — upload as-is
+            uid = await bundle_service.upload_file(api_key, team_id, img_bytes, "story.jpg", "image/jpeg")
+            return uid or None
+        # Letterbox: scale to fit within 1080×1080, center on 1080×1920 black canvas
+        img.thumbnail((_STORY_W, _STORY_W), Image.LANCZOS)
+        canvas = Image.new("RGB", (_STORY_W, _STORY_H), (0, 0, 0))
+        paste_y = (_STORY_H - img.height) // 2
+        canvas.paste(img, (0, paste_y))
+        buf = io.BytesIO()
+        canvas.save(buf, format="JPEG", quality=90)
+        uid = await bundle_service.upload_file(api_key, team_id, buf.getvalue(), "story.jpg", "image/jpeg")
+        return uid or None
+    except Exception as e:
+        logger.warning("_make_story_upload failed (%s): %s", image_url[:60], e)
+        return None
+
+
 async def publish_bundle(post: dict, client: dict, publish_now: bool = False) -> dict:
     from server import db
     settings = await db.settings.find_one({"key": "global"}) or {}
@@ -1106,6 +1136,7 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
         return {"status": "failed", "error": "Bundle not configured — run setup first", "metrics": {}}
 
     upload_ids = []
+    image_urls = []
     try:
         is_video = post.get("kind") == "video"
         post_type = post.get("post_type", "carousel")
@@ -1229,21 +1260,36 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
         logger.error(f"Bundle create_post failed: {e}")
         return {"status": "failed", "error": f"Bundle API error: {str(e)[:200]}", "metrics": {}}
 
-    # Auto-story: publish a companion Instagram Story using the first uploaded
-    # media item. Runs only for Instagram posts that have media. Story failure
-    # never affects the main post result — it's best-effort only.
-    if platform == "instagram" and upload_ids and client.get("auto_story_enabled", True):
+    # Auto-story: publish a companion Instagram Story at 9:16.
+    # Image/carousel posts are letterboxed to 1080×1920 before upload.
+    # Video posts only get a story when flagged is_vertical=True (portrait source).
+    # Failures never affect the main post result — best-effort only.
+    if platform == "instagram" and client.get("auto_story_enabled", True):
         try:
-            await bundle_service.create_post(
-                api_key=api_key,
-                team_id=team_id,
-                platforms=[platform],
-                text="",
-                post_date=effective_date,
-                upload_ids=[upload_ids[0]],
-                platform_overrides={"INSTAGRAM": {"type": "STORY", "uploadIds": [upload_ids[0]]}},
-            )
-            logger.info("Auto-story created for post %s", post.get("id", "")[:8])
+            story_upload_id = None
+            if is_video and upload_ids and post.get("is_vertical"):
+                story_upload_id = upload_ids[0]
+            elif not is_video:
+                source_url = (
+                    image_urls[0] if has_carousel and image_urls
+                    else post.get("image_url")
+                )
+                if source_url:
+                    story_upload_id = await _make_story_upload(api_key, team_id, source_url)
+
+            if story_upload_id:
+                await bundle_service.create_post(
+                    api_key=api_key,
+                    team_id=team_id,
+                    platforms=[platform],
+                    text="",
+                    post_date=effective_date,
+                    upload_ids=[story_upload_id],
+                    platform_overrides={"INSTAGRAM": {"type": "STORY", "uploadIds": [story_upload_id]}},
+                )
+                logger.info("Auto-story created for post %s", post.get("id", "")[:8])
+            else:
+                logger.info("Auto-story skipped (no suitable 9:16 media) for post %s", post.get("id", "")[:8])
         except Exception as e:
             logger.warning("Auto-story failed (main post unaffected) for post %s: %s", post.get("id", "")[:8], e)
 
