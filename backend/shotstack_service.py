@@ -465,7 +465,10 @@ async def submit_render(
 
     body = {
         "timeline": _normalize_placeholders(tpl.get("timeline", {})),
-        "output": tpl.get("output", {}),
+        "output": {
+            **tpl.get("output", {}),
+            "destinations": [{"provider": "shotstack", "exclude": True}],
+        },
         "merge": merge_array,
     }
 
