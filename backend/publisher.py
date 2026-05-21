@@ -1072,9 +1072,8 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
     base = {"text": text, "uploadIds": upload_ids}
     if platform == "instagram":
         if is_video:
-            # Publish Instagram videos as Reels (Bundle defaults to POST type).
-            # thumbnailOffset is in ms — picks the cover frame at that timestamp.
             base["type"] = "REEL"
+            base["shareToFeed"] = True
             offset_raw = post.get("instagram_thumbnail_offset_ms")
             try:
                 offset_ms = int(offset_raw) if offset_raw is not None else 64
@@ -1083,6 +1082,15 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
             base["thumbnailOffset"] = max(0, offset_ms)
         else:
             base["autoFitImage"] = True
+    elif platform == "tiktok":
+        if is_video:
+            base["type"] = "VIDEO"
+            offset_raw = post.get("tiktok_thumbnail_offset_ms")
+            try:
+                offset_ms = int(offset_raw) if offset_raw is not None else 64
+            except (TypeError, ValueError):
+                offset_ms = 64
+            base["thumbnailOffset"] = max(0, offset_ms)
     elif platform == "youtube":
         base["title"] = post.get("title") or post.get("text", "")[:100]
         base["madeForKids"] = False
