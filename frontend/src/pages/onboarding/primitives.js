@@ -235,6 +235,60 @@ export function LongTextarea({ label, value, onChange, minWords, placeholder, te
   );
 }
 
+export function SelectMultiInput({ label, values, onChange, options, placeholder, testid, minItems }) {
+  const safe = Array.isArray(values) && values.length ? values : [""];
+  const add = () => onChange([...safe, ""]);
+  const remove = (i) => onChange(safe.filter((_, idx) => idx !== i));
+  const update = (i, v) => onChange(safe.map((x, idx) => idx === i ? v : x));
+  const filled = safe.filter(v => v && String(v).trim()).length;
+  const ok = !minItems || filled >= minItems;
+  return (
+    <div>
+      <Label>
+        {label}
+        {minItems && (
+          <span className={`ml-2 normal-case tracking-normal ${ok ? "text-emerald-500/80" : "text-zinc-600"}`}>
+            {filled} / {minItems} min
+          </span>
+        )}
+      </Label>
+      <div className="space-y-2">
+        {safe.map((val, i) => (
+          <div key={i} className="flex gap-2">
+            <select
+              data-testid={`${testid}-${i}`}
+              value={val}
+              onChange={e => update(i, e.target.value)}
+              className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150 appearance-none"
+            >
+              <option value="" disabled>{placeholder || "Select..."}</option>
+              {options.map(opt => (
+                <option key={opt} value={opt} className="bg-zinc-950">{opt}</option>
+              ))}
+            </select>
+            {safe.length > 1 && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="px-2 text-zinc-600 hover:text-red-400 border border-zinc-700 hover:border-red-900 transition-colors duration-150"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={add}
+          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-white font-mono transition-colors duration-150"
+        >
+          <Plus size={12} /> Add another language
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── @-prefix input extracted from Onboarding.js for reuse ─────── */
 
 export function PrefixedInput({ prefix = "@", testid, value, onChange, placeholder }) {

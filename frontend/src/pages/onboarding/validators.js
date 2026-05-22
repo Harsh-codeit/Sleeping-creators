@@ -113,9 +113,11 @@ export function validateStep3(form) {
 
   const multiErr = checkMultiSelects(form, [
     ["brand_vibe", "Brand vibe"],
-    ["language",   "Content language"],
   ]);
   if (multiErr) return multiErr;
+
+  const langVal = Array.isArray(form.language) ? form.language[0] : form.language;
+  if (!langVal || !String(langVal).trim()) return "Content language — please select a language";
 
   return checkArrays(form, [
     ["competitor_accounts", "Competitor accounts"],

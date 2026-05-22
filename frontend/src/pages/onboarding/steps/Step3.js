@@ -6,6 +6,23 @@ import {
   CappedMultiInput,
 } from "../primitives";
 
+const LANGUAGE_OPTIONS = [
+  // Indian
+  "English", "Hindi", "Hinglish", "Punjabi", "Bengali",
+  "Tamil", "Telugu", "Kannada", "Marathi", "Urdu",
+  "Gujarati", "Malayalam", "Odia", "Assamese", "Maithili",
+  "Santali", "Kashmiri", "Nepali", "Sindhi", "Konkani",
+  "Dogri", "Manipuri", "Bodo",
+  // Global
+  "Arabic", "Chinese (Simplified)", "Chinese (Traditional)",
+  "French", "German", "Spanish", "Portuguese", "Italian",
+  "Russian", "Japanese", "Korean", "Turkish", "Dutch",
+  "Polish", "Swedish", "Norwegian", "Danish", "Finnish",
+  "Greek", "Hebrew", "Thai", "Vietnamese", "Indonesian",
+  "Malay", "Swahili", "Persian (Farsi)",
+  "Other",
+];
+
 export default function Step3({ form, set }) {
   return (
     <div className="space-y-8">
@@ -42,14 +59,20 @@ export default function Step3({ form, set }) {
             columns={4}
           />
 
-          <MultiCheckbox
-            label="Language of Content"
-            options={["Hindi", "English", "Hinglish", "Other"]}
-            values={form.language ?? []}
-            onChange={(v) => set("language", v)}
-            testid="ob-lang"
-            columns={4}
-          />
+          <div>
+            <Label>Language of Content</Label>
+            <select
+              data-testid="ob-lang"
+              value={Array.isArray(form.language) ? (form.language[0] ?? "") : (form.language ?? "")}
+              onChange={(e) => set("language", e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150"
+            >
+              <option value="" disabled>Select a language</option>
+              {LANGUAGE_OPTIONS.map(opt => (
+                <option key={opt} value={opt} className="bg-zinc-950">{opt}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

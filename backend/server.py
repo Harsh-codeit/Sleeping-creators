@@ -1621,7 +1621,7 @@ async def run_pipelines():
         total = 0
         for idx, pipeline in enumerate(due_pipelines):
             try:
-                total += await execute_pipeline(pipeline, now, stagger_minutes=idx * 3)
+                total += await execute_pipeline(pipeline, now, stagger_minutes=idx * 3, auto_publish=True)
             except Exception as e:
                 logger.error(f"Pipeline error {pipeline.get('id')}: {e}")
                 await db.pipelines.update_one(
