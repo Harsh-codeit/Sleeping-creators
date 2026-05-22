@@ -7,25 +7,49 @@ export function ContentStrategyMonthlyEmail({ clientName, month, platforms, tota
   return (
     <Html>
       <Head />
-      <Body style={{ fontFamily: 'sans-serif', backgroundColor: '#ffffff', color: '#111111', maxWidth: '600px', margin: '0 auto', padding: '32px 24px' }}>
-        <Text style={{ fontSize: '13px', color: '#888', margin: '0 0 4px 0' }}>SLEEPING CREATORS</Text>
-        <Text style={{ fontSize: '24px', fontWeight: '700', margin: '0 0 4px 0' }}>{month} Content Plan</Text>
-        <Text style={{ fontSize: '14px', color: '#555', margin: '0 0 24px 0' }}>{clientName}</Text>
-        <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px 0' }} />
-        <Section style={{ backgroundColor: '#f9f9f9', padding: '16px', marginBottom: '24px' }}>
-          <Text style={{ margin: '0 0 6px 0', fontSize: '14px' }}>Total scheduled: <strong>{totalScheduled} posts</strong></Text>
-          <Text style={{ margin: '0', fontSize: '14px' }}>Platforms: <strong>{(platforms || []).join(', ')}</strong></Text>
-        </Section>
-        <Text style={{ fontSize: '13px', fontWeight: '600', color: '#888', margin: '0 0 12px 0' }}>THIS MONTH WE'RE COVERING</Text>
-        <Section style={{ backgroundColor: '#f9f9f9', padding: '16px', marginBottom: '24px' }}>
-          {topicList.map((t, i) => (
-            <Text key={i} style={{ margin: '0 0 6px 0', fontSize: '14px' }}>
-              • {t.title}{t.postCount ? ` (${t.postCount} posts)` : ''}
+      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+        <Section style={{ maxWidth: '600px', margin: '0 auto' }}>
+
+          {/* Header */}
+          <Section style={{ backgroundColor: '#000000', padding: '32px 40px 28px' }}>
+            <Text style={{ color: '#ffffff', fontSize: '11px', letterSpacing: '3px', margin: '0 0 6px', fontWeight: '600' }}>SLEEPING CREATORS</Text>
+            <Text style={{ color: '#ffffff', fontSize: '28px', fontWeight: '900', margin: '0 0 4px', letterSpacing: '-0.5px' }}>{month}</Text>
+            <Text style={{ color: '#888888', fontSize: '13px', margin: '0' }}>Content Plan · {clientName}</Text>
+          </Section>
+
+          {/* Post count hero */}
+          <Section style={{ padding: '40px 40px 0' }}>
+            <Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '2px', margin: '0 0 8px', fontWeight: '600' }}>TOTAL POSTS SCHEDULED</Text>
+            <Text style={{ fontSize: '64px', fontWeight: '900', color: '#000000', margin: '0 0 4px', letterSpacing: '-3px', lineHeight: '1' }}>{totalScheduled}</Text>
+            <Text style={{ fontSize: '13px', color: '#666666', margin: '0 0 0' }}>across {(platforms || []).join(', ')}</Text>
+          </Section>
+
+          <Hr style={{ borderColor: '#eeeeee', margin: '32px 40px' }} />
+
+          {/* Topics */}
+          {topicList.length > 0 && (
+            <Section style={{ padding: '0 40px 0' }}>
+              <Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '2px', margin: '0 0 20px', fontWeight: '600' }}>THIS MONTH WE'RE COVERING</Text>
+              {topicList.map((t, i) => (
+                <Section key={i} style={{ marginBottom: '16px', borderLeft: '3px solid #000000', paddingLeft: '16px' }}>
+                  <Text style={{ fontSize: '11px', color: '#999999', margin: '0 0 2px', fontWeight: '600' }}>
+                    {String(i + 1).padStart(2, '0')}{t.postCount ? ` · ${t.postCount} posts` : ''}
+                  </Text>
+                  <Text style={{ fontSize: '15px', color: '#111111', margin: '0', fontWeight: '600' }}>{t.title}</Text>
+                </Section>
+              ))}
+            </Section>
+          )}
+
+          {/* Footer */}
+          <Section style={{ backgroundColor: '#F7F7F7', padding: '24px 40px', marginTop: '32px' }}>
+            <Text style={{ fontSize: '12px', color: '#999999', margin: '0', lineHeight: '1.6' }}>
+              Questions about this month's plan? Reply directly to this email.<br />
+              Sleeping Creators · sleeeping.creators@gmail.com
             </Text>
-          ))}
+          </Section>
+
         </Section>
-        <Hr style={{ borderColor: '#eeeeee', margin: '0 0 16px 0' }} />
-        <Text style={{ fontSize: '12px', color: '#aaa' }}>Questions? Reply to this email.</Text>
       </Body>
     </Html>
   );
