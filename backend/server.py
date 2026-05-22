@@ -6494,17 +6494,16 @@ async def register_clip(client_id: str, body: ClipRegisterRequest):
 
 
 class ClearClipCacheRequest(BaseModel):
-    password: str
     dry_run: bool = True
 
 @api_router.post("/admin/clips/clear-r2-cache")
-async def clear_clip_r2_cache(body: ClearClipCacheRequest):
+async def clear_clip_r2_cache(request: Request, body: ClearClipCacheRequest):
     """One-time migration: clear r2_url from drive-synced clips so they
     get re-staged to R2 on next render. Does NOT touch uploaded clips.
     Use dry_run=true first to preview what will be cleared."""
-    s = await get_settings()
-    if not _verify_pw(body.password, s.get("admin_password_hash", "")):
-        raise HTTPException(401, "Incorrect password")
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer ") or not _check_token(auth[7:]):
+        raise HTTPException(401, "Not authenticated")
 
     drive_clips = await db.drive_clips.find(
         {"source": {"$ne": "upload"}, "r2_url": {"$exists": True}}
