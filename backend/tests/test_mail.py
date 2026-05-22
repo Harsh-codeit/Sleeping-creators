@@ -1,7 +1,5 @@
-import pytest, os
-from unittest.mock import patch, MagicMock
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import os
+from unittest.mock import patch
 
 
 def test_send_email_calls_resend():
@@ -42,3 +40,11 @@ def test_verify_webhook_invalid():
     with patch.dict(os.environ, {"RESEND_WEBHOOK_SECRET": "whsec_dGVzdA=="}):
         from mail_service import verify_webhook_signature
         assert verify_webhook_signature("id", "ts", "v1,badsig", b"{}") is False
+
+
+def test_verify_webhook_missing_secret():
+    with patch.dict(os.environ, {}, clear=True):
+        # Remove RESEND_WEBHOOK_SECRET if set
+        os.environ.pop("RESEND_WEBHOOK_SECRET", None)
+        from mail_service import verify_webhook_signature
+        assert verify_webhook_signature("id", "ts", "v1,anysig", b"{}") is False

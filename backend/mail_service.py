@@ -1,18 +1,27 @@
-import os, hmac, hashlib, base64
+import os
+import hmac
+import hashlib
+import base64
+import logging
 import resend
 
-resend.api_key = os.environ.get("RESEND_API_KEY", "")
+logger = logging.getLogger(__name__)
 _FROM = os.environ.get("RESEND_FROM_EMAIL", "Sleeping Creators <noreply@sleepingcreators.com>")
 
 
 def send_email(to: str, subject: str, html: str, cc: list | None = None, reply_to: str | None = None) -> str:
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
     params = {"from": _FROM, "to": [to], "subject": subject, "html": html}
     if cc:
         params["cc"] = cc
     if reply_to:
         params["reply_to"] = reply_to
-    resp = resend.Emails.send(params)
-    return resp["id"]
+    try:
+        resp = resend.Emails.send(params)
+        return resp["id"]
+    except Exception as e:
+        logger.error("Resend send_email failed to=%s subject=%s: %s", to, subject, e)
+        raise
 
 
 def verify_webhook_signature(svix_id: str, svix_timestamp: str, svix_signature: str, raw_body: bytes) -> bool:
