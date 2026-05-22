@@ -379,28 +379,6 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
         )
 
 
-def _apply_video_transcode(timeline: dict) -> None:
-    """Set `asset.transcode = true` on every video-type clip in the timeline.
-
-    Shotstack's transcode flag causes it to read and honour the rotation
-    metadata embedded in the source file (Display Matrix / EXIF), so the
-    rendered output is always correctly oriented regardless of how the clip
-    was shot. Idempotent — safe to call even if already set.
-    """
-    transcoded = 0
-    for track in timeline.get("tracks", []) or []:
-        if not isinstance(track, dict):
-            continue
-        for clip in track.get("clips", []) or []:
-            if not isinstance(clip, dict):
-                continue
-            asset = clip.get("asset")
-            if isinstance(asset, dict) and asset.get("type") == "video":
-                asset["transcode"] = True
-                transcoded += 1
-    if transcoded:
-        logger.info("_apply_video_transcode: set transcode=true on %d video clip(s)", transcoded)
-
 
 def _normalize_placeholders(obj):
     """
@@ -431,11 +409,6 @@ async def submit_render(
     """
     mutated = _apply_filter_and_audio(template_data, filter_name, audio_url)
     tpl = mutated.get("template", {})
-
-    # Instruct Shotstack to honour the rotation metadata embedded in each video
-    # file (Display Matrix / EXIF). Without this flag Shotstack ignores rotation
-    # tags and renders the raw pixels, causing portrait clips to appear sideways.
-    _apply_video_transcode(tpl.get("timeline", {}))
 
     # Belt-and-suspenders: substitute merge values directly into text-asset
     # content where the asset's literal text matches the merge field's default.
