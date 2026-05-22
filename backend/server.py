@@ -2004,6 +2004,8 @@ async def lifespan(app: FastAPI):
                       start_date=_now + timedelta(seconds=330))
     scheduler.add_job(pull_sheet_approvals, 'interval', minutes=15, id='sheets_inbound_sync',
                       start_date=_now + timedelta(seconds=390))
+    scheduler.add_job(purge_published_media, 'interval', hours=1, id='purge_media',
+                      start_date=_now + timedelta(seconds=450))
     scheduler.start()
     # Verify competitor weekly scan job is registered and log next fire time
     _competitor_job = scheduler.get_job('competitor_weekly_scan')
