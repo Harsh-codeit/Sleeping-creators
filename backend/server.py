@@ -18,6 +18,7 @@ import os, uuid, logging, random, secrets, asyncio, tempfile, re
 import sheets_service
 import httpx
 import bundle_service
+import mail_service
 import storage
 from urllib.parse import urlencode, quote
 from datetime import datetime, timezone, timedelta
@@ -46,7 +47,7 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/")
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
@@ -2092,6 +2093,28 @@ async def lifespan(app: FastAPI):
         pass
 
 app = FastAPI(lifespan=lifespan, redirect_slashes=False)
+class MailSendRequest(BaseModel):
+    type: str
+    client_id: str
+    to: str
+    cc: Optional[List[str]] = None
+    reply_to: Optional[str] = None
+    subject: str
+    html: str
+
+class MailScheduleRequest(BaseModel):
+    type: str
+    client_id: str
+    to: str
+    cc: Optional[List[str]] = None
+    reply_to: Optional[str] = None
+    subject: str
+    html: str
+    scheduled_at: str  # ISO datetime string
+
+class BulkReportRequest(BaseModel):
+    period: str
+
 api_router = APIRouter(prefix="/api")
 
 app.add_middleware(AuthMiddleware)
