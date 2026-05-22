@@ -18,6 +18,7 @@ import os, uuid, logging, random, secrets, asyncio, tempfile, re
 import sheets_service
 import httpx
 import bundle_service
+import storage
 from urllib.parse import urlencode, quote
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -1903,6 +1904,75 @@ async def pull_sheet_approvals():
                     pass
         except Exception as e:
             logging.error(f"[sheets] inbound pull failed for {client.get('name')}: {e}")
+
+
+async def _iter_db_cursor(cursor):
+    """Yield items from a Motor cursor, compatible with AsyncMock-based test stubs.
+
+    In tests, cursor.__aiter__ is an AsyncMock that returns a sync iterator when
+    awaited.  In production Motor returns an async iterator directly.
+    """
+    aiter_result = cursor.__aiter__()
+    if asyncio.iscoroutine(aiter_result):
+        # Test stub: await to get the underlying sync iterator, then yield each item.
+        sync_iter = await aiter_result
+        for item in sync_iter:
+            yield item
+    else:
+        # Real Motor cursor: already an async iterator.
+        async for item in aiter_result:
+            yield item
+
+
+async def purge_published_media():
+    """Hourly job: delete R2 media for posts published >24h ago."""
+    r2_base = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+    if not r2_base:
+        logger.warning("purge_published_media: R2_PUBLIC_URL not set — skipping")
+        return
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    cursor = db.posts.find({
+        "status": "published",
+        "published_at": {"$lte": cutoff},
+        "r2_media_purged": {"$ne": True},
+    })
+
+    purged = 0
+    async for post in _iter_db_cursor(cursor):
+        keys = []
+
+        for url in [
+            post.get("r2_video_url"),
+            post.get("r2_snapshot_url"),
+            post.get("image_url"),
+        ]:
+            key = _extract_r2_key(url, r2_base)
+            if key:
+                keys.append(key)
+
+        for url in ((post.get("carousel_data") or {}).get("exported_images") or []):
+            key = _extract_r2_key(url, r2_base)
+            if key:
+                keys.append(key)
+
+        for key in keys:
+            try:
+                storage.delete_file(key)
+            except Exception as e:
+                logger.warning(f"purge_published_media: delete failed for {key!r}: {e}")
+
+        try:
+            await db.posts.update_one(
+                {"id": post["id"]},
+                {"$set": {"r2_media_purged": True, "r2_media_purged_at": now_iso()}},
+            )
+            purged += 1
+        except Exception as e:
+            logger.error(f"purge_published_media: stamp failed for post {post.get('id')}: {e}")
+
+    if purged:
+        logger.info(f"purge_published_media: stamped {purged} post(s)")
 
 
 # ─── FastAPI App ──────────────────────────────────────────────────────────────
