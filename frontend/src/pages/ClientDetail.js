@@ -1808,7 +1808,7 @@ export default function ClientDetail() {
 
   useEffect(() => {
     if (activeTab === 'Emails' && id) {
-      axios.get(`/api/clients/${id}/emails`).then(r => setClientEmails(r.data)).catch(() => {});
+      axios.get(`${API}/clients/${id}/emails`).then(r => setClientEmails(r.data)).catch(() => {});
     }
   }, [activeTab, id]);
 
