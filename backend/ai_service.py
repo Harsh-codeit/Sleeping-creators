@@ -464,6 +464,53 @@ def _is_indian_audience(onboarding: dict, client: dict) -> bool:
     return False
 
 
+def _build_topic_rules_block(client: dict) -> str:
+    """Returns a hard-enforcement topic rules block for the top of the system prompt.
+    Returns empty string if no rules are configured."""
+    strategy = client.get("strategy") or {}
+    onboarding = client.get("onboarding_data") or {}
+
+    include_entries = strategy.get("topics_include") or []
+    never_cover = [x for x in (onboarding.get("not_to_do_list") or []) if x and x.strip()]
+
+    topic_only = []
+    mentions = []
+    for e in include_entries:
+        if isinstance(e, dict):
+            text = (e.get("text") or "").strip()
+            if not text:
+                continue
+            if e.get("type") == "mention":
+                mentions.append(text)
+            else:
+                topic_only.append(text)
+        elif isinstance(e, str) and e.strip():
+            topic_only.append(e.strip())
+
+    if not topic_only and not mentions and not never_cover:
+        return ""
+
+    SEP = "═" * 60
+    lines = [SEP, "ABSOLUTE TOPIC RULES — THESE OVERRIDE ALL OTHER INSTRUCTIONS", SEP]
+
+    if topic_only:
+        lines.append("ALWAYS DRAW FROM THESE TOPICS (content must stay within these):")
+        lines.extend(f"- {t}" for t in topic_only)
+    if mentions:
+        lines.append("ALWAYS INCLUDE THESE ELEMENTS (weave into any topic):")
+        lines.extend(f"- {m}" for m in mentions)
+    if never_cover:
+        lines.append("NEVER COVER THESE TOPICS UNDER ANY CIRCUMSTANCES:")
+        lines.extend(f"- {n}" for n in never_cover)
+
+    lines += [
+        "Every slide, hook, CTA, and example must comply.",
+        "If any rule conflicts with a format requirement, the rule wins.",
+        SEP,
+    ]
+    return "\n".join(lines)
+
+
 def _build_brand_context(client: dict, onboarding: dict) -> str:
     """Build a rich brand context block from all available client data."""
     lines = []
@@ -505,9 +552,6 @@ async def _generate_single_image_hook(
     themes   = client.get("strategy", {}).get("themes", ["business insights"])
     brand_ctx = _build_brand_context(client, onboarding)
 
-    not_to_do = onboarding.get("not_to_do_list") or []
-    avoid_block = ("\n\nNEVER DO:\n" + "\n".join(f"- {x}" for x in not_to_do if x)) if not_to_do else ""
-
     topic_line = f"Topic: {topic}" if topic else f"Choose the most scroll-stopping topic from: {', '.join(themes)}"
 
     # Use the module-level _PLATFORM_VOICE (defined further down) — same dict for both code paths.
@@ -537,7 +581,9 @@ async def _generate_single_image_hook(
             "changing a word, REWRITE it. Do not reuse phrasings from the persona examples."
         )
 
-    system_msg = f"""{_CAROUSEL_STRATEGIST_PERSONA}
+    _topic_rules = _build_topic_rules_block(client)
+    _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
+    system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
 {india_block}
 CLIENT CONTEXT:
 You are writing for {name} ({industry}).
@@ -553,7 +599,7 @@ SINGLE-CARD RULES (override the carousel-specific rules above):
 - This is one card, not a list — do NOT use bullet lists or "Step N:" markers.
 - No filler. No generic motivational language.
 - Make it specific to {industry} — not a generic life lesson.
-- It must stop a {platform} scroll cold.{avoid_block}
+- It must stop a {platform} scroll cold.
 
 LANGUAGE LOCK: Write the content in {language}. Do NOT use English unless {language} is English."""
 
@@ -667,9 +713,6 @@ async def _generate_carousel_single_pass(
             "nights, 93,000 hours, etc.) — those are illustrations of the PATTERN, not phrases to reuse."
         )
 
-    not_to_do = onboarding.get("not_to_do_list") or []
-    avoid_block = ("\n\nNEVER DO:\n" + "\n".join(f"- {x}" for x in not_to_do if x)) if not_to_do else ""
-
     # Sanitize free-form user input before it lands in the system prompt
     safe_topic = _safe_for_prompt(topic, max_len=300)
     safe_hook_inspiration = _safe_for_prompt(hook_inspiration, max_len=300)
@@ -735,7 +778,9 @@ async def _generate_carousel_single_pass(
         for i in range(slide_count)
     )
 
-    system_msg = f"""{_CAROUSEL_STRATEGIST_PERSONA}
+    _topic_rules = _build_topic_rules_block(client)
+    _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
+    system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
 {india_block}
 CLIENT CONTEXT:
 You are writing for {name} ({industry}).
@@ -750,7 +795,7 @@ Write a {slide_count}-slide {platform} carousel.
 {format_block}
 {hook_anchor_block}
 {hook_block}
-{cta_block}{avoid_block}
+{cta_block}
 {memory_block}
 
 LANGUAGE LOCK: Write ALL slide content (including the title) in {language}. Every word, every slide. Do NOT use English unless {language} is English. This rule overrides everything else.
