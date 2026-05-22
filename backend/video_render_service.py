@@ -391,14 +391,19 @@ def _parse_content_json(raw: str) -> Optional[dict]:
 def _generate_content_json(full_prompt: str) -> dict:
     """Call Claude and parse the JSON response. Retries once with more tokens
     if the first attempt returns malformed/truncated JSON."""
+    import anthropic as _anthropic
+    from fastapi import HTTPException
     client = _anthropic_client()
     last_raw = ""
     for attempt, max_tokens in enumerate((4096, 8000), start=1):
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": full_prompt}],
-        )
+        try:
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": full_prompt}],
+            )
+        except _anthropic.OverloadedError:
+            raise HTTPException(status_code=503, detail="AI service is temporarily overloaded — please try again in a moment")
         last_raw = msg.content[0].text if msg.content else ""
         data = _parse_content_json(last_raw)
         if data is not None:
