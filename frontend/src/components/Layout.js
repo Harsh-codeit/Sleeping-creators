@@ -2,7 +2,7 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, Users, LayoutTemplate, CalendarRange, BarChart3,
-  Terminal, Settings, Circle, Layers, LogOut, Star, Coins, Music2, Film, UserCog
+  Terminal, Settings, Circle, Layers, LogOut, Star, Coins, Music2, Film, UserCog, AlertTriangle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -29,6 +29,7 @@ const NAV = [
 export default function Layout({ onLogout }) {
   const location = useLocation();
   const [engineRunning, setEngineRunning] = useState(true);
+  const [driveConnected, setDriveConnected] = useState(true);
   const { role, permissions } = useUser();
 
   const visibleNav = NAV.filter(nav => {
@@ -46,6 +47,18 @@ export default function Layout({ onLogout }) {
     };
     fetchStatus();
     const interval = setInterval(fetchStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const checkDrive = async () => {
+      try {
+        const resp = await axios.get(`${API}/auth/google/status`);
+        setDriveConnected(resp.data.connected);
+      } catch {}
+    };
+    checkDrive();
+    const interval = setInterval(checkDrive, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -116,7 +129,19 @@ export default function Layout({ onLogout }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto scrollbar-thin">
+      <main className="flex-1 overflow-y-auto scrollbar-thin flex flex-col">
+        {!driveConnected && (
+          <div className="flex items-center gap-3 px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/30 text-amber-400 text-xs font-mono flex-shrink-0">
+            <AlertTriangle size={13} className="flex-shrink-0" />
+            <span className="flex-1">Google Drive is disconnected — video clips and images cannot be downloaded.</span>
+            <a
+              href={`${process.env.REACT_APP_BACKEND_URL}/api/auth/google/start`}
+              className="px-3 py-1 border border-amber-500/50 hover:border-amber-400 hover:text-amber-300 transition-colors duration-150 whitespace-nowrap"
+            >
+              Reconnect Drive
+            </a>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
