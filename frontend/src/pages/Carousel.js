@@ -1063,6 +1063,36 @@ export default function Carousel() {
                 <span className="text-[10px] font-mono text-zinc-600 ml-auto">Save to enable export</span>
               )}
             </div>
+            {/* Topic Rules panel — shown when client has rules configured */}
+            {selectedClientId && (() => {
+              const includeEntries = (selectedClient?.strategy?.topics_include || []).map(e =>
+                typeof e === "string" ? { text: e, type: "topic" } : e
+              ).filter(e => e.text);
+              const neverCover = (selectedClient?.onboarding_data?.not_to_do_list || []).filter(Boolean);
+              if (!includeEntries.length && !neverCover.length) return null;
+              return (
+                <div className="flex items-start gap-3 mb-3 px-3 py-2 border border-zinc-800 bg-zinc-900/60">
+                  <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mt-0.5 flex-shrink-0">Topic Rules</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {includeEntries.map((e, i) => (
+                      <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border ${
+                        e.type === "mention"
+                          ? "bg-sky-950/40 border-sky-900/60 text-sky-400/80"
+                          : "bg-emerald-950/40 border-emerald-900/60 text-emerald-400/80"
+                      }`}>
+                        {e.text}
+                        <span className="text-[8px] opacity-60 uppercase">{e.type}</span>
+                      </span>
+                    ))}
+                    {neverCover.map((tag, i) => (
+                      <span key={`nc-${i}`} className="inline-flex items-center px-2 py-0.5 text-[10px] font-mono border bg-rose-950/40 border-rose-900/60 text-rose-400/80">
+                        <span className="text-[8px] opacity-60 uppercase mr-1">never</span>{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {/* Prompt input */}
             <form onSubmit={handlePromptSubmit} className="flex items-center gap-3">
               <div className="flex-1 flex items-center bg-zinc-900 border border-zinc-700 focus-within:border-zinc-500 transition-colors duration-150">

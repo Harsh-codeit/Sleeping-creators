@@ -1759,7 +1759,9 @@ export default function ClientDetail() {
       setStrategyForm({
         themes: (s.themes || []).join(", "),
         hashtags: (s.hashtags || []).join(", "),
-        topics_include: s.topics_include || [],
+        topics_include: (s.topics_include || []).map(e =>
+          typeof e === "string" ? { text: e, type: "topic" } : e
+        ),
         video_hooks: s.video_hooks || [],
         video_prompt: s.video_prompt || ""
       });
@@ -2264,9 +2266,25 @@ export default function ClientDetail() {
                   <span className="text-[10px] font-mono text-emerald-500 uppercase">Always Include</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 min-h-[32px]">
-                  {strategyForm.topics_include.map((tag, i) => (
+                  {strategyForm.topics_include.map((entry, i) => (
                     <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400 text-xs">
-                      {tag}
+                      {entry.text}
+                      <button
+                        onClick={() => setStrategyForm(f => ({
+                          ...f,
+                          topics_include: f.topics_include.map((e, j) =>
+                            j === i ? { ...e, type: e.type === "mention" ? "topic" : "mention" } : e
+                          )
+                        }))}
+                        title={entry.type === "mention" ? "MENTION — click to change to TOPIC" : "TOPIC — click to change to MENTION"}
+                        className={`font-mono text-[9px] uppercase tracking-widest px-1 border transition-colors cursor-pointer ${
+                          entry.type === "mention"
+                            ? "border-sky-700 text-sky-400 hover:border-sky-500"
+                            : "border-emerald-800 text-emerald-600 hover:border-emerald-600"
+                        }`}
+                      >
+                        {entry.type === "mention" ? "mention" : "topic"}
+                      </button>
                       <button
                         onClick={() => setStrategyForm(f => ({ ...f, topics_include: f.topics_include.filter((_, j) => j !== i) }))}
                         className="text-emerald-600 hover:text-emerald-300 transition-colors"
@@ -2284,8 +2302,8 @@ export default function ClientDetail() {
                     if ((e.key === "Enter" || e.key === ",") && topicIncludeInput.trim()) {
                       e.preventDefault();
                       const val = topicIncludeInput.trim().replace(/,$/, "");
-                      if (val && !strategyForm.topics_include.includes(val)) {
-                        setStrategyForm(f => ({ ...f, topics_include: [...f.topics_include, val] }));
+                      if (val && !strategyForm.topics_include.some(e => e.text === val)) {
+                        setStrategyForm(f => ({ ...f, topics_include: [...f.topics_include, { text: val, type: "topic" }] }));
                       }
                       setTopicIncludeInput("");
                     }
