@@ -1722,6 +1722,7 @@ export default function ClientDetail() {
   // onboarding_data.not_to_do_list. Editable only in Profile tab; this tab shows read-only mirrors.
   const [strategyForm, setStrategyForm] = useState({ themes: "", hashtags: "", topics_include: [], video_hooks: [], video_prompt: "" });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
+  const [neverCoverInput, setNeverCoverInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
   const [hookGenKeyword, setHookGenKeyword] = useState("");
   const [hookGenLoading, setHookGenLoading] = useState(false);
@@ -2313,25 +2314,50 @@ export default function ClientDetail() {
                 />
               </div>
 
-              {/* Exclude — read-only mirror of onboarding_data.not_to_do_list */}
-              <div className="border border-dashed border-zinc-800 bg-zinc-950/50 p-3 space-y-2" data-testid="strategy-topics-exclude-mirror">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500/50" />
-                    <span className="text-[10px] font-mono text-rose-500/70 uppercase">Never Cover</span>
-                  </div>
-                  <span className="text-[9px] font-mono text-zinc-600 normal-case tracking-normal">mirror — edit in Profile</span>
+              {/* Exclude — editable, syncs to onboarding_data.not_to_do_list */}
+              <div className="border border-zinc-800 p-3 space-y-2" data-testid="strategy-topics-exclude-mirror">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  <span className="text-[10px] font-mono text-rose-500 uppercase">Never Cover</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 min-h-[32px]">
                   {(client?.onboarding_data?.not_to_do_list || []).filter(Boolean).map((tag, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-950/40 border border-rose-900/60 text-rose-400/80 text-xs">
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-950 border border-rose-800 text-rose-400 text-xs">
                       {tag}
+                      <button
+                        onClick={async () => {
+                          const updated = (client.onboarding_data.not_to_do_list || []).filter((_, j) => j !== i);
+                          try {
+                            const resp = await axios.put(`${API}/clients/${id}`, { onboarding_data: { ...client.onboarding_data, not_to_do_list: updated } });
+                            setClient(resp.data);
+                          } catch { toast.error("Failed to update"); }
+                        }}
+                        className="text-rose-600 hover:text-rose-300 transition-colors"
+                      ><X size={10} /></button>
                     </span>
                   ))}
-                  {(!client?.onboarding_data?.not_to_do_list || client.onboarding_data.not_to_do_list.filter(Boolean).length === 0) && (
-                    <span className="text-[10px] text-zinc-700 italic font-mono">Set in Profile → Topics to AVOID</span>
-                  )}
                 </div>
+                <input
+                  data-testid="strategy-never-cover-input"
+                  value={neverCoverInput}
+                  onChange={e => setNeverCoverInput(e.target.value)}
+                  onKeyDown={async e => {
+                    if ((e.key === "Enter" || e.key === ",") && neverCoverInput.trim()) {
+                      e.preventDefault();
+                      const val = neverCoverInput.trim().replace(/,$/, "");
+                      const current = (client?.onboarding_data?.not_to_do_list || []).filter(Boolean);
+                      if (val && !current.includes(val)) {
+                        try {
+                          const resp = await axios.put(`${API}/clients/${id}`, { onboarding_data: { ...client.onboarding_data, not_to_do_list: [...current, val] } });
+                          setClient(resp.data);
+                        } catch { toast.error("Failed to update"); }
+                      }
+                      setNeverCoverInput("");
+                    }
+                  }}
+                  placeholder="Type and press Enter"
+                  className="w-full bg-zinc-950 border border-zinc-700 px-2 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-rose-700"
+                />
               </div>
             </div>
           </div>
