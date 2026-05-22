@@ -9,7 +9,7 @@ import { StatusBadge, getPostActions } from "@/lib/postStatus";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
-const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Profile"];
+const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Profile", "Emails"];
 
 const STATUS_DOT = { active: "text-emerald-400", paused: "text-amber-400", error: "text-red-400" };
 
@@ -1734,6 +1734,7 @@ export default function ClientDetail() {
   const [competitorInsight, setCompetitorInsight] = useState(null);
   const [togglingWinner, setTogglingWinner] = useState(null);
   const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
+  const [clientEmails, setClientEmails] = useState([]);
 
   const refreshAnalytics = async () => {
     if (refreshingAnalytics) return;
@@ -1804,6 +1805,12 @@ export default function ClientDetail() {
     }, 5000);
     return () => clearInterval(iv);
   }, [activeTab, posts, id]);
+
+  useEffect(() => {
+    if (activeTab === 'Emails' && id) {
+      axios.get(`/api/clients/${id}/emails`).then(r => setClientEmails(r.data)).catch(() => {});
+    }
+  }, [activeTab, id]);
 
   const saveEditProfile = async () => {
     if (!editForm) return;
@@ -2781,6 +2788,44 @@ export default function ClientDetail() {
           saving={savingEdit}
           onSave={saveEditProfile}
         />
+      )}
+
+      {activeTab === 'Emails' && (
+        <div className="p-6" data-testid="emails-tab">
+          <p className="text-xs font-sans text-zinc-500 uppercase tracking-widest mb-4">Email History</p>
+          {clientEmails.length === 0
+            ? <p className="text-sm font-mono text-zinc-600">No emails sent to this client yet.</p>
+            : (
+              <table className="w-full text-xs font-mono">
+                <thead>
+                  <tr className="text-zinc-500 border-b border-zinc-800">
+                    <th className="text-left py-2 pr-4 font-normal">Type</th>
+                    <th className="text-left py-2 pr-4 font-normal">Subject</th>
+                    <th className="text-left py-2 pr-4 font-normal">Sent By</th>
+                    <th className="text-left py-2 pr-4 font-normal">Sent At</th>
+                    <th className="text-left py-2 font-normal">Delivery</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientEmails.map(e => (
+                    <tr key={e._id} className="border-b border-zinc-900 hover:bg-zinc-900 transition-colors duration-200">
+                      <td className="py-2 pr-4 text-zinc-300">{e.type}</td>
+                      <td className="py-2 pr-4 text-zinc-400 max-w-[220px] truncate">{e.subject}</td>
+                      <td className="py-2 pr-4 text-zinc-400">{e.sent_by}</td>
+                      <td className="py-2 pr-4 text-zinc-400">{new Date(e.sent_at).toLocaleString()}</td>
+                      <td className="py-2">
+                        <span className={`inline-block w-2 h-2 rounded-full ${
+                          e.delivery_status === 'delivered' || e.delivery_status === 'opened' ? 'bg-emerald-500' :
+                          e.delivery_status === 'bounced' ? 'bg-red-500' : 'bg-zinc-500'
+                        }`} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          }
+        </div>
       )}
 
       {showGenModal && (
