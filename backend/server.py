@@ -714,6 +714,16 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def _extract_r2_key(url: str | None, r2_base: str) -> str | None:
+    """Return the R2 object key for a URL, or None if it's not an R2 URL."""
+    if not url:
+        return None
+    base = r2_base.rstrip("/")
+    if url.startswith(base + "/"):
+        return url[len(base) + 1:]
+    return None
+
+
 def _compute_engagement_score(performance: dict) -> int:
     """Likes + comments*3 + shares*5."""
     return (
