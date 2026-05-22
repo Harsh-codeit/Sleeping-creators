@@ -6493,22 +6493,44 @@ async def register_clip(client_id: str, body: ClipRegisterRequest):
     return {k: v for k, v in clip.items() if k != "_id"}
 
 
+class ClearClipCacheRequest(BaseModel):
+    password: str
+    dry_run: bool = True
+
 @api_router.post("/admin/clips/clear-r2-cache")
-async def clear_clip_r2_cache():
-    """One-time migration: clear r2_url from all drive-synced clips so they
-    get re-staged to R2 on next render. Does NOT touch uploaded clips."""
-    result = await db.drive_clips.update_many(
+async def clear_clip_r2_cache(body: ClearClipCacheRequest):
+    """One-time migration: clear r2_url from drive-synced clips so they
+    get re-staged to R2 on next render. Does NOT touch uploaded clips.
+    Use dry_run=true first to preview what will be cleared."""
+    s = await get_settings()
+    if not _verify_pw(body.password, s.get("admin_password_hash", "")):
+        raise HTTPException(401, "Incorrect password")
+
+    drive_clips = await db.drive_clips.find(
+        {"source": {"$ne": "upload"}, "r2_url": {"$exists": True}}
+    ).to_list(1000)
+    cache_clips = await db.clip_cache.find(
+        {"r2_url": {"$exists": True}}
+    ).to_list(1000)
+
+    preview = {
+        "drive_clips_to_clear": [
+            {"name": c.get("name"), "r2_url": c.get("r2_url"), "client_id": c.get("client_id")}
+            for c in drive_clips
+        ],
+        "clip_cache_to_clear": len(cache_clips),
+        "dry_run": body.dry_run,
+    }
+
+    if body.dry_run:
+        return preview
+
+    await db.drive_clips.update_many(
         {"source": {"$ne": "upload"}},
         {"$unset": {"r2_url": ""}},
     )
-    result2 = await db.clip_cache.update_many(
-        {},
-        {"$unset": {"r2_url": ""}},
-    )
-    return {
-        "drive_clips_cleared": result.modified_count,
-        "clip_cache_cleared": result2.modified_count,
-    }
+    await db.clip_cache.update_many({}, {"$unset": {"r2_url": ""}})
+    return {**preview, "dry_run": False, "status": "cleared"}
 
 
 class DriveSyncRequest(BaseModel):
