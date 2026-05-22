@@ -2,7 +2,7 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, Users, LayoutTemplate, CalendarRange, BarChart3,
-  Terminal, Settings, Circle, Layers, LogOut, Star, Coins, Music2, Film, UserCog, AlertTriangle
+  Terminal, Settings, Circle, Layers, LogOut, Star, Coins, Music2, Film, UserCog, AlertTriangle, Mail
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -24,6 +24,7 @@ const NAV = [
   { path: "/usage",           label: "Usage",     icon: Coins,                          resource: "usage" },
   { path: "/settings",        label: "Settings",  icon: Settings,                       resource: "settings" },
   { path: "/team",            label: "Team",      icon: UserCog,       ownerOnly: true, resource: null },
+  { path: "/mail",            label: "Mail",      icon: Mail,          ownerOnly: true, resource: null },
 ];
 
 export default function Layout({ onLogout }) {

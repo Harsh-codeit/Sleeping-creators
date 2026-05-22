@@ -26,6 +26,7 @@ import { UserProvider } from "./context/UserContext";
 import { PermissionGate } from "./components/PermissionGate";
 import TeamPage from "./pages/TeamPage";
 import VideoTemplatesAdmin from "./pages/VideoTemplatesAdmin";
+import MailCenter from "./pages/MailCenter";
 
 // Set axios auth header synchronously on load so it's ready before any
 // child component fires an API call (useEffect would run too late).
@@ -101,6 +102,7 @@ function App() {
                 <Route path="video-templates" element={<PermissionGate resource="video_templates"><VideoTemplatesAdmin /></PermissionGate>} />
                 <Route path="onboarding" element={<Onboarding />} />
                 <Route path="team" element={<PermissionGate ownerOnly><TeamPage /></PermissionGate>} />
+                <Route path="mail" element={<PermissionGate ownerOnly><MailCenter /></PermissionGate>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
