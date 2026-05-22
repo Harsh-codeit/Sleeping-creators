@@ -986,6 +986,38 @@ async def seed_sample_data():
 
 # ─── Scheduler Tasks ─────────────────────────────────────────────────────────
 
+async def fire_scheduled_emails():
+    now = datetime.now(timezone.utc).isoformat()
+    pending = await db.scheduled_emails.find(
+        {"status": "pending", "scheduled_at": {"$lte": now}}
+    ).to_list(50)
+    for doc in pending:
+        try:
+            resend_id = mail_service.send_email(
+                to=doc["to"], subject=doc["subject"], html=doc["html"],
+                cc=doc.get("cc"), reply_to=doc.get("reply_to"),
+            )
+            await db.scheduled_emails.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"status": "sent", "resend_id": resend_id,
+                           "sent_at": datetime.now(timezone.utc).isoformat(),
+                           "delivery_status": "queued"}},
+            )
+            await db.email_logs.insert_one({
+                "type": doc["type"], "client_id": doc["client_id"],
+                "to": doc["to"], "cc": doc.get("cc", []),
+                "subject": doc["subject"], "resend_id": resend_id,
+                "status": "sent", "delivery_status": "queued",
+                "sent_by": doc.get("created_by", "scheduler"),
+                "sent_at": datetime.now(timezone.utc).isoformat(), "error": None,
+            })
+        except Exception as e:
+            await db.scheduled_emails.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"status": "failed", "error": str(e)}},
+            )
+
+
 async def process_scheduled_posts():
     try:
         settings = await get_settings()
@@ -2007,6 +2039,7 @@ async def lifespan(app: FastAPI):
                       start_date=_now + timedelta(seconds=390))
     scheduler.add_job(purge_published_media, 'interval', hours=1, id='purge_media',
                       start_date=_now + timedelta(seconds=450))
+    scheduler.add_job(fire_scheduled_emails, 'interval', seconds=60, id='fire_scheduled_emails')
     scheduler.start()
     # Verify competitor weekly scan job is registered and log next fire time
     _competitor_job = scheduler.get_job('competitor_weekly_scan')
@@ -6458,6 +6491,24 @@ async def register_clip(client_id: str, body: ClipRegisterRequest):
     }
     await db.drive_clips.insert_one(clip)
     return {k: v for k, v in clip.items() if k != "_id"}
+
+
+@api_router.post("/admin/clips/clear-r2-cache")
+async def clear_clip_r2_cache():
+    """One-time migration: clear r2_url from all drive-synced clips so they
+    get re-staged to R2 on next render. Does NOT touch uploaded clips."""
+    result = await db.drive_clips.update_many(
+        {"source": {"$ne": "upload"}},
+        {"$unset": {"r2_url": ""}},
+    )
+    result2 = await db.clip_cache.update_many(
+        {},
+        {"$unset": {"r2_url": ""}},
+    )
+    return {
+        "drive_clips_cleared": result.modified_count,
+        "clip_cache_cleared": result2.modified_count,
+    }
 
 
 class DriveSyncRequest(BaseModel):
