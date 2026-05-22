@@ -162,7 +162,9 @@ async def generate_content(client: dict, platform: str, content_type: str, topic
         text_limit_rule = f"- text must be under {limit} characters\n" if limit else ""
 
         bio_line = f"\nAbout the client: {client['bio']}" if client.get('bio') else ""
-        system_msg = f"""You are a world-class social media content strategist for {client.get('name', 'a brand')}.
+        _topic_rules = _build_topic_rules_block(client)
+        _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
+        system_msg = f"""{_topic_rules_prefix}You are a world-class social media content strategist for {client.get('name', 'a brand')}.
 Industry: {client.get('industry', 'General')}
 Brand voice: {tone}
 Target audience: {client.get('target_audience', 'General public')}{bio_line}
