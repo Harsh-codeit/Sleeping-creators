@@ -206,6 +206,18 @@ def upload_bytes(data: bytes, key: str, content_type: str = "image/png") -> str:
         return ""
 
 
+def generate_presigned_upload_url(key: str, content_type: str, expires: int = 3600) -> str:
+    """Return a presigned PUT URL the browser can use to upload directly to R2/MinIO."""
+    if not _enabled:
+        raise RuntimeError(f"Storage ({_BACKEND}) not configured")
+    s3 = _client()
+    return s3.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": _active_bucket(), "Key": key, "ContentType": content_type},
+        ExpiresIn=expires,
+    )
+
+
 def delete_file(key: str) -> bool:
     """Delete a file from the configured storage backend. Returns True on success."""
     if not _enabled:

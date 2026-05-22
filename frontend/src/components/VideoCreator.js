@@ -538,12 +538,38 @@ export function VideoCreator() {
     if (!file) return;
     setUploading(true); setUploadProgress(0);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await axios.post(`${API}/clients/${selectedClient.id}/clips/upload`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
+      // Get video metadata from browser before uploading
+      const meta = await new Promise(resolve => {
+        const vid = document.createElement("video");
+        vid.preload = "metadata";
+        vid.onloadedmetadata = () => {
+          resolve({ duration: vid.duration, width: vid.videoWidth, height: vid.videoHeight });
+          URL.revokeObjectURL(vid.src);
+        };
+        vid.onerror = () => { resolve({ duration: 0, width: 0, height: 0 }); URL.revokeObjectURL(vid.src); };
+        vid.src = URL.createObjectURL(file);
+      });
+
+      // Get presigned URL
+      const { data: { upload_url, key, clip_id } } = await axios.get(
+        `${API}/clients/${selectedClient.id}/clips/presign`,
+        { params: { filename: file.name, content_type: file.type || "video/mp4" } }
+      );
+
+      // Upload directly to R2
+      await axios.put(upload_url, file, {
+        headers: { "Content-Type": file.type || "video/mp4" },
         onUploadProgress: (e) => setUploadProgress(Math.round((e.loaded * 100) / e.total)),
       });
+
+      // Register metadata with server
+      const r = await axios.post(`${API}/clients/${selectedClient.id}/clips/register`, {
+        key, clip_id, filename: file.name,
+        content_type: file.type || "video/mp4",
+        duration: meta.duration, width: meta.width, height: meta.height,
+        is_vertical: meta.height > meta.width,
+      });
+
       setClips(prev => [r.data, ...prev]);
       const clipCount = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
       if (selectedClips.length < clipCount) setSelectedClips(prev => [...prev, r.data]);

@@ -6381,6 +6381,62 @@ async def upload_clip(client_id: str, request: Request, file: UploadFile = File(
         except: pass
 
 
+@api_router.get("/clients/{client_id}/clips/presign")
+async def presign_clip_upload(client_id: str, filename: str, content_type: str = "video/mp4"):
+    """Return a presigned PUT URL so the browser can upload a clip directly to R2."""
+    import storage as _storage
+    client = await db.clients.find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    if not _storage.is_enabled():
+        raise HTTPException(503, "File storage (R2/S3) is not configured on this server.")
+    suffix = "." + (filename.rsplit(".", 1)[-1] if filename and "." in filename else "mp4")
+    clip_id = str(uuid.uuid4())
+    key = f"clips/{client_id}/{clip_id}{suffix}"
+    try:
+        url = _storage.generate_presigned_upload_url(key, content_type)
+    except Exception as e:
+        raise HTTPException(500, f"Could not generate presigned URL: {e}")
+    return {"upload_url": url, "key": key, "clip_id": clip_id}
+
+
+class ClipRegisterRequest(BaseModel):
+    key: str
+    clip_id: str
+    filename: str
+    content_type: str = "video/mp4"
+    duration: float = 0.0
+    width: int = 0
+    height: int = 0
+    is_vertical: bool = False
+
+@api_router.post("/clients/{client_id}/clips/register", status_code=201)
+async def register_clip(client_id: str, body: ClipRegisterRequest):
+    """Save clip metadata after a direct browser → R2 presigned upload."""
+    import storage as _storage
+    client = await db.clients.find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    r2_url = _storage._public_url(body.key)
+    clip = {
+        "drive_file_id": body.clip_id,
+        "client_id": client_id,
+        "name": body.filename,
+        "source": "upload",
+        "mime_type": body.content_type,
+        "r2_url": r2_url,
+        "thumbnail_url": None,
+        "duration": body.duration,
+        "width": body.width,
+        "height": body.height,
+        "is_vertical": body.is_vertical,
+        "sequence_number": 9999,
+        "synced_at": now_iso(),
+    }
+    await db.drive_clips.insert_one(clip)
+    return {k: v for k, v in clip.items() if k != "_id"}
+
+
 class DriveSyncRequest(BaseModel):
     folder_id: Optional[str] = None
 
