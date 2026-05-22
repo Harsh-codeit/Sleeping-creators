@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { RefreshCw, Film, Loader2, Trash2, Plus, X, FileCode2 } from "lucide-react";
 import VideoTemplateDetail from "../components/VideoTemplateDetail";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL || ""}/api`;
 
@@ -17,7 +18,7 @@ function isVideo(url) {
   return /\.(mp4|mov|webm|ogg)(\?|$)/i.test(url);
 }
 
-function TemplateCard({ template, onClick, onDeleted }) {
+function TemplateCard({ template, onClick, onDeleted, canDelete }) {
   const videoRef = useRef(null);
   const [hovered, setHovered] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -141,14 +142,16 @@ function TemplateCard({ template, onClick, onDeleted }) {
 
         {/* Top-right: status badge + delete button (delete only on hover) */}
         <div className="absolute top-2 right-2 flex items-center gap-1.5">
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            title="Remove from local registry (re-appears on next Sync)"
-            className={`flex items-center justify-center w-6 h-6 bg-black/70 text-zinc-400 hover:text-red-400 hover:bg-black transition-all duration-200 ${hovered ? "opacity-100" : "opacity-0"} disabled:opacity-40`}
-          >
-            {deleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-          </button>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Remove from local registry (re-appears on next Sync)"
+              className={`flex items-center justify-center w-6 h-6 bg-black/70 text-zinc-400 hover:text-red-400 hover:bg-black transition-all duration-200 ${hovered ? "opacity-100" : "opacity-0"} disabled:opacity-40`}
+            >
+              {deleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+            </button>
+          )}
           {template.shotstack_template_id?.startsWith("inline:") && (
             <span
               title="Imported from pasted JSON — won't be touched by Sync"
@@ -308,6 +311,9 @@ function ImportJsonModal({ onClose, onImported }) {
 }
 
 export default function VideoTemplatesAdmin() {
+  const { role, permissions } = useUser();
+  const vp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.video_templates ?? { view: true, create: true, edit: true, delete: true });
   const [rows, setRows] = useState([]);
   const [syncing, setSyncing] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -346,21 +352,25 @@ export default function VideoTemplatesAdmin() {
           <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">SHOTSTACK TEMPLATE REGISTRY</div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200"
-          >
-            <Plus size={12} /> Import JSON
-          </button>
-          <button
-            data-testid="sync-templates-btn"
-            onClick={sync}
-            disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
-          >
-            <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
-            {syncing ? "Syncing…" : "Sync from Shotstack"}
-          </button>
+          {vp.create && (
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-800 transition-colors duration-200"
+            >
+              <Plus size={12} /> Import JSON
+            </button>
+          )}
+          {vp.create && (
+            <button
+              data-testid="sync-templates-btn"
+              onClick={sync}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Syncing…" : "Sync from Shotstack"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -380,6 +390,7 @@ export default function VideoTemplatesAdmin() {
                 template={r}
                 onClick={() => setSelected(r)}
                 onDeleted={(id) => setRows(prev => prev.filter(t => t.id !== id))}
+                canDelete={vp.delete}
               />
             ))}
           </div>

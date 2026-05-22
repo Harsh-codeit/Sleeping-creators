@@ -12,6 +12,7 @@ export default function Login({ onLogin }) {
   const [confirm, setConfirm]   = useState("");
   const [loading, setLoading]   = useState(false);
   const [showPw, setShowPw]     = useState(false);
+  const [email, setEmail]       = useState("");
 
   useEffect(() => {
     axios.get(`${API}/auth/status`).then(r => {
@@ -24,12 +25,19 @@ export default function Login({ onLogin }) {
     if (!password) return toast.error("Enter a password");
     if (mode === "setup") {
       if (password.length < 6) return toast.error("Password must be at least 6 characters");
-      if (password !== confirm)  return toast.error("Passwords don't match");
+      if (password !== confirm) return toast.error("Passwords don't match");
     }
     setLoading(true);
     try {
-      const endpoint = mode === "setup" ? "/auth/setup" : "/auth/login";
-      const { data } = await axios.post(`${API}${endpoint}`, { password });
+      let data;
+      if (email.trim()) {
+        const resp = await axios.post(`${API}/auth/team/login`, { email: email.trim(), password });
+        data = resp.data;
+      } else {
+        const endpoint = mode === "setup" ? "/auth/setup" : "/auth/login";
+        const resp = await axios.post(`${API}${endpoint}`, { password });
+        data = resp.data;
+      }
       localStorage.setItem("sc_token", data.token);
       onLogin(data.token);
     } catch (err) {
@@ -68,6 +76,26 @@ export default function Login({ onLogin }) {
           {mode === "setup" && (
             <div className="bg-zinc-900 border border-zinc-700 px-4 py-3 text-xs text-zinc-400 font-mono">
               First time setup — choose a strong password to protect your dashboard.
+            </div>
+          )}
+
+          {/* Email field (team members only, login mode) */}
+          {mode === "login" && (
+            <div>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
+                Email
+              </label>
+              <input
+                data-testid="email-input"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="team@agency.com"
+                className="w-full bg-zinc-900 border border-zinc-800 px-4 py-3 text-white text-sm placeholder-zinc-700 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-colors rounded-none"
+              />
+              <p className="text-[10px] font-mono text-zinc-600 mt-1">
+                TEAM MEMBERS ONLY — LEAVE BLANK FOR ADMIN
+              </p>
             </div>
           )}
 

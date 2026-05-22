@@ -4,6 +4,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Pause, Play, Trash2, Circle, ExternalLink, RefreshCw, Sparkles, Search, X, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -149,6 +150,9 @@ function AddClientDialog({ open, onClose, onCreated }) {
 
 export default function Clients() {
   const navigate = useNavigate();
+  const { role, permissions } = useUser();
+  const cp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.clients ?? { view: true, create: true, edit: true, delete: true });
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -273,22 +277,26 @@ export default function Clients() {
           >
             <RefreshCw size={14} />
           </button>
-          <button
-            onClick={() => navigate("/onboarding")}
-            data-testid="onboard-client-btn"
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors duration-150"
-          >
-            <Sparkles size={14} />
-            Onboard Client
-          </button>
-          <button
-            onClick={() => setShowAdd(true)}
-            data-testid="add-client-btn"
-            className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors duration-150"
-          >
-            <Plus size={14} />
-            Quick Add
-          </button>
+          {cp.create && (
+            <button
+              onClick={() => navigate("/onboarding")}
+              data-testid="onboard-client-btn"
+              className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors duration-150"
+            >
+              <Sparkles size={14} />
+              Onboard Client
+            </button>
+          )}
+          {cp.create && (
+            <button
+              onClick={() => setShowAdd(true)}
+              data-testid="add-client-btn"
+              className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors duration-150"
+            >
+              <Plus size={14} />
+              Quick Add
+            </button>
+          )}
         </div>
       </div>
 
@@ -526,13 +534,15 @@ export default function Clients() {
                 >
                   <ExternalLink size={13} />
                 </button>
-                <button
-                  data-testid={`client-delete-btn-${client.id}`}
-                  onClick={e => deleteClient(client, e)}
-                  className="p-1.5 text-zinc-500 hover:text-red-400 border border-transparent hover:border-red-900 transition-colors duration-150"
-                >
-                  <Trash2 size={13} />
-                </button>
+                {cp.delete && (
+                  <button
+                    data-testid={`client-delete-btn-${client.id}`}
+                    onClick={e => deleteClient(client, e)}
+                    className="p-1.5 text-zinc-500 hover:text-red-400 border border-transparent hover:border-red-900 transition-colors duration-150"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             </div>
           ))

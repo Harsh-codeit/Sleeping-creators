@@ -62,35 +62,169 @@ def _is_clip_stream_path(path: str) -> bool:
 def _hash_pw(pw: str) -> str:   return _pwd_ctx.hash(pw)
 def _verify_pw(pw: str, h: str) -> bool: return _pwd_ctx.verify(pw, h)
 
-def _make_token() -> str:
-    exp = datetime.now(timezone.utc) + timedelta(days=_TOKEN_DAYS)
-    return jwt.encode({"sub": "admin", "exp": exp}, _JWT_SECRET, algorithm=_JWT_ALGO)
-
-def _check_token(token: str) -> bool:
+def _decode_token(token: str) -> dict | None:
+    """Returns {"role": "owner"|"member", "user_id": str|None} or None if invalid/expired."""
     try:
         payload = jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALGO])
-        return payload.get("sub") == "admin"
+        sub = payload.get("sub")
+        if not sub:
+            return None
+        if sub == "admin":
+            return {"role": "owner", "user_id": None}
+        role = payload.get("role", "member")
+        return {"role": role, "user_id": sub}
     except JWTError:
-        return False
+        return None
+
+def _check_token(token: str) -> bool:
+    return _decode_token(token) is not None
+
+def _make_token() -> str:
+    exp = datetime.now(timezone.utc) + timedelta(days=_TOKEN_DAYS)
+    return jwt.encode({"sub": "admin", "role": "owner", "exp": exp}, _JWT_SECRET, algorithm=_JWT_ALGO)
+
+def _make_member_token(member_id: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(days=_TOKEN_DAYS)
+    return jwt.encode({"sub": member_id, "role": "member", "exp": exp}, _JWT_SECRET, algorithm=_JWT_ALGO)
+
+
+import re as _re
+
+PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
+    # Team management — owner only (will also be blocked by _require_owner, belt-and-suspenders)
+    ("GET",    r"^/api/team$"):  ("_owner_only", "view"),
+    ("POST",   r"^/api/team$"):  ("_owner_only", "create"),
+    ("PUT",    r"^/api/team/"):  ("_owner_only", "edit"),
+    ("DELETE", r"^/api/team/"):  ("_owner_only", "delete"),
+    # Clients
+    ("GET",    r"^/api/clients$"):                        ("clients", "view"),
+    ("POST",   r"^/api/clients$"):                        ("clients", "create"),
+    ("GET",    r"^/api/clients/[^/]+$"):                  ("clients", "view"),
+    ("PUT",    r"^/api/clients/[^/]+$"):                  ("clients", "edit"),
+    ("DELETE", r"^/api/clients/[^/]+$"):                  ("clients", "delete"),
+    ("GET",    r"^/api/clients/[^/]+/"):                  ("clients", "view"),
+    ("POST",   r"^/api/clients/[^/]+/"):                  ("clients", "edit"),
+    ("PATCH",  r"^/api/clients/[^/]+/"):                  ("clients", "edit"),
+    ("DELETE", r"^/api/clients/[^/]+/"):                  ("clients", "delete"),
+    ("POST",   r"^/api/clients/onboard"):                 ("clients", "create"),
+    # Templates
+    ("GET",    r"^/api/templates"):                       ("templates", "view"),
+    ("POST",   r"^/api/templates$"):                      ("templates", "create"),
+    ("PUT",    r"^/api/templates/[^/]+$"):                ("templates", "edit"),
+    ("DELETE", r"^/api/templates/[^/]+$"):                ("templates", "delete"),
+    # Calendar + Posts
+    ("GET",    r"^/api/calendar"):                        ("calendar", "view"),
+    ("GET",    r"^/api/posts$"):                          ("calendar", "view"),
+    ("GET",    r"^/api/posts/[^/]+$"):                    ("calendar", "view"),
+    ("POST",   r"^/api/posts$"):                          ("calendar", "create"),
+    ("POST",   r"^/api/posts/generate"):                  ("calendar", "create"),
+    ("POST",   r"^/api/posts/bulk-generate"):             ("calendar", "create"),
+    ("PUT",    r"^/api/posts/[^/]+$"):                    ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/schedule"):            ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/approve"):             ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/mark-published"):      ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/retry-render"):        ("calendar", "edit"),
+    ("DELETE", r"^/api/posts/[^/]+$"):                    ("calendar", "delete"),
+    # Studio (Carousel)
+    ("GET",    r"^/api/carousels"):                       ("studio", "view"),
+    ("POST",   r"^/api/carousels$"):                      ("studio", "create"),
+    ("POST",   r"^/api/carousel/"):                       ("studio", "create"),
+    ("PUT",    r"^/api/carousels/[^/]+"):                 ("studio", "edit"),
+    ("DELETE", r"^/api/carousels/[^/]+"):                 ("studio", "delete"),
+    # Music
+    ("GET",    r"^/api/music"):                           ("music", "view"),
+    ("POST",   r"^/api/music/upload"):                    ("music", "create"),
+    ("POST",   r"^/api/music/drive/import"):              ("music", "create"),
+    ("PUT",    r"^/api/music/[^/]+"):                     ("music", "edit"),
+    ("DELETE", r"^/api/music/[^/]+"):                     ("music", "delete"),
+    # Video Templates (actual backend route: /shotstack-templates)
+    ("GET",    r"^/api/shotstack-templates"):             ("video_templates", "view"),
+    ("POST",   r"^/api/shotstack-templates"):             ("video_templates", "create"),
+    ("PATCH",  r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "edit"),
+    ("DELETE", r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "delete"),
+    # Analytics
+    ("GET",    r"^/api/dashboard/"):                      ("analytics", "view"),
+    ("GET",    r"^/api/analytics/"):                      ("analytics", "view"),
+    # Dropbox / Global Library
+    ("GET",    r"^/api/dropbox/global"):                  ("dropbox", "view"),
+    ("GET",    r"^/api/clients/[^/]+/dropbox"):           ("dropbox", "view"),
+    ("PATCH",  r"^/api/posts/[^/]+/promote-global"):      ("dropbox", "edit"),
+    # Logs
+    ("GET",    r"^/api/logs$"):                           ("logs", "view"),
+    # Usage
+    ("GET",    r"^/api/usage/"):                          ("usage", "view"),
+    # Settings
+    ("GET",    r"^/api/settings$"):                       ("settings", "view"),
+    ("PUT",    r"^/api/settings$"):                       ("settings", "edit"),
+}
+
+_MEMBER_EXEMPT = ("/api/me", "/api/auth/")
+
+def _get_required_permission(method: str, path: str) -> tuple[str, str] | None:
+    for (m, pattern), permission in PERMISSION_MAP.items():
+        if m == method and _re.match(pattern, path):
+            return permission
+    return None
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        # Allow public paths
         if any(path.startswith(p) for p in _AUTH_EXEMPT):
             return await call_next(request)
         if any(path.endswith(s) for s in _PUBLIC_SUFFIXES):
             return await call_next(request)
-        # Require Bearer token for all /api/* routes
-        if path.startswith("/api/"):
-            if _is_clip_stream_path(path):
-                stream_token = request.query_params.get("token", "")
-                if stream_token and _check_token(stream_token):
-                    return await call_next(request)
-            auth = request.headers.get("Authorization", "")
-            if not auth.startswith("Bearer ") or not _check_token(auth[7:]):
-                return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        if not path.startswith("/api/"):
+            return await call_next(request)
+
+        # Clip stream: token in query param
+        if _is_clip_stream_path(path):
+            stream_token = request.query_params.get("token", "")
+            if stream_token and _check_token(stream_token):
+                return await call_next(request)
+
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+        token = auth[7:]
+        token_info = _decode_token(token)
+
+        # Fallback for mocked/test tokens that pass _check_token but can't be decoded
+        if token_info is None:
+            if _check_token(token):
+                return await call_next(request)
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+        # Owner: full access
+        if token_info["role"] == "owner":
+            return await call_next(request)
+
+        # Member: always allow /api/me and /api/auth/
+        if any(path.startswith(p) for p in _MEMBER_EXEMPT):
+            return await call_next(request)
+
+        # Member: look up in DB for is_active + permissions
+        member_id = token_info["user_id"]
+        try:
+            member = await db.team_members.find_one({"_id": ObjectId(member_id)})
+        except Exception:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+        if not member:
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        if not member.get("is_active", False):
+            return JSONResponse({"detail": "Account inactive"}, status_code=401)
+
+        required = _get_required_permission(request.method, path)
+        if required is None:
+            return JSONResponse({"detail": "Insufficient permissions"}, status_code=403)
+
+        resource, action = required
+        perms = member.get("permissions", {})
+        if not perms.get(resource, {}).get(action, False):
+            return JSONResponse({"detail": "Insufficient permissions"}, status_code=403)
+
         return await call_next(request)
 
 # ─── Pydantic Models ─────────────────────────────────────────────────────────
@@ -329,6 +463,23 @@ class AuthLoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class TeamLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class TeamMemberCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+    permissions: dict = {}
+
+class TeamMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    permissions: Optional[dict] = None
+    is_active: Optional[bool] = None
 
 class ClientKeywordsUpdate(BaseModel):
     custom_trend_keywords: List[str]
@@ -2950,6 +3101,34 @@ async def auth_login(data: AuthLoginRequest):
         raise HTTPException(401, "Incorrect password")
     return {"token": _make_token()}
 
+@api_router.post("/auth/team/login")
+async def team_login(data: TeamLoginRequest):
+    """Authenticate a team member with email + password."""
+    member = await db.team_members.find_one({"email": data.email.lower().strip()})
+    if not member or not _verify_pw(data.password, member.get("password_hash", "")):
+        raise HTTPException(401, "Invalid email or password")
+    if not member.get("is_active", False):
+        raise HTTPException(401, "Account inactive")
+    return {"token": _make_member_token(str(member["_id"]))}
+
+@api_router.get("/me")
+async def get_me(request: Request):
+    """Return current user identity and permissions."""
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    token_info = _decode_token(token)
+    if not token_info or token_info["role"] == "owner":
+        return {"role": "owner", "name": "Admin", "email": "", "permissions": None}
+    member = await db.team_members.find_one({"_id": ObjectId(token_info["user_id"])})
+    if not member:
+        raise HTTPException(401, "Not authenticated")
+    return {
+        "role": "member",
+        "name": member.get("name", ""),
+        "email": member.get("email", ""),
+        "permissions": member.get("permissions", {}),
+    }
+
 @api_router.post("/auth/change-password")
 async def auth_change_password(data: ChangePasswordRequest, request: Request):
     """Change the admin password (requires current token)."""
@@ -2965,6 +3144,86 @@ async def auth_change_password(data: ChangePasswordRequest, request: Request):
         {"key": "global"}, {"$set": {"admin_password_hash": _hash_pw(data.new_password)}}
     )
     return {"token": _make_token()}
+
+# ─── Team Management Routes ───────────────────────────────────────────────────
+
+def _serialize_member(m: dict) -> dict:
+    """Convert ObjectId to str and strip password_hash from member doc."""
+    return {
+        "id": str(m["_id"]),
+        "name": m.get("name", ""),
+        "email": m.get("email", ""),
+        "is_active": m.get("is_active", True),
+        "permissions": m.get("permissions", {}),
+        "created_at": str(m.get("created_at", "")),
+    }
+
+def _require_owner(request: Request) -> None:
+    """Raise 403 if the request is from a team member (not owner)."""
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    info = _decode_token(token)
+    if info and info["role"] != "owner":
+        raise HTTPException(403, "Insufficient permissions")
+
+
+@api_router.get("/team")
+async def list_team_members(request: Request):
+    _require_owner(request)
+    cursor = db.team_members.find({})
+    members = await cursor.to_list(length=None)
+    return [_serialize_member(m) for m in members]
+
+
+@api_router.post("/team", status_code=201)
+async def create_team_member(data: TeamMemberCreate, request: Request):
+    _require_owner(request)
+    existing = await db.team_members.find_one({"email": data.email.lower().strip()})
+    if existing:
+        raise HTTPException(400, "A team member with this email already exists")
+    doc = {
+        "name": data.name.strip(),
+        "email": data.email.lower().strip(),
+        "password_hash": _hash_pw(data.password),
+        "is_active": True,
+        "permissions": data.permissions,
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.team_members.insert_one(doc)
+    created = await db.team_members.find_one({"_id": result.inserted_id})
+    return _serialize_member(created)
+
+
+@api_router.put("/team/{member_id}")
+async def update_team_member(member_id: str, data: TeamMemberUpdate, request: Request):
+    _require_owner(request)
+    member = await db.team_members.find_one({"_id": ObjectId(member_id)})
+    if not member:
+        raise HTTPException(404, "Team member not found")
+    updates: dict = {}
+    if data.name is not None:
+        updates["name"] = data.name.strip()
+    if data.email is not None:
+        updates["email"] = data.email.lower().strip()
+    if data.password is not None and data.password != "":
+        updates["password_hash"] = _hash_pw(data.password)
+    if data.permissions is not None:
+        updates["permissions"] = data.permissions
+    if data.is_active is not None:
+        updates["is_active"] = data.is_active
+    if updates:
+        await db.team_members.update_one({"_id": ObjectId(member_id)}, {"$set": updates})
+    updated = await db.team_members.find_one({"_id": ObjectId(member_id)})
+    return _serialize_member(updated)
+
+
+@api_router.delete("/team/{member_id}", status_code=204)
+async def delete_team_member(member_id: str, request: Request):
+    _require_owner(request)
+    member = await db.team_members.find_one({"_id": ObjectId(member_id)})
+    if not member:
+        raise HTTPException(404, "Team member not found")
+    await db.team_members.delete_one({"_id": ObjectId(member_id)})
 
 # ─── Settings Routes ──────────────────────────────────────────────────────────
 

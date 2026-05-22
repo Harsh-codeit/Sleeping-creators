@@ -1,22 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Music, FolderInput } from "lucide-react";
+import { Plus, Music } from "lucide-react";
 import { MusicTrackCard } from "../components/music/MusicTrackCard";
 import { MusicUploadModal } from "../components/music/MusicUploadModal";
-import { MusicDriveImportModal } from "../components/music/MusicDriveImportModal";
-import { useMusicTags } from "../hooks/useMusicTags";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const MOOD_FILTERS = ["all", "energy", "power", "authority", "calm", "inspiring", "urgent", "celebratory", "mysterious", "playful"];
+
 export default function MusicLibraryPage() {
+  const { role, permissions } = useUser();
+  const mp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.music ?? { view: true, create: true, edit: true, delete: true });
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState("all");
   const [showUpload, setShowUpload] = useState(false);
-  const [showDriveImport, setShowDriveImport] = useState(false);
-  const [playingId, setPlayingId] = useState(null);
-  const { tags: catalogTags } = useMusicTags();
 
   const fetchTracks = useCallback(() => {
     const params = moodFilter !== "all" ? { mood: moodFilter } : {};
@@ -32,10 +33,6 @@ export default function MusicLibraryPage() {
 
   const handleUploaded = (track) => {
     setTracks((prev) => [track, ...prev]);
-  };
-
-  const handleImported = (newTracks) => {
-    setTracks((prev) => [...newTracks, ...prev]);
   };
 
   const handleDeleted = (id) => {
@@ -55,15 +52,7 @@ export default function MusicLibraryPage() {
           <h1 className="text-lg font-bold text-white tracking-tight">Music Library</h1>
           <span className="text-[10px] font-mono text-zinc-600 ml-1">{tracks.length} tracks</span>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setShowDriveImport(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-200 text-sm font-semibold hover:border-zinc-500 hover:text-white transition-colors"
-          >
-            <FolderInput size={14} />
-            Import from Drive
-          </button>
+        {mp.create && (
           <button
             type="button"
             onClick={() => setShowUpload(true)}
@@ -72,12 +61,12 @@ export default function MusicLibraryPage() {
             <Plus size={14} />
             Upload Track
           </button>
-        </div>
+        )}
       </div>
 
       {/* Mood filter bar */}
       <div className="flex gap-1.5 px-6 py-3 border-b border-zinc-800 overflow-x-auto">
-        {["all", ...catalogTags].map((mood) => (
+        {MOOD_FILTERS.map((mood) => (
           <button
             key={mood}
             type="button"
@@ -113,9 +102,7 @@ export default function MusicLibraryPage() {
             track={track}
             onDeleted={handleDeleted}
             onUpdated={handleUpdated}
-            isPlaying={playingId === track.id}
-            onPlay={() => setPlayingId(track.id)}
-            onPause={() => setPlayingId((p) => (p === track.id ? null : p))}
+            canDelete={mp.delete}
           />
         ))}
       </div>
@@ -124,12 +111,6 @@ export default function MusicLibraryPage() {
         open={showUpload}
         onClose={() => setShowUpload(false)}
         onUploaded={handleUploaded}
-      />
-
-      <MusicDriveImportModal
-        open={showDriveImport}
-        onClose={() => setShowDriveImport(false)}
-        onImported={handleImported}
       />
     </div>
   );
