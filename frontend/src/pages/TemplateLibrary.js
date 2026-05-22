@@ -5,11 +5,15 @@ import { toast } from "sonner";
 import { Plus, Search, Pencil, Copy, Trash2, Layers } from "lucide-react";
 import VideoTemplateBuilder from "../components/video-builder/VideoTemplateBuilder";
 import VideoTemplateCard from "../components/VideoTemplateCard";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function TemplateLibrary() {
   const navigate = useNavigate();
+  const { role, permissions } = useUser();
+  const tp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.templates ?? { view: true, create: true, edit: true, delete: true });
   const [templates, setTemplates] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -84,14 +88,15 @@ export default function TemplateLibrary() {
         <>
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
             <h1 className="text-lg font-bold text-white tracking-tight">Templates</h1>
-            {contentTab === "carousel" ? (
+            {tp.create && contentTab === "carousel" && (
               <button
                 onClick={() => navigate("/templates/new")}
                 className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
               >
                 <Plus size={14} /> Create Template
               </button>
-            ) : (
+            )}
+            {tp.create && contentTab === "video" && (
               <button
                 onClick={() => { setEditingVideoTemplate(null); setShowVideoEditor(true); }}
                 className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
@@ -185,7 +190,7 @@ export default function TemplateLibrary() {
                         >
                           <Copy size={10} /> Clone
                         </button>
-                        {!tpl.is_starter && (
+                        {tp.delete && !tpl.is_starter && (
                           <button
                             onClick={() => handleDeleteCarousel(tpl.id)}
                             className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono border border-zinc-700 text-red-500 hover:border-red-500 transition-colors ml-auto"
@@ -210,12 +215,14 @@ export default function TemplateLibrary() {
                   <p className="text-zinc-400 text-sm font-semibold">No video templates yet</p>
                   <p className="text-zinc-600 text-xs font-mono mt-1">Define overlay layouts — text, CTAs, shapes — applied to video posts</p>
                 </div>
-                <button
-                  onClick={() => { setEditingVideoTemplate(null); setShowVideoEditor(true); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors mt-1"
-                >
-                  <Plus size={12} /> New Video Template
-                </button>
+                {tp.create && (
+                  <button
+                    onClick={() => { setEditingVideoTemplate(null); setShowVideoEditor(true); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors mt-1"
+                  >
+                    <Plus size={12} /> New Video Template
+                  </button>
+                )}
               </div>
             ) : (
               <>

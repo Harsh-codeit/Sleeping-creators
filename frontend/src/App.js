@@ -22,6 +22,10 @@ import MusicLibraryPage from "./pages/MusicLibraryPage";
 import Login from "./pages/Login";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import { UserProvider } from "./context/UserContext";
+import { PermissionGate } from "./components/PermissionGate";
+import TeamPage from "./pages/TeamPage";
+import VideoTemplatesAdmin from "./pages/VideoTemplatesAdmin";
 
 // Set axios auth header synchronously on load so it's ready before any
 // child component fires an API call (useEffect would run too late).
@@ -68,43 +72,47 @@ function App() {
   };
 
   return (
-    <BrowserRouter>
-      <Toaster richColors position="top-right" />
-      <Routes>
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/terms-of-service" element={<TermsOfService />} />
-        <Route path="/instagram/callback" element={<InstagramCallback />} />
-        <Route path="/facebook/callback" element={<FacebookCallback />} />
-        {token ? (
-          <>
-            <Route path="/" element={<Layout onLogout={handleLogout} />}>
-              <Route index element={<Dashboard />} />
-              <Route path="clients" element={<Clients />} />
-              <Route path="clients/:id" element={<ClientDetail />} />
-              <Route path="templates" element={<TemplateLibrary />} />
-              <Route path="templates/new" element={<TemplateBuilder />} />
-              <Route path="templates/:id/edit" element={<TemplateBuilder />} />
-              <Route path="templates/:id/clone" element={<TemplateBuilder />} />
-              <Route path="calendar" element={<CalendarPage />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="dropbox" element={<GlobalLibrary />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="logs" element={<Logs />} />
-              <Route path="usage" element={<UsagePage />} />
-              <Route path="carousel" element={<Carousel />} />
-              <Route path="music" element={<MusicLibraryPage />} />
-              <Route path="onboarding" element={<Onboarding />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </>
-        ) : (
-          <>
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </>
-        )}
-      </Routes>
-    </BrowserRouter>
+    <UserProvider token={token}>
+      <BrowserRouter>
+        <Toaster richColors position="top-right" />
+        <Routes>
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/instagram/callback" element={<InstagramCallback />} />
+          <Route path="/facebook/callback" element={<FacebookCallback />} />
+          {token ? (
+            <>
+              <Route path="/" element={<Layout onLogout={handleLogout} />}>
+                <Route index element={<Dashboard />} />
+                <Route path="clients" element={<PermissionGate resource="clients"><Clients /></PermissionGate>} />
+                <Route path="clients/:id" element={<PermissionGate resource="clients"><ClientDetail /></PermissionGate>} />
+                <Route path="templates" element={<PermissionGate resource="templates"><TemplateLibrary /></PermissionGate>} />
+                <Route path="templates/new" element={<PermissionGate resource="templates"><TemplateBuilder /></PermissionGate>} />
+                <Route path="templates/:id/edit" element={<PermissionGate resource="templates"><TemplateBuilder /></PermissionGate>} />
+                <Route path="templates/:id/clone" element={<PermissionGate resource="templates"><TemplateBuilder /></PermissionGate>} />
+                <Route path="calendar" element={<PermissionGate resource="calendar"><CalendarPage /></PermissionGate>} />
+                <Route path="analytics" element={<PermissionGate resource="analytics"><Analytics /></PermissionGate>} />
+                <Route path="dropbox" element={<PermissionGate resource="dropbox"><GlobalLibrary /></PermissionGate>} />
+                <Route path="settings" element={<PermissionGate resource="settings"><Settings /></PermissionGate>} />
+                <Route path="logs" element={<PermissionGate resource="logs"><Logs /></PermissionGate>} />
+                <Route path="usage" element={<PermissionGate resource="usage"><UsagePage /></PermissionGate>} />
+                <Route path="carousel" element={<PermissionGate resource="studio"><Carousel /></PermissionGate>} />
+                <Route path="music" element={<PermissionGate resource="music"><MusicLibraryPage /></PermissionGate>} />
+                <Route path="video-templates" element={<PermissionGate resource="video_templates"><VideoTemplatesAdmin /></PermissionGate>} />
+                <Route path="onboarding" element={<Onboarding />} />
+                <Route path="team" element={<PermissionGate ownerOnly><TeamPage /></PermissionGate>} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/login" element={<Login onLogin={handleLogin} />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </>
+          )}
+        </Routes>
+      </BrowserRouter>
+    </UserProvider>
   );
 }
 

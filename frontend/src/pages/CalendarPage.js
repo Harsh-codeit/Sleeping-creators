@@ -6,6 +6,7 @@ import {
   Clock, GripVertical, Plus, Wand2, RefreshCw, Copy
 } from "lucide-react";
 import GeneratePostModal from "../components/GeneratePostModal";
+import { useUser } from "../context/UserContext";
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
@@ -68,6 +69,9 @@ function groupPostsByDate(posts) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
+  const { role, permissions } = useUser();
+  const calp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.calendar ?? { view: true, create: true, edit: true, delete: true });
   const [posts, setPosts] = useState([]);
   const [clients, setClients] = useState([]);
   const [showGenModal, setShowGenModal] = useState(false);
@@ -206,13 +210,15 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setShowGenModal(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-150"
-          >
-            <Wand2 size={13} />
-            Generate Post
-          </button>
+          {calp.create && (
+            <button
+              onClick={() => setShowGenModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-150"
+            >
+              <Wand2 size={13} />
+              Generate Post
+            </button>
+          )}
         </div>
       </div>
 
@@ -665,6 +671,9 @@ function DayCard({ post, color, onClick }) {
 // ─── Post Sidebar ─────────────────────────────────────────────────────────────
 
 function PostSidebar({ post, clientColor, onClose, onUpdate }) {
+  const { role, permissions } = useUser();
+  const calp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.calendar ?? { view: true, create: true, edit: true, delete: true });
   const totalSlides = slideCount(post);
   const [form, setForm] = useState({
     text: post.text || "",
@@ -956,13 +965,15 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
               {publishing ? "Publishing..." : post.status === "failed" ? "Retry" : post.status === "published" ? "Re-publish" : "Publish"}
             </button>
           )}
-          <button
-            onClick={deletePost}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs border border-red-900 text-red-400 hover:bg-red-950 transition-colors"
-          >
-            <Trash2 size={11} />
-            Delete
-          </button>
+          {calp.delete && (
+            <button
+              onClick={deletePost}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs border border-red-900 text-red-400 hover:bg-red-950 transition-colors"
+            >
+              <Trash2 size={11} />
+              Delete
+            </button>
+          )}
         </div>
       </div>
     </div>

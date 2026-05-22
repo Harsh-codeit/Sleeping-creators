@@ -14,7 +14,7 @@ function fmtDuration(secs) {
   return `${m}:${String(Math.floor(secs % 60)).padStart(2, "0")}`;
 }
 
-export function MusicTrackCard({ track, onDeleted, onUpdated }) {
+export function MusicTrackCard({ track, onDeleted, onUpdated, canDelete = true }) {
   const [editing, setEditing] = useState(false);
   const [moodTags, setMoodTags] = useState(track.mood_tags || []);
   const [segments, setSegments] = useState(track.segments || []);
@@ -78,13 +78,15 @@ export function MusicTrackCard({ track, onDeleted, onUpdated }) {
             <Pencil size={11} />
             {editing ? "Close" : "Edit"}
           </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="px-3 py-1.5 text-xs font-mono border border-red-900/50 text-red-400 hover:bg-red-900/20 transition-colors"
-          >
-            <Trash2 size={11} />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="px-3 py-1.5 text-xs font-mono border border-red-900/50 text-red-400 hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 size={11} />
+            </button>
+          )}
         </div>
       </div>
 

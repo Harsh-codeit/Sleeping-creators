@@ -2,30 +2,40 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, Users, LayoutTemplate, CalendarRange, BarChart3,
-  Terminal, Settings, Circle, Layers, LogOut, Star, Coins, Music2
+  Terminal, Settings, Circle, Layers, LogOut, Star, Coins, Music2, Film, UserCog
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import axios from "axios";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const NAV = [
-  { path: "/",          label: "Dashboard",  icon: LayoutDashboard, exact: true },
-  { path: "/clients",   label: "Clients",    icon: Users },
-  { path: "/templates", label: "Templates",  icon: LayoutTemplate },
-  { path: "/calendar",  label: "Calendar",   icon: CalendarRange },
-  { path: "/carousel",  label: "Studio",     icon: Layers },
-  { path: "/music",     label: "Music",      icon: Music2 },
-  { path: "/analytics", label: "Analytics",  icon: BarChart3 },
-  { path: "/dropbox",   label: "Dropbox",    icon: Star },
-  { path: "/logs",      label: "Logs",       icon: Terminal },
-  { path: "/usage",     label: "Usage",      icon: Coins },
-  { path: "/settings",  label: "Settings",   icon: Settings },
+  { path: "/",                label: "Dashboard", icon: LayoutDashboard, exact: true,  resource: "dashboard" },
+  { path: "/clients",         label: "Clients",   icon: Users,                          resource: "clients" },
+  { path: "/templates",       label: "Templates", icon: LayoutTemplate,                 resource: "templates" },
+  { path: "/calendar",        label: "Calendar",  icon: CalendarRange,                  resource: "calendar" },
+  { path: "/carousel",        label: "Studio",    icon: Layers,                         resource: "studio" },
+  { path: "/music",           label: "Music",     icon: Music2,                         resource: "music" },
+  { path: "/video-templates", label: "Video",     icon: Film,                           resource: "video_templates" },
+  { path: "/analytics",       label: "Analytics", icon: BarChart3,                      resource: "analytics" },
+  { path: "/dropbox",         label: "Dropbox",   icon: Star,                           resource: "dropbox" },
+  { path: "/logs",            label: "Logs",      icon: Terminal,                       resource: "logs" },
+  { path: "/usage",           label: "Usage",     icon: Coins,                          resource: "usage" },
+  { path: "/settings",        label: "Settings",  icon: Settings,                       resource: "settings" },
+  { path: "/team",            label: "Team",      icon: UserCog,       ownerOnly: true, resource: null },
 ];
 
 export default function Layout({ onLogout }) {
   const location = useLocation();
   const [engineRunning, setEngineRunning] = useState(true);
+  const { role, permissions } = useUser();
+
+  const visibleNav = NAV.filter(nav => {
+    if (nav.ownerOnly) return role === "owner";
+    if (role === "owner" || !permissions) return true;
+    return permissions[nav.resource]?.view === true;
+  });
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -59,7 +69,7 @@ export default function Layout({ onLogout }) {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-thin">
-          {NAV.map((nav) => {
+          {visibleNav.map((nav) => {
             const Icon = nav.icon;
             const active = isActive(nav);
             return (

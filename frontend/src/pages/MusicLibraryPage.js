@@ -4,12 +4,16 @@ import { toast } from "sonner";
 import { Plus, Music } from "lucide-react";
 import { MusicTrackCard } from "../components/music/MusicTrackCard";
 import { MusicUploadModal } from "../components/music/MusicUploadModal";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const MOOD_FILTERS = ["all", "energy", "power", "authority", "calm", "inspiring", "urgent", "celebratory", "mysterious", "playful"];
 
 export default function MusicLibraryPage() {
+  const { role, permissions } = useUser();
+  const mp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
+    : (permissions?.music ?? { view: true, create: true, edit: true, delete: true });
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState("all");
@@ -48,14 +52,16 @@ export default function MusicLibraryPage() {
           <h1 className="text-lg font-bold text-white tracking-tight">Music Library</h1>
           <span className="text-[10px] font-mono text-zinc-600 ml-1">{tracks.length} tracks</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowUpload(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
-        >
-          <Plus size={14} />
-          Upload Track
-        </button>
+        {mp.create && (
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
+          >
+            <Plus size={14} />
+            Upload Track
+          </button>
+        )}
       </div>
 
       {/* Mood filter bar */}
@@ -96,6 +102,7 @@ export default function MusicLibraryPage() {
             track={track}
             onDeleted={handleDeleted}
             onUpdated={handleUpdated}
+            canDelete={mp.delete}
           />
         ))}
       </div>
