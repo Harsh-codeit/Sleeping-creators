@@ -72,22 +72,9 @@ async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     For uploaded clips (source='upload') with r2_url already set, returns directly.
     """
     # Uploaded clips already have r2_url — skip Drive entirely
-    # But skip stale URLs from old storage backends (e.g. MinIO CDN that's no longer active)
-    import os as _os
-    import storage as _storage_mod
-    r2_base = _os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
     clip_doc = await db.drive_clips.find_one({"drive_file_id": drive_file_id, "client_id": client_id})
     if clip_doc and clip_doc.get("r2_url"):
-        url = clip_doc["r2_url"]
-        if r2_base and not url.startswith(r2_base):
-            # Stale URL from old storage — clear it so we re-stage below
-            logger.warning("stage_clip: stale r2_url %r (not on current R2), re-staging", url)
-            await db.drive_clips.update_one(
-                {"drive_file_id": drive_file_id, "client_id": client_id},
-                {"$unset": {"r2_url": ""}},
-            )
-        else:
-            return url
+        return clip_doc["r2_url"]
 
     cached = await db.clip_cache.find_one({"client_id": client_id, "drive_file_id": drive_file_id})
 
@@ -98,11 +85,7 @@ async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     if cached and cached.get("r2_url") and (
         not drive_mtime or cached.get("drive_modified_time") == drive_mtime
     ):
-        cached_url = cached["r2_url"]
-        if r2_base and not cached_url.startswith(r2_base):
-            logger.warning("stage_clip: stale clip_cache url %r, re-staging", cached_url)
-        else:
-            return cached_url
+        return cached["r2_url"]
 
     return await _download_and_upload(db, client_id, drive_file_id, refresh_token, drive_mtime)
 
