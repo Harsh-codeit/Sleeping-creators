@@ -6919,6 +6919,169 @@ async def get_schedule_slots():
     return {r["_id"]: r["count"] for r in results}
 
 
+# ─── Mail ────────────────────────────────────────────────────────────────────
+
+@api_router.post("/mail/send")
+async def mail_send(data: MailSendRequest, request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    try:
+        resend_id = mail_service.send_email(
+            to=data.to, subject=data.subject, html=data.html,
+            cc=data.cc, reply_to=data.reply_to,
+        )
+    except Exception as e:
+        await db.email_logs.insert_one({
+            "type": data.type, "client_id": data.client_id, "to": data.to,
+            "cc": data.cc or [], "subject": data.subject, "resend_id": None,
+            "status": "failed", "delivery_status": None,
+            "sent_by": token_data.get("user_id") or "owner",
+            "sent_at": datetime.now(timezone.utc).isoformat(), "error": str(e),
+        })
+        raise HTTPException(502, f"Resend error: {e}")
+    await db.email_logs.insert_one({
+        "type": data.type, "client_id": data.client_id, "to": data.to,
+        "cc": data.cc or [], "subject": data.subject, "resend_id": resend_id,
+        "status": "sent", "delivery_status": "queued",
+        "sent_by": token_data.get("user_id") or "owner",
+        "sent_at": datetime.now(timezone.utc).isoformat(), "error": None,
+    })
+    return {"ok": True, "resend_id": resend_id}
+
+
+@api_router.post("/mail/schedule")
+async def mail_schedule(data: MailScheduleRequest, request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    doc = {
+        "type": data.type, "client_id": data.client_id,
+        "to": data.to, "cc": data.cc or [], "reply_to": data.reply_to,
+        "subject": data.subject, "html": data.html,
+        "scheduled_at": data.scheduled_at, "status": "pending",
+        "created_by": token_data.get("user_id") or "owner",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "sent_at": None, "resend_id": None, "delivery_status": None, "error": None,
+    }
+    result = await db.scheduled_emails.insert_one(doc)
+    return {"ok": True, "id": str(result.inserted_id)}
+
+
+@api_router.get("/mail/scheduled")
+async def mail_list_scheduled(request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    docs = await db.scheduled_emails.find({"status": "pending"}).sort("scheduled_at", 1).to_list(200)
+    for d in docs:
+        d["_id"] = str(d["_id"])
+    return docs
+
+
+@api_router.delete("/mail/scheduled/{email_id}")
+async def mail_cancel_scheduled(email_id: str, request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    result = await db.scheduled_emails.delete_one({"_id": ObjectId(email_id), "status": "pending"})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Not found or already sent")
+    return {"ok": True}
+
+
+@api_router.get("/mail/history")
+async def mail_history(request: Request, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=200)):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    skip = (page - 1) * limit
+    docs = await db.email_logs.find().sort("sent_at", -1).skip(skip).limit(limit).to_list(limit)
+    for d in docs:
+        d["_id"] = str(d["_id"])
+    return docs
+
+
+@api_router.get("/clients/{client_id}/emails")
+async def client_email_log(client_id: str, request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    docs = await db.email_logs.find({"client_id": client_id}).sort("sent_at", -1).to_list(100)
+    for d in docs:
+        d["_id"] = str(d["_id"])
+    return docs
+
+
+@api_router.post("/mail/bulk-report")
+async def mail_bulk_report(data: BulkReportRequest, request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    clients = await db.clients.find({"onboarding_data.email": {"$exists": True, "$ne": ""}}).to_list(500)
+    sent, failed, errors = 0, 0, []
+    now = datetime.now(timezone.utc).isoformat()
+    for client in clients:
+        email_addr = client.get("onboarding_data", {}).get("email", "")
+        if not email_addr:
+            continue
+        client_name = client.get("name", "Client")
+        post_count = await db.posts.count_documents({"client_id": str(client["_id"]), "status": "published"})
+        subject = f"Monthly Report — {data.period} | {client_name}"
+        html = (
+            f'<html><body style="font-family:sans-serif;color:#111;max-width:600px;margin:auto;padding:24px">'
+            f'<h1 style="font-size:22px;margin-bottom:8px">Monthly Report — {data.period}</h1>'
+            f'<p style="color:#555;margin-bottom:24px">{client_name}</p>'
+            f'<table style="width:100%;border-collapse:collapse">'
+            f'<tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#555">Posts published</td>'
+            f'<td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:600">{post_count}</td></tr>'
+            f'</table>'
+            f'<p style="margin-top:24px;color:#555;font-size:13px">Automated monthly report from Sleeping Creators.</p>'
+            f'</body></html>'
+        )
+        try:
+            resend_id = mail_service.send_email(to=email_addr, subject=subject, html=html)
+            await db.email_logs.insert_one({
+                "type": "report", "client_id": str(client["_id"]), "to": email_addr,
+                "cc": [], "subject": subject, "resend_id": resend_id,
+                "status": "sent", "delivery_status": "queued",
+                "sent_by": token_data.get("user_id") or "owner",
+                "sent_at": now, "error": None,
+            })
+            sent += 1
+        except Exception as e:
+            failed += 1
+            errors.append({"client": client_name, "error": str(e)})
+            await db.email_logs.insert_one({
+                "type": "report", "client_id": str(client["_id"]), "to": email_addr,
+                "cc": [], "subject": subject, "resend_id": None,
+                "status": "failed", "delivery_status": None,
+                "sent_by": token_data.get("user_id") or "owner",
+                "sent_at": now, "error": str(e),
+            })
+    return {"ok": True, "sent": sent, "failed": failed, "errors": errors}
+
+
+@api_router.post("/mail/webhook/resend")
+async def mail_webhook(request: Request):
+    svix_id = request.headers.get("svix-id", "")
+    svix_ts = request.headers.get("svix-timestamp", "")
+    svix_sig = request.headers.get("svix-signature", "")
+    raw_body = await request.body()
+    if not mail_service.verify_webhook_signature(svix_id, svix_ts, svix_sig, raw_body):
+        raise HTTPException(401, "Invalid webhook signature")
+    import json as _json
+    event = _json.loads(raw_body)
+    event_type = event.get("type", "")
+    resend_id = event.get("data", {}).get("email_id", "")
+    delivery_map = {"email.delivered": "delivered", "email.opened": "opened", "email.bounced": "bounced"}
+    delivery_status = delivery_map.get(event_type)
+    if delivery_status and resend_id:
+        await db.email_logs.update_one({"resend_id": resend_id}, {"$set": {"delivery_status": delivery_status}})
+        await db.scheduled_emails.update_one({"resend_id": resend_id}, {"$set": {"delivery_status": delivery_status}})
+    return {"ok": True}
+
+
 app.include_router(api_router)
 
 import json as _json
