@@ -1080,8 +1080,6 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
             except (TypeError, ValueError):
                 offset_ms = 64
             base["thumbnailOffset"] = max(0, offset_ms)
-        else:
-            base["autoFitImage"] = True
     elif platform == "tiktok":
         if is_video:
             base["type"] = "VIDEO"
