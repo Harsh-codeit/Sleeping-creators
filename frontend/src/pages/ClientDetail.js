@@ -34,7 +34,7 @@ function initEditForm(client) {
     brand_vibe: Array.isArray(ob.brand_vibe) ? ob.brand_vibe : (ob.brand_vibe ? [ob.brand_vibe] : []),
     account_goals: ob.account_goals || "followers",
     cta_link: ob.cta_link || "",
-    language: Array.isArray(ob.language) ? ob.language : (ob.language ? [ob.language] : ["English"]),
+    language: Array.isArray(ob.language) ? (ob.language[0] ?? "English") : (ob.language || "English"),
     branding_assets_link: ob.branding_assets_link || "",
     google_drive_images: ob.google_drive_images || "",
     google_drive_videos: ob.google_drive_videos || "",
@@ -158,7 +158,19 @@ const EDIT_CAROUSEL_TEMPLATES = [
 ];
 const EDIT_ALL_PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
 const EDIT_BRAND_VIBES = ["Professional", "Rude/Bold", "Funny", "Inspirational", "Creative", "Straight-talking", "Funky"];
-const EDIT_LANGUAGE_CHIPS = ["Hindi", "English", "Hinglish", "Other"];
+const EDIT_LANGUAGE_OPTIONS = [
+  "English", "Hindi", "Hinglish", "Punjabi", "Bengali",
+  "Tamil", "Telugu", "Kannada", "Marathi", "Urdu",
+  "Gujarati", "Malayalam", "Odia", "Assamese", "Maithili",
+  "Santali", "Kashmiri", "Nepali", "Sindhi", "Konkani",
+  "Dogri", "Manipuri", "Bodo",
+  "Arabic", "Chinese (Simplified)", "Chinese (Traditional)",
+  "French", "German", "Spanish", "Portuguese", "Italian",
+  "Russian", "Japanese", "Korean", "Turkish", "Dutch",
+  "Polish", "Swedish", "Norwegian", "Danish", "Finnish",
+  "Greek", "Hebrew", "Thai", "Vietnamese", "Indonesian",
+  "Malay", "Swahili", "Persian (Farsi)", "Other",
+];
 const EDIT_EMOTIONAL_STATES = ["Ambitious", "Stressed", "Confused", "Motivated", "Depressed", "Directionless", "Lonely"];
 const EDIT_NEXT_STEPS = [
   { value: "dm", label: "DM Me" },
@@ -511,24 +523,17 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
             </div>
             <div>
               <ELabel>Language</ELabel>
-              <div className="grid grid-cols-2 gap-2">
-                {EDIT_LANGUAGE_CHIPS.map(l => {
-                  const selected = (editForm.language || []).includes(l);
-                  return (
-                    <button key={l} type="button"
-                      onClick={() => {
-                        const cur = Array.isArray(editForm.language) ? editForm.language : [];
-                        const next = cur.includes(l) ? cur.filter(x => x !== l) : [...cur, l];
-                        set("language", next);
-                      }}
-                      data-testid={`edit-language-${l.toLowerCase()}`}
-                      className={`relative py-2 px-3 border text-xs font-mono text-left transition-all duration-150 ${selected ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
-                      {selected && (<span className="absolute top-1 right-1"><Check size={8} /></span>)}
-                      {l}
-                    </button>
-                  );
-                })}
-              </div>
+              <select
+                data-testid="edit-language"
+                value={Array.isArray(editForm.language) ? (editForm.language[0] ?? "") : (editForm.language ?? "")}
+                onChange={e => set("language", e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150"
+              >
+                <option value="" disabled>Select a language</option>
+                {EDIT_LANGUAGE_OPTIONS.map(l => (
+                  <option key={l} value={l} className="bg-zinc-950">{l}</option>
+                ))}
+              </select>
             </div>
           </div>
           <div>
