@@ -1,7 +1,5 @@
 import { Html, Head, Body, Section, Text, Hr, Row, Column, Img, Font } from '@react-email/components';
 
-// Matches the Sleeping Creators Monthly Performance Report PDF layout
-
 const card = {
   backgroundColor: '#f4f4f4',
   borderRadius: '10px',
@@ -34,11 +32,11 @@ function StatCard({ label, value }) {
 }
 
 export function ClientReportEmail({
-  clientName, instagramHandle, period,
-  totalFollowers, newFollowers, followerGrowthRate,
-  totalReach, totalImpressions, profileVisits,
-  likes, comments, shares, saves,
-  postsPublished, platform,
+  clientName, instagramHandle, period, platform,
+  followers, impressions, views,
+  likes, comments, engagementRate,
+  following, impressionsUnique, viewsUnique,
+  posts,
   notes,
   baseUrl = '',
 }) {
@@ -81,7 +79,7 @@ export function ClientReportEmail({
 
           <Section style={{ padding: '24px 24px 0' }}>
 
-            {/* ── CLIENT INFO ROW (3-col) ──────────────────────────── */}
+            {/* ── CLIENT INFO (3-col) ──────────────────────────────── */}
             <Row style={{ marginBottom: '10px' }}>
               <Column style={{ width: '33.33%', paddingRight: '5px' }}>
                 <StatCard label="Client Name" value={clientName} />
@@ -94,52 +92,49 @@ export function ClientReportEmail({
               </Column>
             </Row>
 
-            {/* ── FOLLOWERS ROW (3-col) ───────────────────────────── */}
+            {/* ── ROW 1: Followers | Impressions | Views ───────────── */}
             <Row style={{ marginBottom: '10px' }}>
               <Column style={{ width: '33.33%', paddingRight: '5px' }}>
-                <StatCard label="Total Followers" value={fmt(totalFollowers)} />
+                <StatCard label="Followers" value={fmt(followers)} />
               </Column>
               <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
-                <StatCard label="New Followers This Month" value={fmt(newFollowers)} />
+                <StatCard label="Impressions" value={fmt(impressions)} />
               </Column>
               <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
-                <StatCard label="Follower Growth Rate" value={followerGrowthRate || '—'} />
+                <StatCard label="Views" value={fmt(views)} />
               </Column>
             </Row>
 
-            {/* ── REACH ROW (3-col) ───────────────────────────────── */}
+            {/* ── ROW 2: Likes | Comments | Eng. Rate ─────────────── */}
             <Row style={{ marginBottom: '10px' }}>
               <Column style={{ width: '33.33%', paddingRight: '5px' }}>
-                <StatCard label="Total Reach" value={fmt(totalReach)} />
-              </Column>
-              <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
-                <StatCard label="Total Impressions" value={fmt(totalImpressions)} />
-              </Column>
-              <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
-                <StatCard label="Profile Visits" value={fmt(profileVisits)} />
-              </Column>
-            </Row>
-
-            {/* ── ENGAGEMENT ROW (4-col) ──────────────────────────── */}
-            <Row style={{ marginBottom: '10px' }}>
-              <Column style={{ width: '25%', paddingRight: '5px' }}>
                 <StatCard label="Likes" value={fmt(likes)} />
               </Column>
-              <Column style={{ width: '25%', paddingRight: '5px', paddingLeft: '5px' }}>
+              <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
                 <StatCard label="Comments" value={fmt(comments)} />
               </Column>
-              <Column style={{ width: '25%', paddingRight: '5px', paddingLeft: '5px' }}>
-                <StatCard label="Shares / Reposts" value={fmt(shares)} />
-              </Column>
-              <Column style={{ width: '25%', paddingLeft: '5px' }}>
-                <StatCard label="Saves" value={fmt(saves)} />
+              <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
+                <StatCard label="Eng. Rate" value={engagementRate ? `${engagementRate}%` : '—'} />
               </Column>
             </Row>
 
-            {/* ── POSTS ROW (2-col) ───────────────────────────────── */}
+            {/* ── ROW 3: Following | Uniq. Impressions | Uniq. Views ─ */}
+            <Row style={{ marginBottom: '10px' }}>
+              <Column style={{ width: '33.33%', paddingRight: '5px' }}>
+                <StatCard label="Following" value={fmt(following)} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
+                <StatCard label="Uniq. Impressions" value={fmt(impressionsUnique)} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
+                <StatCard label="Uniq. Views" value={fmt(viewsUnique)} />
+              </Column>
+            </Row>
+
+            {/* ── ROW 4: Posts | Platform ──────────────────────────── */}
             <Row style={{ marginBottom: '24px' }}>
               <Column style={{ width: '50%', paddingRight: '5px' }}>
-                <StatCard label="Total Posts Live This Month" value={fmt(postsPublished)} />
+                <StatCard label="Posts" value={fmt(posts)} />
               </Column>
               <Column style={{ width: '50%', paddingLeft: '5px' }}>
                 <StatCard label="Platform" value={platform || '—'} />

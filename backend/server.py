@@ -3237,9 +3237,10 @@ async def analytics_monthly_report(client_id: str):
         "period": month_str,
         "instagram_handle": ob.get("instagram_handle", ""),
         "platform": ", ".join(client.get("platforms") or ["Instagram"]),
-        "total_followers": 0, "new_followers": 0, "follower_growth_rate": "",
-        "total_reach": 0, "total_impressions": 0, "profile_visits": 0,
-        "likes": 0, "comments": 0, "shares": 0, "saves": 0, "posts_published": 0,
+        "followers": 0, "impressions": 0, "views": 0,
+        "likes": 0, "comments": 0, "engagement_rate": 0,
+        "following": 0, "impressions_unique": 0, "views_unique": 0,
+        "posts": 0,
     }
 
     # Source 1: Bundle stored analytics
@@ -3286,24 +3287,19 @@ async def analytics_monthly_report(client_id: str):
     if socials:
         src = next((s for s in socials if s.get("platform") == "instagram"), socials[0])
         if src.get("followers"):
-            out["total_followers"]    = src.get("followers") or 0
-            out["new_followers"]      = src.get("new_followers") or 0
-            out["total_reach"]        = src.get("impressions_unique") or 0
-            out["total_impressions"]  = src.get("impressions") or 0
-            out["profile_visits"]     = src.get("profile_views") or 0
+            out["followers"]          = src.get("followers") or 0
+            out["impressions"]        = src.get("impressions") or 0
+            out["views"]              = src.get("views") or 0
             out["likes"]              = src.get("likes") or 0
             out["comments"]           = src.get("comments") or 0
-            out["shares"]             = src.get("shares") or 0
-            out["saves"]              = src.get("saves") or 0
-            out["posts_published"]    = src.get("post_count") or 0
-            f, nf = out["total_followers"], out["new_followers"]
-            if f and nf:
-                prev = f - nf
-                if prev > 0:
-                    out["follower_growth_rate"] = f"+{nf / prev * 100:.1f}%"
+            out["engagement_rate"]    = src.get("engagement_rate") or 0
+            out["following"]          = src.get("following") or 0
+            out["impressions_unique"] = src.get("impressions_unique") or 0
+            out["views_unique"]       = src.get("views_unique") or 0
+            out["posts"]              = src.get("post_count") or 0
 
     # Source 2: Instagram Graph API (when Bundle has no data)
-    if not out["total_followers"]:
+    if not out["followers"]:
         token, ig_uid = client.get("instagram_access_token", ""), client.get("instagram_user_id", "")
         if token and ig_uid:
             month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -3312,14 +3308,15 @@ async def analytics_monthly_report(client_id: str):
                     pr = await http.get(f"https://graph.instagram.com/v23.0/{ig_uid}",
                                         params={"fields": "followers_count,media_count", "access_token": token})
                     if pr.status_code == 200:
-                        out["total_followers"] = pr.json().get("followers_count") or 0
+                        p = pr.json()
+                        out["followers"] = p.get("followers_count") or 0
                     mr = await http.get(f"https://graph.instagram.com/v23.0/{ig_uid}/media",
                                         params={"fields": "id,timestamp,like_count,comments_count",
                                                 "since": int(month_start.timestamp()), "limit": 100, "access_token": token})
                     if mr.status_code == 200:
                         media = mr.json().get("data", [])
                         if media:
-                            out["posts_published"] = out["posts_published"] or len(media)
+                            out["posts"]    = out["posts"]    or len(media)
                             out["likes"]    = out["likes"]    or sum(m.get("like_count", 0)     for m in media)
                             out["comments"] = out["comments"] or sum(m.get("comments_count", 0) for m in media)
             except Exception as e:
@@ -3339,11 +3336,10 @@ async def analytics_monthly_report(client_id: str):
     ]).to_list(1)
     if agg_res:
         a = agg_res[0]
-        out["posts_published"]  = out["posts_published"]  or a.get("count", 0)
-        out["likes"]            = out["likes"]            or a.get("likes", 0)
-        out["comments"]         = out["comments"]         or a.get("comments", 0)
-        out["shares"]           = out["shares"]           or a.get("shares", 0)
-        out["total_impressions"]= out["total_impressions"]or a.get("impressions", 0)
+        out["posts"]       = out["posts"]       or a.get("count", 0)
+        out["likes"]       = out["likes"]       or a.get("likes", 0)
+        out["comments"]    = out["comments"]    or a.get("comments", 0)
+        out["impressions"] = out["impressions"] or a.get("impressions", 0)
 
     return out
 

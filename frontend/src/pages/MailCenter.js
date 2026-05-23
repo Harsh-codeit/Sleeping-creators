@@ -137,17 +137,16 @@ export default function MailCenter() {
         const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
         if (cancelled) return;
         const fill = {};
-        if (d.total_followers)     fill.totalFollowers     = String(d.total_followers);
-        if (d.new_followers)       fill.newFollowers       = String(d.new_followers);
-        if (d.follower_growth_rate)fill.followerGrowthRate = d.follower_growth_rate;
-        if (d.total_reach)         fill.totalReach         = String(d.total_reach);
-        if (d.total_impressions)   fill.totalImpressions   = String(d.total_impressions);
-        if (d.profile_visits)      fill.profileVisits      = String(d.profile_visits);
-        if (d.likes)               fill.likes              = String(d.likes);
-        if (d.comments)            fill.comments           = String(d.comments);
-        if (d.shares)              fill.shares             = String(d.shares);
-        if (d.saves)               fill.saves              = String(d.saves);
-        if (d.posts_published)     fill.postsPublished     = String(d.posts_published);
+        if (d.followers)          fill.followers          = String(d.followers);
+        if (d.impressions)        fill.impressions        = String(d.impressions);
+        if (d.views)              fill.views              = String(d.views);
+        if (d.likes)              fill.likes              = String(d.likes);
+        if (d.comments)           fill.comments           = String(d.comments);
+        if (d.engagement_rate)    fill.engagementRate     = String(d.engagement_rate);
+        if (d.following)          fill.following          = String(d.following);
+        if (d.impressions_unique) fill.impressionsUnique  = String(d.impressions_unique);
+        if (d.views_unique != null)fill.viewsUnique       = String(d.views_unique);
+        if (d.posts)              fill.posts              = String(d.posts);
         if (Object.keys(fill).length) {
           setFields(f => ({ ...f, ...fill }));
           toast.success('Analytics loaded');
@@ -163,17 +162,16 @@ export default function MailCenter() {
     try {
       const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
       const fill = {};
-      if (d.total_followers)     fill.totalFollowers     = String(d.total_followers);
-      if (d.new_followers)       fill.newFollowers       = String(d.new_followers);
-      if (d.follower_growth_rate)fill.followerGrowthRate = d.follower_growth_rate;
-      if (d.total_reach)         fill.totalReach         = String(d.total_reach);
-      if (d.total_impressions)   fill.totalImpressions   = String(d.total_impressions);
-      if (d.profile_visits)      fill.profileVisits      = String(d.profile_visits);
-      if (d.likes)               fill.likes              = String(d.likes);
-      if (d.comments)            fill.comments           = String(d.comments);
-      if (d.shares)              fill.shares             = String(d.shares);
-      if (d.saves)               fill.saves              = String(d.saves);
-      if (d.posts_published)     fill.postsPublished     = String(d.posts_published);
+      if (d.followers)           fill.followers         = String(d.followers);
+      if (d.impressions)         fill.impressions       = String(d.impressions);
+      if (d.views)               fill.views             = String(d.views);
+      if (d.likes)               fill.likes             = String(d.likes);
+      if (d.comments)            fill.comments          = String(d.comments);
+      if (d.engagement_rate)     fill.engagementRate    = String(d.engagement_rate);
+      if (d.following)           fill.following         = String(d.following);
+      if (d.impressions_unique)  fill.impressionsUnique = String(d.impressions_unique);
+      if (d.views_unique != null)fill.viewsUnique       = String(d.views_unique);
+      if (d.posts)               fill.posts             = String(d.posts);
       setFields(f => ({ ...f, ...fill }));
       toast.success(Object.keys(fill).length ? 'Analytics synced' : 'No analytics data found');
     } catch {
@@ -208,18 +206,17 @@ export default function MailCenter() {
         clientName={name}
         instagramHandle={fields.instagramHandle ?? ''}
         period={fields.period ?? ''}
-        totalFollowers={fields.totalFollowers ?? ''}
-        newFollowers={fields.newFollowers ?? ''}
-        followerGrowthRate={fields.followerGrowthRate ?? ''}
-        totalReach={fields.totalReach ?? ''}
-        totalImpressions={fields.totalImpressions ?? ''}
-        profileVisits={fields.profileVisits ?? ''}
+        platform={fields.platform ?? ''}
+        followers={fields.followers ?? ''}
+        impressions={fields.impressions ?? ''}
+        views={fields.views ?? ''}
         likes={fields.likes ?? ''}
         comments={fields.comments ?? ''}
-        shares={fields.shares ?? ''}
-        saves={fields.saves ?? ''}
-        postsPublished={fields.postsPublished ?? ''}
-        platform={fields.platform ?? ''}
+        engagementRate={fields.engagementRate ?? ''}
+        following={fields.following ?? ''}
+        impressionsUnique={fields.impressionsUnique ?? ''}
+        viewsUnique={fields.viewsUnique ?? ''}
+        posts={fields.posts ?? ''}
         notes={fields.notes ?? ''}
         baseUrl={baseUrl}
       />;
@@ -403,21 +400,20 @@ export default function MailCenter() {
               </button>
               <Field label="Period" value={fields.period ?? ''} onChange={v => setField('period', v)} placeholder="May 2026" />
               <Field label="Instagram Handle" value={fields.instagramHandle ?? ''} onChange={v => setField('instagramHandle', v)} placeholder="@client" />
-              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Followers —</p>
-              <Field label="Total Followers" value={fields.totalFollowers ?? ''} onChange={v => setField('totalFollowers', v)} placeholder="12,400" />
-              <Field label="New Followers" value={fields.newFollowers ?? ''} onChange={v => setField('newFollowers', v)} placeholder="320" />
-              <Field label="Growth Rate" value={fields.followerGrowthRate ?? ''} onChange={v => setField('followerGrowthRate', v)} placeholder="+2.6%" />
-              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Reach —</p>
-              <Field label="Total Reach" value={fields.totalReach ?? ''} onChange={v => setField('totalReach', v)} placeholder="48,000" />
-              <Field label="Total Impressions" value={fields.totalImpressions ?? ''} onChange={v => setField('totalImpressions', v)} placeholder="72,000" />
-              <Field label="Profile Visits" value={fields.profileVisits ?? ''} onChange={v => setField('profileVisits', v)} placeholder="1,200" />
-              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Engagement —</p>
-              <Field label="Likes" value={fields.likes ?? ''} onChange={v => setField('likes', v)} placeholder="3,400" />
-              <Field label="Comments" value={fields.comments ?? ''} onChange={v => setField('comments', v)} placeholder="280" />
-              <Field label="Shares / Reposts" value={fields.shares ?? ''} onChange={v => setField('shares', v)} placeholder="140" />
-              <Field label="Saves" value={fields.saves ?? ''} onChange={v => setField('saves', v)} placeholder="520" />
-              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Posts —</p>
-              <Field label="Posts Published" value={fields.postsPublished ?? ''} onChange={v => setField('postsPublished', v)} placeholder="24" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Row 1 —</p>
+              <Field label="Followers" value={fields.followers ?? ''} onChange={v => setField('followers', v)} placeholder="40" />
+              <Field label="Impressions" value={fields.impressions ?? ''} onChange={v => setField('impressions', v)} placeholder="5,817" />
+              <Field label="Views" value={fields.views ?? ''} onChange={v => setField('views', v)} placeholder="177" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Row 2 —</p>
+              <Field label="Likes" value={fields.likes ?? ''} onChange={v => setField('likes', v)} placeholder="93" />
+              <Field label="Comments" value={fields.comments ?? ''} onChange={v => setField('comments', v)} placeholder="9" />
+              <Field label="Eng. Rate (%)" value={fields.engagementRate ?? ''} onChange={v => setField('engagementRate', v)} placeholder="255.00" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Row 3 —</p>
+              <Field label="Following" value={fields.following ?? ''} onChange={v => setField('following', v)} placeholder="31" />
+              <Field label="Uniq. Impressions" value={fields.impressionsUnique ?? ''} onChange={v => setField('impressionsUnique', v)} placeholder="5,817" />
+              <Field label="Uniq. Views" value={fields.viewsUnique ?? ''} onChange={v => setField('viewsUnique', v)} placeholder="0" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Row 4 —</p>
+              <Field label="Posts" value={fields.posts ?? ''} onChange={v => setField('posts', v)} placeholder="251" />
               <Field label="Platform" value={fields.platform ?? ''} onChange={v => setField('platform', v)} placeholder="Instagram" />
               <Field label="Notes / Strategy Update" value={fields.notes ?? ''} onChange={v => setField('notes', v)} placeholder="Based on this month's performance..." textarea />
             </>}
