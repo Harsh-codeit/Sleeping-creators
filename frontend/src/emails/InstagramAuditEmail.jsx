@@ -34,10 +34,10 @@ function LightCard({ label, value, height }) {
   );
 }
 
-function BulletList({ items }) {
+function BulletList({ items, dark }) {
   const lines = (items || '').split('\n').filter(Boolean);
   return lines.map((line, i) => (
-    <Text key={i} style={{ margin: '4px 0 0', fontSize: '11px', color: '#555555', fontFamily: bodyFont }}>
+    <Text key={i} style={{ margin: '4px 0 0', fontSize: '11px', color: dark ? '#cccccc' : '#555555', fontFamily: bodyFont }}>
       · {line}
     </Text>
   ));
@@ -216,7 +216,7 @@ export function InstagramAuditEmail({
                     <Text style={{ margin: 0, fontSize: '9px', color: '#888888', fontStyle: 'italic', fontFamily: bodyFont }}>{sub}</Text>
                   </Column>
                   <Column style={{ verticalAlign: 'top', paddingLeft: '12px', borderLeft: '1px solid #333333' }}>
-                    <BulletList items={items} />
+                    <BulletList items={items} dark />
                   </Column>
                 </Row>
               </Section>
