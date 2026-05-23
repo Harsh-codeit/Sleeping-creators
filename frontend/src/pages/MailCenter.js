@@ -171,8 +171,9 @@ export default function MailCenter() {
     const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
     const subs = {
-      invoice: `Invoice${fields.invoiceNumber ? ` #${fields.invoiceNumber}` : ''} — ${fields.invoiceMonth || 'This Month'} — Sleeping Creators`,
-      report: `Monthly Report — ${fields.period ?? ''} | ${name}`,
+      invoice: `Invoice for This Month — Sleeping Creators`,
+      report: `Here's everything your profile did this month - Sleeping Creators`,
+      audit: `Your Instagram Audit is ready, have a look | Team Sleeping Creators`,
       strategy_onboarding: `Your Content Strategy — ${name}`,
     };
     setSubject(subs[template] ?? '');
