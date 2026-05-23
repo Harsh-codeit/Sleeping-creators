@@ -1,4 +1,4 @@
-import { Html, Head, Body, Section, Text, Hr, Img } from '@react-email/components';
+import { Html, Head, Body, Section, Text, Hr, Img, Font } from '@react-email/components';
 
 export function ContentStrategyMonthlyEmail({ clientName, month, platforms, totalScheduled, topics, baseUrl = '' }) {
   const topicList = typeof topics === 'string'
@@ -6,8 +6,15 @@ export function ContentStrategyMonthlyEmail({ clientName, month, platforms, tota
     : (topics || []);
   return (
     <Html>
-      <Head />
-      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+      <Head>
+        <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
+          webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
+          fontWeight={400} fontStyle="normal" />
+        <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
+          webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKZAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
+          fontWeight={700} fontStyle="normal" />
+      </Head>
+      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: 'Inter,Helvetica,Arial,sans-serif' }}>
         <Section style={{ maxWidth: '600px', margin: '0 auto' }}>
 
           {/* Header */}

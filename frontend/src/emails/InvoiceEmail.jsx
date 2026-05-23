@@ -21,17 +21,17 @@ export function InvoiceEmail({
   return (
     <Html lang="en">
       <Head>
-        <Font fontFamily="IBM Plex Sans" fallbackFontFamily="Arial"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdHeFaxOedc.woff2', format: 'woff2' }}
+        <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
+          webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={400} fontStyle="normal" />
-        <Font fontFamily="IBM Plex Sans" fallbackFontFamily="Arial"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjSL9AIFsdP3pBmtF8A.woff2', format: 'woff2' }}
+        <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
+          webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKZAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={700} fontStyle="normal" />
         <Font fontFamily="IBM Plex Mono" fallbackFontFamily="Courier New"
           webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
           fontWeight={600} fontStyle="normal" />
       </Head>
-      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: '"IBM Plex Sans",Arial,sans-serif' }}>
+      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: 'Inter,Helvetica,Arial,sans-serif' }}>
         <Section style={{ maxWidth: '640px', margin: '0 auto', backgroundColor: '#ffffff' }}>
 
           {/* ── HEADER ──────────────────────────────────────────────── */}

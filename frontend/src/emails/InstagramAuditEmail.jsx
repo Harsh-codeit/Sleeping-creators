@@ -2,7 +2,7 @@ import { Html, Head, Body, Section, Text, Hr, Row, Column, Img, Font } from '@re
 
 // Matches the Sleeping Creators Instagram Audit Report PDF (3 pages, 9 sections)
 
-const bodyFont = '"IBM Plex Sans", Arial, sans-serif';
+const bodyFont = 'Inter, Helvetica, Arial, sans-serif';
 const monoFont = '"IBM Plex Mono", "Courier New", monospace';
 
 const sectionHeader = (num, title) => (
@@ -84,11 +84,11 @@ export function InstagramAuditEmail({
   return (
     <Html lang="en">
       <Head>
-        <Font fontFamily="IBM Plex Sans" fallbackFontFamily="Arial"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdHeFaxOedc.woff2', format: 'woff2' }}
+        <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
+          webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={400} fontStyle="normal" />
-        <Font fontFamily="IBM Plex Sans" fallbackFontFamily="Arial"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjSL9AIFsdP3pBmtF8A.woff2', format: 'woff2' }}
+        <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
+          webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKZAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={700} fontStyle="normal" />
         <Font fontFamily="IBM Plex Mono" fallbackFontFamily="Courier New"
           webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
