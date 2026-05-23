@@ -160,15 +160,31 @@ export default function MailCenter() {
           fill.followerGrowthRate = `+${((src.new_followers / (src.followers - src.new_followers)) * 100).toFixed(1)}%`;
         if (platforms.length)       fill.platform            = platforms.map(p => p[0].toUpperCase() + p.slice(1)).join(', ');
 
-        // Aggregate shares from published posts this month
+        // Fallback: Instagram Graph API (followers + month media engagement)
+        if (!fill.totalFollowers) {
+          try {
+            const igStats = await axios.get(`/api/analytics/clients/${clientId}/ig-stats`).then(r => r.data);
+            if (igStats.followers_count) fill.totalFollowers = String(igStats.followers_count);
+            if (!fill.postsPublished && igStats.month_posts) fill.postsPublished = String(igStats.month_posts);
+            if (!fill.likes && igStats.month_likes)       fill.likes    = String(igStats.month_likes);
+            if (!fill.comments && igStats.month_comments) fill.comments = String(igStats.month_comments);
+          } catch { /* IG not connected */ }
+        }
+
+        // Aggregate engagement from stored posts this month
         try {
           const now = new Date();
           const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
           const postsRes = await axios.get(`/api/posts?client_id=${clientId}&status=published&limit=1000`);
           const monthPosts = postsRes.data.filter(p => (p.published_at || '').startsWith(monthPrefix));
-          const totalShares = monthPosts.reduce((s, p) => s + (p.performance?.shares || 0), 0);
-          if (!fill.postsPublished && monthPosts.length) fill.postsPublished = String(monthPosts.length);
-          if (totalShares > 0) fill.shares = String(totalShares);
+          if (monthPosts.length) {
+            const sum = key => monthPosts.reduce((s, p) => s + (p.performance?.[key] || 0), 0);
+            if (!fill.postsPublished)     fill.postsPublished   = String(monthPosts.length);
+            if (!fill.likes    && sum('likes'))        fill.likes        = String(sum('likes'));
+            if (!fill.comments && sum('comments'))     fill.comments     = String(sum('comments'));
+            if (!fill.shares   && sum('shares'))       fill.shares       = String(sum('shares'));
+            if (!fill.totalImpressions && sum('impressions')) fill.totalImpressions = String(sum('impressions'));
+          }
         } catch { /* posts fetch failed */ }
 
         if (Object.keys(fill).length) {

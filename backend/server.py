@@ -3179,6 +3179,47 @@ async def analytics_client_refresh(client_id: str):
     )
     return {"socials": socials, "socials_refreshed_at": refreshed_at}
 
+
+@api_router.get("/analytics/clients/{client_id}/ig-stats")
+async def analytics_client_ig_stats(client_id: str):
+    """Fetch live Instagram stats (followers, month media engagement) using the stored token.
+    Used as a fallback when Bundle.social is not configured."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    token = client.get("instagram_access_token", "")
+    ig_user_id = client.get("instagram_user_id", "")
+    if not token or not ig_user_id:
+        raise HTTPException(400, "Instagram not connected for this client")
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    async with httpx.AsyncClient(timeout=15) as http:
+        profile_resp = await http.get(
+            f"https://graph.instagram.com/v23.0/{ig_user_id}",
+            params={"fields": "followers_count,media_count", "access_token": token},
+        )
+        if profile_resp.status_code != 200:
+            raise HTTPException(502, f"Instagram API error: {profile_resp.text}")
+        profile = profile_resp.json()
+        media_resp = await http.get(
+            f"https://graph.instagram.com/v23.0/{ig_user_id}/media",
+            params={
+                "fields": "id,timestamp,like_count,comments_count",
+                "since": int(month_start.timestamp()),
+                "limit": 100,
+                "access_token": token,
+            },
+        )
+        media = media_resp.json().get("data", []) if media_resp.status_code == 200 else []
+    return {
+        "followers_count": profile.get("followers_count", 0),
+        "media_count":     profile.get("media_count", 0),
+        "month_posts":     len(media),
+        "month_likes":     sum(m.get("like_count", 0) for m in media),
+        "month_comments":  sum(m.get("comments_count", 0) for m in media),
+    }
+
+
 # ─── Logs Routes ─────────────────────────────────────────────────────────────
 
 @api_router.get("/logs")
