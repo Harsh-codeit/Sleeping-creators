@@ -102,7 +102,25 @@ export default function MailCenter() {
     if (template === 'invoice') {
       element = <InvoiceEmail clientName={name} period={fields.period ?? ''} postsPublished={fields.postsPublished ?? 0} platforms={[]} amount={fields.amount ?? ''} serviceDescription={fields.serviceDescription ?? ''} paymentUrl={fields.paymentUrl ?? ''} baseUrl={baseUrl} />;
     } else if (template === 'report') {
-      element = <ClientReportEmail clientName={name} period={fields.period ?? ''} postsPublished={0} platforms={[]} likes={0} comments={0} reach={0} queuePending={0} queueApproved={0} topPostImageUrl={null} topPostCaption={null} baseUrl={baseUrl} />;
+      element = <ClientReportEmail
+        clientName={name}
+        instagramHandle={fields.instagramHandle ?? ''}
+        period={fields.period ?? ''}
+        totalFollowers={fields.totalFollowers ?? ''}
+        newFollowers={fields.newFollowers ?? ''}
+        followerGrowthRate={fields.followerGrowthRate ?? ''}
+        totalReach={fields.totalReach ?? ''}
+        totalImpressions={fields.totalImpressions ?? ''}
+        profileVisits={fields.profileVisits ?? ''}
+        likes={fields.likes ?? ''}
+        comments={fields.comments ?? ''}
+        shares={fields.shares ?? ''}
+        saves={fields.saves ?? ''}
+        postsPublished={fields.postsPublished ?? ''}
+        platform={fields.platform ?? ''}
+        notes={fields.notes ?? ''}
+        baseUrl={baseUrl}
+      />;
     } else if (template === 'strategy_onboarding') {
       element = <ContentStrategyOnboardingEmail clientName={name} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} frequency={fields.frequency ?? ''} contentPillars={fields.contentPillars ?? ''} brandVoice={c?.brand_voice ?? ''} startDate={fields.startDate ?? ''} baseUrl={baseUrl} />;
     } else if (template === 'strategy_monthly') {
@@ -248,7 +266,24 @@ export default function MailCenter() {
             </>}
             {template === 'report' && <>
               <Field label="Period" value={fields.period ?? ''} onChange={v => setField('period', v)} placeholder="May 2026" />
-              <p className="text-xs text-zinc-600 font-mono mt-1">Engagement stats auto-pulled on send.</p>
+              <Field label="Instagram Handle" value={fields.instagramHandle ?? ''} onChange={v => setField('instagramHandle', v)} placeholder="@client" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Followers —</p>
+              <Field label="Total Followers" value={fields.totalFollowers ?? ''} onChange={v => setField('totalFollowers', v)} placeholder="12,400" />
+              <Field label="New Followers" value={fields.newFollowers ?? ''} onChange={v => setField('newFollowers', v)} placeholder="320" />
+              <Field label="Growth Rate" value={fields.followerGrowthRate ?? ''} onChange={v => setField('followerGrowthRate', v)} placeholder="+2.6%" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Reach —</p>
+              <Field label="Total Reach" value={fields.totalReach ?? ''} onChange={v => setField('totalReach', v)} placeholder="48,000" />
+              <Field label="Total Impressions" value={fields.totalImpressions ?? ''} onChange={v => setField('totalImpressions', v)} placeholder="72,000" />
+              <Field label="Profile Visits" value={fields.profileVisits ?? ''} onChange={v => setField('profileVisits', v)} placeholder="1,200" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Engagement —</p>
+              <Field label="Likes" value={fields.likes ?? ''} onChange={v => setField('likes', v)} placeholder="3,400" />
+              <Field label="Comments" value={fields.comments ?? ''} onChange={v => setField('comments', v)} placeholder="280" />
+              <Field label="Shares / Reposts" value={fields.shares ?? ''} onChange={v => setField('shares', v)} placeholder="140" />
+              <Field label="Saves" value={fields.saves ?? ''} onChange={v => setField('saves', v)} placeholder="520" />
+              <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Posts —</p>
+              <Field label="Posts Published" value={fields.postsPublished ?? ''} onChange={v => setField('postsPublished', v)} placeholder="24" />
+              <Field label="Platform" value={fields.platform ?? ''} onChange={v => setField('platform', v)} placeholder="Instagram" />
+              <Field label="Notes / Strategy Update" value={fields.notes ?? ''} onChange={v => setField('notes', v)} placeholder="Based on this month's performance..." textarea />
             </>}
             {template === 'strategy_onboarding' && <>
               <Field label="Platforms" value={fields.platforms ?? ''} onChange={v => setField('platforms', v)} placeholder="Instagram, TikTok" />

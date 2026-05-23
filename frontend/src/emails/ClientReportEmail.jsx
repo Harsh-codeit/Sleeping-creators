@@ -1,76 +1,193 @@
-import { Html, Head, Body, Section, Text, Hr, Row, Column, Img } from '@react-email/components';
+import { Html, Head, Body, Section, Text, Hr, Row, Column, Img, Font } from '@react-email/components';
 
-export function ClientReportEmail({ clientName, period, postsPublished, platforms, likes, comments, reach, queuePending, queueApproved, topPostImageUrl, topPostCaption, baseUrl = '' }) {
-  const fmt = (n) => n != null ? Number(n).toLocaleString() : '—';
+// Matches the Sleeping Creators Monthly Performance Report PDF layout
+
+const card = {
+  backgroundColor: '#f4f4f4',
+  borderRadius: '10px',
+  padding: '14px 16px 12px',
+};
+
+const labelStyle = {
+  fontSize: '8px', fontWeight: '600', color: '#aaaaaa',
+  letterSpacing: '1.5px', textTransform: 'uppercase',
+  margin: '0 0 18px', display: 'block',
+};
+
+const valueStyle = {
+  fontSize: '22px', fontWeight: '700', color: '#111111',
+  margin: '0', letterSpacing: '-0.5px', lineHeight: '1',
+  fontFamily: 'IBM Plex Mono, Courier New, monospace',
+};
+
+const dividerStyle = { borderColor: '#cccccc', margin: '10px 0 0', borderTopWidth: '1px' };
+
+function StatCard({ label, value }) {
   return (
-    <Html>
-      <Head />
-      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
-        <Section style={{ maxWidth: '600px', margin: '0 auto' }}>
+    <Section style={card}>
+      <Text style={labelStyle}>{label}</Text>
+      <Text style={valueStyle}>{value || '—'}</Text>
+      <Hr style={dividerStyle} />
+    </Section>
+  );
+}
 
-          {/* Header */}
-          <Section style={{ backgroundColor: '#000000', padding: '32px 40px 28px' }}>
-            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" height="36" style={{ display: 'block', marginBottom: '12px' }} />
-            <Text style={{ color: '#ffffff', fontSize: '28px', fontWeight: '900', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Monthly Report</Text>
-            <Text style={{ color: '#888888', fontSize: '13px', margin: '0' }}>{period} · {clientName}</Text>
-          </Section>
+export function ClientReportEmail({
+  clientName, instagramHandle, period,
+  totalFollowers, newFollowers, followerGrowthRate,
+  totalReach, totalImpressions, profileVisits,
+  likes, comments, shares, saves,
+  postsPublished, platform,
+  notes,
+  baseUrl = '',
+}) {
+  const fmt = n => (n != null && n !== '') ? Number(n).toLocaleString() : '—';
+  const defaultNotes = 'Based on this month\'s performance, we have identified winning content patterns that are clearly resonating with your audience. We are refining the strategy around them for upcoming posts — doubling down on what works and improving what doesn\'t. Thank you for your patience and feedback. We will keep iterating until we achieve the best possible outcome for your profile.';
 
-          {/* Key stats */}
-          <Section style={{ padding: '40px 40px 0' }}>
-            <Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '2px', margin: '0 0 20px', fontWeight: '600' }}>PERFORMANCE</Text>
+  return (
+    <Html lang="en">
+      <Head>
+        <Font fontFamily="IBM Plex Mono" fallbackFontFamily="Courier New"
+          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
+          fontWeight={600} fontStyle="normal" />
+        <Font fontFamily="IBM Plex Sans" fallbackFontFamily="Arial"
+          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdHeFaxOedc.woff2', format: 'woff2' }}
+          fontWeight={400} fontStyle="normal" />
+        <Font fontFamily="IBM Plex Sans" fallbackFontFamily="Arial"
+          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjSL9AIFsdP3pBmtF8A.woff2', format: 'woff2' }}
+          fontWeight={700} fontStyle="normal" />
+      </Head>
+      <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: '"IBM Plex Sans", Arial, sans-serif' }}>
+        <Section style={{ maxWidth: '620px', margin: '0 auto', backgroundColor: '#ffffff' }}>
+
+          {/* ── HEADER ──────────────────────────────────────────────── */}
+          <Section style={{ backgroundColor: '#000000', padding: '20px 28px' }}>
             <Row>
-              <Column style={{ textAlign: 'center', paddingRight: '8px' }}>
-                <Text style={{ fontSize: '36px', fontWeight: '900', color: '#000000', margin: '0', letterSpacing: '-1px' }}>{postsPublished ?? '—'}</Text>
-                <Text style={{ fontSize: '11px', color: '#999999', margin: '4px 0 0', letterSpacing: '1px', fontWeight: '600' }}>POSTS</Text>
+              <Column style={{ width: '50%', verticalAlign: 'middle' }}>
+                <Row>
+                  <Column style={{ width: '48px', verticalAlign: 'middle' }}>
+                    <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="40" height="40" style={{ display: 'block', borderRadius: '8px' }} />
+                  </Column>
+                  <Column style={{ verticalAlign: 'middle', paddingLeft: '10px' }}>
+                    <Text style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2' }}>Sleeping Creators</Text>
+                    <Text style={{ margin: 0, fontSize: '10px', color: '#888888', lineHeight: '1.4' }}>You Sleep. Your Profile Doesn't.</Text>
+                  </Column>
+                </Row>
               </Column>
-              <Column style={{ textAlign: 'center', paddingRight: '8px' }}>
-                <Text style={{ fontSize: '36px', fontWeight: '900', color: '#000000', margin: '0', letterSpacing: '-1px' }}>{fmt(likes)}</Text>
-                <Text style={{ fontSize: '11px', color: '#999999', margin: '4px 0 0', letterSpacing: '1px', fontWeight: '600' }}>LIKES</Text>
-              </Column>
-              <Column style={{ textAlign: 'center' }}>
-                <Text style={{ fontSize: '36px', fontWeight: '900', color: '#000000', margin: '0', letterSpacing: '-1px' }}>{fmt(reach)}</Text>
-                <Text style={{ fontSize: '11px', color: '#999999', margin: '4px 0 0', letterSpacing: '1px', fontWeight: '600' }}>REACH</Text>
+              <Column style={{ width: '50%', textAlign: 'right', verticalAlign: 'middle' }}>
+                <Text style={{ margin: '0 0 2px', fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2' }}>Monthly Performance Report</Text>
+                <Text style={{ margin: 0, fontSize: '11px', color: '#888888' }}>sleepingcreators.com</Text>
               </Column>
             </Row>
           </Section>
 
-          <Hr style={{ borderColor: '#eeeeee', margin: '32px 40px' }} />
+          <Section style={{ padding: '24px 24px 0' }}>
 
-          {/* Secondary stats */}
-          <Section style={{ backgroundColor: '#F7F7F7', margin: '0 40px', padding: '24px' }}>
-            <Row style={{ marginBottom: '12px' }}>
-              <Column><Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '1px', margin: '0', fontWeight: '600' }}>COMMENTS</Text></Column>
-              <Column><Text style={{ fontSize: '14px', color: '#111111', margin: '0', fontWeight: '600', textAlign: 'right' }}>{fmt(comments)}</Text></Column>
+            {/* ── CLIENT INFO ROW (3-col) ──────────────────────────── */}
+            <Row style={{ marginBottom: '10px' }}>
+              <Column style={{ width: '33.33%', paddingRight: '5px' }}>
+                <StatCard label="Client Name" value={clientName} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
+                <StatCard label="Instagram Handle" value={instagramHandle} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
+                <StatCard label="Report Period" value={period} />
+              </Column>
             </Row>
-            <Row style={{ marginBottom: '12px' }}>
-              <Column><Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '1px', margin: '0', fontWeight: '600' }}>PLATFORMS</Text></Column>
-              <Column><Text style={{ fontSize: '14px', color: '#111111', margin: '0', textAlign: 'right' }}>{(platforms || []).join(', ')}</Text></Column>
+
+            {/* ── FOLLOWERS ROW (3-col) ───────────────────────────── */}
+            <Row style={{ marginBottom: '10px' }}>
+              <Column style={{ width: '33.33%', paddingRight: '5px' }}>
+                <StatCard label="Total Followers" value={fmt(totalFollowers)} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
+                <StatCard label="New Followers This Month" value={fmt(newFollowers)} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
+                <StatCard label="Follower Growth Rate" value={followerGrowthRate || '—'} />
+              </Column>
             </Row>
-            <Row style={{ marginBottom: '12px' }}>
-              <Column><Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '1px', margin: '0', fontWeight: '600' }}>QUEUE — PENDING</Text></Column>
-              <Column><Text style={{ fontSize: '14px', color: '#111111', margin: '0', textAlign: 'right' }}>{queuePending ?? 0}</Text></Column>
+
+            {/* ── REACH ROW (3-col) ───────────────────────────────── */}
+            <Row style={{ marginBottom: '10px' }}>
+              <Column style={{ width: '33.33%', paddingRight: '5px' }}>
+                <StatCard label="Total Reach" value={fmt(totalReach)} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
+                <StatCard label="Total Impressions" value={fmt(totalImpressions)} />
+              </Column>
+              <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
+                <StatCard label="Profile Visits" value={fmt(profileVisits)} />
+              </Column>
             </Row>
-            <Row>
-              <Column><Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '1px', margin: '0', fontWeight: '600' }}>QUEUE — APPROVED</Text></Column>
-              <Column><Text style={{ fontSize: '14px', color: '#111111', margin: '0', textAlign: 'right' }}>{queueApproved ?? 0}</Text></Column>
+
+            {/* ── ENGAGEMENT ROW (4-col) ──────────────────────────── */}
+            <Row style={{ marginBottom: '10px' }}>
+              <Column style={{ width: '25%', paddingRight: '5px' }}>
+                <StatCard label="Likes" value={fmt(likes)} />
+              </Column>
+              <Column style={{ width: '25%', paddingRight: '5px', paddingLeft: '5px' }}>
+                <StatCard label="Comments" value={fmt(comments)} />
+              </Column>
+              <Column style={{ width: '25%', paddingRight: '5px', paddingLeft: '5px' }}>
+                <StatCard label="Shares / Reposts" value={fmt(shares)} />
+              </Column>
+              <Column style={{ width: '25%', paddingLeft: '5px' }}>
+                <StatCard label="Saves" value={fmt(saves)} />
+              </Column>
             </Row>
+
+            {/* ── POSTS ROW (2-col) ───────────────────────────────── */}
+            <Row style={{ marginBottom: '24px' }}>
+              <Column style={{ width: '50%', paddingRight: '5px' }}>
+                <StatCard label="Total Posts Live This Month" value={fmt(postsPublished)} />
+              </Column>
+              <Column style={{ width: '50%', paddingLeft: '5px' }}>
+                <StatCard label="Platform" value={platform || '—'} />
+              </Column>
+            </Row>
+
           </Section>
 
-          {/* Top post */}
-          {topPostCaption && (
-            <Section style={{ padding: '32px 40px 0' }}>
-              <Text style={{ fontSize: '11px', color: '#999999', letterSpacing: '2px', margin: '0 0 16px', fontWeight: '600' }}>★ TOP POST THIS MONTH</Text>
-              {topPostImageUrl && <Img src={topPostImageUrl} alt="Top post" style={{ width: '100%', maxHeight: '320px', objectFit: 'cover', display: 'block' }} />}
-              <Text style={{ fontSize: '14px', color: '#555555', fontStyle: 'italic', margin: '12px 0 0', lineHeight: '1.6' }}>"{topPostCaption}"</Text>
-            </Section>
-          )}
-
-          {/* Footer */}
-          <Section style={{ backgroundColor: '#F7F7F7', padding: '24px 40px', marginTop: '32px' }}>
-            <Text style={{ fontSize: '12px', color: '#999999', margin: '0', lineHeight: '1.6' }}>
-              Questions about your report? Reply directly to this email.<br />
-              Sleeping Creators · sleeeping.creators@gmail.com
+          {/* ── NOTES & STRATEGY UPDATE ─────────────────────────────── */}
+          <Section style={{ padding: '0 24px 24px' }}>
+            <Text style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: '#111111', letterSpacing: '1px', textTransform: 'uppercase' }}>
+              Notes &amp; Strategy Update
             </Text>
+            <Section style={{ backgroundColor: '#f9f9f9', borderRadius: '10px', padding: '18px 20px', border: '1px solid #eeeeee' }}>
+              <Text style={{ margin: 0, fontSize: '13px', color: '#555555', lineHeight: '1.75', fontStyle: 'italic' }}>
+                {notes || defaultNotes}
+              </Text>
+            </Section>
+          </Section>
+
+          {/* ── FOOTER LOGO BLOCK ───────────────────────────────────── */}
+          <Section style={{ padding: '16px 0 12px', textAlign: 'center' }}>
+            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="48" height="48" style={{ display: 'block', margin: '0 auto 8px', borderRadius: '10px' }} />
+            <Text style={{ margin: '0 0 2px', fontSize: '18px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px' }}>
+              You Sleep...
+            </Text>
+            <Text style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px' }}>
+              Your Profile Doesn't.
+            </Text>
+            <Text style={{ margin: 0, fontSize: '11px', color: '#aaaaaa' }}>Sleeping Creators</Text>
+          </Section>
+
+          {/* ── FOOTER BAR ──────────────────────────────────────────── */}
+          <Section style={{ backgroundColor: '#111111', padding: '12px 24px' }}>
+            <Row>
+              <Column style={{ width: '60%' }}>
+                <Text style={{ margin: 0, fontSize: '10px', color: '#777777', lineHeight: '1.5' }}>
+                  Sleeping Creators · sleepingcreators.com · You Sleep. Your Profile Doesn't.
+                </Text>
+              </Column>
+              <Column style={{ width: '40%', textAlign: 'right' }}>
+                <Text style={{ margin: 0, fontSize: '10px', color: '#777777' }}>
+                  Confidential — For Client Use Only
+                </Text>
+              </Column>
+            </Row>
           </Section>
 
         </Section>
