@@ -128,6 +128,40 @@ export default function MailCenter() {
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);
 
+  useEffect(() => {
+    if (template !== 'report' || !clientId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let analytics = await axios.get(`/api/analytics/clients/${clientId}`).then(r => r.data);
+        if (!analytics.totals?.followers) {
+          try {
+            await axios.post(`/api/analytics/clients/${clientId}/refresh`);
+            analytics = await axios.get(`/api/analytics/clients/${clientId}`).then(r => r.data);
+          } catch { /* bundle not configured — skip */ }
+        }
+        if (cancelled) return;
+        const { totals = {}, platform_breakdown = {} } = analytics;
+        const ig = platform_breakdown.instagram || {};
+        const src = ig.followers ? ig : totals;
+        const platforms = Object.keys(platform_breakdown);
+        const fill = {};
+        if (src.followers)          fill.totalFollowers   = String(src.followers);
+        if (src.impressions_unique) fill.totalReach       = String(src.impressions_unique);
+        if (src.impressions)        fill.totalImpressions = String(src.impressions);
+        if (src.likes)              fill.likes            = String(src.likes);
+        if (src.comments)           fill.comments         = String(src.comments);
+        if (src.post_count)         fill.postsPublished   = String(src.post_count);
+        if (platforms.length)       fill.platform         = platforms.map(p => p[0].toUpperCase() + p.slice(1)).join(', ');
+        if (Object.keys(fill).length) {
+          setFields(f => ({ ...f, ...fill }));
+          toast.success('Analytics loaded from Bundle');
+        }
+      } catch { /* client has no analytics */ }
+    })();
+    return () => { cancelled = true; };
+  }, [template, clientId]);
+
   const rebuildPreview = useCallback(async () => {
     const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
