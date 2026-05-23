@@ -17,7 +17,7 @@ const labelStyle = {
 const valueStyle = {
   fontSize: '22px', fontWeight: '700', color: '#111111',
   margin: '0', letterSpacing: '-0.5px', lineHeight: '1',
-  fontFamily: 'IBM Plex Mono, Courier New, monospace',
+  fontFamily: 'Inter, Helvetica, Arial, sans-serif',
 };
 
 const dividerStyle = { borderColor: '#cccccc', margin: '10px 0 0', borderTopWidth: '1px' };
@@ -47,9 +47,6 @@ export function ClientReportEmail({
   return (
     <Html lang="en">
       <Head>
-        <Font fontFamily="IBM Plex Mono" fallbackFontFamily="Courier New"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
-          fontWeight={600} fontStyle="normal" />
         <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
           webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={400} fontStyle="normal" />

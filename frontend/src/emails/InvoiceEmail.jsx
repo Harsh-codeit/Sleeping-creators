@@ -13,7 +13,7 @@ export function InvoiceEmail({
   const fmt = n => n.toLocaleString('en-IN');
 
   const metaLbl = { margin: '0 0 10px', fontSize: '9px', fontWeight: '600', color: '#aaaaaa', letterSpacing: '1.5px', textTransform: 'uppercase' };
-  const metaVal = { margin: 0, fontSize: '13px', fontWeight: '600', color: '#111111', fontFamily: '"IBM Plex Mono","Courier New",monospace' };
+  const metaVal = { margin: 0, fontSize: '13px', fontWeight: '600', color: '#111111', fontFamily: 'Inter,Helvetica,Arial,sans-serif' };
   const thStyle = { margin: 0, fontSize: '9px', fontWeight: '700', color: '#ffffff', letterSpacing: '1.5px', textTransform: 'uppercase' };
   const fromLbl = { margin: 0, fontSize: '10px', color: '#777777' };
   const fromVal = { margin: 0, fontSize: '10px', fontWeight: '700', color: '#ffffff' };
@@ -27,9 +27,6 @@ export function InvoiceEmail({
         <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
           webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKZAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={700} fontStyle="normal" />
-        <Font fontFamily="IBM Plex Mono" fallbackFontFamily="Courier New"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
-          fontWeight={600} fontStyle="normal" />
       </Head>
       <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: 'Inter,Helvetica,Arial,sans-serif' }}>
         <Section style={{ maxWidth: '640px', margin: '0 auto', backgroundColor: '#ffffff' }}>
@@ -176,7 +173,7 @@ export function InvoiceEmail({
                 <Section style={{ backgroundColor: '#111111', padding: '10px 16px' }}>
                   <Row>
                     <Column><Text style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase' }}>Total Due</Text></Column>
-                    <Column style={{ textAlign: 'right' }}><Text style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#ffffff', textAlign: 'right', fontFamily: '"IBM Plex Mono","Courier New",monospace' }}>₹{fmt(total)}</Text></Column>
+                    <Column style={{ textAlign: 'right' }}><Text style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#ffffff', textAlign: 'right', fontFamily: 'Inter,Helvetica,Arial,sans-serif' }}>₹{fmt(total)}</Text></Column>
                   </Row>
                 </Section>
               </Column>

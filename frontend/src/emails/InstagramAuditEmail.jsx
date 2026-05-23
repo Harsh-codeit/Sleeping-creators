@@ -3,7 +3,7 @@ import { Html, Head, Body, Section, Text, Hr, Row, Column, Img, Font } from '@re
 // Matches the Sleeping Creators Instagram Audit Report PDF (3 pages, 9 sections)
 
 const bodyFont = 'Inter, Helvetica, Arial, sans-serif';
-const monoFont = '"IBM Plex Mono", "Courier New", monospace';
+const monoFont = 'Inter, Helvetica, Arial, sans-serif';
 
 const sectionHeader = (num, title) => (
   <Section style={{ marginBottom: '16px' }}>
@@ -90,9 +90,6 @@ export function InstagramAuditEmail({
         <Font fontFamily="Inter" fallbackFontFamily="Helvetica"
           webFont={{ url: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKZAZ9hiJ-Ek-_EeA.woff2', format: 'woff2' }}
           fontWeight={700} fontStyle="normal" />
-        <Font fontFamily="IBM Plex Mono" fallbackFontFamily="Courier New"
-          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
-          fontWeight={600} fontStyle="normal" />
       </Head>
       <Body style={{ margin: 0, padding: 0, backgroundColor: '#ffffff', fontFamily: bodyFont }}>
         <Section style={{ maxWidth: '640px', margin: '0 auto', backgroundColor: '#ffffff' }}>
