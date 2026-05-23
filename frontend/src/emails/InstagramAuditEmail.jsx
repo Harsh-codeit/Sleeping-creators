@@ -252,26 +252,6 @@ export function InstagramAuditEmail({
               ))}
             </Section>
 
-            {/* ── 09 CONTENT PERFORMANCE SNAPSHOT ────────────────── */}
-            {sectionHeader('09', 'CONTENT PERFORMANCE SNAPSHOT')}
-            <Row style={{ marginBottom: '24px' }}>
-              {[
-                ['Total Posts', totalPosts],
-                ['Avg. Likes', avgLikes],
-                ['Avg. Comments', avgComments],
-                ['Avg. Reach', avgReach],
-                ['Avg. Saves', avgSaves],
-              ].map(([label, value], i) => (
-                <Column key={i} style={{ width: '20%', paddingRight: i < 4 ? '4px' : '0', paddingLeft: i > 0 ? '4px' : '0' }}>
-                  <Section style={lightCard}>
-                    <Text style={cardLabel}>{label}</Text>
-                    <Text style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#111111', fontFamily: monoFont, letterSpacing: '-0.5px' }}>{value || '—'}</Text>
-                    <Hr style={divLine} />
-                  </Section>
-                </Column>
-              ))}
-            </Row>
-
           </Section>
 
           {/* ── FOOTER LOGO BLOCK ───────────────────────────────────── */}
