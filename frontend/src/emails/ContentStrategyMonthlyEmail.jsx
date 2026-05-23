@@ -1,6 +1,6 @@
-import { Html, Head, Body, Section, Text, Hr } from '@react-email/components';
+import { Html, Head, Body, Section, Text, Hr, Img } from '@react-email/components';
 
-export function ContentStrategyMonthlyEmail({ clientName, month, platforms, totalScheduled, topics }) {
+export function ContentStrategyMonthlyEmail({ clientName, month, platforms, totalScheduled, topics, baseUrl = '' }) {
   const topicList = typeof topics === 'string'
     ? topics.split('\n').filter(Boolean).map(t => ({ title: t, postCount: null }))
     : (topics || []);
@@ -12,7 +12,7 @@ export function ContentStrategyMonthlyEmail({ clientName, month, platforms, tota
 
           {/* Header */}
           <Section style={{ backgroundColor: '#000000', padding: '32px 40px 28px' }}>
-            <Text style={{ color: '#ffffff', fontSize: '11px', letterSpacing: '3px', margin: '0 0 6px', fontWeight: '600' }}>SLEEPING CREATORS</Text>
+            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" height="36" style={{ display: 'block', marginBottom: '12px' }} />
             <Text style={{ color: '#ffffff', fontSize: '28px', fontWeight: '900', margin: '0 0 4px', letterSpacing: '-0.5px' }}>{month}</Text>
             <Text style={{ color: '#888888', fontSize: '13px', margin: '0' }}>Content Plan · {clientName}</Text>
           </Section>

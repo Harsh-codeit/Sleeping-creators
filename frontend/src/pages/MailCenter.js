@@ -86,15 +86,16 @@ export default function MailCenter() {
   const rebuildPreview = useCallback(async () => {
     const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
+    const baseUrl = window.location.origin;
     let element = null;
     if (template === 'invoice') {
-      element = <InvoiceEmail clientName={name} period={fields.period ?? ''} postsPublished={fields.postsPublished ?? 0} platforms={[]} amount={fields.amount ?? ''} serviceDescription={fields.serviceDescription ?? ''} paymentUrl={fields.paymentUrl ?? ''} />;
+      element = <InvoiceEmail clientName={name} period={fields.period ?? ''} postsPublished={fields.postsPublished ?? 0} platforms={[]} amount={fields.amount ?? ''} serviceDescription={fields.serviceDescription ?? ''} paymentUrl={fields.paymentUrl ?? ''} baseUrl={baseUrl} />;
     } else if (template === 'report') {
-      element = <ClientReportEmail clientName={name} period={fields.period ?? ''} postsPublished={0} platforms={[]} likes={0} comments={0} reach={0} queuePending={0} queueApproved={0} topPostImageUrl={null} topPostCaption={null} />;
+      element = <ClientReportEmail clientName={name} period={fields.period ?? ''} postsPublished={0} platforms={[]} likes={0} comments={0} reach={0} queuePending={0} queueApproved={0} topPostImageUrl={null} topPostCaption={null} baseUrl={baseUrl} />;
     } else if (template === 'strategy_onboarding') {
-      element = <ContentStrategyOnboardingEmail clientName={name} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} frequency={fields.frequency ?? ''} contentPillars={fields.contentPillars ?? ''} brandVoice={c?.brand_voice ?? ''} startDate={fields.startDate ?? ''} />;
+      element = <ContentStrategyOnboardingEmail clientName={name} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} frequency={fields.frequency ?? ''} contentPillars={fields.contentPillars ?? ''} brandVoice={c?.brand_voice ?? ''} startDate={fields.startDate ?? ''} baseUrl={baseUrl} />;
     } else if (template === 'strategy_monthly') {
-      element = <ContentStrategyMonthlyEmail clientName={name} month={fields.month ?? ''} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} totalScheduled={fields.totalScheduled ?? 0} topics={fields.topics ?? ''} />;
+      element = <ContentStrategyMonthlyEmail clientName={name} month={fields.month ?? ''} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} totalScheduled={fields.totalScheduled ?? 0} topics={fields.topics ?? ''} baseUrl={baseUrl} />;
     }
     if (!element) return;
     try {

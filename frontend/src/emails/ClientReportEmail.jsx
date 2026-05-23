@@ -1,6 +1,6 @@
 import { Html, Head, Body, Section, Text, Hr, Row, Column, Img } from '@react-email/components';
 
-export function ClientReportEmail({ clientName, period, postsPublished, platforms, likes, comments, reach, queuePending, queueApproved, topPostImageUrl, topPostCaption }) {
+export function ClientReportEmail({ clientName, period, postsPublished, platforms, likes, comments, reach, queuePending, queueApproved, topPostImageUrl, topPostCaption, baseUrl = '' }) {
   const fmt = (n) => n != null ? Number(n).toLocaleString() : '—';
   return (
     <Html>
@@ -10,7 +10,7 @@ export function ClientReportEmail({ clientName, period, postsPublished, platform
 
           {/* Header */}
           <Section style={{ backgroundColor: '#000000', padding: '32px 40px 28px' }}>
-            <Text style={{ color: '#ffffff', fontSize: '11px', letterSpacing: '3px', margin: '0 0 6px', fontWeight: '600' }}>SLEEPING CREATORS</Text>
+            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" height="36" style={{ display: 'block', marginBottom: '12px' }} />
             <Text style={{ color: '#ffffff', fontSize: '28px', fontWeight: '900', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Monthly Report</Text>
             <Text style={{ color: '#888888', fontSize: '13px', margin: '0' }}>{period} · {clientName}</Text>
           </Section>

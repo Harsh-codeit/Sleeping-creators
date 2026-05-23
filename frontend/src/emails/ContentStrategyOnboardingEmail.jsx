@@ -1,6 +1,6 @@
-import { Html, Head, Body, Section, Text, Hr } from '@react-email/components';
+import { Html, Head, Body, Section, Text, Hr, Img } from '@react-email/components';
 
-export function ContentStrategyOnboardingEmail({ clientName, platforms, frequency, contentPillars, brandVoice, startDate }) {
+export function ContentStrategyOnboardingEmail({ clientName, platforms, frequency, contentPillars, brandVoice, startDate, baseUrl = '' }) {
   const pillars = typeof contentPillars === 'string'
     ? contentPillars.split('\n').filter(Boolean)
     : (contentPillars || []);
@@ -12,7 +12,7 @@ export function ContentStrategyOnboardingEmail({ clientName, platforms, frequenc
 
           {/* Header */}
           <Section style={{ backgroundColor: '#000000', padding: '32px 40px 28px' }}>
-            <Text style={{ color: '#ffffff', fontSize: '11px', letterSpacing: '3px', margin: '0 0 6px', fontWeight: '600' }}>SLEEPING CREATORS</Text>
+            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" height="36" style={{ display: 'block', marginBottom: '12px' }} />
             <Text style={{ color: '#ffffff', fontSize: '28px', fontWeight: '900', margin: '0', letterSpacing: '-0.5px' }}>Welcome Aboard</Text>
           </Section>
 
