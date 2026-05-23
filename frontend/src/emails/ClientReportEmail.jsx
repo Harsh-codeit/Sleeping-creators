@@ -21,11 +21,11 @@ const valueStyle = {
 
 const dividerStyle = { borderColor: '#cccccc', margin: '10px 0 0', borderTopWidth: '1px' };
 
-function StatCard({ label, value }) {
+function StatCard({ label, value, valueSize }) {
   return (
     <Section style={card}>
       <Text style={labelStyle}>{label}</Text>
-      <Text style={valueStyle}>{value || '—'}</Text>
+      <Text style={valueSize ? { ...valueStyle, fontSize: valueSize } : valueStyle}>{value || '—'}</Text>
       <Hr style={dividerStyle} />
     </Section>
   );
@@ -82,13 +82,13 @@ export function ClientReportEmail({
             {/* ── CLIENT INFO (3-col) ──────────────────────────────── */}
             <Row style={{ marginBottom: '10px' }}>
               <Column style={{ width: '33.33%', paddingRight: '5px' }}>
-                <StatCard style={{ fontSize: '16px' }} label="Client Name" value={clientName} />
+                <StatCard label="Client Name" value={clientName} valueSize="16px" />
               </Column>
               <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
-                <StatCard style={{ fontSize: '16px' }} label="Instagram Handle" value={instagramHandle} />
+                <StatCard label="Instagram Handle" value={instagramHandle} valueSize="16px" />
               </Column>
               <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
-                <StatCard style={{ fontSize: '16px' }} label="Report Period" value={period} />
+                <StatCard label="Report Period" value={period} valueSize="16px" />
               </Column>
             </Row>
 

@@ -86,6 +86,7 @@ export default function MailCenter() {
   const [scheduled, setScheduled] = useState([]);
   const [history, setHistory] = useState([]);
   const [syncingAnalytics, setSyncingAnalytics] = useState(false);
+  const [generatingAudit, setGeneratingAudit] = useState(false);
 
   useEffect(() => {
     axios.get('/api/clients').then(r => setClients(r.data)).catch(() => {});
@@ -128,6 +129,22 @@ export default function MailCenter() {
         reportDate: monthStr,
         niche: ob.niche ?? '',
         targetAudience: ob.target_audience_description ?? c.target_audience ?? '',
+        comp1Handle: ob.competitor_accounts?.[0] ?? '',
+        comp2Handle: ob.competitor_accounts?.[1] ?? '',
+        comp3Handle: ob.competitor_accounts?.[2] ?? '',
+        contentTrends: ob.niche_working_topics ?? '',
+        marketNotes: [
+          ob.niche_working_topics        && `Working: ${ob.niche_working_topics}`,
+          ob.niche_oversaturated_topics  && `Oversaturated: ${ob.niche_oversaturated_topics}`,
+          ob.niche_underserved_topics    && `Underserved: ${ob.niche_underserved_topics}`,
+        ].filter(Boolean).join('\n') || '',
+        pillar1Topic: c.strategy?.themes?.[0] ?? '',
+        pillar2Topic: c.strategy?.themes?.[1] ?? '',
+        pillar3Topic: c.strategy?.themes?.[2] ?? '',
+        pillar4Topic: c.strategy?.themes?.[3] ?? '',
+        strategyOverview: c.brand_voice ?? '',
+        topContentFormat: 'Reels',
+        peakPostingTime: '7–9 PM IST',
       },
       strategy_onboarding: {
         platforms: platformStr,
@@ -194,6 +211,38 @@ export default function MailCenter() {
     return () => { cancelled = true; };
   }, [template, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (template !== 'audit' || !clientId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
+        if (cancelled) return;
+        const posts = Number(d.posts) || 0;
+        const likes = Number(d.likes) || 0;
+        const comments = Number(d.comments) || 0;
+        const er = Number(d.engagement_rate) || 0;
+        const fill = {};
+        if (d.engagement_rate != null) {
+          fill.avgEngagementRate = `${er}%`;
+          fill.engagementRateRating = `${er}% — ${er > 5 ? 'above avg' : er > 2 ? 'near avg' : 'below avg'}`;
+        }
+        if (posts) {
+          fill.totalPosts = String(posts);
+          const freq = Math.round(posts / 30 * 10) / 10;
+          fill.postingFrequencyRating = `~${freq} posts/day`;
+        }
+        if (posts > 0) {
+          if (likes) fill.avgLikes = String(Math.round(likes / posts));
+          if (comments) fill.avgComments = String(Math.round(comments / posts));
+        }
+        if (d.impressions_unique) fill.avgReach = String(d.impressions_unique);
+        if (Object.keys(fill).length) setFields(f => ({ ...f, ...fill }));
+      } catch { /* no analytics */ }
+    })();
+    return () => { cancelled = true; };
+  }, [template, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const syncAnalytics = useCallback(async () => {
     if (!clientId) return;
     setSyncingAnalytics(true);
@@ -208,6 +257,20 @@ export default function MailCenter() {
       setSyncingAnalytics(false);
     }
   }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const generateAudit = useCallback(async () => {
+    if (!clientId) return;
+    setGeneratingAudit(true);
+    try {
+      const data = await axios.post('/api/mail/audit/ai-generate', { client_id: clientId, fields }).then(r => r.data);
+      setFields(f => ({ ...f, ...data }));
+      toast.success('AI audit generated');
+    } catch {
+      toast.error('AI generation failed');
+    } finally {
+      setGeneratingAudit(false);
+    }
+  }, [clientId, fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rebuildPreview = useCallback(async () => {
     const c = clients.find(c => c.id === clientId);
@@ -454,6 +517,11 @@ export default function MailCenter() {
               <Field label="Notes / Strategy Update" value={fields.notes ?? ''} onChange={v => setField('notes', v)} placeholder="Based on this month's performance..." textarea />
             </>}
             {template === 'audit' && <>
+              <button onClick={generateAudit} disabled={!clientId || generatingAudit}
+                className="w-full flex items-center justify-center gap-2 mb-4 py-2 text-xs font-mono border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white transition-colors duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                {generatingAudit ? <Loader2 size={12} className="animate-spin" /> : <span>✦</span>}
+                {generatingAudit ? 'Generating with AI...' : 'AI Generate All Fields'}
+              </button>
               <Field label="Instagram Handle" value={fields.instagramHandle ?? ''} onChange={v => setField('instagramHandle', v)} placeholder="@client" />
               <Field label="Report Date" value={fields.reportDate ?? ''} onChange={v => setField('reportDate', v)} placeholder="June 2026" />
               <Field label="Niche / Industry" value={fields.niche ?? ''} onChange={v => setField('niche', v)} placeholder="Fashion & Lifestyle" />

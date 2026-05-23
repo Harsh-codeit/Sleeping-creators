@@ -7243,6 +7243,102 @@ async def next_invoice_number(request: Request):
     return {"invoice_number": f"SC-{ym}-{str(count + 1).zfill(3)}"}
 
 
+@api_router.post("/mail/audit/ai-generate")
+async def audit_ai_generate(request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    body = await request.json()
+    client_id = body.get("client_id", "")
+    existing = body.get("fields", {})
+
+    client = await db.clients.find_one({"id": client_id})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    ob = client.get("onboarding_data") or {}
+    name         = client.get("name", "")
+    niche        = ob.get("niche") or existing.get("niche", "")
+    target_aud   = ob.get("target_audience_description") or client.get("target_audience") or existing.get("targetAudience", "")
+    brand_voice  = client.get("brand_voice", "")
+    competitors  = ob.get("competitor_accounts") or []
+    ig_handle    = ob.get("instagram_handle") or existing.get("instagramHandle", "")
+    pillars      = (client.get("strategy") or {}).get("themes") or []
+    working      = ob.get("niche_working_topics", "")
+    oversatd     = ob.get("niche_oversaturated_topics", "")
+    underserved  = ob.get("niche_underserved_topics", "")
+
+    analytics = {}
+    try:
+        from bson import ObjectId as _ObjId
+        _cid = client_id
+        _c = await db.clients.find_one({"id": _cid})
+        if _c and _c.get("bundle_team_id"):
+            pass
+        analytics = {
+            "engagement_rate": existing.get("avgEngagementRate", ""),
+            "total_posts":     existing.get("totalPosts", ""),
+            "avg_likes":       existing.get("avgLikes", ""),
+            "avg_comments":    existing.get("avgComments", ""),
+            "avg_reach":       existing.get("avgReach", ""),
+        }
+    except Exception:
+        pass
+
+    comp_lines = "\n".join([f"- @{h}" for h in competitors[:3]]) if competitors else "- Not provided"
+    pillar_lines = "\n".join([f"- {p}" for p in pillars[:4]]) if pillars else "- Not provided"
+
+    prompt = (
+        f"You are a senior Instagram growth strategist writing a professional audit report.\n\n"
+        f"CLIENT PROFILE:\n"
+        f"- Name: {name}\n"
+        f"- Instagram: @{ig_handle}\n"
+        f"- Niche: {niche}\n"
+        f"- Target Audience: {target_aud}\n"
+        f"- Brand Voice: {brand_voice}\n"
+        f"- Competitor Accounts: {comp_lines}\n"
+        f"- Content Pillars: {pillar_lines}\n"
+        f"- Niche Working Topics: {working}\n"
+        f"- Oversaturated Topics: {oversatd}\n"
+        f"- Underserved Topics: {underserved}\n\n"
+        f"CURRENT ANALYTICS:\n"
+        f"- Engagement Rate: {analytics.get('engagement_rate','unknown')}\n"
+        f"- Total Posts: {analytics.get('total_posts','unknown')}\n"
+        f"- Avg Likes/Post: {analytics.get('avg_likes','unknown')}\n"
+        f"- Avg Comments/Post: {analytics.get('avg_comments','unknown')}\n"
+        f"- Avg Reach/Post: {analytics.get('avg_reach','unknown')}\n\n"
+        f"Generate a complete audit report. Return ONLY a valid JSON object with these exact keys:\n"
+        f"- tam: e.g. '$1.2B globally'\n"
+        f"- comp1Followers, comp2Followers, comp3Followers: estimated follower count strings e.g. '45,000'\n"
+        f"- comp1Working, comp2Working, comp3Working: 1-2 sentences on what's working for each competitor\n"
+        f"- comp1Gap, comp2Gap, comp3Gap: 1-2 sentences on gaps/weaknesses for each competitor\n"
+        f"- pillar1Format, pillar2Format, pillar3Format, pillar4Format: best format e.g. 'Reels', 'Carousel', 'Static'\n"
+        f"- month1Items, month2Items, month3Items, month4Items: 3-4 goals/tactics (one per line, \\n separated)\n"
+        f"- strengths, weaknesses, opportunities, threats: 3-4 bullet points each (one per line, \\n separated)\n"
+        f"- profilePhotoRating: brief 1-line assessment\n"
+        f"- bioRating: brief 1-line assessment\n"
+        f"- highlightsRating: brief 1-line assessment\n"
+        f"- contentConsistencyRating: brief 1-line assessment\n"
+        f"- avgSaves: estimated avg saves per post as a number string e.g. '12'\n"
+        f"Return ONLY valid JSON, no markdown, no explanation."
+    )
+
+    import anthropic as _anthropic, json as _json, re as _re
+    _ac = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    msg = _ac.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    raw = msg.content[0].text.strip()
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        data = _json.loads(m.group()) if m else {}
+    return data
+
+
 @api_router.get("/mail/history")
 async def mail_history(request: Request, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=200)):
     token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
