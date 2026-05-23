@@ -133,65 +133,25 @@ export default function MailCenter() {
     let cancelled = false;
     (async () => {
       try {
-        let analytics = await axios.get(`/api/analytics/clients/${clientId}`).then(r => r.data);
-        if (!analytics.totals?.followers) {
-          try {
-            await axios.post(`/api/analytics/clients/${clientId}/refresh`);
-            analytics = await axios.get(`/api/analytics/clients/${clientId}`).then(r => r.data);
-          } catch { /* bundle not configured — skip */ }
-        }
+        const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
         if (cancelled) return;
-        const { totals = {}, platform_breakdown = {} } = analytics;
-        const ig = platform_breakdown.instagram || {};
-        const src = ig.followers ? ig : totals;
-        const platforms = Object.keys(platform_breakdown);
         const fill = {};
-        if (src.followers)          fill.totalFollowers      = String(src.followers);
-        if (src.new_followers)      fill.newFollowers        = String(src.new_followers);
-        if (src.impressions_unique) fill.totalReach          = String(src.impressions_unique);
-        if (src.impressions)        fill.totalImpressions    = String(src.impressions);
-        if (src.profile_views)      fill.profileVisits       = String(src.profile_views);
-        if (src.likes)              fill.likes               = String(src.likes);
-        if (src.comments)           fill.comments            = String(src.comments);
-        if (src.shares)             fill.shares              = String(src.shares);
-        if (src.saves)              fill.saves               = String(src.saves);
-        if (src.post_count)         fill.postsPublished      = String(src.post_count);
-        if (src.followers && src.new_followers)
-          fill.followerGrowthRate = `+${((src.new_followers / (src.followers - src.new_followers)) * 100).toFixed(1)}%`;
-        if (platforms.length)       fill.platform            = platforms.map(p => p[0].toUpperCase() + p.slice(1)).join(', ');
-
-        // Fallback: Instagram Graph API (followers + month media engagement)
-        if (!fill.totalFollowers) {
-          try {
-            const igStats = await axios.get(`/api/analytics/clients/${clientId}/ig-stats`).then(r => r.data);
-            if (igStats.followers_count) fill.totalFollowers = String(igStats.followers_count);
-            if (!fill.postsPublished && igStats.month_posts) fill.postsPublished = String(igStats.month_posts);
-            if (!fill.likes && igStats.month_likes)       fill.likes    = String(igStats.month_likes);
-            if (!fill.comments && igStats.month_comments) fill.comments = String(igStats.month_comments);
-          } catch { /* IG not connected */ }
-        }
-
-        // Aggregate engagement from stored posts this month
-        try {
-          const now = new Date();
-          const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-          const postsRes = await axios.get(`/api/posts?client_id=${clientId}&status=published&limit=1000`);
-          const monthPosts = postsRes.data.filter(p => (p.published_at || '').startsWith(monthPrefix));
-          if (monthPosts.length) {
-            const sum = key => monthPosts.reduce((s, p) => s + (p.performance?.[key] || 0), 0);
-            if (!fill.postsPublished)     fill.postsPublished   = String(monthPosts.length);
-            if (!fill.likes    && sum('likes'))        fill.likes        = String(sum('likes'));
-            if (!fill.comments && sum('comments'))     fill.comments     = String(sum('comments'));
-            if (!fill.shares   && sum('shares'))       fill.shares       = String(sum('shares'));
-            if (!fill.totalImpressions && sum('impressions')) fill.totalImpressions = String(sum('impressions'));
-          }
-        } catch { /* posts fetch failed */ }
-
+        if (d.total_followers)     fill.totalFollowers     = String(d.total_followers);
+        if (d.new_followers)       fill.newFollowers       = String(d.new_followers);
+        if (d.follower_growth_rate)fill.followerGrowthRate = d.follower_growth_rate;
+        if (d.total_reach)         fill.totalReach         = String(d.total_reach);
+        if (d.total_impressions)   fill.totalImpressions   = String(d.total_impressions);
+        if (d.profile_visits)      fill.profileVisits      = String(d.profile_visits);
+        if (d.likes)               fill.likes              = String(d.likes);
+        if (d.comments)            fill.comments           = String(d.comments);
+        if (d.shares)              fill.shares             = String(d.shares);
+        if (d.saves)               fill.saves              = String(d.saves);
+        if (d.posts_published)     fill.postsPublished     = String(d.posts_published);
         if (Object.keys(fill).length) {
           setFields(f => ({ ...f, ...fill }));
           toast.success('Analytics loaded');
         }
-      } catch { /* client has no analytics */ }
+      } catch { /* no analytics available */ }
     })();
     return () => { cancelled = true; };
   }, [template, clientId]);
