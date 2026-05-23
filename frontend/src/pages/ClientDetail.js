@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star, Film, Image } from "lucide-react";
+import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star, Film, Image, CheckCircle } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
+import { render } from "@react-email/render";
+import { ContentStrategyOnboardingEmail } from "../emails/ContentStrategyOnboardingEmail";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
@@ -304,7 +306,7 @@ function DriveImagesFolderCard({ client, clientId, setClient }) {
   );
 }
 
-function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
+function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, completing }) {
   const set = (key, val) => setEditForm(f => ({ ...f, [key]: val }));
   return (
     <div className="max-w-2xl space-y-5" data-testid="edit-profile-tab">
@@ -750,8 +752,13 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
         </div>
       </div>
 
-      {/* Save */}
-      <div className="flex justify-end pb-8">
+      {/* Save / Complete */}
+      <div className="flex items-center justify-between pb-8">
+        <button onClick={onComplete} disabled={completing || saving}
+          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50 transition-colors duration-150">
+          <CheckCircle size={14} />
+          {completing ? "Scheduling…" : "Complete Onboarding"}
+        </button>
         <button onClick={onSave} disabled={saving} data-testid="save-edit-btn"
           className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-semibold hover:bg-zinc-200 disabled:opacity-50 transition-colors duration-150">
           <Save size={14} />
@@ -1719,6 +1726,7 @@ export default function ClientDetail() {
   const [showGenModal, setShowGenModal] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [completingOnboarding, setCompletingOnboarding] = useState(false);
   const [postKindFilter, setPostKindFilter] = useState("all"); // all | video | carousel | text
   const [retryingPostId, setRetryingPostId] = useState(null);
   const [viewingVideoPost, setViewingVideoPost] = useState(null);
@@ -1834,6 +1842,32 @@ export default function ClientDetail() {
       toast.error(err?.response?.data?.detail || "Failed to save profile");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const completeOnboarding = async () => {
+    if (!client) return;
+    const to = client.onboarding_data?.email || '';
+    if (!to) return toast.error("No email address on file for this client");
+    setCompletingOnboarding(true);
+    try {
+      const html = await render(
+        <ContentStrategyOnboardingEmail
+          clientName={client.name}
+          privacyPolicyUrl="https://sleepingcreators.com/privacy"
+          baseUrl={window.location.origin}
+        />
+      );
+      await axios.post(`${API}/clients/${id}/complete-onboarding`, {
+        to,
+        subject: `You're in. Here's everything you need to know | Sleeping Creators…`,
+        html,
+      });
+      toast.success("Onboarding complete! Welcome email scheduled for 2 hours from now.");
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Failed to schedule onboarding email");
+    } finally {
+      setCompletingOnboarding(false);
     }
   };
 
@@ -2787,6 +2821,8 @@ export default function ClientDetail() {
           setEditForm={setEditForm}
           saving={savingEdit}
           onSave={saveEditProfile}
+          onComplete={completeOnboarding}
+          completing={completingOnboarding}
         />
       )}
 

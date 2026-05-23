@@ -2145,6 +2145,13 @@ class MailScheduleRequest(BaseModel):
     html: str
     scheduled_at: str  # ISO datetime string
 
+class OnboardingCompleteRequest(BaseModel):
+    to: Union[str, List[str]]
+    subject: str
+    html: str
+    cc: Optional[List[str]] = None
+    reply_to: Optional[str] = None
+
 class BulkReportRequest(BaseModel):
     period: str
 
@@ -7153,6 +7160,30 @@ async def get_schedule_slots():
 
 
 # ─── Mail ────────────────────────────────────────────────────────────────────
+
+@api_router.post("/clients/{client_id}/complete-onboarding")
+async def complete_onboarding(client_id: str, data: OnboardingCompleteRequest, request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    now = datetime.now(timezone.utc)
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$set": {"onboarding_completed": True, "onboarding_completed_at": now.isoformat()}}
+    )
+    send_at = (now + timedelta(hours=2)).isoformat()
+    doc = {
+        "type": "strategy_onboarding", "client_id": client_id,
+        "to": data.to, "cc": data.cc or [], "reply_to": data.reply_to,
+        "subject": data.subject, "html": data.html,
+        "scheduled_at": send_at, "status": "pending",
+        "created_by": token_data.get("user_id") or "owner",
+        "created_at": now.isoformat(),
+        "sent_at": None, "resend_id": None, "delivery_status": None, "error": None,
+    }
+    await db.scheduled_emails.insert_one(doc)
+    return {"ok": True, "scheduled_at": send_at}
+
 
 @api_router.post("/mail/send")
 async def mail_send(data: MailSendRequest, request: Request):
