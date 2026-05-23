@@ -153,9 +153,21 @@ export default function MailCenter() {
         if (src.comments)           fill.comments         = String(src.comments);
         if (src.post_count)         fill.postsPublished   = String(src.post_count);
         if (platforms.length)       fill.platform         = platforms.map(p => p[0].toUpperCase() + p.slice(1)).join(', ');
+
+        // Aggregate shares from published posts this month
+        try {
+          const now = new Date();
+          const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const postsRes = await axios.get(`/api/posts?client_id=${clientId}&status=published&limit=1000`);
+          const monthPosts = postsRes.data.filter(p => (p.published_at || '').startsWith(monthPrefix));
+          const totalShares = monthPosts.reduce((s, p) => s + (p.performance?.shares || 0), 0);
+          if (!fill.postsPublished && monthPosts.length) fill.postsPublished = String(monthPosts.length);
+          if (totalShares > 0) fill.shares = String(totalShares);
+        } catch { /* posts fetch failed */ }
+
         if (Object.keys(fill).length) {
           setFields(f => ({ ...f, ...fill }));
-          toast.success('Analytics loaded from Bundle');
+          toast.success('Analytics loaded');
         }
       } catch { /* client has no analytics */ }
     })();
