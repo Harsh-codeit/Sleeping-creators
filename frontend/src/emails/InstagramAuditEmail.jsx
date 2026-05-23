@@ -205,23 +205,24 @@ export function InstagramAuditEmail({
 
             {/* ── 06 ROADMAP ──────────────────────────────────────── */}
             {sectionHeader('06', '3–4 MONTH ROADMAP')}
-            <Row style={{ marginBottom: '24px' }}>
-              {[
-                ['MONTH 1', 'Foundation & Testing', month1Items],
-                ['MONTH 2', 'Refine & Grow',        month2Items],
-                ['MONTH 3', 'Double Down',           month3Items],
-                ['MONTH 4', 'Scale & Review',        month4Items],
-              ].map(([label, sub, items], i) => (
-                <Column key={i} style={{ width: '25%', paddingRight: i < 3 ? '4px' : '0', paddingLeft: i > 0 ? '4px' : '0', verticalAlign: 'top' }}>
-                  <Section style={darkCard}>
-                    <Text style={{ margin: '0 0 2px', fontSize: '10px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px', fontFamily: bodyFont }}>{label}</Text>
-                    <Text style={{ margin: '0 0 8px', fontSize: '9px', color: '#888888', fontStyle: 'italic', fontFamily: bodyFont }}>{sub}</Text>
-                    <Hr style={divLineDark} />
+            {[
+              ['MONTH 1', 'Foundation & Testing', month1Items],
+              ['MONTH 2', 'Refine & Grow',        month2Items],
+              ['MONTH 3', 'Double Down',           month3Items],
+              ['MONTH 4', 'Scale & Review',        month4Items],
+            ].map(([label, sub, items], i) => (
+              <Section key={i} style={{ ...darkCard, marginBottom: i < 3 ? '8px' : '24px' }}>
+                <Row>
+                  <Column style={{ width: '120px', verticalAlign: 'middle' }}>
+                    <Text style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px', fontFamily: bodyFont }}>{label}</Text>
+                    <Text style={{ margin: 0, fontSize: '9px', color: '#888888', fontStyle: 'italic', fontFamily: bodyFont }}>{sub}</Text>
+                  </Column>
+                  <Column style={{ verticalAlign: 'top', paddingLeft: '12px', borderLeft: '1px solid #333333' }}>
                     <BulletList items={items} />
-                  </Section>
-                </Column>
-              ))}
-            </Row>
+                  </Column>
+                </Row>
+              </Section>
+            ))}
 
             {/* ── 07 SWOT ─────────────────────────────────────────── */}
             {sectionHeader('07', 'SWOT ANALYSIS')}
