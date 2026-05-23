@@ -8,15 +8,13 @@ import 'react-day-picker/dist/style.css';
 import { InvoiceEmail } from '../emails/InvoiceEmail';
 import { ClientReportEmail } from '../emails/ClientReportEmail';
 import { ContentStrategyOnboardingEmail } from '../emails/ContentStrategyOnboardingEmail';
-import { ContentStrategyMonthlyEmail } from '../emails/ContentStrategyMonthlyEmail';
 import { InstagramAuditEmail } from '../emails/InstagramAuditEmail';
 
 const TEMPLATES = [
   { value: 'invoice',             label: 'Invoice' },
-  { value: 'report',              label: 'Report' },
+  { value: 'report',              label: 'Monthly' },
   { value: 'audit',               label: 'Audit' },
   { value: 'strategy_onboarding', label: 'Onboarding' },
-  { value: 'strategy_monthly',    label: 'Monthly' },
 ];
 
 const INPUT_CLS = "w-full bg-zinc-950 border border-zinc-800 text-white text-sm px-3 py-2 rounded-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none font-mono placeholder:text-zinc-600 transition-colors duration-200";
@@ -91,7 +89,6 @@ export default function MailCenter() {
       invoice: `Invoice${fields.invoiceNumber ? ` #${fields.invoiceNumber}` : ''} — ${fields.invoiceMonth || 'This Month'} — Sleeping Creators`,
       report: `Monthly Report — ${fields.period ?? ''} | ${name}`,
       strategy_onboarding: `Your Content Strategy — ${name}`,
-      strategy_monthly: `${fields.month ?? ''} Content Plan — ${name}`,
     };
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);
@@ -160,8 +157,6 @@ export default function MailCenter() {
       />;
     } else if (template === 'strategy_onboarding') {
       element = <ContentStrategyOnboardingEmail clientName={name} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} frequency={fields.frequency ?? ''} contentPillars={fields.contentPillars ?? ''} brandVoice={c?.brand_voice ?? ''} startDate={fields.startDate ?? ''} baseUrl={baseUrl} />;
-    } else if (template === 'strategy_monthly') {
-      element = <ContentStrategyMonthlyEmail clientName={name} month={fields.month ?? ''} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} totalScheduled={fields.totalScheduled ?? 0} topics={fields.topics ?? ''} baseUrl={baseUrl} />;
     }
     if (!element) return;
     try {
@@ -386,12 +381,6 @@ export default function MailCenter() {
               <Field label="Posting Frequency" value={fields.frequency ?? ''} onChange={v => setField('frequency', v)} placeholder="1 post/day" />
               <Field label="Content Pillars (one per line)" value={fields.contentPillars ?? ''} onChange={v => setField('contentPillars', v)} placeholder={"Behind the scenes\nProduct showcases"} textarea />
               <Field label="Start Date" value={fields.startDate ?? ''} onChange={v => setField('startDate', v)} placeholder="June 1, 2026" />
-            </>}
-            {template === 'strategy_monthly' && <>
-              <Field label="Month" value={fields.month ?? ''} onChange={v => setField('month', v)} placeholder="June 2026" />
-              <Field label="Platforms" value={fields.platforms ?? ''} onChange={v => setField('platforms', v)} placeholder="Instagram, TikTok" />
-              <Field label="Total Posts" value={fields.totalScheduled ?? ''} onChange={v => setField('totalScheduled', v)} placeholder="24" />
-              <Field label="Topics (one per line)" value={fields.topics ?? ''} onChange={v => setField('topics', v)} placeholder={"Eid collection launch\nSummer menu reveal"} textarea />
             </>}
           </div>
         </div>
