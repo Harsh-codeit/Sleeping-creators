@@ -82,13 +82,13 @@ export function ClientReportEmail({
             {/* ── CLIENT INFO (3-col) ──────────────────────────────── */}
             <Row style={{ marginBottom: '10px' }}>
               <Column style={{ width: '33.33%', paddingRight: '5px' }}>
-                <StatCard label="Client Name" value={clientName} />
+                <StatCard style={{ fontSize: '16px' }} label="Client Name" value={clientName} />
               </Column>
               <Column style={{ width: '33.33%', paddingRight: '5px', paddingLeft: '5px' }}>
-                <StatCard label="Instagram Handle" value={instagramHandle} />
+                <StatCard style={{ fontSize: '16px' }} label="Instagram Handle" value={instagramHandle} />
               </Column>
               <Column style={{ width: '33.33%', paddingLeft: '5px' }}>
-                <StatCard label="Report Period" value={period} />
+                <StatCard style={{ fontSize: '16px' }} label="Report Period" value={period} />
               </Column>
             </Row>
 
