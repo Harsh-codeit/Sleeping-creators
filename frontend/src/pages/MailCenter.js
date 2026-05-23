@@ -146,13 +146,19 @@ export default function MailCenter() {
         const src = ig.followers ? ig : totals;
         const platforms = Object.keys(platform_breakdown);
         const fill = {};
-        if (src.followers)          fill.totalFollowers   = String(src.followers);
-        if (src.impressions_unique) fill.totalReach       = String(src.impressions_unique);
-        if (src.impressions)        fill.totalImpressions = String(src.impressions);
-        if (src.likes)              fill.likes            = String(src.likes);
-        if (src.comments)           fill.comments         = String(src.comments);
-        if (src.post_count)         fill.postsPublished   = String(src.post_count);
-        if (platforms.length)       fill.platform         = platforms.map(p => p[0].toUpperCase() + p.slice(1)).join(', ');
+        if (src.followers)          fill.totalFollowers      = String(src.followers);
+        if (src.new_followers)      fill.newFollowers        = String(src.new_followers);
+        if (src.impressions_unique) fill.totalReach          = String(src.impressions_unique);
+        if (src.impressions)        fill.totalImpressions    = String(src.impressions);
+        if (src.profile_views)      fill.profileVisits       = String(src.profile_views);
+        if (src.likes)              fill.likes               = String(src.likes);
+        if (src.comments)           fill.comments            = String(src.comments);
+        if (src.shares)             fill.shares              = String(src.shares);
+        if (src.saves)              fill.saves               = String(src.saves);
+        if (src.post_count)         fill.postsPublished      = String(src.post_count);
+        if (src.followers && src.new_followers)
+          fill.followerGrowthRate = `+${((src.new_followers / (src.followers - src.new_followers)) * 100).toFixed(1)}%`;
+        if (platforms.length)       fill.platform            = platforms.map(p => p[0].toUpperCase() + p.slice(1)).join(', ');
 
         // Aggregate shares from published posts this month
         try {

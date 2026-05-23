@@ -3085,13 +3085,10 @@ async def analytics_client(client_id: str):
     bundle = client.get("bundle") or {"socials": [], "socials_refreshed_at": None}
     socials = bundle.get("socials") or []
 
-    totals = {
-        "followers": 0, "following": 0,
-        "impressions": 0, "impressions_unique": 0,
-        "views": 0, "views_unique": 0,
-        "likes": 0, "comments": 0,
-        "post_count": 0,
-    }
+    _sum_keys = ("followers", "following", "new_followers", "impressions", "impressions_unique",
+                 "views", "views_unique", "likes", "comments", "shares", "saves",
+                 "profile_views", "post_count")
+    totals = {k: 0 for k in _sum_keys}
     platform_breakdown = {}
     for s in socials:
         plat = s.get("platform") or "unknown"
@@ -3099,20 +3096,9 @@ async def analytics_client(client_id: str):
         likes = s.get("likes", 0) or 0
         comments = s.get("comments", 0) or 0
         engagement_rate = round((likes + comments) / followers * 100, 2) if followers > 0 else 0
-        platform_breakdown[plat] = {
-            "followers":          followers,
-            "following":          s.get("following", 0) or 0,
-            "impressions":        s.get("impressions", 0) or 0,
-            "impressions_unique": s.get("impressions_unique", 0) or 0,
-            "views":              s.get("views", 0) or 0,
-            "views_unique":       s.get("views_unique", 0) or 0,
-            "likes":              likes,
-            "comments":           comments,
-            "post_count":         s.get("post_count", 0) or 0,
-            "engagement_rate":    engagement_rate,
-        }
-        for k in ("followers", "following", "impressions", "impressions_unique",
-                  "views", "views_unique", "likes", "comments", "post_count"):
+        platform_breakdown[plat] = {k: s.get(k, 0) or 0 for k in _sum_keys}
+        platform_breakdown[plat]["engagement_rate"] = engagement_rate
+        for k in _sum_keys:
             totals[k] += s.get(k, 0) or 0
     totals["engagement_rate"] = round(
         (totals["likes"] + totals["comments"]) / totals["followers"] * 100, 2
@@ -3162,19 +3148,23 @@ async def analytics_client_refresh(client_id: str):
         acct = data.get("socialAccount") or {}
         item = items[0] if items else {}
         socials.append({
-            "platform":          platform,
-            "username":          acct.get("username"),
-            "avatar_url":        acct.get("avatarUrl"),
-            "followers":         item.get("followers", 0) or 0,
-            "following":         item.get("following", 0) or 0,
-            "impressions":       item.get("impressions", 0) or 0,
+            "platform":           platform,
+            "username":           acct.get("username"),
+            "avatar_url":         acct.get("avatarUrl"),
+            "followers":          item.get("followers", 0) or 0,
+            "following":          item.get("following", 0) or 0,
+            "new_followers":      item.get("newFollowers") or item.get("followerGrowth") or item.get("followersGained") or 0,
+            "impressions":        item.get("impressions", 0) or 0,
             "impressions_unique": item.get("impressionsUnique", 0) or 0,
-            "views":             item.get("views", 0) or 0,
-            "views_unique":      item.get("viewsUnique", 0) or 0,
-            "likes":             item.get("likes", 0) or 0,
-            "comments":          item.get("comments", 0) or 0,
-            "post_count":        item.get("postCount", 0) or 0,
-            "refreshed_at":      refreshed_at,
+            "views":              item.get("views", 0) or 0,
+            "views_unique":       item.get("viewsUnique", 0) or 0,
+            "likes":              item.get("likes", 0) or 0,
+            "comments":           item.get("comments", 0) or 0,
+            "shares":             item.get("shares") or item.get("reposts") or item.get("retweets") or 0,
+            "saves":              item.get("saves") or item.get("bookmarks") or item.get("saved") or 0,
+            "profile_views":      item.get("profileViews") or item.get("profileVisits") or item.get("profileView") or 0,
+            "post_count":         item.get("postCount", 0) or 0,
+            "refreshed_at":       refreshed_at,
         })
 
     if not socials:
