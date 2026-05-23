@@ -380,6 +380,23 @@ def _apply_clip_fallback_substitution(timeline: dict, merge_values: dict) -> Non
 
 
 
+def _apply_video_transcode(template_data: dict) -> dict:
+    """Set transcode=False on every video-type clip asset in the timeline."""
+    import copy
+    data = copy.deepcopy(template_data)
+    tpl = data.get("template", {})
+    for track in tpl.get("timeline", {}).get("tracks", []) or []:
+        if not isinstance(track, dict):
+            continue
+        for clip in track.get("clips", []) or []:
+            if not isinstance(clip, dict):
+                continue
+            asset = clip.get("asset")
+            if isinstance(asset, dict) and asset.get("type") == "video":
+                asset["transcode"] = False
+    return data
+
+
 def _normalize_placeholders(obj):
     """
     Strip whitespace inside {{ FIELD }} placeholders → {{FIELD}}.
@@ -408,6 +425,7 @@ async def submit_render(
     merge_values: {FIELD_NAME: value} — keys must match find values exactly.
     """
     mutated = _apply_filter_and_audio(template_data, filter_name, audio_url)
+    mutated = _apply_video_transcode(mutated)
     tpl = mutated.get("template", {})
 
     # Belt-and-suspenders: substitute merge values directly into text-asset
