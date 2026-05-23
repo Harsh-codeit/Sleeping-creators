@@ -265,8 +265,9 @@ export default function MailCenter() {
       const data = await axios.post('/api/mail/audit/ai-generate', { client_id: clientId, fields }).then(r => r.data);
       setFields(f => ({ ...f, ...data }));
       toast.success('AI audit generated');
-    } catch {
-      toast.error('AI generation failed');
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e?.message || 'AI generation failed';
+      toast.error(msg);
     } finally {
       setGeneratingAudit(false);
     }

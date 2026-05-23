@@ -7304,8 +7304,11 @@ async def audit_ai_generate(request: Request):
     hashtags          = strategy.get("hashtags") or []
     video_hooks       = strategy.get("video_hooks") or []
 
-    # Competitor accounts
-    comp_accounts     = ob.get("competitor_accounts") or []
+    # Competitor accounts (may be list or comma-string)
+    _raw_comps = ob.get("competitor_accounts") or []
+    if isinstance(_raw_comps, str):
+        _raw_comps = [c.strip() for c in _raw_comps.split(",") if c.strip()]
+    comp_accounts     = [str(h) for h in _raw_comps if h]
     scraped_comps     = await db.competitors.find({"client_id": client_id, "is_active": True}, {"_id": 0}).to_list(10)
 
     # Analytics (from existing fields already auto-filled, or from monthly-report)
@@ -7429,18 +7432,26 @@ Return ONLY a valid JSON object with EXACTLY these keys:
 Return ONLY valid JSON. No markdown code blocks. No explanation."""
 
     import anthropic as _anthropic, json as _json, re as _re
-    _ac = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    msg = _ac.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = msg.content[0].text.strip()
+    try:
+        _ac = _anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+        msg = await _ac.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+    except Exception as e:
+        raise HTTPException(500, f"Claude API error: {e}")
     try:
         data = _json.loads(raw)
     except Exception:
-        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
-        data = _json.loads(m.group()) if m else {}
+        m = _re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", raw, _re.DOTALL)
+        if not m:
+            m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        try:
+            data = _json.loads(m.group()) if m else {}
+        except Exception:
+            raise HTTPException(500, f"Claude returned non-JSON: {raw[:200]}")
     return data
 
 
