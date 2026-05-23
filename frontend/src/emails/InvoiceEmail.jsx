@@ -216,9 +216,7 @@ export function InvoiceEmail({
 
           {/* ── FOOTER LOGO ─────────────────────────────────────────── */}
           <Section style={{ padding: '24px 0 16px', textAlign: 'center' }}>
-            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="56" height="56" style={{ display: 'block', margin: '0 auto 12px', borderRadius: '12px' }} />
-            <Text style={{ margin: '0 0 2px', fontSize: '22px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px', lineHeight: '1.2' }}>You Sleep...</Text>
-            <Text style={{ margin: '0 0 8px', fontSize: '22px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px', lineHeight: '1.2' }}>Your Profile Doesn't.</Text>
+            <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="56" height="56" style={{ display: 'block', margin: '0 auto 8px', borderRadius: '12px' }} />
             <Text style={{ margin: 0, fontSize: '11px', color: '#aaaaaa' }}>Sleeping Creators</Text>
           </Section>
 

@@ -277,8 +277,6 @@ export function InstagramAuditEmail({
           {/* ── FOOTER LOGO BLOCK ───────────────────────────────────── */}
           <Section style={{ padding: '16px 0 12px', textAlign: 'center' }}>
             <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="48" height="48" style={{ display: 'block', margin: '0 auto 8px', borderRadius: '10px' }} />
-            <Text style={{ margin: '0 0 2px', fontSize: '18px', fontWeight: '700', color: '#111111', fontFamily: bodyFont }}>You Sleep...</Text>
-            <Text style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: '700', color: '#111111', fontFamily: bodyFont }}>Your Profile Doesn't.</Text>
             <Text style={{ margin: 0, fontSize: '11px', color: '#aaaaaa', fontFamily: bodyFont }}>Sleeping Creators</Text>
           </Section>
 
