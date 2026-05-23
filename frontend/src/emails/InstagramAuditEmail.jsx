@@ -149,20 +149,22 @@ export function InstagramAuditEmail({
                 ['COMPETITOR 2', comp2Handle, comp2Followers, comp2Working, comp2Gap],
                 ['COMPETITOR 3', comp3Handle, comp3Followers, comp3Working, comp3Gap],
               ].map(([label, handle, followers, working, gap], i) => (
-                <Column key={i} style={{ width: '33.33%', paddingRight: i < 2 ? '5px' : '0', paddingLeft: i > 0 ? '5px' : '0', verticalAlign: 'top', backgroundColor: '#111111', borderRadius: '10px', padding: '14px 16px 16px' }}>
-                  <Text style={{ margin: '0 0 12px', fontSize: '10px', fontWeight: '700', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>{label}</Text>
-                  <Hr style={divLineDark} />
-                  <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>Handle</Text>
-                  <Text style={{ margin: '0 0 6px', fontSize: '12px', color: '#ffffff', fontFamily: bodyFont }}>{handle || '—'}</Text>
-                  <Hr style={divLineDark} />
-                  <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>Followers</Text>
-                  <Text style={{ margin: '0 0 6px', fontSize: '12px', color: '#ffffff', fontFamily: monoFont }}>{followers || '—'}</Text>
-                  <Hr style={divLineDark} />
-                  <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>What's Working</Text>
-                  <Text style={{ margin: '0 0 6px', fontSize: '11px', color: '#cccccc', lineHeight: '1.5', fontFamily: bodyFont }}>{working || '—'}</Text>
-                  <Hr style={divLineDark} />
-                  <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>Gap / Weakness</Text>
-                  <Text style={{ margin: 0, fontSize: '11px', color: '#cccccc', lineHeight: '1.5', fontFamily: bodyFont }}>{gap || '—'}</Text>
+                <Column key={i} style={{ width: '33.33%', paddingRight: i < 2 ? '8px' : '0', paddingLeft: i > 0 ? '8px' : '0', verticalAlign: 'top' }}>
+                  <Section style={{ ...darkCard, minHeight: '220px' }}>
+                    <Text style={{ margin: '0 0 12px', fontSize: '10px', fontWeight: '700', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>{label}</Text>
+                    <Hr style={divLineDark} />
+                    <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>Handle</Text>
+                    <Text style={{ margin: '0 0 6px', fontSize: '12px', color: '#ffffff', fontFamily: bodyFont }}>{handle || '—'}</Text>
+                    <Hr style={divLineDark} />
+                    <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>Followers</Text>
+                    <Text style={{ margin: '0 0 6px', fontSize: '12px', color: '#ffffff', fontFamily: monoFont }}>{followers || '—'}</Text>
+                    <Hr style={divLineDark} />
+                    <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>What's Working</Text>
+                    <Text style={{ margin: '0 0 6px', fontSize: '11px', color: '#cccccc', lineHeight: '1.5', fontFamily: bodyFont }}>{working || '—'}</Text>
+                    <Hr style={divLineDark} />
+                    <Text style={{ margin: '6px 0 2px', fontSize: '9px', color: '#888888', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>Gap / Weakness</Text>
+                    <Text style={{ margin: 0, fontSize: '11px', color: '#cccccc', lineHeight: '1.5', fontFamily: bodyFont }}>{gap || '—'}</Text>
+                  </Section>
                 </Column>
               ))}
             </Row>
