@@ -174,7 +174,7 @@ export default function MailCenter() {
       invoice: `Invoice for This Month — Sleeping Creators`,
       report: `Here's everything your profile did this month - Sleeping Creators`,
       audit: `Your Instagram Audit is ready, have a look | Team Sleeping Creators`,
-      strategy_onboarding: `Your Content Strategy — ${name}`,
+      strategy_onboarding: `Your content strategy is ready — Sleeping Creators`,
     };
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);
