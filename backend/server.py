@@ -3264,9 +3264,12 @@ async def analytics_monthly_report(client_id: str):
                         new_socials.append({
                             "platform": platform, "username": acct.get("username"),
                             "followers":          item.get("followers", 0) or 0,
+                            "following":          item.get("following", 0) or 0,
                             "new_followers":      item.get("newFollowers") or item.get("followerGrowth") or 0,
                             "impressions":        item.get("impressions", 0) or 0,
                             "impressions_unique": item.get("impressionsUnique", 0) or 0,
+                            "views":              item.get("views", 0) or 0,
+                            "views_unique":       item.get("viewsUnique", 0) or 0,
                             "likes":              item.get("likes", 0) or 0,
                             "comments":           item.get("comments", 0) or 0,
                             "shares":             item.get("shares") or item.get("reposts") or 0,
@@ -3287,12 +3290,15 @@ async def analytics_monthly_report(client_id: str):
     if socials:
         src = next((s for s in socials if s.get("platform") == "instagram"), socials[0])
         if src.get("followers"):
-            out["followers"]          = src.get("followers") or 0
+            f  = src.get("followers") or 0
+            lk = src.get("likes") or 0
+            cm = src.get("comments") or 0
+            out["followers"]          = f
             out["impressions"]        = src.get("impressions") or 0
             out["views"]              = src.get("views") or 0
-            out["likes"]              = src.get("likes") or 0
-            out["comments"]           = src.get("comments") or 0
-            out["engagement_rate"]    = src.get("engagement_rate") or 0
+            out["likes"]              = lk
+            out["comments"]           = cm
+            out["engagement_rate"]    = round((lk + cm) / f * 100, 2) if f else 0
             out["following"]          = src.get("following") or 0
             out["impressions_unique"] = src.get("impressions_unique") or 0
             out["views_unique"]       = src.get("views_unique") or 0

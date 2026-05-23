@@ -129,6 +129,22 @@ export default function MailCenter() {
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);
 
+  const mapAnalyticsToFields = (d) => {
+    const s = (v) => v != null ? String(v) : null;
+    const fill = {};
+    if (d.followers)          fill.followers         = s(d.followers);
+    if (d.impressions)        fill.impressions       = s(d.impressions);
+    if (d.views != null)      fill.views             = s(d.views);
+    if (d.likes)              fill.likes             = s(d.likes);
+    if (d.comments)           fill.comments          = s(d.comments);
+    if (d.engagement_rate != null) fill.engagementRate = s(d.engagement_rate);
+    if (d.following != null)  fill.following         = s(d.following);
+    if (d.impressions_unique) fill.impressionsUnique = s(d.impressions_unique);
+    if (d.views_unique != null) fill.viewsUnique     = s(d.views_unique);
+    if (d.posts)              fill.posts             = s(d.posts);
+    return fill;
+  };
+
   useEffect(() => {
     if (template !== 'report' || !clientId) return;
     let cancelled = false;
@@ -136,17 +152,7 @@ export default function MailCenter() {
       try {
         const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
         if (cancelled) return;
-        const fill = {};
-        if (d.followers)          fill.followers          = String(d.followers);
-        if (d.impressions)        fill.impressions        = String(d.impressions);
-        if (d.views)              fill.views              = String(d.views);
-        if (d.likes)              fill.likes              = String(d.likes);
-        if (d.comments)           fill.comments           = String(d.comments);
-        if (d.engagement_rate)    fill.engagementRate     = String(d.engagement_rate);
-        if (d.following)          fill.following          = String(d.following);
-        if (d.impressions_unique) fill.impressionsUnique  = String(d.impressions_unique);
-        if (d.views_unique != null)fill.viewsUnique       = String(d.views_unique);
-        if (d.posts)              fill.posts              = String(d.posts);
+        const fill = mapAnalyticsToFields(d);
         if (Object.keys(fill).length) {
           setFields(f => ({ ...f, ...fill }));
           toast.success('Analytics loaded');
@@ -154,24 +160,14 @@ export default function MailCenter() {
       } catch { /* no analytics available */ }
     })();
     return () => { cancelled = true; };
-  }, [template, clientId]);
+  }, [template, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncAnalytics = useCallback(async () => {
     if (!clientId) return;
     setSyncingAnalytics(true);
     try {
       const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
-      const fill = {};
-      if (d.followers)           fill.followers         = String(d.followers);
-      if (d.impressions)         fill.impressions       = String(d.impressions);
-      if (d.views)               fill.views             = String(d.views);
-      if (d.likes)               fill.likes             = String(d.likes);
-      if (d.comments)            fill.comments          = String(d.comments);
-      if (d.engagement_rate)     fill.engagementRate    = String(d.engagement_rate);
-      if (d.following)           fill.following         = String(d.following);
-      if (d.impressions_unique)  fill.impressionsUnique = String(d.impressions_unique);
-      if (d.views_unique != null)fill.viewsUnique       = String(d.views_unique);
-      if (d.posts)               fill.posts             = String(d.posts);
+      const fill = mapAnalyticsToFields(d);
       setFields(f => ({ ...f, ...fill }));
       toast.success(Object.keys(fill).length ? 'Analytics synced' : 'No analytics data found');
     } catch {
@@ -179,7 +175,7 @@ export default function MailCenter() {
     } finally {
       setSyncingAnalytics(false);
     }
-  }, [clientId]);
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rebuildPreview = useCallback(async () => {
     const c = clients.find(c => c.id === clientId);
