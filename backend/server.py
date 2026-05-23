@@ -7401,17 +7401,27 @@ async def audit_ai_generate(request: Request):
 Based on ALL the above data, generate a complete audit. Every field must be specific to this client — no generic filler.
 
 Return ONLY a valid JSON object with EXACTLY these keys:
+- "targetAudience": clear 1-line description of ideal audience if not already provided
+- "marketNotes": 2-3 sentences on market opportunity in this niche
+- "contentTrends": 3-4 bullet points (\\n separated) on what's working in this niche on Instagram right now
 - "tam": Total Addressable Market estimate for this niche (e.g. "$800M India market")
+- "comp1Handle": Instagram handle for competitor 1 (use from context, or suggest a real one in the niche, with @ prefix)
+- "comp2Handle": Instagram handle for competitor 2
+- "comp3Handle": Instagram handle for competitor 3
 - "comp1Followers": estimated follower count for competitor 1 (e.g. "42,000")
 - "comp2Followers": estimated follower count for competitor 2
 - "comp3Followers": estimated follower count for competitor 3
-- "comp1Working": 1-2 sentences on what's working for competitor 1 based on their niche
+- "comp1Working": 1-2 sentences on what's working for competitor 1
 - "comp2Working": 1-2 sentences for competitor 2
 - "comp3Working": 1-2 sentences for competitor 3
-- "comp1Gap": 1-2 sentences on content gap/weakness for competitor 1
+- "comp1Gap": 1-2 sentences on gap/weakness for competitor 1
 - "comp2Gap": 1-2 sentences for competitor 2
 - "comp3Gap": 1-2 sentences for competitor 3
-- "pillar1Format": best content format for pillar 1 (Reels / Carousel / Static / Story)
+- "pillar1Topic": concise topic name for pillar 1 (5 words max)
+- "pillar2Topic": concise topic name for pillar 2
+- "pillar3Topic": concise topic name for pillar 3
+- "pillar4Topic": concise topic name for pillar 4
+- "pillar1Format": best format for pillar 1 (Reels / Carousel / Static / Story)
 - "pillar2Format": best format for pillar 2
 - "pillar3Format": best format for pillar 3
 - "pillar4Format": best format for pillar 4

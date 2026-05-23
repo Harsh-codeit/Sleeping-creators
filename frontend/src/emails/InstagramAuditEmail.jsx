@@ -149,7 +149,7 @@ export function InstagramAuditEmail({
                 ['COMPETITOR 2', comp2Handle, comp2Followers, comp2Working, comp2Gap],
                 ['COMPETITOR 3', comp3Handle, comp3Followers, comp3Working, comp3Gap],
               ].map(([label, handle, followers, working, gap], i) => (
-                <Column key={i} style={{ width: '33.33%', paddingRight: i < 2 ? '5px' : '0', paddingLeft: i > 0 ? '5px' : '0' }}>
+                <Column key={i} style={{ width: '33.33%', paddingRight: i < 2 ? '5px' : '0', paddingLeft: i > 0 ? '5px' : '0', verticalAlign: 'top' }}>
                   <Section style={darkCard}>
                     <Text style={{ margin: '0 0 12px', fontSize: '10px', fontWeight: '700', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>{label}</Text>
                     <Hr style={divLineDark} />
@@ -185,7 +185,7 @@ export function InstagramAuditEmail({
                 ['CONTENT PILLAR 3', pillar3Topic, pillar3Format],
                 ['CONTENT PILLAR 4', pillar4Topic, pillar4Format],
               ].map(([label, topic, format], i) => (
-                <Column key={i} style={{ width: '25%', paddingRight: i < 3 ? '4px' : '0', paddingLeft: i > 0 ? '4px' : '0' }}>
+                <Column key={i} style={{ width: '25%', paddingRight: i < 3 ? '4px' : '0', paddingLeft: i > 0 ? '4px' : '0', verticalAlign: 'top' }}>
                   <Section style={darkCard}>
                     <Text style={{ margin: '0 0 10px', fontSize: '9px', fontWeight: '700', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: bodyFont }}>{label}</Text>
                     <Hr style={divLineDark} />
@@ -212,7 +212,7 @@ export function InstagramAuditEmail({
                 ['MONTH 3', 'Double Down',           month3Items],
                 ['MONTH 4', 'Scale & Review',        month4Items],
               ].map(([label, sub, items], i) => (
-                <Column key={i} style={{ width: '25%', paddingRight: i < 3 ? '4px' : '0', paddingLeft: i > 0 ? '4px' : '0' }}>
+                <Column key={i} style={{ width: '25%', paddingRight: i < 3 ? '4px' : '0', paddingLeft: i > 0 ? '4px' : '0', verticalAlign: 'top' }}>
                   <Section style={darkCard}>
                     <Text style={{ margin: '0 0 2px', fontSize: '10px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px', fontFamily: bodyFont }}>{label}</Text>
                     <Text style={{ margin: '0 0 8px', fontSize: '9px', color: '#888888', fontStyle: 'italic', fontFamily: bodyFont }}>{sub}</Text>
