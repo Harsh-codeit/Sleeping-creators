@@ -104,7 +104,6 @@ export function InstagramAuditEmail({
                   </Column>
                   <Column style={{ verticalAlign: 'middle', paddingLeft: '10px' }}>
                     <Text style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2' }}>Sleeping Creators</Text>
-                    <Text style={{ margin: 0, fontSize: '10px', color: '#888888' }}>You Sleep. Your Profile Doesn't.</Text>
                   </Column>
                 </Row>
               </Column>
@@ -265,7 +264,7 @@ export function InstagramAuditEmail({
             <Row>
               <Column style={{ width: '60%' }}>
                 <Text style={{ margin: 0, fontSize: '10px', color: '#777777', fontFamily: bodyFont }}>
-                  Sleeping Creators · sleepingcreators.com · You Sleep. Your Profile Doesn't.
+                  Sleeping Creators · sleepingcreators.com
                 </Text>
               </Column>
               <Column style={{ width: '40%', textAlign: 'right' }}>

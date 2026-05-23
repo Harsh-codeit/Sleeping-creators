@@ -42,7 +42,6 @@ export function InvoiceEmail({
                   </Column>
                   <Column style={{ paddingLeft: '10px', verticalAlign: 'middle' }}>
                     <Text style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#000000', lineHeight: '1.2' }}>Sleeping Creators</Text>
-                    <Text style={{ margin: 0, fontSize: '10px', color: '#888888', lineHeight: '1.4' }}>You Sleep. Your Profile Doesn't.</Text>
                   </Column>
                 </Row>
               </Column>
@@ -225,7 +224,7 @@ export function InvoiceEmail({
             <Row>
               <Column style={{ width: '60%' }}>
                 <Text style={{ margin: 0, fontSize: '10px', color: '#666666', lineHeight: '1.5' }}>
-                  Sleeping Creators · sleepingcreators.com · You Sleep. Your Profile Doesn't.
+                  Sleeping Creators · sleepingcreators.com
                 </Text>
               </Column>
               <Column style={{ width: '40%', textAlign: 'right' }}>
