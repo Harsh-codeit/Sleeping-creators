@@ -83,6 +83,41 @@ export default function MailCenter() {
   }, [clientId, clients]);
 
   useEffect(() => {
+    if (!clientId) return;
+    const c = clients.find(c => c.id === clientId);
+    if (!c) return;
+    const ob = c.onboarding_data ?? {};
+    const now = new Date();
+    const monthStr = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const platformStr = (c.platforms ?? []).join(', ') || 'Instagram';
+    const fills = {
+      invoice: {
+        clientEmail: ob.email ?? '',
+        clientPhone: ob.whatsapp ?? '',
+        invoiceMonth: monthStr,
+        invoiceDate: dateStr,
+      },
+      report: {
+        instagramHandle: ob.instagram_handle ?? '',
+        period: monthStr,
+        platform: platformStr,
+      },
+      audit: {
+        instagramHandle: ob.instagram_handle ?? '',
+        reportDate: monthStr,
+        niche: ob.niche ?? '',
+        targetAudience: ob.target_audience_description ?? c.target_audience ?? '',
+      },
+      strategy_onboarding: {
+        platforms: platformStr,
+      },
+    };
+    const fill = fills[template];
+    if (fill) setFields(f => ({ ...f, ...fill }));
+  }, [clientId, template, clients]);
+
+  useEffect(() => {
     const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
     const subs = {
