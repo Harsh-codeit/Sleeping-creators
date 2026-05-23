@@ -17,7 +17,7 @@ export function InvoiceEmail({
   const metaVal = { margin: 0, fontSize: '13px', fontWeight: '600', color: '#111111', fontFamily: 'Inter,Helvetica,Arial,sans-serif' };
   const thStyle = { margin: 0, fontSize: '9px', fontWeight: '700', color: '#ffffff', letterSpacing: '1.5px', textTransform: 'uppercase' };
   const fromLbl = { margin: 0, fontSize: '10px', color: '#777777' };
-  const fromVal = { margin: 0, fontSize: '10px', fontWeight: '700', color: '#ffffff' };
+  const fromVal = { margin: 0, fontSize: '10px', fontWeight: '700', color: '#ffffff', lineHeight: '16px' };
 
   return (
     <Html lang="en">
@@ -105,10 +105,6 @@ export function InvoiceEmail({
                       <Text style={fromVal}>801, B Block, Shubh Labh Heights</Text>
                       <Text style={fromVal}>Near Robot Square, Indore - 452010</Text>
                     </Column>
-                  </Row>
-                  <Row>
-                    <Column style={{ width: '68px' }}><Text style={fromLbl}>GSTIN</Text></Column>
-                    <Column><Text style={{ ...fromVal, color: '#555555' }}>—</Text></Column>
                   </Row>
                 </Section>
               </Column>

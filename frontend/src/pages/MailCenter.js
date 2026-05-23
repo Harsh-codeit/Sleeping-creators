@@ -10,6 +10,24 @@ import { ClientReportEmail } from '../emails/ClientReportEmail';
 import { ContentStrategyOnboardingEmail } from '../emails/ContentStrategyOnboardingEmail';
 import { InstagramAuditEmail } from '../emails/InstagramAuditEmail';
 
+function numberToWords(n) {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  if (!n || n <= 0) return '';
+  const b100 = x => x < 20 ? ones[x] : tens[Math.floor(x / 10)] + (x % 10 ? ' ' + ones[x % 10] : '');
+  const b1000 = x => x < 100 ? b100(x) : ones[Math.floor(x / 100)] + ' Hundred' + (x % 100 ? ' ' + b100(x % 100) : '');
+  const crore = Math.floor(n / 10000000); n %= 10000000;
+  const lakh  = Math.floor(n / 100000);   n %= 100000;
+  const thou  = Math.floor(n / 1000);     n %= 1000;
+  return [
+    crore && b1000(crore) + ' Crore',
+    lakh  && b100(lakh)   + ' Lakh',
+    thou  && b100(thou)   + ' Thousand',
+    n     && b1000(n),
+  ].filter(Boolean).join(' ');
+}
+
 const TEMPLATES = [
   { value: 'invoice',             label: 'Invoice' },
   { value: 'report',              label: 'Monthly' },
@@ -118,6 +136,12 @@ export default function MailCenter() {
     const fill = fills[template];
     if (fill) setFields(f => ({ ...f, ...fill }));
   }, [clientId, template, clients]);
+
+  useEffect(() => {
+    if (template !== 'invoice') return;
+    const n = Number(String(fields.amount || '').replace(/,/g, ''));
+    setFields(f => ({ ...f, amountInWords: n ? numberToWords(n) : '' }));
+  }, [fields.amount, template]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (template !== 'invoice' || !clientId) return;
