@@ -194,6 +194,7 @@ export default function MailCenter() {
         amount={fields.amount ?? ''}
         discount={fields.discount ?? 0}
         amountInWords={fields.amountInWords ?? ''}
+        includeGst={!!fields.includeGst}
         paymentUrl={fields.paymentUrl ?? ''}
         baseUrl={baseUrl}
       />;
@@ -383,7 +384,13 @@ export default function MailCenter() {
               <Field label="Phone / WhatsApp" value={fields.clientPhone ?? ''} onChange={v => setField('clientPhone', v)} placeholder="+91 98765 43210" />
               <Field label="Client GSTIN" value={fields.clientGstin ?? ''} onChange={v => setField('clientGstin', v)} placeholder="(if applicable)" />
               <p className="text-xs font-mono text-zinc-600 mb-3">— Amount —</p>
-              <Field label="Amount (excl. GST)" value={fields.amount ?? ''} onChange={v => setField('amount', v)} placeholder="5000" />
+              <Field label="Amount" value={fields.amount ?? ''} onChange={v => setField('amount', v)} placeholder="5000" />
+              <div className="mb-3 flex items-center gap-2 cursor-pointer" onClick={() => setField('includeGst', !fields.includeGst)}>
+                <div className={`w-4 h-4 border flex items-center justify-center transition-colors ${fields.includeGst ? 'bg-white border-white' : 'border-zinc-600'}`}>
+                  {fields.includeGst && <span className="text-black text-xs font-bold leading-none">✓</span>}
+                </div>
+                <span className="text-xs font-mono text-zinc-400">Add GST (18%)</span>
+              </div>
               <Field label="Discount" value={fields.discount ?? ''} onChange={v => setField('discount', v)} placeholder="0" />
               <Field label="Amount in Words" value={fields.amountInWords ?? ''} onChange={v => setField('amountInWords', v)} placeholder="Five Thousand Nine Hundred" />
               <Field label="Payment URL" value={fields.paymentUrl ?? ''} onChange={v => setField('paymentUrl', v)} placeholder="https://pay.stripe.com/..." />

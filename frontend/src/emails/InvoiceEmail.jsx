@@ -4,10 +4,11 @@ export function InvoiceEmail({
   clientName, clientEmail, clientPhone, clientGstin,
   invoiceNumber, invoiceDate, invoiceMonth,
   amount, discount = 0, amountInWords,
+  includeGst = false,
   paymentUrl, baseUrl = '',
 }) {
   const subtotal = Number(String(amount || 0).replace(/,/g, '')) || 0;
-  const gst = Math.round(subtotal * 0.18);
+  const gst = includeGst ? Math.round(subtotal * 0.18) : 0;
   const disc = Number(String(discount || 0).replace(/,/g, '')) || 0;
   const total = subtotal + gst - disc;
   const fmt = n => n.toLocaleString('en-IN');
@@ -158,12 +159,14 @@ export function InvoiceEmail({
                     <Column style={{ textAlign: 'right' }}><Text style={{ margin: 0, fontSize: '11px', color: '#111111', textAlign: 'right' }}>₹{fmt(subtotal)}</Text></Column>
                   </Row>
                 </Section>
+                {includeGst && (
                 <Section style={{ borderBottom: '1px solid #eeeeee', padding: '8px 16px' }}>
                   <Row>
                     <Column><Text style={{ margin: 0, fontSize: '11px', color: '#555555' }}>GST (18%)</Text></Column>
                     <Column style={{ textAlign: 'right' }}><Text style={{ margin: 0, fontSize: '11px', color: '#111111', textAlign: 'right' }}>₹{fmt(gst)}</Text></Column>
                   </Row>
                 </Section>
+                )}
                 <Section style={{ borderBottom: '1px solid #eeeeee', padding: '8px 16px' }}>
                   <Row>
                     <Column><Text style={{ margin: 0, fontSize: '11px', color: '#555555' }}>Discount</Text></Column>
@@ -183,7 +186,9 @@ export function InvoiceEmail({
           {/* ── FOOTNOTES ───────────────────────────────────────────── */}
           <Section style={{ padding: '12px 32px 0' }}>
             <Text style={{ margin: '0 0 2px', fontSize: '10px', color: '#999999', fontStyle: 'italic' }}>* HSN 998372 — Social Media Marketing Services</Text>
-            <Text style={{ margin: 0, fontSize: '10px', color: '#999999', fontStyle: 'italic' }}>* GST applicable as per government norms</Text>
+            {includeGst && (
+              <Text style={{ margin: 0, fontSize: '10px', color: '#999999', fontStyle: 'italic' }}>* GST applicable as per government norms</Text>
+            )}
           </Section>
 
           {/* ── AMOUNT IN WORDS ─────────────────────────────────────── */}
