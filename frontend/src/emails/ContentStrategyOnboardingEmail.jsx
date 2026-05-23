@@ -2,35 +2,22 @@ import { Html, Head, Body, Section, Text, Hr, Row, Column, Img, Font } from '@re
 
 const F = 'Inter, Helvetica, Arial, sans-serif';
 
-const card = { backgroundColor: '#f4f4f4', borderRadius: '10px', padding: '14px 16px 12px', border: '1px solid #ebebeb' };
-const darkCard = { backgroundColor: '#111111', borderRadius: '10px', padding: '14px 16px 16px' };
+const heading = { margin: '0 0 8px', fontSize: '13px', fontWeight: '700', color: '#111111', fontFamily: F };
+const body = { margin: '0', fontSize: '13px', color: '#555555', lineHeight: '1.75', fontFamily: F };
+const bullet = { margin: '4px 0 0', fontSize: '13px', color: '#555555', lineHeight: '1.75', fontFamily: F };
 
-const labelStyle = {
-  fontSize: '8px', fontWeight: '600', color: '#aaaaaa',
-  letterSpacing: '1.5px', textTransform: 'uppercase',
-  margin: '0 0 10px', display: 'block', fontFamily: F,
-};
-const valueStyle = { fontSize: '13px', fontWeight: '400', color: '#333333', margin: '0', lineHeight: '1.6', fontFamily: F };
-const dividerStyle = { borderColor: '#cccccc', margin: '10px 0 0', borderTopWidth: '1px' };
-
-function StatCard({ label, value }) {
+function Section2({ title, children }) {
   return (
-    <Section style={card}>
-      <Text style={labelStyle}>{label}</Text>
-      <Text style={valueStyle}>{value || '—'}</Text>
-      <Hr style={dividerStyle} />
+    <Section style={{ marginBottom: '20px' }}>
+      <Text style={heading}>{title}</Text>
+      {children}
     </Section>
   );
 }
 
 export function ContentStrategyOnboardingEmail({
-  clientName, platforms, frequency, contentPillars, brandVoice, startDate, baseUrl = '',
+  clientName, privacyPolicyUrl = '#', baseUrl = '',
 }) {
-  const pillars = typeof contentPillars === 'string'
-    ? contentPillars.split('\n').filter(Boolean)
-    : (contentPillars || []);
-  const platformStr = Array.isArray(platforms) ? platforms.join(', ') : (platforms || '—');
-
   return (
     <Html lang="en">
       <Head>
@@ -59,72 +46,83 @@ export function ContentStrategyOnboardingEmail({
                 </Row>
               </Column>
               <Column style={{ width: '50%', textAlign: 'right', verticalAlign: 'middle' }}>
-                <Text style={{ margin: '0 0 2px', fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2', fontFamily: F }}>Content Strategy</Text>
+                <Text style={{ margin: '0 0 2px', fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2', fontFamily: F }}>Welcome Onboard</Text>
                 <Text style={{ margin: 0, fontSize: '11px', color: '#888888', fontFamily: F }}>sleepingcreators.com</Text>
               </Column>
             </Row>
           </Section>
 
-          <Section style={{ padding: '24px 24px 0' }}>
+          {/* ── BODY ────────────────────────────────────────────────── */}
+          <Section style={{ padding: '28px 28px 8px' }}>
 
-            {/* ── WELCOME ─────────────────────────────────────────────── */}
-            <Section style={{ ...darkCard, marginBottom: '16px' }}>
-              <Text style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: '700', color: '#ffffff', letterSpacing: '-0.3px', fontFamily: F }}>
-                Welcome aboard, {clientName || 'there'}.
+            {/* Greeting */}
+            <Text style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px', fontFamily: F }}>
+              Hey {clientName || 'there'}!
+            </Text>
+            <Text style={{ ...body, marginBottom: '24px' }}>
+              Welcome to Sleeping Creators — genuinely excited to have you on board. You've taken the first step, and now we get to work. Before we dive in, here's a quick rundown of how the next few days will look so there are zero surprises.
+            </Text>
+
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 20px', borderTopWidth: '1px' }} />
+
+            <Section2 title="First, we do our homework (48 hrs)">
+              <Text style={body}>
+                We spend the first 48 hours doing a full research and competitor analysis on your niche. We study what's working, what's not, and build a content direction tailored to your profile. No guesswork, just strategy.
               </Text>
-              <Text style={{ margin: 0, fontSize: '13px', color: '#aaaaaa', lineHeight: '1.7', fontFamily: F }}>
-                Here's your content strategy — designed around your brand and goals. This is the foundation we'll build from.
+            </Section2>
+
+            <Section2 title="Then your first posts go live (within 72–84 hrs after that)">
+              <Text style={body}>
+                Once the research is done, your content will be live within 72–84 hours. So from today, expect your first post within roughly 4–5 days.
               </Text>
-            </Section>
+            </Section2>
 
-            {/* ── STRATEGY DETAILS ────────────────────────────────────── */}
-            <Row style={{ marginBottom: '10px' }}>
-              <Column style={{ width: '50%', paddingRight: '5px' }}>
-                <StatCard label="Platforms" value={platformStr} />
-              </Column>
-              <Column style={{ width: '50%', paddingLeft: '5px' }}>
-                <StatCard label="Posting Frequency" value={frequency} />
-              </Column>
-            </Row>
-            <Row style={{ marginBottom: '16px' }}>
-              <Column style={{ width: '50%', paddingRight: '5px' }}>
-                <StatCard label="Start Date" value={startDate} />
-              </Column>
-              <Column style={{ width: '50%', paddingLeft: '5px' }}>
-                <StatCard label="Brand Voice" value={brandVoice} />
-              </Column>
-            </Row>
-
-            {/* ── CONTENT PILLARS ─────────────────────────────────────── */}
-            {pillars.length > 0 && (
-              <>
-                <Text style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: '#111111', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: F }}>
-                  Content Pillars
-                </Text>
-                {pillars.map((p, i) => (
-                  <Section key={i} style={{ ...card, marginBottom: i < pillars.length - 1 ? '8px' : '24px' }}>
-                    <Row>
-                      <Column style={{ width: '28px', verticalAlign: 'middle' }}>
-                        <Text style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: '#aaaaaa', fontFamily: F }}>0{i + 1}</Text>
-                      </Column>
-                      <Column style={{ verticalAlign: 'middle', borderLeft: '2px solid #111111', paddingLeft: '12px' }}>
-                        <Text style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111111', fontFamily: F }}>{p}</Text>
-                      </Column>
-                    </Row>
-                  </Section>
-                ))}
-              </>
-            )}
-
-          </Section>
-
-          {/* ── NOTE ────────────────────────────────────────────────────── */}
-          <Section style={{ padding: '0 24px 24px' }}>
-            <Section style={{ backgroundColor: '#f9f9f9', borderRadius: '10px', padding: '18px 20px', border: '1px solid #eeeeee' }}>
-              <Text style={{ margin: 0, fontSize: '13px', color: '#555555', lineHeight: '1.75', fontStyle: 'italic', fontFamily: F }}>
-                Questions about your strategy? Reply directly to this email and our team will get back to you within 24 hours.
+            <Section2 title="Send us your photos &amp; videos ASAP">
+              <Text style={body}>
+                If you want Reels, we need your raw content — photos and videos — as soon as possible. Without them, we'll start with carousels, which is totally fine, but Reels will always perform better. So the sooner you share, the sooner we can hit the ground running.
               </Text>
-            </Section>
+            </Section2>
+
+            <Section2 title="Get your profile ready">
+              <Text style={{ ...body, marginBottom: '6px' }}>Before we start posting, please make sure:</Text>
+              <Text style={bullet}>· Your profile photo is up-to-date and clear</Text>
+              <Text style={{ ...bullet, marginBottom: '8px' }}>· Your bio reflects what you do (we can help if needed)</Text>
+              <Text style={body}>A polished profile makes every post land better.</Text>
+            </Section2>
+
+            <Section2 title="The first week — let's be real">
+              <Text style={body}>
+                The first week is always a little rough. We're learning your audience, testing content, and figuring out what clicks. Please be patient with us, and more importantly share your feedback. The more you tell us what you like or don't like, the faster we improve and find your groove.
+              </Text>
+            </Section2>
+
+            <Section2 title="One rule for communication">
+              <Text style={body}>
+                All queries, feedback, and updates — please drop a voice note or message in the group only. This keeps everything in one place and makes sure nothing gets missed. No DMs/calls on the side, please!
+              </Text>
+            </Section2>
+
+            <Section2 title="A quick but important note">
+              <Text style={{ ...body, marginBottom: '10px' }}>
+                We're an affordable service and we genuinely give it our all — but we don't make any promises around follower growth or specific results. Social media takes time and consistency. We're here to do our best work, and we will.
+              </Text>
+              <Text style={body}>
+                Also, please take a few minutes to read through our{' '}
+                <a href={privacyPolicyUrl} style={{ color: '#111111', fontWeight: '600' }}>Privacy Policy</a>
+                {' '}so everything stays smooth and transparent on both ends.
+              </Text>
+            </Section2>
+
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 20px', borderTopWidth: '1px' }} />
+
+            {/* Sign-off */}
+            <Text style={{ ...body, marginBottom: '4px' }}>
+              That's it — you're all set. Drop any questions in the group and let's make something great together.
+            </Text>
+            <Text style={{ ...body, marginBottom: '4px' }}>Talk soon,</Text>
+            <Text style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: '700', color: '#111111', fontFamily: F }}>The Sleeping Creators Team</Text>
+            <Text style={{ margin: '0 0 24px', fontSize: '12px', color: '#aaaaaa', fontFamily: F }}>sleepingcreators.com</Text>
+
           </Section>
 
           {/* ── FOOTER LOGO BLOCK ───────────────────────────────────────── */}

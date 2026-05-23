@@ -146,9 +146,7 @@ export default function MailCenter() {
         topContentFormat: 'Reels',
         peakPostingTime: '7–9 PM IST',
       },
-      strategy_onboarding: {
-        platforms: platformStr,
-      },
+      strategy_onboarding: {},
     };
     const fill = fills[template];
     if (fill) setFields(f => ({ ...f, ...fill }));
@@ -174,7 +172,7 @@ export default function MailCenter() {
       invoice: `Invoice for This Month — Sleeping Creators`,
       report: `Here's everything your profile did this month - Sleeping Creators`,
       audit: `Your Instagram Audit is ready, have a look | Team Sleeping Creators`,
-      strategy_onboarding: `Your content strategy is ready — Sleeping Creators`,
+      strategy_onboarding: `You're in. Here's everything you need to know | Sleeping Creators…`,
     };
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);
@@ -337,7 +335,7 @@ export default function MailCenter() {
         baseUrl={baseUrl}
       />;
     } else if (template === 'strategy_onboarding') {
-      element = <ContentStrategyOnboardingEmail clientName={name} platforms={(fields.platforms ?? '').split(',').map(s => s.trim()).filter(Boolean)} frequency={fields.frequency ?? ''} contentPillars={fields.contentPillars ?? ''} brandVoice={c?.brand_voice ?? ''} startDate={fields.startDate ?? ''} baseUrl={baseUrl} />;
+      element = <ContentStrategyOnboardingEmail clientName={name} privacyPolicyUrl={fields.privacyPolicyUrl ?? '#'} baseUrl={baseUrl} />;
     }
     if (!element) return;
     try {
@@ -574,10 +572,7 @@ export default function MailCenter() {
               <Field label="Avg. Saves" value={fields.avgSaves ?? ''} onChange={v => setField('avgSaves', v)} placeholder="45" />
             </>}
             {template === 'strategy_onboarding' && <>
-              <Field label="Platforms" value={fields.platforms ?? ''} onChange={v => setField('platforms', v)} placeholder="Instagram, TikTok" />
-              <Field label="Posting Frequency" value={fields.frequency ?? ''} onChange={v => setField('frequency', v)} placeholder="1 post/day" />
-              <Field label="Content Pillars (one per line)" value={fields.contentPillars ?? ''} onChange={v => setField('contentPillars', v)} placeholder={"Behind the scenes\nProduct showcases"} textarea />
-              <Field label="Start Date" value={fields.startDate ?? ''} onChange={v => setField('startDate', v)} placeholder="June 1, 2026" />
+              <Field label="Privacy Policy URL" value={fields.privacyPolicyUrl ?? ''} onChange={v => setField('privacyPolicyUrl', v)} placeholder="https://sleepingcreators.com/privacy" />
             </>}
           </div>
         </div>
