@@ -8,16 +8,17 @@ const card = {
   padding: '14px 16px 12px',
 };
 
+const F = 'Inter, Helvetica, Arial, sans-serif';
+
 const labelStyle = {
   fontSize: '8px', fontWeight: '600', color: '#aaaaaa',
   letterSpacing: '1.5px', textTransform: 'uppercase',
-  margin: '0 0 18px', display: 'block',
+  margin: '0 0 18px', display: 'block', fontFamily: F,
 };
 
 const valueStyle = {
   fontSize: '22px', fontWeight: '700', color: '#111111',
-  margin: '0', letterSpacing: '-0.5px', lineHeight: '1',
-  fontFamily: 'Inter, Helvetica, Arial, sans-serif',
+  margin: '0', letterSpacing: '-0.5px', lineHeight: '1', fontFamily: F,
 };
 
 const dividerStyle = { borderColor: '#cccccc', margin: '10px 0 0', borderTopWidth: '1px' };
@@ -66,14 +67,14 @@ export function ClientReportEmail({
                     <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="40" height="40" style={{ display: 'block', borderRadius: '8px' }} />
                   </Column>
                   <Column style={{ verticalAlign: 'middle', paddingLeft: '10px' }}>
-                    <Text style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2' }}>Sleeping Creators</Text>
-                    <Text style={{ margin: 0, fontSize: '10px', color: '#888888', lineHeight: '1.4' }}>You Sleep. Your Profile Doesn't.</Text>
+                    <Text style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2', fontFamily: F }}>Sleeping Creators</Text>
+                    <Text style={{ margin: 0, fontSize: '10px', color: '#888888', lineHeight: '1.4', fontFamily: F }}>You Sleep. Your Profile Doesn't.</Text>
                   </Column>
                 </Row>
               </Column>
               <Column style={{ width: '50%', textAlign: 'right', verticalAlign: 'middle' }}>
-                <Text style={{ margin: '0 0 2px', fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2' }}>Monthly Performance Report</Text>
-                <Text style={{ margin: 0, fontSize: '11px', color: '#888888' }}>sleepingcreators.com</Text>
+                <Text style={{ margin: '0 0 2px', fontSize: '15px', fontWeight: '700', color: '#ffffff', lineHeight: '1.2', fontFamily: F }}>Monthly Performance Report</Text>
+                <Text style={{ margin: 0, fontSize: '11px', color: '#888888', fontFamily: F }}>sleepingcreators.com</Text>
               </Column>
             </Row>
           </Section>
@@ -149,11 +150,11 @@ export function ClientReportEmail({
 
           {/* ── NOTES & STRATEGY UPDATE ─────────────────────────────── */}
           <Section style={{ padding: '0 24px 24px' }}>
-            <Text style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: '#111111', letterSpacing: '1px', textTransform: 'uppercase' }}>
+            <Text style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: '#111111', letterSpacing: '1px', textTransform: 'uppercase', fontFamily: F }}>
               Notes &amp; Strategy Update
             </Text>
             <Section style={{ backgroundColor: '#f9f9f9', borderRadius: '10px', padding: '18px 20px', border: '1px solid #eeeeee' }}>
-              <Text style={{ margin: 0, fontSize: '13px', color: '#555555', lineHeight: '1.75', fontStyle: 'italic' }}>
+              <Text style={{ margin: 0, fontSize: '13px', color: '#555555', lineHeight: '1.75', fontStyle: 'italic', fontFamily: F }}>
                 {notes || defaultNotes}
               </Text>
             </Section>
@@ -162,25 +163,25 @@ export function ClientReportEmail({
           {/* ── FOOTER LOGO BLOCK ───────────────────────────────────── */}
           <Section style={{ padding: '16px 0 12px', textAlign: 'center' }}>
             <Img src={`${baseUrl}/logo.png`} alt="Sleeping Creators" width="48" height="48" style={{ display: 'block', margin: '0 auto 8px', borderRadius: '10px' }} />
-            <Text style={{ margin: '0 0 2px', fontSize: '18px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px' }}>
+            <Text style={{ margin: '0 0 2px', fontSize: '18px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px', fontFamily: F }}>
               You Sleep...
             </Text>
-            <Text style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px' }}>
+            <Text style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px', fontFamily: F }}>
               Your Profile Doesn't.
             </Text>
-            <Text style={{ margin: 0, fontSize: '11px', color: '#aaaaaa' }}>Sleeping Creators</Text>
+            <Text style={{ margin: 0, fontSize: '11px', color: '#aaaaaa', fontFamily: F }}>Sleeping Creators</Text>
           </Section>
 
           {/* ── FOOTER BAR ──────────────────────────────────────────── */}
           <Section style={{ backgroundColor: '#111111', padding: '12px 24px' }}>
             <Row>
               <Column style={{ width: '60%' }}>
-                <Text style={{ margin: 0, fontSize: '10px', color: '#777777', lineHeight: '1.5' }}>
+                <Text style={{ margin: 0, fontSize: '10px', color: '#777777', lineHeight: '1.5', fontFamily: F }}>
                   Sleeping Creators · sleepingcreators.com · You Sleep. Your Profile Doesn't.
                 </Text>
               </Column>
               <Column style={{ width: '40%', textAlign: 'right' }}>
-                <Text style={{ margin: 0, fontSize: '10px', color: '#777777' }}>
+                <Text style={{ margin: 0, fontSize: '10px', color: '#777777', fontFamily: F }}>
                   Confidential — For Client Use Only
                 </Text>
               </Column>
