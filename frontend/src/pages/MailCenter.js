@@ -493,9 +493,9 @@ export default function MailCenter() {
           </div>
 
           {/* iframe */}
-          <div className="flex-1 bg-white" style={{ minHeight: '240px' }}>
+          <div className="flex-1 bg-white overflow-hidden" style={{ minHeight: '240px' }}>
             {previewHtml
-              ? <iframe srcDoc={previewHtml} title="email-preview" data-testid="email-preview-frame"
+              ? <iframe srcDoc={previewHtml.replace('</head>', '<style>html{zoom:0.75;font-size:16px}</style></head>')} title="email-preview" data-testid="email-preview-frame"
                   className="w-full h-full" style={{ minHeight: '240px' }} sandbox="allow-same-origin" />
               : (
                 <div className="flex flex-col items-center justify-center h-full min-h-[240px] text-zinc-300 gap-3">
