@@ -25,6 +25,13 @@ export function InvoiceEmail({ clientName, period, postsPublished, platforms, am
           fontWeight={900}
           fontStyle="normal"
         />
+        <Font
+          fontFamily="IBM Plex Mono"
+          fallbackFontFamily="Courier New"
+          webFont={{ url: 'https://fonts.gstatic.com/s/ibmplexmono/v19/-F63fjptAgt5VM-kVkqdyU8n3oQIwlBFhA.woff2', format: 'woff2' }}
+          fontWeight={600}
+          fontStyle="normal"
+        />
       </Head>
       <Body style={{ margin: 0, padding: 0, backgroundColor: '#e8ebe6', fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}>
 
@@ -47,26 +54,31 @@ export function InvoiceEmail({ clientName, period, postsPublished, platforms, am
 
           {/* ── AMOUNT HERO (sage → white card transition) ──────────── */}
           <Section style={{ backgroundColor: '#e8ebe6', padding: '28px 32px 0' }}>
-            <Section style={{ backgroundColor: '#ffffff', borderRadius: '24px', padding: '32px 32px 28px', border: '1px solid #d4d8d1' }}>
-              <Text style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '600', letterSpacing: '2px', color: '#868685', textTransform: 'uppercase' }}>
-                Amount Due{period ? ` · ${period}` : ''}
-              </Text>
-              <Text style={{ margin: '0 0 20px', fontSize: '64px', fontWeight: '900', color: '#0e0f0c', letterSpacing: '-3px', lineHeight: '1', fontFamily: 'Inter, Helvetica, Arial, sans-serif' }}>
-                ₹{amount || '—'}
-              </Text>
-              {paymentUrl && (
-                <Button
-                  href={paymentUrl}
-                  style={{
-                    backgroundColor: '#9fe870', color: '#0e0f0c',
-                    fontSize: '15px', fontWeight: '700', letterSpacing: '0.2px',
-                    padding: '14px 28px', textDecoration: 'none',
-                    borderRadius: '24px', display: 'inline-block',
-                  }}
-                >
-                  Pay Now →
-                </Button>
-              )}
+            <Section style={{ backgroundColor: '#ffffff', borderRadius: '24px', overflow: 'hidden', border: '1px solid #d4d8d1' }}>
+              {/* Lime-green accent stripe */}
+              <Section style={{ backgroundColor: '#9fe870', padding: '6px 32px' }}>
+                <Text style={{ margin: 0, fontSize: '11px', fontWeight: '700', letterSpacing: '2px', color: '#0e0f0c', textTransform: 'uppercase' }}>
+                  Amount Due{period ? ` · ${period}` : ''} · Pay within 3–4 days
+                </Text>
+              </Section>
+              <Section style={{ padding: '28px 32px 28px' }}>
+                <Text style={{ margin: '0 0 20px', fontSize: '64px', fontWeight: '600', color: '#0e0f0c', letterSpacing: '-3px', lineHeight: '1', fontFamily: '"IBM Plex Mono", "Courier New", monospace' }}>
+                  ₹{amount || '—'}
+                </Text>
+                {paymentUrl && (
+                  <Button
+                    href={paymentUrl}
+                    style={{
+                      backgroundColor: '#9fe870', color: '#0e0f0c',
+                      fontSize: '15px', fontWeight: '700', letterSpacing: '0.2px',
+                      padding: '14px 32px', textDecoration: 'none',
+                      borderRadius: '24px', display: 'inline-block',
+                    }}
+                  >
+                    Pay Now →
+                  </Button>
+                )}
+              </Section>
             </Section>
           </Section>
 
