@@ -75,7 +75,7 @@ export default function MailCenter() {
     const c = clients.find(c => c._id === clientId);
     const name = c?.name ?? 'Client';
     const subs = {
-      invoice: `Invoice — ${fields.period ?? ''}`,
+      invoice: `Invoice for ${fields.period ?? 'This Month'} — Sleeping Creators`,
       report: `Monthly Report — ${fields.period ?? ''} | ${name}`,
       strategy_onboarding: `Your Content Strategy — ${name}`,
       strategy_monthly: `${fields.month ?? ''} Content Plan — ${name}`,
