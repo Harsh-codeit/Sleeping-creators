@@ -110,7 +110,7 @@ export default function MailCenter() {
     const now = new Date();
     const monthStr = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
     const dateStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const platformStr = (c.platforms ?? []).join(', ') || 'Instagram';
+    const platformStr = (c.platforms ?? []).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ') || 'Instagram';
     const fills = {
       invoice: {
         clientName: c.name ?? '',
