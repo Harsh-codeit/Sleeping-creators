@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Music } from "lucide-react";
+import { Plus, Music, HardDrive } from "lucide-react";
 import { MusicTrackCard } from "../components/music/MusicTrackCard";
 import { MusicUploadModal } from "../components/music/MusicUploadModal";
+import { MusicDriveImportModal } from "../components/music/MusicDriveImportModal";
 import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -18,6 +19,7 @@ export default function MusicLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState("all");
   const [showUpload, setShowUpload] = useState(false);
+  const [showDriveImport, setShowDriveImport] = useState(false);
 
   const fetchTracks = useCallback(() => {
     const params = moodFilter !== "all" ? { mood: moodFilter } : {};
@@ -53,14 +55,24 @@ export default function MusicLibraryPage() {
           <span className="text-[10px] font-mono text-zinc-600 ml-1">{tracks.length} tracks</span>
         </div>
         {mp.create && (
-          <button
-            type="button"
-            onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
-          >
-            <Plus size={14} />
-            Upload Track
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDriveImport(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm font-semibold hover:bg-zinc-800 transition-colors"
+            >
+              <HardDrive size={14} />
+              Import from Drive
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowUpload(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
+            >
+              <Plus size={14} />
+              Upload Track
+            </button>
+          </div>
         )}
       </div>
 
@@ -111,6 +123,11 @@ export default function MusicLibraryPage() {
         open={showUpload}
         onClose={() => setShowUpload(false)}
         onUploaded={handleUploaded}
+      />
+      <MusicDriveImportModal
+        open={showDriveImport}
+        onClose={() => setShowDriveImport(false)}
+        onImported={fetchTracks}
       />
     </div>
   );
