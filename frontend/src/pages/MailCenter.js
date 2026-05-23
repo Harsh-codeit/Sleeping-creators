@@ -88,7 +88,7 @@ export default function MailCenter() {
     const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
     const subs = {
-      invoice: `Invoice for ${fields.period ?? 'This Month'} — Sleeping Creators`,
+      invoice: `Invoice${fields.invoiceNumber ? ` #${fields.invoiceNumber}` : ''} — ${fields.invoiceMonth || 'This Month'} — Sleeping Creators`,
       report: `Monthly Report — ${fields.period ?? ''} | ${name}`,
       strategy_onboarding: `Your Content Strategy — ${name}`,
       strategy_monthly: `${fields.month ?? ''} Content Plan — ${name}`,
@@ -102,7 +102,20 @@ export default function MailCenter() {
     const baseUrl = window.location.origin;
     let element = null;
     if (template === 'invoice') {
-      element = <InvoiceEmail clientName={name} period={fields.period ?? ''} postsPublished={fields.postsPublished ?? 0} platforms={[]} amount={fields.amount ?? ''} serviceDescription={fields.serviceDescription ?? ''} paymentUrl={fields.paymentUrl ?? ''} baseUrl={baseUrl} />;
+      element = <InvoiceEmail
+        clientName={name}
+        clientEmail={fields.clientEmail ?? c?.onboarding_data?.email ?? ''}
+        clientPhone={fields.clientPhone ?? ''}
+        clientGstin={fields.clientGstin ?? ''}
+        invoiceNumber={fields.invoiceNumber ?? ''}
+        invoiceDate={fields.invoiceDate ?? ''}
+        invoiceMonth={fields.invoiceMonth ?? ''}
+        amount={fields.amount ?? ''}
+        discount={fields.discount ?? 0}
+        amountInWords={fields.amountInWords ?? ''}
+        paymentUrl={fields.paymentUrl ?? ''}
+        baseUrl={baseUrl}
+      />;
     } else if (template === 'report') {
       element = <ClientReportEmail
         clientName={name}
@@ -283,9 +296,18 @@ export default function MailCenter() {
           <SectionDivider label="Content" />
           <div className="p-4 flex-1">
             {template === 'invoice' && <>
-              <Field label="Amount" value={fields.amount ?? ''} onChange={v => setField('amount', v)} placeholder="5,000" />
-              <Field label="Service" value={fields.serviceDescription ?? ''} onChange={v => setField('serviceDescription', v)} placeholder="Social Media Management" />
-              <Field label="Period" value={fields.period ?? ''} onChange={v => setField('period', v)} placeholder="May 2026" />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Invoice Details —</p>
+              <Field label="Invoice Number" value={fields.invoiceNumber ?? ''} onChange={v => setField('invoiceNumber', v)} placeholder="SC-2026-001" />
+              <Field label="Invoice Date" value={fields.invoiceDate ?? ''} onChange={v => setField('invoiceDate', v)} placeholder="23 May 2026" />
+              <Field label="Invoice Month" value={fields.invoiceMonth ?? ''} onChange={v => setField('invoiceMonth', v)} placeholder="May 2026" />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Billed To —</p>
+              <Field label="Client Email (invoice)" value={fields.clientEmail ?? ''} onChange={v => setField('clientEmail', v)} placeholder="client@email.com" />
+              <Field label="Phone / WhatsApp" value={fields.clientPhone ?? ''} onChange={v => setField('clientPhone', v)} placeholder="+91 98765 43210" />
+              <Field label="Client GSTIN" value={fields.clientGstin ?? ''} onChange={v => setField('clientGstin', v)} placeholder="(if applicable)" />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Amount —</p>
+              <Field label="Amount (excl. GST)" value={fields.amount ?? ''} onChange={v => setField('amount', v)} placeholder="5000" />
+              <Field label="Discount" value={fields.discount ?? ''} onChange={v => setField('discount', v)} placeholder="0" />
+              <Field label="Amount in Words" value={fields.amountInWords ?? ''} onChange={v => setField('amountInWords', v)} placeholder="Five Thousand Nine Hundred" />
               <Field label="Payment URL" value={fields.paymentUrl ?? ''} onChange={v => setField('paymentUrl', v)} placeholder="https://pay.stripe.com/..." />
             </>}
             {template === 'report' && <>
