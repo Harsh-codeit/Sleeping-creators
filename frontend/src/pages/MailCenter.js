@@ -9,10 +9,12 @@ import { InvoiceEmail } from '../emails/InvoiceEmail';
 import { ClientReportEmail } from '../emails/ClientReportEmail';
 import { ContentStrategyOnboardingEmail } from '../emails/ContentStrategyOnboardingEmail';
 import { ContentStrategyMonthlyEmail } from '../emails/ContentStrategyMonthlyEmail';
+import { InstagramAuditEmail } from '../emails/InstagramAuditEmail';
 
 const TEMPLATES = [
   { value: 'invoice',             label: 'Invoice' },
   { value: 'report',              label: 'Report' },
+  { value: 'audit',               label: 'Audit' },
   { value: 'strategy_onboarding', label: 'Onboarding' },
   { value: 'strategy_monthly',    label: 'Monthly' },
 ];
@@ -119,6 +121,28 @@ export default function MailCenter() {
         postsPublished={fields.postsPublished ?? ''}
         platform={fields.platform ?? ''}
         notes={fields.notes ?? ''}
+        baseUrl={baseUrl}
+      />;
+    } else if (template === 'audit') {
+      element = <InstagramAuditEmail
+        clientName={name} instagramHandle={fields.instagramHandle ?? ''} reportDate={fields.reportDate ?? ''}
+        niche={fields.niche ?? ''} targetAudience={fields.targetAudience ?? ''}
+        tam={fields.tam ?? ''} marketNotes={fields.marketNotes ?? ''}
+        avgEngagementRate={fields.avgEngagementRate ?? ''} topContentFormat={fields.topContentFormat ?? ''} peakPostingTime={fields.peakPostingTime ?? ''}
+        comp1Handle={fields.comp1Handle ?? ''} comp1Followers={fields.comp1Followers ?? ''} comp1Working={fields.comp1Working ?? ''} comp1Gap={fields.comp1Gap ?? ''}
+        comp2Handle={fields.comp2Handle ?? ''} comp2Followers={fields.comp2Followers ?? ''} comp2Working={fields.comp2Working ?? ''} comp2Gap={fields.comp2Gap ?? ''}
+        comp3Handle={fields.comp3Handle ?? ''} comp3Followers={fields.comp3Followers ?? ''} comp3Working={fields.comp3Working ?? ''} comp3Gap={fields.comp3Gap ?? ''}
+        contentTrends={fields.contentTrends ?? ''}
+        pillar1Topic={fields.pillar1Topic ?? ''} pillar1Format={fields.pillar1Format ?? ''}
+        pillar2Topic={fields.pillar2Topic ?? ''} pillar2Format={fields.pillar2Format ?? ''}
+        pillar3Topic={fields.pillar3Topic ?? ''} pillar3Format={fields.pillar3Format ?? ''}
+        pillar4Topic={fields.pillar4Topic ?? ''} pillar4Format={fields.pillar4Format ?? ''}
+        strategyOverview={fields.strategyOverview ?? ''}
+        month1Items={fields.month1Items ?? ''} month2Items={fields.month2Items ?? ''} month3Items={fields.month3Items ?? ''} month4Items={fields.month4Items ?? ''}
+        strengths={fields.strengths ?? ''} weaknesses={fields.weaknesses ?? ''} opportunities={fields.opportunities ?? ''} threats={fields.threats ?? ''}
+        profilePhotoRating={fields.profilePhotoRating ?? ''} bioRating={fields.bioRating ?? ''} highlightsRating={fields.highlightsRating ?? ''}
+        contentConsistencyRating={fields.contentConsistencyRating ?? ''} postingFrequencyRating={fields.postingFrequencyRating ?? ''} engagementRateRating={fields.engagementRateRating ?? ''}
+        totalPosts={fields.totalPosts ?? ''} avgLikes={fields.avgLikes ?? ''} avgComments={fields.avgComments ?? ''} avgReach={fields.avgReach ?? ''} avgSaves={fields.avgSaves ?? ''}
         baseUrl={baseUrl}
       />;
     } else if (template === 'strategy_onboarding') {
@@ -284,6 +308,56 @@ export default function MailCenter() {
               <Field label="Posts Published" value={fields.postsPublished ?? ''} onChange={v => setField('postsPublished', v)} placeholder="24" />
               <Field label="Platform" value={fields.platform ?? ''} onChange={v => setField('platform', v)} placeholder="Instagram" />
               <Field label="Notes / Strategy Update" value={fields.notes ?? ''} onChange={v => setField('notes', v)} placeholder="Based on this month's performance..." textarea />
+            </>}
+            {template === 'audit' && <>
+              <Field label="Instagram Handle" value={fields.instagramHandle ?? ''} onChange={v => setField('instagramHandle', v)} placeholder="@client" />
+              <Field label="Report Date" value={fields.reportDate ?? ''} onChange={v => setField('reportDate', v)} placeholder="June 2026" />
+              <Field label="Niche / Industry" value={fields.niche ?? ''} onChange={v => setField('niche', v)} placeholder="Fashion & Lifestyle" />
+              <Field label="Target Audience" value={fields.targetAudience ?? ''} onChange={v => setField('targetAudience', v)} placeholder="Women 18–35, UAE" />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Market —</p>
+              <Field label="TAM" value={fields.tam ?? ''} onChange={v => setField('tam', v)} placeholder="$2.4B" />
+              <Field label="Market Notes" value={fields.marketNotes ?? ''} onChange={v => setField('marketNotes', v)} placeholder="Growing market with..." textarea />
+              <Field label="Avg. Engagement Rate" value={fields.avgEngagementRate ?? ''} onChange={v => setField('avgEngagementRate', v)} placeholder="3.2%" />
+              <Field label="Top Content Format" value={fields.topContentFormat ?? ''} onChange={v => setField('topContentFormat', v)} placeholder="Reels" />
+              <Field label="Peak Posting Time" value={fields.peakPostingTime ?? ''} onChange={v => setField('peakPostingTime', v)} placeholder="7–9 PM" />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Competitors —</p>
+              {[1,2,3].map(n => <div key={n}>
+                <p className="text-xs font-mono text-zinc-700 mb-2">Competitor {n}</p>
+                <Field label={`C${n} Handle`} value={fields[`comp${n}Handle`] ?? ''} onChange={v => setField(`comp${n}Handle`, v)} placeholder="@competitor" />
+                <Field label={`C${n} Followers`} value={fields[`comp${n}Followers`] ?? ''} onChange={v => setField(`comp${n}Followers`, v)} placeholder="50,000" />
+                <Field label={`C${n} What's Working`} value={fields[`comp${n}Working`] ?? ''} onChange={v => setField(`comp${n}Working`, v)} placeholder="Consistent Reels..." />
+                <Field label={`C${n} Gap`} value={fields[`comp${n}Gap`] ?? ''} onChange={v => setField(`comp${n}Gap`, v)} placeholder="Low engagement..." />
+              </div>)}
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Content —</p>
+              <Field label="Content Trends" value={fields.contentTrends ?? ''} onChange={v => setField('contentTrends', v)} placeholder="Trending formats in your niche..." textarea />
+              {[1,2,3,4].map(n => <div key={n}>
+                <p className="text-xs font-mono text-zinc-700 mb-2">Pillar {n}</p>
+                <Field label={`Pillar ${n} Topic`} value={fields[`pillar${n}Topic`] ?? ''} onChange={v => setField(`pillar${n}Topic`, v)} placeholder="Behind the scenes" />
+                <Field label={`Pillar ${n} Format`} value={fields[`pillar${n}Format`] ?? ''} onChange={v => setField(`pillar${n}Format`, v)} placeholder="Reels" />
+              </div>)}
+              <Field label="Strategy Overview" value={fields.strategyOverview ?? ''} onChange={v => setField('strategyOverview', v)} placeholder="Our approach for your account..." textarea />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Roadmap (one item per line) —</p>
+              {['month1Items','month2Items','month3Items','month4Items'].map((k,i) => (
+                <Field key={k} label={`Month ${i+1} Items`} value={fields[k] ?? ''} onChange={v => setField(k, v)} placeholder={`Goal\nTactic\nDeliverable`} textarea />
+              ))}
+              <p className="text-xs font-mono text-zinc-600 mb-3">— SWOT (one point per line) —</p>
+              <Field label="Strengths" value={fields.strengths ?? ''} onChange={v => setField('strengths', v)} placeholder={"Strong visual brand\nHigh saves rate"} textarea />
+              <Field label="Weaknesses" value={fields.weaknesses ?? ''} onChange={v => setField('weaknesses', v)} placeholder={"Low posting frequency"} textarea />
+              <Field label="Opportunities" value={fields.opportunities ?? ''} onChange={v => setField('opportunities', v)} placeholder={"Untapped Reels market"} textarea />
+              <Field label="Threats" value={fields.threats ?? ''} onChange={v => setField('threats', v)} placeholder={"Rising competitor accounts"} textarea />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Profile Audit Ratings —</p>
+              <Field label="Profile Photo" value={fields.profilePhotoRating ?? ''} onChange={v => setField('profilePhotoRating', v)} placeholder="Good — on brand" />
+              <Field label="Bio" value={fields.bioRating ?? ''} onChange={v => setField('bioRating', v)} placeholder="Needs CTA" />
+              <Field label="Highlights" value={fields.highlightsRating ?? ''} onChange={v => setField('highlightsRating', v)} placeholder="3 active, 2 outdated" />
+              <Field label="Content Consistency" value={fields.contentConsistencyRating ?? ''} onChange={v => setField('contentConsistencyRating', v)} placeholder="Inconsistent theme" />
+              <Field label="Posting Frequency" value={fields.postingFrequencyRating ?? ''} onChange={v => setField('postingFrequencyRating', v)} placeholder="2–3x/week" />
+              <Field label="Engagement Rate" value={fields.engagementRateRating ?? ''} onChange={v => setField('engagementRateRating', v)} placeholder="4.1% — above avg" />
+              <p className="text-xs font-mono text-zinc-600 mb-3">— Performance Snapshot —</p>
+              <Field label="Total Posts" value={fields.totalPosts ?? ''} onChange={v => setField('totalPosts', v)} placeholder="142" />
+              <Field label="Avg. Likes" value={fields.avgLikes ?? ''} onChange={v => setField('avgLikes', v)} placeholder="280" />
+              <Field label="Avg. Comments" value={fields.avgComments ?? ''} onChange={v => setField('avgComments', v)} placeholder="18" />
+              <Field label="Avg. Reach" value={fields.avgReach ?? ''} onChange={v => setField('avgReach', v)} placeholder="1,200" />
+              <Field label="Avg. Saves" value={fields.avgSaves ?? ''} onChange={v => setField('avgSaves', v)} placeholder="45" />
             </>}
             {template === 'strategy_onboarding' && <>
               <Field label="Platforms" value={fields.platforms ?? ''} onChange={v => setField('platforms', v)} placeholder="Instagram, TikTok" />
