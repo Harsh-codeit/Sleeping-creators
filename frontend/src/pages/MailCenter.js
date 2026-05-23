@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { render } from '@react-email/render';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Send, Calendar, Trash2, X, Loader2, Mail } from 'lucide-react';
+import { Send, Calendar, Trash2, X, Loader2, Mail, RefreshCw } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { InvoiceEmail } from '../emails/InvoiceEmail';
@@ -67,6 +67,7 @@ export default function MailCenter() {
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [scheduled, setScheduled] = useState([]);
   const [history, setHistory] = useState([]);
+  const [syncingAnalytics, setSyncingAnalytics] = useState(false);
 
   useEffect(() => {
     axios.get('/api/clients').then(r => setClients(r.data)).catch(() => {});
@@ -155,6 +156,32 @@ export default function MailCenter() {
     })();
     return () => { cancelled = true; };
   }, [template, clientId]);
+
+  const syncAnalytics = useCallback(async () => {
+    if (!clientId) return;
+    setSyncingAnalytics(true);
+    try {
+      const d = await axios.get(`/api/analytics/clients/${clientId}/monthly-report`).then(r => r.data);
+      const fill = {};
+      if (d.total_followers)     fill.totalFollowers     = String(d.total_followers);
+      if (d.new_followers)       fill.newFollowers       = String(d.new_followers);
+      if (d.follower_growth_rate)fill.followerGrowthRate = d.follower_growth_rate;
+      if (d.total_reach)         fill.totalReach         = String(d.total_reach);
+      if (d.total_impressions)   fill.totalImpressions   = String(d.total_impressions);
+      if (d.profile_visits)      fill.profileVisits      = String(d.profile_visits);
+      if (d.likes)               fill.likes              = String(d.likes);
+      if (d.comments)            fill.comments           = String(d.comments);
+      if (d.shares)              fill.shares             = String(d.shares);
+      if (d.saves)               fill.saves              = String(d.saves);
+      if (d.posts_published)     fill.postsPublished     = String(d.posts_published);
+      setFields(f => ({ ...f, ...fill }));
+      toast.success(Object.keys(fill).length ? 'Analytics synced' : 'No analytics data found');
+    } catch {
+      toast.error('Failed to fetch analytics');
+    } finally {
+      setSyncingAnalytics(false);
+    }
+  }, [clientId]);
 
   const rebuildPreview = useCallback(async () => {
     const c = clients.find(c => c.id === clientId);
@@ -369,6 +396,11 @@ export default function MailCenter() {
               <Field label="Payment URL" value={fields.paymentUrl ?? ''} onChange={v => setField('paymentUrl', v)} placeholder="https://pay.stripe.com/..." />
             </>}
             {template === 'report' && <>
+              <button onClick={syncAnalytics} disabled={!clientId || syncingAnalytics}
+                className="w-full flex items-center justify-center gap-2 mb-4 py-2 text-xs font-mono border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white transition-colors duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                <RefreshCw size={12} className={syncingAnalytics ? 'animate-spin' : ''} />
+                {syncingAnalytics ? 'Syncing...' : 'Sync Analytics'}
+              </button>
               <Field label="Period" value={fields.period ?? ''} onChange={v => setField('period', v)} placeholder="May 2026" />
               <Field label="Instagram Handle" value={fields.instagramHandle ?? ''} onChange={v => setField('instagramHandle', v)} placeholder="@client" />
               <p className="text-xs font-mono text-zinc-600 mb-3 -mt-1">— Followers —</p>
