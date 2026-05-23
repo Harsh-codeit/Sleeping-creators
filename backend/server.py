@@ -7383,7 +7383,7 @@ async def audit_ai_generate(request: Request):
     )
     analytics_block = "\n".join([f"  {k}: {v}" for k, v in analytics_data.items() if v])
 
-    prompt = f"""You are a senior Instagram growth strategist generating a complete, client-specific audit report.
+    prompt = f"""You are an Instagram growth strategist. Generate a short, punchy, carousel-focused audit. No long explanations — bullet points only, max 6 words per point.
 
 === CLIENT PROFILE ===
 {profile_block}
@@ -7398,55 +7398,54 @@ async def audit_ai_generate(request: Request):
 === CURRENT ANALYTICS ===
 {analytics_block}
 
-Based on ALL the above data, generate a complete audit. Every field must be specific to this client — no generic filler.
+Return ONLY a valid JSON object with EXACTLY these keys. Be specific to this client. No filler.
 
-Return ONLY a valid JSON object with EXACTLY these keys:
-- "targetAudience": clear 1-line description of ideal audience if not already provided
-- "marketNotes": 2-3 sentences on market opportunity in this niche
-- "contentTrends": 3-4 bullet points (\\n separated) on what's working in this niche on Instagram right now
-- "tam": Total Addressable Market estimate for this niche (e.g. "$800M India market")
-- "comp1Handle": Instagram handle for competitor 1 (use from context, or suggest a real one in the niche, with @ prefix)
-- "comp2Handle": Instagram handle for competitor 2
-- "comp3Handle": Instagram handle for competitor 3
-- "comp1Followers": estimated follower count for competitor 1 (e.g. "42,000")
-- "comp2Followers": estimated follower count for competitor 2
-- "comp3Followers": estimated follower count for competitor 3
-- "comp1Working": 1-2 sentences on what's working for competitor 1
-- "comp2Working": 1-2 sentences for competitor 2
-- "comp3Working": 1-2 sentences for competitor 3
-- "comp1Gap": 1-2 sentences on gap/weakness for competitor 1
-- "comp2Gap": 1-2 sentences for competitor 2
-- "comp3Gap": 1-2 sentences for competitor 3
-- "pillar1Topic": concise topic name for pillar 1 (5 words max)
-- "pillar2Topic": concise topic name for pillar 2
-- "pillar3Topic": concise topic name for pillar 3
-- "pillar4Topic": concise topic name for pillar 4
-- "pillar1Format": best format for pillar 1 (Reels / Carousel / Static / Story)
-- "pillar2Format": best format for pillar 2
-- "pillar3Format": best format for pillar 3
-- "pillar4Format": best format for pillar 4
-- "month1Items": 3-4 specific goals/tactics for Month 1 (\\n separated)
-- "month2Items": 3-4 specific goals/tactics for Month 2 (\\n separated)
-- "month3Items": 3-4 specific goals/tactics for Month 3 (\\n separated)
-- "month4Items": 3-4 specific goals/tactics for Month 4 (\\n separated)
-- "strengths": 3-4 specific strengths (\\n separated)
-- "weaknesses": 3-4 specific weaknesses (\\n separated)
-- "opportunities": 3-4 specific opportunities (\\n separated)
-- "threats": 3-4 specific threats (\\n separated)
-- "profilePhotoRating": 1-line specific assessment
-- "bioRating": 1-line specific assessment mentioning what's missing or working
-- "highlightsRating": 1-line assessment
-- "contentConsistencyRating": 1-line assessment based on niche and analytics
-- "avgSaves": estimated avg saves per post as number string (e.g. "8")
+- "targetAudience": 1 short line (who they are + pain point)
+- "marketNotes": 3 bullet points \\n separated, each max 8 words, on niche opportunity
+- "contentTrends": 3 bullet points \\n separated, what's working on Instagram in this niche right now — carousel-first
+- "tam": TAM estimate, e.g. "₹500Cr India coaching market"
+- "comp1Handle": @handle competitor 1
+- "comp2Handle": @handle competitor 2
+- "comp3Handle": @handle competitor 3
+- "comp1Followers": e.g. "42,000"
+- "comp2Followers": e.g. "18,000"
+- "comp3Followers": e.g. "31,000"
+- "comp1Working": 1 short line on what works for them
+- "comp2Working": 1 short line
+- "comp3Working": 1 short line
+- "comp1Gap": 1 short line on their weakness
+- "comp2Gap": 1 short line
+- "comp3Gap": 1 short line
+- "pillar1Topic": 3-4 word topic name
+- "pillar2Topic": 3-4 word topic name
+- "pillar3Topic": 3-4 word topic name
+- "pillar4Topic": 3-4 word topic name
+- "pillar1Format": prefer Carousel unless Reels clearly fits better
+- "pillar2Format": prefer Carousel unless Reels clearly fits better
+- "pillar3Format": prefer Carousel unless Reels clearly fits better
+- "pillar4Format": prefer Carousel unless Reels clearly fits better
+- "month1Items": 3 action items \\n separated, max 7 words each, carousel-focused
+- "month2Items": 3 action items \\n separated
+- "month3Items": 3 action items \\n separated
+- "month4Items": 3 action items \\n separated
+- "strengths": 3 bullet points \\n separated, max 6 words each
+- "weaknesses": 3 bullet points \\n separated, max 6 words each
+- "opportunities": 3 bullet points \\n separated, max 6 words each
+- "threats": 3 bullet points \\n separated, max 6 words each
+- "profilePhotoRating": 1 short line
+- "bioRating": 1 short line
+- "highlightsRating": 1 short line
+- "contentConsistencyRating": 1 short line
+- "avgSaves": number string only, e.g. "8"
 
-Return ONLY valid JSON. No markdown code blocks. No explanation."""
+Return ONLY valid JSON. No markdown. No explanation."""
 
     import anthropic as _anthropic, json as _json, re as _re
     try:
         _ac = _anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
         msg = await _ac.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2500,
+            max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = msg.content[0].text.strip()
