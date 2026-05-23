@@ -94,6 +94,7 @@ export default function MailCenter() {
     const platformStr = (c.platforms ?? []).join(', ') || 'Instagram';
     const fills = {
       invoice: {
+        clientName: c.name ?? '',
         clientEmail: ob.email ?? '',
         clientPhone: ob.whatsapp ?? '',
         invoiceMonth: monthStr,
@@ -117,6 +118,13 @@ export default function MailCenter() {
     const fill = fills[template];
     if (fill) setFields(f => ({ ...f, ...fill }));
   }, [clientId, template, clients]);
+
+  useEffect(() => {
+    if (template !== 'invoice' || !clientId) return;
+    axios.get('/api/mail/next-invoice-number')
+      .then(r => setFields(f => f.invoiceNumber ? f : { ...f, invoiceNumber: r.data.invoice_number }))
+      .catch(() => {});
+  }, [template, clientId]);
 
   useEffect(() => {
     const c = clients.find(c => c.id === clientId);
@@ -184,7 +192,7 @@ export default function MailCenter() {
     let element = null;
     if (template === 'invoice') {
       element = <InvoiceEmail
-        clientName={name}
+        clientName={fields.clientName || name}
         clientEmail={fields.clientEmail ?? c?.onboarding_data?.email ?? ''}
         clientPhone={fields.clientPhone ?? ''}
         clientGstin={fields.clientGstin ?? ''}
@@ -380,6 +388,7 @@ export default function MailCenter() {
               <Field label="Invoice Date" value={fields.invoiceDate ?? ''} onChange={v => setField('invoiceDate', v)} placeholder="23 May 2026" />
               <Field label="Invoice Month" value={fields.invoiceMonth ?? ''} onChange={v => setField('invoiceMonth', v)} placeholder="May 2026" />
               <p className="text-xs font-mono text-zinc-600 mb-3">— Billed To —</p>
+              <Field label="Client Name" value={fields.clientName ?? ''} onChange={v => setField('clientName', v)} placeholder="John Doe" />
               <Field label="Client Email (invoice)" value={fields.clientEmail ?? ''} onChange={v => setField('clientEmail', v)} placeholder="client@email.com" />
               <Field label="Phone / WhatsApp" value={fields.clientPhone ?? ''} onChange={v => setField('clientPhone', v)} placeholder="+91 98765 43210" />
               <Field label="Client GSTIN" value={fields.clientGstin ?? ''} onChange={v => setField('clientGstin', v)} placeholder="(if applicable)" />

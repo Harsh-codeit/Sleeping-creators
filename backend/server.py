@@ -7223,6 +7223,26 @@ async def mail_cancel_scheduled(email_id: str, request: Request):
     return {"ok": True}
 
 
+@api_router.get("/mail/next-invoice-number")
+async def next_invoice_number(request: Request):
+    token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
+    if not token_data:
+        raise HTTPException(401, "Unauthorized")
+    now = datetime.now(timezone.utc)
+    year, month = now.year, now.month
+    start_str = datetime(year, month, 1, tzinfo=timezone.utc).isoformat()
+    if month == 12:
+        end_str = datetime(year + 1, 1, 1, tzinfo=timezone.utc).isoformat()
+    else:
+        end_str = datetime(year, month + 1, 1, tzinfo=timezone.utc).isoformat()
+    count = await db.email_logs.count_documents({
+        "type": "invoice",
+        "sent_at": {"$gte": start_str, "$lt": end_str}
+    })
+    ym = f"{year}{str(month).zfill(2)}"
+    return {"invoice_number": f"SC-{ym}-{str(count + 1).zfill(3)}"}
+
+
 @api_router.get("/mail/history")
 async def mail_history(request: Request, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=200)):
     token_data = _decode_token(request.headers.get("Authorization", "").replace("Bearer ", ""))
