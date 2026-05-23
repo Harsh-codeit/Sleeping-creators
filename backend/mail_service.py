@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 _FROM = os.environ.get("RESEND_FROM_EMAIL", "Sleeping Creators <noreply@sleepingcreators.com>")
 
 
-def send_email(to: str, subject: str, html: str, cc: list | None = None, reply_to: str | None = None) -> str:
+def send_email(to: str | list, subject: str, html: str, cc: list | None = None, reply_to: str | None = None) -> str:
     resend.api_key = os.environ.get("RESEND_API_KEY", "")
-    params = {"from": _FROM, "to": [to], "subject": subject, "html": html}
+    to_list = [to] if isinstance(to, str) else to
+    params = {"from": _FROM, "to": to_list, "subject": subject, "html": html}
     if cc:
         params["cc"] = cc
     if reply_to:

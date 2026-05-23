@@ -67,12 +67,12 @@ export default function MailCenter() {
   function loadHistory() { axios.get('/api/mail/history').then(r => setHistory(r.data)).catch(() => {}); }
 
   useEffect(() => {
-    const c = clients.find(c => c._id === clientId);
+    const c = clients.find(c => c.id === clientId);
     if (c) setTo(c.onboarding_data?.email ?? '');
   }, [clientId, clients]);
 
   useEffect(() => {
-    const c = clients.find(c => c._id === clientId);
+    const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
     const subs = {
       invoice: `Invoice for ${fields.period ?? 'This Month'} — Sleeping Creators`,
@@ -84,7 +84,7 @@ export default function MailCenter() {
   }, [template, clientId, fields, clients]);
 
   const rebuildPreview = useCallback(async () => {
-    const c = clients.find(c => c._id === clientId);
+    const c = clients.find(c => c.id === clientId);
     const name = c?.name ?? 'Client';
     let element = null;
     if (template === 'invoice') {
@@ -111,10 +111,11 @@ export default function MailCenter() {
 
   async function handleSend() {
     if (!to) { toast.error('Client has no email address'); return; }
+    const toList = to.split(',').map(s => s.trim()).filter(Boolean);
     setSending(true);
     try {
       await axios.post('/api/mail/send', {
-        type: template, client_id: clientId, to,
+        type: template, client_id: clientId, to: toList,
         cc: cc ? cc.split(',').map(s => s.trim()) : null,
         reply_to: replyTo || null, subject, html: previewHtml,
       });
@@ -128,12 +129,13 @@ export default function MailCenter() {
   async function handleSchedule() {
     if (!to) { toast.error('Client has no email address'); return; }
     if (!scheduleDay) { toast.error('Pick a date'); return; }
+    const toList = to.split(',').map(s => s.trim()).filter(Boolean);
     const [h, m] = scheduleTime.split(':');
     const dt = new Date(scheduleDay);
     dt.setHours(Number(h), Number(m), 0, 0);
     try {
       await axios.post('/api/mail/schedule', {
-        type: template, client_id: clientId, to,
+        type: template, client_id: clientId, to: toList,
         cc: cc ? cc.split(',').map(s => s.trim()) : null,
         reply_to: replyTo || null, subject, html: previewHtml,
         scheduled_at: dt.toISOString(),
@@ -178,11 +180,11 @@ export default function MailCenter() {
             <label className={LABEL_CLS}>Client</label>
             <select value={clientId} onChange={e => setClientId(e.target.value)} data-testid="client-select" className={selectCls}>
               <option value="">— Select client —</option>
-              {clients.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           {!to && clientId && <p className="text-xs text-amber-400 font-mono mb-3">This client has no email address on file.</p>}
-          <Field label="To" value={to} onChange={setTo} placeholder="client@email.com" />
+          <Field label="To (comma-separated)" value={to} onChange={setTo} placeholder="client@email.com, other@email.com" />
           <Field label="CC (comma-separated)" value={cc} onChange={setCc} placeholder="team@agency.com" />
           <Field label="Reply-to" value={replyTo} onChange={setReplyTo} placeholder="support@agency.com" />
 
@@ -214,7 +216,7 @@ export default function MailCenter() {
         <div className="p-6 flex flex-col">
           <p className="text-xs font-sans text-zinc-500 uppercase tracking-widest mb-4">Preview</p>
           <div className="mb-3 font-mono text-xs text-zinc-400 space-y-1">
-            <div>To: <span className="text-zinc-300">{to || '—'}</span></div>
+            <div>To: <span className="text-zinc-300">{to ? to.split(',').map(s => s.trim()).filter(Boolean).join(', ') : '—'}</span></div>
             <div>Subject: <span className="text-zinc-300">{subject || '—'}</span></div>
           </div>
           <div className="flex-1 border border-zinc-800 bg-white min-h-[400px]">
@@ -250,7 +252,7 @@ export default function MailCenter() {
                 <th className="py-2" />
               </tr></thead>
               <tbody>{scheduled.map(s => {
-                const c = clients.find(c => c._id === s.client_id);
+                const c = clients.find(c => c.id === s.client_id);
                 return <tr key={s._id} className="border-b border-zinc-900 hover:bg-zinc-900 transition-colors duration-200">
                   <td className="py-2 pr-4 text-zinc-300">{c?.name ?? s.client_id}</td>
                   <td className="py-2 pr-4 text-zinc-400">{s.type}</td>

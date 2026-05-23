@@ -2129,7 +2129,7 @@ app = FastAPI(lifespan=lifespan, redirect_slashes=False)
 class MailSendRequest(BaseModel):
     type: str
     client_id: str
-    to: str
+    to: Union[str, List[str]]
     cc: Optional[List[str]] = None
     reply_to: Optional[str] = None
     subject: str
@@ -2138,7 +2138,7 @@ class MailSendRequest(BaseModel):
 class MailScheduleRequest(BaseModel):
     type: str
     client_id: str
-    to: str
+    to: Union[str, List[str]]
     cc: Optional[List[str]] = None
     reply_to: Optional[str] = None
     subject: str
