@@ -274,7 +274,7 @@ export default function MailCenter() {
       </div>
 
       {/* ── COMPOSE + PREVIEW ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] border-b border-zinc-800" style={{ minHeight: '600px' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] border-b border-zinc-800" style={{ minHeight: '240px' }}>
 
         {/* Compose sidebar */}
         <div className="border-r border-zinc-800 overflow-y-auto flex flex-col">
@@ -441,12 +441,12 @@ export default function MailCenter() {
           </div>
 
           {/* iframe */}
-          <div className="flex-1 bg-white" style={{ minHeight: '400px' }}>
+          <div className="flex-1 bg-white" style={{ minHeight: '240px' }}>
             {previewHtml
               ? <iframe srcDoc={previewHtml} title="email-preview" data-testid="email-preview-frame"
-                  className="w-full h-full" style={{ minHeight: '400px' }} sandbox="allow-same-origin" />
+                  className="w-full h-full" style={{ minHeight: '240px' }} sandbox="allow-same-origin" />
               : (
-                <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-zinc-300 gap-3">
+                <div className="flex flex-col items-center justify-center h-full min-h-[240px] text-zinc-300 gap-3">
                   <Mail size={32} className="text-zinc-700" />
                   <p className="text-sm font-mono text-zinc-600">Select a client to preview</p>
                 </div>
