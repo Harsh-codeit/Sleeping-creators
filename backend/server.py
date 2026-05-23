@@ -7257,77 +7257,182 @@ async def audit_ai_generate(request: Request):
         raise HTTPException(404, "Client not found")
 
     ob = client.get("onboarding_data") or {}
-    name         = client.get("name", "")
-    niche        = ob.get("niche") or existing.get("niche", "")
-    target_aud   = ob.get("target_audience_description") or client.get("target_audience") or existing.get("targetAudience", "")
-    brand_voice  = client.get("brand_voice", "")
-    competitors  = ob.get("competitor_accounts") or []
-    ig_handle    = ob.get("instagram_handle") or existing.get("instagramHandle", "")
-    pillars      = (client.get("strategy") or {}).get("themes") or []
-    working      = ob.get("niche_working_topics", "")
-    oversatd     = ob.get("niche_oversaturated_topics", "")
-    underserved  = ob.get("niche_underserved_topics", "")
+    strategy = client.get("strategy") or {}
 
-    analytics = {}
+    # ── Collect everything ────────────────────────────────────────────────
+    def _f(v): return str(v).strip() if v else ""
+
+    name              = _f(client.get("name"))
+    ig_handle         = _f(ob.get("instagram_handle")) or existing.get("instagramHandle", "")
+    niche             = _f(ob.get("niche")) or existing.get("niche", "")
+    brand_voice       = _f(client.get("brand_voice"))
+    brand_vibe        = _f(ob.get("brand_vibe"))
+    account_goals     = _f(ob.get("account_goals"))
+    problem_solved    = _f(ob.get("problem_solved"))
+    business_desc     = _f(ob.get("business_description"))
+    personal_story    = _f(ob.get("personal_story"))
+    industry_label    = _f(ob.get("industry_label"))
+    signature_topic   = _f(ob.get("signature_topic"))
+    daily_life        = _f(ob.get("daily_life"))
+
+    # Audience
+    target_aud        = _f(ob.get("target_audience_description")) or _f(client.get("target_audience")) or existing.get("targetAudience","")
+    aud_age           = _f(ob.get("audience_age_range"))
+    aud_emotion       = _f(ob.get("audience_emotional_state"))
+    aud_problems      = _f(ob.get("audience_problems"))
+    aud_desires       = _f(ob.get("audience_desires"))
+    aud_myths         = _f(ob.get("audience_myths"))
+    aud_failed        = _f(ob.get("audience_failed_attempts"))
+    solutions         = _f(ob.get("solutions_provided"))
+    usps              = _f(ob.get("unique_selling_points"))
+    freq_questions    = _f(ob.get("frequent_questions"))
+    love_topics       = _f(ob.get("love_topics"))
+    case1             = _f(ob.get("case_study_1"))
+    case2             = _f(ob.get("case_study_2"))
+
+    # Niche
+    niche_working     = _f(ob.get("niche_working_topics"))
+    niche_oversat     = _f(ob.get("niche_oversaturated_topics"))
+    niche_under       = _f(ob.get("niche_underserved_topics"))
+    disliked          = _f(ob.get("disliked_content"))
+    not_to_do         = _f(ob.get("not_to_do_list"))
+    next_step         = _f(ob.get("next_step_after_view"))
+    bio_template      = _f(ob.get("bio_template"))
+
+    # Strategy
+    pillars           = strategy.get("themes") or []
+    hashtags          = strategy.get("hashtags") or []
+    video_hooks       = strategy.get("video_hooks") or []
+
+    # Competitor accounts
+    comp_accounts     = ob.get("competitor_accounts") or []
+    scraped_comps     = await db.competitors.find({"client_id": client_id, "is_active": True}, {"_id": 0}).to_list(10)
+
+    # Analytics (from existing fields already auto-filled, or from monthly-report)
+    analytics_data = {}
     try:
-        from bson import ObjectId as _ObjId
-        _cid = client_id
-        _c = await db.clients.find_one({"id": _cid})
-        if _c and _c.get("bundle_team_id"):
-            pass
-        analytics = {
-            "engagement_rate": existing.get("avgEngagementRate", ""),
-            "total_posts":     existing.get("totalPosts", ""),
-            "avg_likes":       existing.get("avgLikes", ""),
-            "avg_comments":    existing.get("avgComments", ""),
-            "avg_reach":       existing.get("avgReach", ""),
+        r = await analytics_monthly_report(client_id)
+        posts = r.get("posts", 0) or 0
+        likes = r.get("likes", 0) or 0
+        comments = r.get("comments", 0) or 0
+        analytics_data = {
+            "followers":       r.get("followers", 0),
+            "following":       r.get("following", 0),
+            "engagement_rate": r.get("engagement_rate", 0),
+            "total_posts":     posts,
+            "impressions":     r.get("impressions", 0),
+            "impressions_unique": r.get("impressions_unique", 0),
+            "avg_likes":       round(likes / posts, 1) if posts else 0,
+            "avg_comments":    round(comments / posts, 1) if posts else 0,
         }
     except Exception:
-        pass
+        analytics_data = {k: existing.get(k, "") for k in ("avgEngagementRate","totalPosts","avgLikes","avgComments","avgReach")}
 
-    comp_lines = "\n".join([f"- @{h}" for h in competitors[:3]]) if competitors else "- Not provided"
-    pillar_lines = "\n".join([f"- {p}" for p in pillars[:4]]) if pillars else "- Not provided"
+    # Build competitor section
+    all_comp_handles = list({h.lstrip("@") for h in (comp_accounts + [c.get("handle","").lstrip("@") for c in scraped_comps])})[:3]
+    comp_block = "\n".join([f"  Competitor {i+1}: @{h}" for i, h in enumerate(all_comp_handles)]) or "  Not provided"
 
-    prompt = (
-        f"You are a senior Instagram growth strategist writing a professional audit report.\n\n"
-        f"CLIENT PROFILE:\n"
-        f"- Name: {name}\n"
-        f"- Instagram: @{ig_handle}\n"
-        f"- Niche: {niche}\n"
-        f"- Target Audience: {target_aud}\n"
-        f"- Brand Voice: {brand_voice}\n"
-        f"- Competitor Accounts: {comp_lines}\n"
-        f"- Content Pillars: {pillar_lines}\n"
-        f"- Niche Working Topics: {working}\n"
-        f"- Oversaturated Topics: {oversatd}\n"
-        f"- Underserved Topics: {underserved}\n\n"
-        f"CURRENT ANALYTICS:\n"
-        f"- Engagement Rate: {analytics.get('engagement_rate','unknown')}\n"
-        f"- Total Posts: {analytics.get('total_posts','unknown')}\n"
-        f"- Avg Likes/Post: {analytics.get('avg_likes','unknown')}\n"
-        f"- Avg Comments/Post: {analytics.get('avg_comments','unknown')}\n"
-        f"- Avg Reach/Post: {analytics.get('avg_reach','unknown')}\n\n"
-        f"Generate a complete audit report. Return ONLY a valid JSON object with these exact keys:\n"
-        f"- tam: e.g. '$1.2B globally'\n"
-        f"- comp1Followers, comp2Followers, comp3Followers: estimated follower count strings e.g. '45,000'\n"
-        f"- comp1Working, comp2Working, comp3Working: 1-2 sentences on what's working for each competitor\n"
-        f"- comp1Gap, comp2Gap, comp3Gap: 1-2 sentences on gaps/weaknesses for each competitor\n"
-        f"- pillar1Format, pillar2Format, pillar3Format, pillar4Format: best format e.g. 'Reels', 'Carousel', 'Static'\n"
-        f"- month1Items, month2Items, month3Items, month4Items: 3-4 goals/tactics (one per line, \\n separated)\n"
-        f"- strengths, weaknesses, opportunities, threats: 3-4 bullet points each (one per line, \\n separated)\n"
-        f"- profilePhotoRating: brief 1-line assessment\n"
-        f"- bioRating: brief 1-line assessment\n"
-        f"- highlightsRating: brief 1-line assessment\n"
-        f"- contentConsistencyRating: brief 1-line assessment\n"
-        f"- avgSaves: estimated avg saves per post as a number string e.g. '12'\n"
-        f"Return ONLY valid JSON, no markdown, no explanation."
+    def _section(title, val):
+        return f"  {title}: {val}\n" if val else ""
+
+    profile_block = (
+        f"  Name: {name}\n"
+        f"  Instagram: @{ig_handle}\n"
+        + _section("Niche", niche)
+        + _section("Industry", industry_label)
+        + _section("Brand Voice", brand_voice)
+        + _section("Brand Vibe", brand_vibe)
+        + _section("Account Goals", account_goals)
+        + _section("Problem Solved", problem_solved)
+        + _section("Business Description", business_desc)
+        + _section("Personal Story", personal_story[:300] if personal_story else "")
+        + _section("Signature Topic", signature_topic)
+        + _section("Daily Life Content", daily_life)
+        + _section("Bio Template", bio_template)
     )
+    audience_block = (
+        _section("Description", target_aud)
+        + _section("Age Range", aud_age)
+        + _section("Emotional State", aud_emotion)
+        + _section("Core Problems", aud_problems)
+        + _section("Desires", aud_desires)
+        + _section("Myths/Misconceptions", aud_myths)
+        + _section("Failed Attempts", aud_failed)
+        + _section("Solutions We Provide", solutions)
+        + _section("Unique Selling Points", usps)
+        + _section("Frequent Questions", freq_questions)
+        + _section("Topics They Love", love_topics)
+        + _section("Case Study 1", case1[:200] if case1 else "")
+        + _section("Case Study 2", case2[:200] if case2 else "")
+    )
+    niche_block = (
+        _section("Working Topics", niche_working)
+        + _section("Oversaturated Topics", niche_oversat)
+        + _section("Underserved Topics", niche_under)
+        + _section("Disliked Content", disliked)
+        + _section("Not To Do", not_to_do)
+        + _section("Next Step After Viewing", next_step)
+    )
+    strategy_block = (
+        _section("Content Pillars", ", ".join(pillars[:6]) if pillars else "")
+        + _section("Hashtag Groups", str(hashtags[:3]) if hashtags else "")
+        + _section("Video Hooks", "; ".join(video_hooks[:3]) if video_hooks else "")
+    )
+    analytics_block = "\n".join([f"  {k}: {v}" for k, v in analytics_data.items() if v])
+
+    prompt = f"""You are a senior Instagram growth strategist generating a complete, client-specific audit report.
+
+=== CLIENT PROFILE ===
+{profile_block}
+=== TARGET AUDIENCE ===
+{audience_block}
+=== NICHE INTELLIGENCE ===
+{niche_block}
+=== CONTENT STRATEGY ===
+{strategy_block}
+=== COMPETITORS ===
+{comp_block}
+=== CURRENT ANALYTICS ===
+{analytics_block}
+
+Based on ALL the above data, generate a complete audit. Every field must be specific to this client — no generic filler.
+
+Return ONLY a valid JSON object with EXACTLY these keys:
+- "tam": Total Addressable Market estimate for this niche (e.g. "$800M India market")
+- "comp1Followers": estimated follower count for competitor 1 (e.g. "42,000")
+- "comp2Followers": estimated follower count for competitor 2
+- "comp3Followers": estimated follower count for competitor 3
+- "comp1Working": 1-2 sentences on what's working for competitor 1 based on their niche
+- "comp2Working": 1-2 sentences for competitor 2
+- "comp3Working": 1-2 sentences for competitor 3
+- "comp1Gap": 1-2 sentences on content gap/weakness for competitor 1
+- "comp2Gap": 1-2 sentences for competitor 2
+- "comp3Gap": 1-2 sentences for competitor 3
+- "pillar1Format": best content format for pillar 1 (Reels / Carousel / Static / Story)
+- "pillar2Format": best format for pillar 2
+- "pillar3Format": best format for pillar 3
+- "pillar4Format": best format for pillar 4
+- "month1Items": 3-4 specific goals/tactics for Month 1 (\\n separated)
+- "month2Items": 3-4 specific goals/tactics for Month 2 (\\n separated)
+- "month3Items": 3-4 specific goals/tactics for Month 3 (\\n separated)
+- "month4Items": 3-4 specific goals/tactics for Month 4 (\\n separated)
+- "strengths": 3-4 specific strengths (\\n separated)
+- "weaknesses": 3-4 specific weaknesses (\\n separated)
+- "opportunities": 3-4 specific opportunities (\\n separated)
+- "threats": 3-4 specific threats (\\n separated)
+- "profilePhotoRating": 1-line specific assessment
+- "bioRating": 1-line specific assessment mentioning what's missing or working
+- "highlightsRating": 1-line assessment
+- "contentConsistencyRating": 1-line assessment based on niche and analytics
+- "avgSaves": estimated avg saves per post as number string (e.g. "8")
+
+Return ONLY valid JSON. No markdown code blocks. No explanation."""
 
     import anthropic as _anthropic, json as _json, re as _re
     _ac = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
     msg = _ac.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1500,
+        max_tokens=2500,
         messages=[{"role": "user", "content": prompt}],
     )
     raw = msg.content[0].text.strip()
