@@ -370,6 +370,20 @@ export default function Settings() {
               />
               <div className="text-[10px] text-zinc-600 font-mono mt-1">0 = pipeline starts immediately. E.g. 48 = first post 2 days after onboarding.</div>
             </div>
+            <div>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Slides Per Carousel</label>
+              <select
+                value={form.onboard_pipeline_slide_count || ""}
+                onChange={e => updateForm("onboard_pipeline_slide_count", e.target.value ? parseInt(e.target.value) : null)}
+                className="w-32 bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
+              >
+                <option value="">Default (5)</option>
+                {[3,4,5,6,7,8,9,10].map(n => (
+                  <option key={n} value={n}>{n} slides</option>
+                ))}
+              </select>
+              <div className="text-[10px] text-zinc-600 font-mono mt-1">Number of slides in each carousel post.</div>
+            </div>
           </div>
         </div>
 

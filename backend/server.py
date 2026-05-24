@@ -382,6 +382,8 @@ class SettingsUpdate(BaseModel):
     onboard_pipeline_delay_hours: Optional[int] = None
     # Default daily posting time (HH:MM) for the auto-created pipeline.
     onboard_pipeline_posting_time: Optional[str] = None
+    # Default slide count for the auto-created pipeline. None = 5 (AI default).
+    onboard_pipeline_slide_count: Optional[int] = None
 
 class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None
@@ -2717,11 +2719,13 @@ async def onboard_client(data: OnboardingCreate):
         default_template = app_settings.get("default_carousel_template") or None
         delay_hours = int(app_settings.get("onboard_pipeline_delay_hours") or 0)
         posting_time = app_settings.get("onboard_pipeline_posting_time") or "09:00"
+        slide_count = app_settings.get("onboard_pipeline_slide_count") or None
         created = await create_pipeline(client["id"], PipelineCreate(
             name="Daily Content",
             pipeline_type="standard",
             content_type="carousel",
             carousel_template=default_template,
+            carousel_slide_count=slide_count,
             max_posts_per_day=1,
             platforms=client["platforms"],
             schedule_type="specific_times",
