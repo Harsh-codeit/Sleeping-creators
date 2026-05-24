@@ -47,7 +47,7 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/")
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
@@ -671,6 +671,65 @@ class OnboardingCreate(BaseModel):
 
     # Platforms (root field, not stored in onboarding_data)
     platforms: List[str] = []
+
+class AffiliateClientData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    name: str
+    brand_name: str = ""
+    email: str = ""
+    whatsapp: str = ""
+    city_country: str = ""
+    instagram_handle: str = ""
+    instagram_profile_url: str = ""
+    instagram_password: str = ""
+    website_url: str = ""
+    linkedin_url: str = ""
+    youtube_url: str = ""
+    twitter_url: str = ""
+    pr_media_links: str = ""
+    high_quality_photos_link: str = ""
+    video_clips_link: str = ""
+    profile_photo_link: str = ""
+    logo_link: str = ""
+    account_suspended: bool = False
+    paid_ads_run: bool = False
+    personal_story: str = ""
+    business_description: str = ""
+    niche: str = ""
+    daily_life: str = ""
+    target_audience_description: str = ""
+    audience_age_range: str = ""
+    audience_emotional_state: List[str] = []
+    solutions_provided: List[str] = []
+    audience_problems: List[str] = []
+    audience_desires: List[str] = []
+    audience_myths: List[str] = []
+    audience_failed_attempts: List[str] = []
+    unique_selling_points: List[str] = []
+    frequent_questions: List[str] = []
+    love_topics: List[str] = []
+    has_case_studies: bool = False
+    case_study_1: str = ""
+    case_study_2: str = ""
+    signature_topic: str = ""
+    brand_vibe: List[str] = []
+    language: List[str] = []
+    niche_working_topics: str = ""
+    niche_oversaturated_topics: str = ""
+    niche_underserved_topics: str = ""
+    competitor_accounts: List[str] = []
+    disliked_content: str = ""
+    not_to_do_list: List[str] = []
+    account_goals: str = ""
+    next_step_after_view: str = ""
+    cta_link: str = ""
+
+
+class AffiliateNewClientWebhook(BaseModel):
+    affiliate_id: str
+    affiliate_client_id: str
+    link_token: str
+    client_data: AffiliateClientData
 
 class KeywordConfigCreate(BaseModel):
     keywords: List[str]
@@ -2580,11 +2639,33 @@ async def upload_asset(file: UploadFile = File(...)):
     return {"url": url}
 
 
+async def _notify_affiliate_sc_status(affiliate_client_id: str, sc_client_id: str, status: str, reason: str = None):
+    url = os.getenv("AFFILIATE_SC_WEBHOOK_URL", "")
+    secret = os.getenv("INTER_APP_SECRET", "")
+    if not url or not secret:
+        return
+    payload = {"affiliate_client_id": affiliate_client_id, "sc_client_id": sc_client_id, "status": status}
+    if reason:
+        payload["reason"] = reason
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as http:
+            await http.post(
+                f"{url}/api/webhooks/sc/status-update",
+                json=payload,
+                headers={"X-Inter-App-Secret": secret},
+            )
+    except Exception:
+        pass
+
+
 @api_router.post("/clients/{client_id}/resume")
 async def resume_client(client_id: str):
     await db.clients.update_one({"id": client_id}, {"$set": {"status": "active"}})
     client = await db.clients.find_one({"id": client_id}, {"_id": 0})
     await add_log("success", f"Automation resumed for {client.get('name', client_id)}", client_id, client.get('name'))
+    affiliate_client_id = client.get("affiliate_client_id")
+    if affiliate_client_id:
+        asyncio.create_task(_notify_affiliate_sc_status(affiliate_client_id, client_id, "approved"))
     return {"status": "active"}
 
 @api_router.post("/clients/onboard", status_code=201)
@@ -7588,6 +7669,84 @@ async def mail_webhook(request: Request):
 
 
 app.include_router(api_router)
+
+@app.post("/api/webhooks/affiliate/new-client", include_in_schema=False)
+async def affiliate_new_client(
+    body: AffiliateNewClientWebhook,
+    request: Request,
+):
+    secret = os.getenv("INTER_APP_SECRET", "")
+    incoming = request.headers.get("X-Inter-App-Secret", "")
+    if not secret or not incoming or incoming != secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    cd = body.client_data
+    onboarding_data = OnboardingCreate(
+        name=cd.name,
+        brand_name=cd.brand_name,
+        email=cd.email,
+        whatsapp=cd.whatsapp,
+        city_country=cd.city_country,
+        instagram_handle=cd.instagram_handle,
+        instagram_profile_url=cd.instagram_profile_url,
+        instagram_password=cd.instagram_password,
+        website_url=cd.website_url,
+        linkedin_url=cd.linkedin_url,
+        youtube_url=cd.youtube_url,
+        twitter_url=cd.twitter_url,
+        pr_links=[l.strip() for l in cd.pr_media_links.split("\n") if l.strip()],
+        profile_photo_link=cd.profile_photo_link,
+        logo_link=cd.logo_link,
+        google_drive_images=cd.high_quality_photos_link,
+        google_drive_videos=cd.video_clips_link,
+        account_suspended=cd.account_suspended,
+        paid_ads_run=cd.paid_ads_run,
+        personal_story=cd.personal_story,
+        business_description=cd.business_description,
+        niche=cd.niche,
+        daily_life=cd.daily_life,
+        target_audience_description=cd.target_audience_description,
+        audience_age_range=cd.audience_age_range,
+        audience_emotional_state=cd.audience_emotional_state,
+        solutions_provided=cd.solutions_provided,
+        audience_problems=cd.audience_problems,
+        audience_desires=cd.audience_desires,
+        audience_myths=cd.audience_myths,
+        audience_failed_attempts=cd.audience_failed_attempts,
+        unique_selling_points=cd.unique_selling_points,
+        frequent_questions=cd.frequent_questions,
+        love_topics=cd.love_topics,
+        has_case_studies=cd.has_case_studies,
+        case_study_1=cd.case_study_1,
+        case_study_2=cd.case_study_2,
+        signature_topic=cd.signature_topic,
+        brand_vibe=cd.brand_vibe,
+        language=cd.language,
+        niche_working_topics=cd.niche_working_topics,
+        niche_oversaturated_topics=cd.niche_oversaturated_topics,
+        niche_underserved_topics=cd.niche_underserved_topics,
+        competitor_accounts=cd.competitor_accounts,
+        disliked_content=cd.disliked_content,
+        not_to_do_list=cd.not_to_do_list,
+        account_goals=cd.account_goals,
+        next_step_after_view=cd.next_step_after_view,
+        lead_magnet_link=cd.cta_link,
+        platforms=[],
+    )
+
+    client = await onboard_client(onboarding_data)
+    sc_client_id = client["id"]
+
+    await db.clients.update_one(
+        {"id": sc_client_id},
+        {"$set": {
+            "affiliate_client_id": body.affiliate_client_id,
+            "affiliate_id": body.affiliate_id,
+            "affiliate_link_token": body.link_token,
+        }},
+    )
+
+    return {"sc_client_id": sc_client_id}
 
 import json as _json
 
