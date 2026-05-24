@@ -695,9 +695,9 @@ class AffiliateClientData(BaseModel):
     linkedin_url: str = ""
     youtube_url: str = ""
     twitter_url: str = ""
-    pr_media_links: str = ""
-    high_quality_photos_link: str = ""
-    video_clips_link: str = ""
+    pr_links: List[str] = []
+    google_drive_images: str = ""
+    google_drive_videos: str = ""
     profile_photo_link: str = ""
     logo_link: str = ""
     account_suspended: bool = False
@@ -7736,11 +7736,11 @@ async def affiliate_new_client(
         linkedin_url=cd.linkedin_url,
         youtube_url=cd.youtube_url,
         twitter_url=cd.twitter_url,
-        pr_links=[l.strip() for l in cd.pr_media_links.split("\n") if l.strip()],
+        pr_links=cd.pr_links,
         profile_photo_link=cd.profile_photo_link,
         logo_link=cd.logo_link,
-        google_drive_images=cd.high_quality_photos_link,
-        google_drive_videos=cd.video_clips_link,
+        google_drive_images=cd.google_drive_images,
+        google_drive_videos=cd.google_drive_videos,
         account_suspended=cd.account_suspended,
         paid_ads_run=cd.paid_ads_run,
         personal_story=cd.personal_story,
