@@ -13,19 +13,22 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [autoStatus, setAutoStatus] = useState(null);
   const [googleConnected, setGoogleConnected] = useState(null);
+  const [templates, setTemplates] = useState([]);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [sResp, aResp, gResp] = await Promise.all([
+        const [sResp, aResp, gResp, tResp] = await Promise.all([
           axios.get(`${API}/settings`),
           axios.get(`${API}/automation/status`),
           axios.get(`${API}/auth/google/status`),
+          axios.get(`${API}/templates`),
         ]);
         setSettings(sResp.data);
         setForm(sResp.data);
         setAutoStatus(aResp.data);
         setGoogleConnected(gResp.data.connected);
+        setTemplates(tResp.data || []);
       } catch { toast.error("Failed to load settings"); }
       finally { setLoading(false); }
     };
@@ -281,6 +284,33 @@ export default function Settings() {
 
         {/* Bundle.social */}
         <BundleSettings />
+
+        {/* New Client Defaults */}
+        <div className="bg-zinc-900 border border-zinc-800 p-5">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
+            <Bot size={14} className="text-zinc-400" />
+            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">New Client Defaults</div>
+          </div>
+          <div className="space-y-4">
+            <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
+              A <span className="text-zinc-300">Daily Content</span> pipeline is created automatically for every new client (1 post/day at 09:00, Instagram). Choose the carousel template it uses.
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Default Carousel Template</label>
+              <select
+                value={form.default_carousel_template || ""}
+                onChange={e => updateForm("default_carousel_template", e.target.value || null)}
+                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
+              >
+                <option value="">AI decides per post</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <div className="text-[10px] text-zinc-600 font-mono mt-1">You can override this per pipeline after the client is created.</div>
+            </div>
+          </div>
+        </div>
 
         {/* Save */}
         <button

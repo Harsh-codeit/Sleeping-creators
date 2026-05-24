@@ -375,6 +375,9 @@ class SettingsUpdate(BaseModel):
     # Empty string is meaningful — clears the global so renders fall back to
     # the built-in _CONTENT_PROMPT.
     global_video_prompt: Optional[str] = None
+    # Default carousel template applied to the auto-created pipeline for new clients.
+    # None means AI decides per-post.
+    default_carousel_template: Optional[str] = None
 
 class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None
@@ -2703,6 +2706,25 @@ async def onboard_client(data: OnboardingCreate):
 
     await db.clients.insert_one({**client})
     await add_log("success", f"Client '{data.name}' onboarded via wizard", None, data.name)
+
+    # Auto-create default pipeline using the template configured in settings
+    try:
+        app_settings = await db.settings.find_one({}, {"_id": 0}) or {}
+        default_template = app_settings.get("default_carousel_template") or None
+        await create_pipeline(client["id"], PipelineCreate(
+            name="Daily Content",
+            pipeline_type="standard",
+            content_type="carousel",
+            carousel_template=default_template,
+            max_posts_per_day=1,
+            platforms=client["platforms"],
+            schedule_type="specific_times",
+            specific_times=["09:00"],
+            require_approval=False,
+        ))
+    except Exception as e:
+        logger.warning(f"Auto-pipeline creation failed for {client['id']}: {e}")
+
     return client
 
 # ─── Post Routes ──────────────────────────────────────────────────────────────
