@@ -616,8 +616,6 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             <ELabel optional>Carousel Drive Images Folder</ELabel>
             <EInput value={editForm.drive_images_folder_id} onChange={e => set("drive_images_folder_id", e.target.value)} placeholder="Folder URL or ID — used for Drive Image elements in carousel export" data-testid="edit-drive-images-folder" />
           </div>
-          <EMultiInput label="Lead Magnets" values={editForm.lead_magnets} onChange={v => set("lead_magnets", v)}
-            placeholder="e.g. Free eBook: 10 Growth Hacks" optional />
         </div>
       </div>
 
