@@ -2135,8 +2135,8 @@ export default function ClientDetail() {
             <div className="bg-zinc-900 border border-zinc-800 p-4">
               <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Profile Photo</div>
               <div className="flex items-center gap-4">
-                {client.profile_photo_url ? (
-                  <img src={client.profile_photo_url} alt={client.name}
+                {(client.profile_photo_url || client.profile_photo_link) ? (
+                  <img src={client.profile_photo_url || client.profile_photo_link} alt={client.name}
                     className="w-14 h-14 rounded-full object-cover border border-zinc-700" />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-lg font-bold text-white">
@@ -2609,7 +2609,7 @@ export default function ClientDetail() {
               {filtered.length === 0 ? (
                 <div className="px-4 py-8 text-center text-zinc-600 font-mono text-sm">
                   {posts.length === 0 ? (
-                    <>No posts yet. <button onClick={generateBulk} className="text-white underline ml-1">Generate with AI</button></>
+                    <>No posts yet. <button onClick={openGenerateModal} className="text-white underline ml-1">Generate with AI</button></>
                   ) : (
                     <>No {postKindFilter} posts.</>
                   )}

@@ -97,3 +97,21 @@ agenthub/agents/youtube/db
 
 # Build caches
 .cache/
+
+# Graphify knowledge graph output
+graphify-out/
+
+# AI tooling runtime files
+.swarm/
+claude-flow.config.json
+ruvector.db
+
+# Backup files
+*.bak
+
+# Local planning and design artifacts
+plans/
+wise-design.md
+docs/SHOTSTACK_TEMPLATE_FEATURE.md
+docs/affiliate-app-prd.md
+scripts/setup-ruflo.ps1

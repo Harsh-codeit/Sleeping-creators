@@ -670,7 +670,7 @@ class OnboardingCreate(BaseModel):
     preferred_video_template: str = ""
 
     # Platforms (root field, not stored in onboarding_data)
-    platforms: List[str] = []
+    platforms: List[str] = ["instagram"]
 
 class AffiliateClientData(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -7731,7 +7731,7 @@ async def affiliate_new_client(
         account_goals=cd.account_goals,
         next_step_after_view=cd.next_step_after_view,
         lead_magnet_link=cd.cta_link,
-        platforms=[],
+        platforms=["instagram"],
     )
 
     client = await onboard_client(onboarding_data)
