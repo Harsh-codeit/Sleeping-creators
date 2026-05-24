@@ -25,6 +25,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     fonts-dejavu-core \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
