@@ -52,7 +52,6 @@ export function validateStep1(form) {
     ["youtube_url",           "YouTube URL"],
     ["twitter_url",           "Twitter / X URL"],
     ["profile_photo_link",    "Profile photo Drive link"],
-    ["logo_link",             "Logo Drive link"],
     ["google_drive_images",   "Photos Drive link"],
     ["google_drive_videos",   "Videos Drive link"],
   ]);
@@ -126,20 +125,9 @@ export function validateStep3(form) {
 }
 
 export function validateStep4(form) {
-  const stringErr = checkStrings(form, [
+  return checkStrings(form, [
     ["next_step_after_view", "Next step after viewing"],
-    ["lead_magnet_link",     "Lead magnet Drive link"],
     ["cta_link",             "Landing page URL"],
-  ]);
-  if (stringErr) return stringErr;
-
-  const arrErr = checkArrays(form, [
-    ["lead_magnets", "Lead magnets"],
-  ]);
-  if (arrErr) return arrErr;
-
-  return checkMultiSelects(form, [
-    ["platforms", "Active platforms"],
   ]);
 }
 

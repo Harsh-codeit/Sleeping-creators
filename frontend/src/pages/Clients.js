@@ -96,16 +96,6 @@ function AddClientDialog({ open, onClose, onCreated }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-mono text-zinc-400 mb-1.5 uppercase">About the Client</label>
-            <textarea
-              value={form.bio}
-              onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-              placeholder="Tell us about yourself — your brand story, what makes you unique, your goals..."
-              rows={4}
-              className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 resize-none"
-            />
-          </div>
-          <div>
             <label className="block text-xs font-mono text-zinc-400 mb-1.5 uppercase">Platforms *</label>
             <div className="flex flex-wrap gap-2">
               {ALL_PLATFORMS.map(p => (

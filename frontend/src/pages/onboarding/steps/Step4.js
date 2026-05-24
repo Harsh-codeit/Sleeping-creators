@@ -1,14 +1,11 @@
 import {
   Label,
   Input,
-  MultiInput,
   SubsectionHeader,
-  MultiCheckbox,
 } from "../primitives";
 
 /**
- * Step 4 — Goals, CTA & Lead Generation
- * 4 sub-sections, 6 fields + Instagram access info card + Platforms picker.
+ * Step 4 — Goals & CTA
  * Contract: ({ form, set }) where set is (key, value) => void.
  */
 export default function Step4({ form, set }) {
@@ -90,29 +87,8 @@ export default function Step4({ form, set }) {
         </div>
       </section>
 
-      {/* ── 4B — Lead Magnet & Funnel ────────────────────────────── */}
+      {/* ── 4B — Call to Action ──────────────────────────────────── */}
       <section className="space-y-4">
-        <SubsectionHeader id="4B" label="Lead Magnet & Funnel" />
-
-        <MultiInput
-          label="Lead Magnets"
-          values={form.lead_magnets ?? [""]}
-          onChange={(v) => set("lead_magnets", v)}
-          placeholder="e.g. Free 7-day plan PDF"
-          testid="ob-lead-magnets"
-        />
-
-        <div>
-          <Label>Lead Magnet Drive Link</Label>
-          <Input
-            type="url"
-            testid="ob-lead-magnet-link"
-            value={form.lead_magnet_link ?? ""}
-            onChange={(e) => set("lead_magnet_link", e.target.value)}
-            placeholder="Drive/Notion link to the lead magnet asset"
-          />
-        </div>
-
         <div>
           <Label>Website or Landing Page URL</Label>
           <Input
@@ -152,23 +128,6 @@ export default function Step4({ form, set }) {
         </div>
       </section>
 
-      {/* ── Platforms Picker ─────────────────────────────────────── */}
-      <section className="space-y-4">
-        <SubsectionHeader
-          id="Platforms"
-          label="Active Platforms"
-          hint="Select all platforms to automate content for"
-        />
-
-        <MultiCheckbox
-          label="Active Platforms *"
-          options={["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"]}
-          values={form.platforms ?? []}
-          onChange={(v) => set("platforms", v)}
-          testid="ob-platform"
-          columns={3}
-        />
-      </section>
     </div>
   );
 }

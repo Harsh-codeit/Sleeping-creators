@@ -5,6 +5,7 @@ export function InvoiceEmail({
   invoiceNumber, invoiceDate, invoiceMonth,
   amount, discount = 0, amountInWords,
   includeGst = false,
+  scGstin = '',
   paymentUrl, baseUrl = '',
 }) {
   const subtotal = Number(String(amount || 0).replace(/,/g, '')) || 0;
@@ -92,7 +93,7 @@ export function InvoiceEmail({
                   </Row>
                   <Row style={{ marginBottom: '8px' }}>
                     <Column style={{ width: '68px' }}><Text style={fromLbl}>Email</Text></Column>
-                    <Column><Text style={fromVal}>hello@sleepingcreators.com</Text></Column>
+                    <Column><Text style={fromVal}>team@sleepingcreators.com</Text></Column>
                   </Row>
                   <Row style={{ marginBottom: '8px' }}>
                     <Column style={{ width: '68px' }}><Text style={fromLbl}>Website</Text></Column>
@@ -104,6 +105,10 @@ export function InvoiceEmail({
                       <Text style={fromVal}>801, B Block, Shubh Labh Heights</Text>
                       <Text style={fromVal}>Near Robot Square, Indore - 452010</Text>
                     </Column>
+                  </Row>
+                  <Row style={{ marginBottom: '8px' }}>
+                    <Column style={{ width: '68px' }}><Text style={fromLbl}>GSTIN</Text></Column>
+                    <Column><Text style={fromVal}>{scGstin || '—'}</Text></Column>
                   </Row>
                 </Section>
               </Column>
@@ -133,7 +138,7 @@ export function InvoiceEmail({
             <Section style={{ border: '1px solid #eeeeee', borderTop: 'none', padding: '14px 16px' }}>
               <Row>
                 <Column style={{ width: '50%' }}>
-                  <Text style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: '700', color: '#111111' }}>Instagram Management (Monthly)</Text>
+                  <Text style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: '700', color: '#111111' }}>Instagram Management</Text>
                   <Text style={{ margin: 0, fontSize: '10px', color: '#888888' }}>Social Media Marketing &amp; Content Management</Text>
                 </Column>
                 <Column style={{ width: '18%' }}><Text style={{ margin: 0, fontSize: '11px', color: '#333333' }}>998372</Text></Column>
@@ -178,14 +183,6 @@ export function InvoiceEmail({
             </Row>
           </Section>
 
-          {/* ── FOOTNOTES ───────────────────────────────────────────── */}
-          <Section style={{ padding: '12px 32px 0' }}>
-            <Text style={{ margin: '0 0 2px', fontSize: '10px', color: '#999999', fontStyle: 'italic' }}>* HSN 998372 — Social Media Marketing Services</Text>
-            {includeGst && (
-              <Text style={{ margin: 0, fontSize: '10px', color: '#999999', fontStyle: 'italic' }}>* GST applicable as per government norms</Text>
-            )}
-          </Section>
-
           {/* ── AMOUNT IN WORDS ─────────────────────────────────────── */}
           <Section style={{ padding: '16px 32px' }}>
             <Section style={{ border: '1px solid #dddddd', padding: '12px 16px' }}>
@@ -198,9 +195,7 @@ export function InvoiceEmail({
 
           {/* ── NOTE ────────────────────────────────────────────────── */}
           <Section style={{ padding: '0 32px 20px' }}>
-            <Text style={{ margin: 0, fontSize: '10px', color: '#888888', fontStyle: 'italic', lineHeight: '1.7' }}>
-              * Note: Delayed payments may result in temporary suspension of services. Kindly ensure timely payment to avoid interruptions.
-            </Text>
+            <Text style={{ margin: 0, fontSize: '9px', color: '#888888' }}>* Note: Delayed payments may result in temporary suspension of services. Kindly ensure timely payment to avoid interruptions.</Text>
           </Section>
 
           {/* ── CTA ─────────────────────────────────────────────────── */}

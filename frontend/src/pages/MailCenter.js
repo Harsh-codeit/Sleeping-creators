@@ -172,7 +172,7 @@ export default function MailCenter() {
       invoice: `Invoice for This Month — Sleeping Creators`,
       report: `Here's everything your profile did this month - Sleeping Creators`,
       audit: `Your Instagram Audit is ready, have a look | Team Sleeping Creators`,
-      strategy_onboarding: `You're in. Here's everything you need to know | Sleeping Creators…`,
+      strategy_onboarding: `We Got Your Form, Here's What Happens Next | Sleeping Creators`,
     };
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);

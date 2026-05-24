@@ -2,14 +2,14 @@ import { Html, Head, Body, Section, Text, Hr, Row, Column, Img, Font } from '@re
 
 const F = 'Inter, Helvetica, Arial, sans-serif';
 
-const heading = { margin: '0 0 8px', fontSize: '13px', fontWeight: '700', color: '#111111', fontFamily: F };
-const body = { margin: '0', fontSize: '13px', color: '#555555', lineHeight: '1.75', fontFamily: F };
-const bullet = { margin: '4px 0 0', fontSize: '13px', color: '#555555', lineHeight: '1.75', fontFamily: F };
+const body = { margin: '0 0 0', fontSize: '13px', color: '#555555', lineHeight: '1.8', fontFamily: F };
+const sectionHeading = { margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: '#111111', letterSpacing: '0.08em', fontFamily: F };
+const para = { margin: '0 0 10px', fontSize: '13px', color: '#555555', lineHeight: '1.8', fontFamily: F };
 
-function Section2({ title, children }) {
+function Block({ title, children }) {
   return (
-    <Section style={{ marginBottom: '20px' }}>
-      <Text style={heading}>{title}</Text>
+    <Section style={{ marginBottom: '24px' }}>
+      <Text style={sectionHeading}>{title}</Text>
       {children}
     </Section>
   );
@@ -56,70 +56,94 @@ export function ContentStrategyOnboardingEmail({
 
             {/* Greeting */}
             <Text style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: '700', color: '#111111', letterSpacing: '-0.3px', fontFamily: F }}>
-              Hey {clientName || 'there'}!
+              Hey {clientName || 'there'},
             </Text>
-            <Text style={{ ...body, marginBottom: '24px' }}>
-              Welcome to Sleeping Creators — genuinely excited to have you on board. You've taken the first step, and now we get to work. Before we dive in, here's a quick rundown of how the next few days will look so there are zero surprises.
+            <Text style={{ ...para, marginBottom: '20px' }}>
+              We got your form and we are genuinely excited to get started with you.
+            </Text>
+            <Text style={{ ...para, marginBottom: '12px' }}>
+              Here is exactly what the next few days look like.
+            </Text>
+            <Text style={para}>
+              <strong style={{ color: '#111111' }}>1.</strong> Our team spends the first 48 hours doing a full audit on your niche and competitors analysis. We study what is working, what angles are getting traction. Once done, you will receive an audit report and content roadmap directly on this email.
+            </Text>
+            <Text style={{ ...para, marginBottom: '24px' }}>
+              <strong style={{ color: '#111111' }}>2.</strong> After the audit, your first post goes live within 72 hours. So from today, expect your profile to start moving in about 4 to 5 days (if some technical glitches happen it can extend too).
             </Text>
 
-            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 20px', borderTopWidth: '1px' }} />
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px', borderTopWidth: '1px' }} />
 
-            <Section2 title="First, we do our homework (48 hrs)">
-              <Text style={body}>
-                We spend the first 48 hours doing a full research and competitor analysis on your niche. We study what's working, what's not, and build a content direction tailored to your profile. No guesswork, just strategy.
+            <Block title="WHAT WE NEED FROM YOU RIGHT NOW">
+              <Text style={para}>
+                <strong style={{ color: '#111111' }}>Be available on WhatsApp</strong> when we message you for the Instagram OTP. Any delay on that pushes everything back, so please keep an eye out and help us log in fast to start posting.
               </Text>
-            </Section2>
+              <Text style={para}>
+                <strong style={{ color: '#111111' }}>Get your profile ready</strong> before we begin. Clear profile picture, a bio that says what you do, your CTA link in bio, and highlights if needed. We don't manage profile setup — that part is yours.
+              </Text>
+              <Text style={para}>
+                <strong style={{ color: '#111111' }}>If you want Reels,</strong> share your raw photos and videos as soon as possible through the Google Drive link. Without footage we will start with carousels, which works great too, but Reels always perform better — so earlier the better.
+              </Text>
+            </Block>
 
-            <Section2 title="Then your first posts go live (within 72–84 hrs after that)">
-              <Text style={body}>
-                Once the research is done, your content will be live within 72–84 hours. So from today, expect your first post within roughly 4–5 days.
-              </Text>
-            </Section2>
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px', borderTopWidth: '1px' }} />
 
-            <Section2 title="Send us your photos &amp; videos ASAP">
-              <Text style={body}>
-                If you want Reels, we need your raw content — photos and videos — as soon as possible. Without them, we'll start with carousels, which is totally fine, but Reels will always perform better. So the sooner you share, the sooner we can hit the ground running.
+            <Block title="HOW WE WORK">
+              <Text style={para}>
+                <strong style={{ color: '#111111' }}>We don't take post approvals.</strong> Content goes live based on niche research and winning content patterns. If something doesn't feel right, just drop a message in the WhatsApp group and we will refine from there.
               </Text>
-            </Section2>
+              <Text style={para}>
+                <strong style={{ color: '#111111' }}>We don't add music to carousels.</strong> We use a scheduling tool and Meta doesn't give music library access to third party apps. We will let you know the posting time so you can add music yourself according to your brand vibe.
+              </Text>
+              <Text style={para}>
+                <strong style={{ color: '#111111' }}>Lead automation</strong> will be switched ON once we start seeing real traction in your comment section. We don't put a fixed date on it because rushing automation before the content is pulling attention does more harm than good.
+              </Text>
+            </Block>
 
-            <Section2 title="Get your profile ready">
-              <Text style={{ ...body, marginBottom: '6px' }}>Before we start posting, please make sure:</Text>
-              <Text style={bullet}>· Your profile photo is up-to-date and clear</Text>
-              <Text style={{ ...bullet, marginBottom: '8px' }}>· Your bio reflects what you do (we can help if needed)</Text>
-              <Text style={body}>A polished profile makes every post land better.</Text>
-            </Section2>
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px', borderTopWidth: '1px' }} />
 
-            <Section2 title="The first week — let's be real">
-              <Text style={body}>
-                The first week is always a little rough. We're learning your audience, testing content, and figuring out what clicks. Please be patient with us, and more importantly share your feedback. The more you tell us what you like or don't like, the faster we improve and find your groove.
+            <Block title="COMMUNICATION">
+              <Text style={para}>
+                Everything goes through the WhatsApp group only — voice notes or text. Different people on our team handle different domains, and the right person will get back to you within 24 hours. Please avoid calls unless it is genuinely urgent, and don't expect replies on holidays or after working hours.
               </Text>
-            </Section2>
+            </Block>
 
-            <Section2 title="One rule for communication">
-              <Text style={body}>
-                All queries, feedback, and updates — please drop a voice note or message in the group only. This keeps everything in one place and makes sure nothing gets missed. No DMs/calls on the side, please!
-              </Text>
-            </Section2>
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px', borderTopWidth: '1px' }} />
 
-            <Section2 title="A quick but important note">
-              <Text style={{ ...body, marginBottom: '10px' }}>
-                We're an affordable service and we genuinely give it our all — but we don't make any promises around follower growth or specific results. Social media takes time and consistency. We're here to do our best work, and we will.
+            <Block title="FIRST WEEK">
+              <Text style={para}>
+                The first 7–10 days will feel a little rough on both sides. Strategy is still finding its direction and things may not feel perfectly aligned yet. That is completely normal. Your feedback in this window is what gets everything dialled in fast. Stay in the group, share what you think, and we will fix quickly.
               </Text>
-              <Text style={body}>
-                Also, please take a few minutes to read through our{' '}
-                <a href={privacyPolicyUrl} style={{ color: '#111111', fontWeight: '600' }}>Privacy Policy</a>
-                {' '}so everything stays smooth and transparent on both ends.
+            </Block>
+
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px', borderTopWidth: '1px' }} />
+
+            <Block title="ONE IMPORTANT THING">
+              <Text style={para}>
+                We are not responsible for account restrictions, shadowbans, or deactivations by Instagram or Meta. These are platform decisions completely outside our control. If anything like that happens, the liability sits with the platform.
               </Text>
-            </Section2>
+            </Block>
+
+            <Hr style={{ borderColor: '#eeeeee', margin: '0 0 24px', borderTopWidth: '1px' }} />
+
+            <Block title="ABOUT RESULTS">
+              <Text style={para}>
+                This is an affordable service and we don't make promises around specific follower counts, reach, or leads. What we promise is that we show up every single day with our best work. We only make real money when you grow through brand deals, so your growth is genuinely our priority. Please give it at least 3 months before drawing any conclusions.
+              </Text>
+              <Text style={para}>
+                For full details on terms, refund policy, and everything else please read through this carefully before we begin:{' '}
+                <a href={privacyPolicyUrl} style={{ color: '#111111', fontWeight: '600' }}>Privacy Policy and T&amp;C</a>
+              </Text>
+            </Block>
 
             <Hr style={{ borderColor: '#eeeeee', margin: '0 0 20px', borderTopWidth: '1px' }} />
 
             {/* Sign-off */}
             <Text style={{ ...body, marginBottom: '4px' }}>
-              That's it — you're all set. Drop any questions in the group and let's make something great together.
+              We will be in touch on WhatsApp very soon. Let's build something worth watching.
             </Text>
-            <Text style={{ ...body, marginBottom: '4px' }}>Talk soon,</Text>
-            <Text style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: '700', color: '#111111', fontFamily: F }}>The Sleeping Creators Team</Text>
+            <Text style={{ ...body, marginBottom: '16px' }}>Talk soon,</Text>
+            <Text style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '700', color: '#111111', fontFamily: F }}>Nikhil and Team</Text>
+            <Text style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '700', color: '#111111', fontFamily: F }}>Sleeping Creators</Text>
             <Text style={{ margin: '0 0 24px', fontSize: '12px', color: '#aaaaaa', fontFamily: F }}>sleepingcreators.com</Text>
 
           </Section>

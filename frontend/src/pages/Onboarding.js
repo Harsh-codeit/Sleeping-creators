@@ -19,7 +19,7 @@ const STEPS = [
   { id: 1, label: "Basic Info",       icon: User,     desc: "Identity & access" },
   { id: 2, label: "Story & Audience", icon: BookOpen, desc: "Personal story & audience intel" },
   { id: 3, label: "Content Strategy", icon: Compass,  desc: "Vibe, niche & competitors" },
-  { id: 4, label: "Goals & Funnel",   icon: Target,   desc: "CTA, lead magnet & platforms" },
+  { id: 4, label: "Goals & CTA",      icon: Target,   desc: "Goals & landing page" },
 ];
 
 const INITIAL = {
@@ -30,7 +30,7 @@ const INITIAL = {
   website_url: "", linkedin_url: "", youtube_url: "", twitter_url: "",
   pr_links: [""],
   // — Step 1C: Assets (Drive links) —
-  profile_photo_link: "", logo_link: "",
+  profile_photo_link: "",
   google_drive_images: "", google_drive_videos: "",
   // — Step 1D: Account Health —
   account_suspended: false, paid_ads_run: false,
@@ -54,10 +54,10 @@ const INITIAL = {
   disliked_content: "", not_to_do_list: [""],
   // — Step 4A: Goal & Next Step —
   account_goals: "followers", next_step_after_view: "",
-  // — Step 4B: Lead Magnet & Funnel —
-  lead_magnets: [""], lead_magnet_link: "", cta_link: "",
-  // — Platforms (required at submit) —
-  platforms: [],
+  // — Step 4B: CTA —
+  cta_link: "",
+  // — Platforms (default: instagram) —
+  platforms: ["instagram"],
 };
 
 // Arrays whose entries can be user-emptied via MultiInput / CappedMultiInput.
@@ -65,7 +65,7 @@ const INITIAL = {
 // (audience_emotional_state, brand_vibe, language, platforms) are NOT in this
 // list — they only contain explicitly-selected values.
 const ARRAY_FIELDS_TO_FILTER = [
-  "pr_links", "lead_magnets", "competitor_accounts", "not_to_do_list",
+  "pr_links", "competitor_accounts", "not_to_do_list",
   "solutions_provided", "audience_problems", "audience_desires",
   "audience_myths", "audience_failed_attempts", "unique_selling_points",
   "frequent_questions", "love_topics",
@@ -137,7 +137,6 @@ function Review({ form }) {
         { label: "Twitter / X",     value: form.twitter_url },
         { label: "PR / Media",      value: form.pr_links },
         { label: "Profile Photo",   value: form.profile_photo_link },
-        { label: "Logo",            value: form.logo_link },
         { label: "Photos (Drive)",  value: form.google_drive_images },
         { label: "Videos (Drive)",  value: form.google_drive_videos },
         { label: "Account Flagged", value: form.account_suspended },
@@ -176,13 +175,10 @@ function Review({ form }) {
         { label: "Topics to Avoid", value: form.not_to_do_list },
       ]} />
 
-      <ReviewSection title="Goals, CTA & Funnel" items={[
+      <ReviewSection title="Goals & CTA" items={[
         { label: "Primary Goal",    value: form.account_goals },
         { label: "Next Step",       value: form.next_step_after_view },
-        { label: "Lead Magnets",    value: form.lead_magnets },
-        { label: "Lead Magnet URL", value: form.lead_magnet_link },
         { label: "Landing Page",    value: form.cta_link },
-        { label: "Platforms",       value: form.platforms },
       ]} />
     </div>
   );

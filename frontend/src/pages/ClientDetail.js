@@ -323,10 +323,6 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             <ELabel optional>Brand Name</ELabel>
             <EInput value={editForm.brand_name} onChange={e => set("brand_name", e.target.value)} placeholder="The public-facing brand name" data-testid="edit-brand-name" />
           </div>
-          <div>
-            <ELabel optional>About the Client</ELabel>
-            <ETextarea value={editForm.bio} onChange={e => set("bio", e.target.value)} placeholder="Tell us about yourself — your brand story, what makes you unique, your goals..." rows={4} data-testid="edit-bio-intro" />
-          </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <ELabel optional>Username</ELabel>
@@ -1860,7 +1856,7 @@ export default function ClientDetail() {
       );
       await axios.post(`${API}/clients/${id}/complete-onboarding`, {
         to,
-        subject: `You're in. Here's everything you need to know | Sleeping Creators…`,
+        subject: `We Got Your Form, Here's What Happens Next | Sleeping Creators`,
         html,
       });
       toast.success("Onboarding complete! Welcome email scheduled for 2 hours from now.");

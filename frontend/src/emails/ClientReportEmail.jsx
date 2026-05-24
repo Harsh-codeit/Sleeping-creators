@@ -41,7 +41,7 @@ export function ClientReportEmail({
   baseUrl = '',
 }) {
   const fmt = n => (n != null && n !== '') ? Number(n).toLocaleString() : '—';
-  const defaultNotes = 'Based on this month\'s performance, we have identified winning content patterns that are clearly resonating with your audience. We are refining the strategy around them for upcoming posts — doubling down on what works and improving what doesn\'t. Thank you for your patience and feedback. We will keep iterating until we achieve the best possible outcome for your profile.';
+  const defaultNotes = 'Based on this month\'s performance, we have identified winning content patterns resonating with your audience. We are doubling down on what works and refining what doesn\'t. Thank you for your feedback — we will keep iterating for the best results.';
 
   return (
     <Html lang="en">
@@ -148,7 +148,7 @@ export function ClientReportEmail({
               Notes &amp; Strategy Update
             </Text>
             <Section style={{ backgroundColor: '#f9f9f9', borderRadius: '10px', padding: '18px 20px', border: '1px solid #eeeeee' }}>
-              <Text style={{ margin: 0, fontSize: '13px', color: '#555555', lineHeight: '1.75', fontStyle: 'italic', fontFamily: F }}>
+              <Text style={{ margin: 0, fontSize: '11px', color: '#555555', lineHeight: '1.65', fontFamily: F }}>
                 {notes || defaultNotes}
               </Text>
             </Section>

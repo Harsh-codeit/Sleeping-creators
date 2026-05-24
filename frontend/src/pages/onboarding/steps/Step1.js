@@ -191,17 +191,6 @@ export default function Step1({ form, set }) {
           </div>
 
           <div>
-            <Label>Logo (Drive Link)</Label>
-            <Input
-              testid="ob-logo-link"
-              type="url"
-              value={form.logo_link ?? ""}
-              onChange={(e) => set("logo_link", e.target.value)}
-              placeholder="Drive link to logo PNG (transparent bg)"
-            />
-          </div>
-
-          <div>
             <Label>Photo Library (Drive Link)</Label>
             <Input
               testid="ob-google-drive-images"
