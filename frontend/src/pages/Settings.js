@@ -293,7 +293,7 @@ export default function Settings() {
           </div>
           <div className="space-y-4">
             <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
-              A <span className="text-zinc-300">Daily Content</span> pipeline is created automatically for every new client (1 post/day at 09:00, Instagram). Choose the carousel template it uses.
+              A <span className="text-zinc-300">Daily Content</span> pipeline is created automatically for every new client (1 post/day, Instagram). Configure the defaults below.
             </div>
             <div>
               <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Default Carousel Template</label>
@@ -311,12 +311,51 @@ export default function Settings() {
             </div>
             <div>
               <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Daily Posting Time</label>
-              <input
-                type="time"
-                value={form.onboard_pipeline_posting_time || "09:00"}
-                onChange={e => updateForm("onboard_pipeline_posting_time", e.target.value)}
-                className="w-36 bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
-              />
+              {(() => {
+                const raw = form.onboard_pipeline_posting_time || "09:00";
+                const [hStr, mStr] = raw.split(":");
+                const h24 = parseInt(hStr, 10);
+                const ampm = h24 >= 12 ? "PM" : "AM";
+                const h12 = h24 % 12 || 12;
+                const setTime = (newH12, newAmpm, newMin) => {
+                  let h = newH12 % 12;
+                  if (newAmpm === "PM") h += 12;
+                  updateForm("onboard_pipeline_posting_time", `${String(h).padStart(2, "0")}:${newMin}`);
+                };
+                return (
+                  <div className="flex items-center gap-1">
+                    <select
+                      value={h12}
+                      onChange={e => setTime(parseInt(e.target.value), ampm, mStr)}
+                      className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-2 py-2 focus:outline-none focus:border-zinc-500"
+                    >
+                      {Array.from({length: 12}, (_, i) => i + 1).map(h => (
+                        <option key={h} value={h}>{String(h).padStart(2, "0")}</option>
+                      ))}
+                    </select>
+                    <span className="text-zinc-500 font-mono text-xs">:</span>
+                    <select
+                      value={mStr}
+                      onChange={e => setTime(h12, ampm, e.target.value)}
+                      className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-2 py-2 focus:outline-none focus:border-zinc-500"
+                    >
+                      {["00","15","30","45"].map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <div className="flex border border-zinc-700 overflow-hidden">
+                      {["AM","PM"].map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setTime(h12, p, mStr)}
+                          className={`px-2.5 py-2 text-xs font-mono transition-colors ${ampm === p ? "bg-zinc-700 text-white" : "bg-zinc-950 text-zinc-500 hover:text-zinc-300"}`}
+                        >{p}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="text-[10px] text-zinc-600 font-mono mt-1">Time of day the daily post fires for all new clients.</div>
             </div>
             <div>
