@@ -378,6 +378,8 @@ class SettingsUpdate(BaseModel):
     # Default carousel template applied to the auto-created pipeline for new clients.
     # None means AI decides per-post.
     default_carousel_template: Optional[str] = None
+    # Hours to wait after client creation before the first pipeline run. 0 = start immediately.
+    onboard_pipeline_delay_hours: Optional[int] = None
 
 class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None
@@ -2711,7 +2713,8 @@ async def onboard_client(data: OnboardingCreate):
     try:
         app_settings = await db.settings.find_one({}, {"_id": 0}) or {}
         default_template = app_settings.get("default_carousel_template") or None
-        await create_pipeline(client["id"], PipelineCreate(
+        delay_hours = int(app_settings.get("onboard_pipeline_delay_hours") or 0)
+        created = await create_pipeline(client["id"], PipelineCreate(
             name="Daily Content",
             pipeline_type="standard",
             content_type="carousel",
@@ -2722,6 +2725,16 @@ async def onboard_client(data: OnboardingCreate):
             specific_times=["09:00"],
             require_approval=False,
         ))
+        if delay_hours > 0:
+            start_after = datetime.now(timezone.utc) + timedelta(hours=delay_hours)
+            delayed_next_run = calculate_next_run(
+                {"schedule_type": "specific_times", "specific_times": ["09:00"]},
+                start_after,
+            )
+            await db.pipelines.update_one(
+                {"id": created["id"]},
+                {"$set": {"next_run_at": delayed_next_run}},
+            )
     except Exception as e:
         logger.warning(f"Auto-pipeline creation failed for {client['id']}: {e}")
 
