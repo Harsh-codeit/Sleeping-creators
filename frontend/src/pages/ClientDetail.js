@@ -41,12 +41,7 @@ function initEditForm(client) {
     google_drive_images: ob.google_drive_images || "",
     google_drive_videos: ob.google_drive_videos || "",
     drive_images_folder_id: ob.drive_images_folder_id || "",
-    lead_magnets: ob.lead_magnets?.length ? ob.lead_magnets : [""],
-    automation_keywords: ob.automation_keywords?.length ? ob.automation_keywords : [""],
     competitor_accounts: ob.competitor_accounts?.length ? ob.competitor_accounts : [""],
-    lead_sheet_link: ob.lead_sheet_link || "",
-    bio_template: ob.bio_template || "",
-    voice_notes_link: ob.voice_notes_link || "",
     not_to_do_list: ob.not_to_do_list?.length ? ob.not_to_do_list : [""],
     preferred_carousel_template: ob.preferred_carousel_template || "full_white",
     preferred_video_template: ob.preferred_video_template || "",
@@ -680,29 +675,15 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             <ELabel optional>Niche — Under-served Topics</ELabel>
             <ETextarea rows={3} value={editForm.niche_underserved_topics} onChange={e => set("niche_underserved_topics", e.target.value)} placeholder="Topics that are UNDER-SERVED" data-testid="edit-niche-underserved-topics" />
           </div>
-          <EMultiInput label="Automation Keywords" values={editForm.automation_keywords} onChange={v => set("automation_keywords", v)}
-            placeholder="e.g. pricing, book, demo, interested" optional />
           <EMultiInput label="Competitor Accounts" values={editForm.competitor_accounts} onChange={v => set("competitor_accounts", v)}
             placeholder="@competitor_handle or URL" optional />
-          <div>
-            <ELabel optional>Lead Sheet Link</ELabel>
-            <EInput value={editForm.lead_sheet_link} onChange={e => set("lead_sheet_link", e.target.value)} placeholder="Google Sheet or CRM link for tracking leads..." type="url" data-testid="edit-lead-sheet" />
-          </div>
-          <div>
-            <ELabel optional>Bio Template</ELabel>
-            <ETextarea rows={4} value={editForm.bio_template} onChange={e => set("bio_template", e.target.value)} placeholder="Paste the client's social media bio template here..." data-testid="edit-bio" />
-          </div>
         </div>
       </div>
 
-      {/* 6. Voice & Training */}
+      {/* 6. Not to Do List */}
       <div className="bg-zinc-900 border border-zinc-800 p-5">
         <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Voice & Training</div>
         <div className="space-y-4">
-          <div>
-            <ELabel optional>Voice Notes Link</ELabel>
-            <EInput value={editForm.voice_notes_link} onChange={e => set("voice_notes_link", e.target.value)} placeholder="Google Drive / Dropbox link to voice note recordings..." type="url" data-testid="edit-voice-link" />
-          </div>
           <EMultiInput label={`"Not to Do" List`} values={editForm.not_to_do_list} onChange={v => set("not_to_do_list", v)}
             placeholder="e.g. Never discuss pricing publicly, avoid political topics..." optional />
         </div>
@@ -1825,8 +1806,6 @@ export default function ClientDetail() {
       const payload = {
         ...editForm,
         pr_links: editForm.pr_links.filter(Boolean),
-        lead_magnets: editForm.lead_magnets.filter(Boolean),
-        automation_keywords: editForm.automation_keywords.filter(Boolean),
         competitor_accounts: editForm.competitor_accounts.filter(Boolean),
         not_to_do_list: editForm.not_to_do_list.filter(Boolean),
       };
