@@ -310,6 +310,16 @@ export default function Settings() {
               <div className="text-[10px] text-zinc-600 font-mono mt-1">You can override this per pipeline after the client is created.</div>
             </div>
             <div>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Daily Posting Time</label>
+              <input
+                type="time"
+                value={form.onboard_pipeline_posting_time || "09:00"}
+                onChange={e => updateForm("onboard_pipeline_posting_time", e.target.value)}
+                className="w-36 bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
+              />
+              <div className="text-[10px] text-zinc-600 font-mono mt-1">Time of day the daily post fires for all new clients.</div>
+            </div>
+            <div>
               <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Delay Before First Post (hours)</label>
               <input
                 type="number"
