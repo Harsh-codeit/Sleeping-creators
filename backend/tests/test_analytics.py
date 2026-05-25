@@ -290,6 +290,7 @@ def test_dashboard_overview_renamed_route_works(mock_db, _):
     mock_db.clients.aggregate.return_value = _empty_cursor()
     mock_db.logs.find.side_effect = _empty_find
     mock_db.posts.count_documents = AsyncMock(return_value=0)
+    mock_db.settings.find_one = AsyncMock(return_value=None)
 
     resp = client.get("/api/dashboard/overview", headers=AUTH)
     assert resp.status_code == 200
@@ -300,6 +301,7 @@ def test_dashboard_overview_renamed_route_works(mock_db, _):
         "published", "failed", "scheduled", "drafts",
         "posts_today", "queue_size", "success_rate",
         "platform_distribution", "recent_activity",
+        "bundle_configured",
     ):
         assert key in body, f"missing key {key} in /dashboard/overview response"
 

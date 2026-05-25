@@ -3160,7 +3160,7 @@ async def dashboard_overview():
     """Command Center stats. Counts only — no engagement metrics (those live in Bundle now)."""
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
-    post_counts_raw, client_counts_raw, platform_raw, recent_logs = await asyncio.gather(
+    post_counts_raw, client_counts_raw, platform_raw, recent_logs, settings_doc = await asyncio.gather(
         db.posts.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]).to_list(None),
         db.clients.aggregate([{"$group": {"_id": "$status", "n": {"$sum": 1}}}]).to_list(None),
         db.posts.aggregate([
@@ -3168,6 +3168,7 @@ async def dashboard_overview():
             {"$group": {"_id": "$platform", "n": {"$sum": 1}}},
         ]).to_list(None),
         db.logs.find({}, {"_id": 0}).sort("created_at", -1).to_list(10),
+        db.settings.find_one({"key": "global"}, {"_id": 0, "bundle_api_key": 1}),
     )
 
     post_counts = {r["_id"]: r["n"] for r in post_counts_raw}
@@ -3200,6 +3201,7 @@ async def dashboard_overview():
         "success_rate": success_rate,
         "platform_distribution": platform_counts,
         "recent_activity": recent_logs,
+        "bundle_configured": bool(settings_doc and settings_doc.get("bundle_api_key")),
     }
 
 

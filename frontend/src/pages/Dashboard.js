@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
@@ -40,12 +40,14 @@ const BADGE_COLORS = {
 
 function daysAgo(isoString) {
   if (!isoString) return Infinity;
-  return (Date.now() - new Date(isoString).getTime()) / (1000 * 60 * 60 * 24);
+  const ms = new Date(isoString).getTime();
+  if (isNaN(ms)) return Infinity;
+  return (Date.now() - ms) / (1000 * 60 * 60 * 24);
 }
 
-function computeHealthIssues(client) {
+function computeHealthIssues(client, bundleConfigured) {
   const issues = [];
-  if (!client.bundle_api_key) {
+  if (!bundleConfigured) {
     issues.push({ badge: "NO BUNDLE", color: "red", priority: 1 });
   }
   if ((client.platforms || []).includes("instagram") && !client.instagram_connected) {
@@ -126,6 +128,11 @@ export default function Dashboard() {
   const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
+
+  const clientsWithIssues = useMemo(
+    () => clients.map((c) => ({ ...c, _issues: computeHealthIssues(c, overview?.bundle_configured) })),
+    [clients, overview?.bundle_configured]
+  );
 
   const fetchData = async () => {
     try {
@@ -249,7 +256,7 @@ export default function Dashboard() {
             </button>
           </div>
           <div>
-            {clients.map((client) => (
+            {clientsWithIssues.map((client) => (
               <div
                 key={client.id}
                 className="data-row px-4 py-3 cursor-pointer"
@@ -283,7 +290,7 @@ export default function Dashboard() {
                   ))}
                 </div>
                 {(() => {
-                  const issues = computeHealthIssues(client);
+                  const issues = client._issues;
                   if (issues.length === 0) return null;
                   return (
                     <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
