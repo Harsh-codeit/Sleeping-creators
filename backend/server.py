@@ -4416,7 +4416,7 @@ async def create_carousel(data: CarouselCreate):
         "author_name": data.author_name or client["name"],
         "author_handle": data.author_handle or f"@{client['name'].lower().replace(' ','')}",
         "author_title": data.author_title or client.get("industry", ""),
-        "profile_photo_url": data.profile_photo_url or client.get("profile_photo_url", ""),
+        "profile_photo_url": data.profile_photo_url or client.get("profile_photo_url", "") or client.get("onboarding_data", {}).get("profile_photo_link", ""),
         "slides": [{"id": str(uuid.uuid4()), **s} for s in data.slides],
         "slide_count": len(data.slides),
         "design_context": data.design_context,
