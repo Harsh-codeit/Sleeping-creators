@@ -70,3 +70,44 @@ def test_create_sheet_creates_six_tabs():
     assert len(created_tabs) == 5
     assert created_tabs == ["Client Info", "Posts", "Performance", "Competitors", "Trends"]
     assert result == {"sheet_id": "sheet123", "sheet_url": "https://sheets.google.com/sheet123"}
+
+
+def test_add_charts_called_on_create():
+    """_add_charts_to_sheet must be called exactly once during sheet creation."""
+    mock_gc = MagicMock()
+    mock_sh = MagicMock()
+    mock_gc.create.return_value = mock_sh
+    mock_sh.sheet1 = MagicMock()
+    mock_sh.id = "s1"
+    mock_sh.url = "https://x"
+    mock_sh.add_worksheet.return_value = MagicMock()
+
+    with patch("sheets_service._get_gc", return_value=mock_gc), \
+         patch("sheets_service._add_charts_to_sheet") as mock_charts:
+        from sheets_service import _create_sheet_sync
+        _create_sheet_sync("tok", "Acme", "a@b.com")
+
+    mock_charts.assert_called_once_with(mock_sh)
+
+
+def test_add_charts_calls_batch_update():
+    """_add_charts_to_sheet must call spreadsheets().batchUpdate with 3 addChart requests."""
+    import sheets_service
+    mock_sh = MagicMock()
+    mock_sh.id = "sheet_id_123"
+    mock_sh.client = MagicMock()
+    mock_sh.client.auth = MagicMock()
+
+    mock_service = MagicMock()
+    mock_spreadsheets = MagicMock()
+    mock_service.spreadsheets.return_value = mock_spreadsheets
+    mock_batchupdate = MagicMock()
+    mock_spreadsheets.batchUpdate.return_value = mock_batchupdate
+    mock_batchupdate.execute.return_value = {}
+
+    with patch("sheets_service._get_sheets_service", return_value=mock_service):
+        sheets_service._add_charts_to_sheet(mock_sh)
+
+    call_args = mock_spreadsheets.batchUpdate.call_args
+    requests = call_args[1]["body"]["requests"]
+    assert len(requests) == 3
