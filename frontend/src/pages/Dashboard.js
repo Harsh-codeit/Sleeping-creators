@@ -277,8 +277,13 @@ function TopPerformersCard({ performers, navigate }) {
             onClick={() => navigate(`/clients/${p.id}`)}
           >
             <span className="text-[10px] font-mono text-zinc-600 w-4 flex-shrink-0">{i + 1}</span>
-            <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-              {p.avatar || (p.name || "?").slice(0, 2).toUpperCase()}
+            <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 flex-shrink-0 overflow-hidden">
+              {p.photo
+                ? <img src={p.photo} alt={p.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "flex"; }} />
+                : null}
+              <div className={`w-full h-full flex items-center justify-center text-[10px] font-bold text-white ${p.photo ? "hidden" : ""}`}>
+                {p.avatar || (p.name || "?").slice(0, 2).toUpperCase()}
+              </div>
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-mono text-white truncate">{p.name}</div>

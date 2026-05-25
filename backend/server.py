@@ -3238,7 +3238,7 @@ async def dashboard_pipelines():
 async def dashboard_top_performers():
     clients = await db.clients.find(
         {"bundle.socials": {"$exists": True, "$ne": []}},
-        {"_id": 0, "id": 1, "name": 1, "avatar": 1, "bundle": 1},
+        {"_id": 0, "id": 1, "name": 1, "avatar": 1, "bundle": 1, "profile_photo_url": 1, "onboarding_data": 1},
     ).to_list(None)
     result = []
     for c in clients:
@@ -3253,10 +3253,16 @@ async def dashboard_top_performers():
         new_followers = sum(s.get("new_followers", 0) or 0 for s in socials)
         engagement_rate = round((likes + comments) / followers * 100, 2) if followers > 0 else 0
         platforms = [s["platform"] for s in socials if s.get("platform")]
+        photo = (
+            c.get("profile_photo_url")
+            or (c.get("onboarding_data") or {}).get("profile_photo_link")
+            or ""
+        )
         result.append({
             "id": c["id"],
             "name": c.get("name", ""),
             "avatar": c.get("avatar", ""),
+            "photo": photo,
             "followers": followers,
             "new_followers": new_followers,
             "impressions": impressions,
