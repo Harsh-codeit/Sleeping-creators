@@ -480,7 +480,7 @@ export default function Carousel() {
         authorName: c.name,
         authorHandle: c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`,
         authorTitle: c.industry || "",
-        profilePhotoUrl: c.profile_photo_url || "",
+        profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
       }));
     }
   }, [selectedClientId, clients]);
