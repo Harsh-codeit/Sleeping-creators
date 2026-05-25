@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, RefreshCw, Zap } from "lucide-react";
+import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -19,24 +19,50 @@ const LOG_LEVEL_STYLES = {
   error: "text-red-400",
 };
 
-function StatCard({ icon: Icon, label, value, sub, accent }) {
-  return (
-    <div className="stat-card" data-testid={`stat-card-${label.toLowerCase().replace(/\s+/g,'-')}`}>
-      <div className="flex items-start justify-between">
-        <div className="text-zinc-500 text-xs font-mono uppercase tracking-widest">{label}</div>
-        <Icon size={14} className={accent || "text-zinc-600"} />
-      </div>
-      <div className="mt-3 text-3xl font-bold text-white font-mono">{value}</div>
-      {sub && <div className="mt-1 text-xs text-zinc-500 font-mono">{sub}</div>}
-    </div>
-  );
-}
-
 const BADGE_COLORS = {
   red:   "text-red-400 border-red-500/30",
   amber: "text-amber-400 border-amber-500/30",
   blue:  "text-blue-400 border-blue-500/30",
 };
+
+// ─── Design system primitives ────────────────────────────────────────────────
+
+function Card({ children, className = "", testId }) {
+  return (
+    <div className={`bg-zinc-900 border border-zinc-800 ${className}`} data-testid={testId}>
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({ label, icon: Icon, action }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+      <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest">{label}</span>
+      <div className="flex items-center gap-2">
+        {action}
+        {Icon && <Icon size={13} className="text-zinc-600" />}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, sub, accentClass, testId }) {
+  return (
+    <Card testId={testId} className="p-5">
+      <div className="flex items-start justify-between mb-5">
+        <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-widest leading-tight">{label}</span>
+        <div className={`p-1.5 border border-zinc-700 bg-zinc-800 ${accentClass}`}>
+          <Icon size={12} />
+        </div>
+      </div>
+      <div className="text-3xl font-bold text-white font-mono leading-none">{value}</div>
+      {sub && <div className="mt-2 text-[11px] text-zinc-500 font-mono">{sub}</div>}
+    </Card>
+  );
+}
+
+// ─── Health helpers ───────────────────────────────────────────────────────────
 
 function daysAgo(isoString) {
   if (!isoString) return Infinity;
@@ -47,28 +73,16 @@ function daysAgo(isoString) {
 
 function computeHealthIssues(client, bundleConfigured) {
   const issues = [];
-  if (!bundleConfigured) {
-    issues.push({ badge: "NO BUNDLE", color: "red", priority: 1 });
-  }
-  if ((client.platforms || []).includes("instagram") && !client.instagram_connected) {
+  if (!bundleConfigured) issues.push({ badge: "NO BUNDLE", color: "red", priority: 1 });
+  if ((client.platforms || []).includes("instagram") && !client.instagram_connected)
     issues.push({ badge: "NO INSTAGRAM", color: "red", priority: 2 });
-  }
-  if (client.instagram_publish_blocked) {
-    issues.push({ badge: "BLOCKED", color: "red", priority: 3 });
-  }
-  if ((client.posts_failed || 0) > 0) {
-    issues.push({ badge: "POST FAILED", color: "red", priority: 4 });
-  }
+  if (client.instagram_publish_blocked) issues.push({ badge: "BLOCKED", color: "red", priority: 3 });
+  if ((client.posts_failed || 0) > 0) issues.push({ badge: "POST FAILED", color: "red", priority: 4 });
   const ob = client.onboarding_data || {};
-  if (!ob.niche || !ob.industry_label || (!ob.brand_name && !client.brand_name)) {
+  if (!ob.niche || !ob.industry_label || (!ob.brand_name && !client.brand_name))
     issues.push({ badge: "PROFILE INCOMPLETE", color: "amber", priority: 5 });
-  }
-  if (daysAgo(client.last_post_at) > 7) {
-    issues.push({ badge: "INACTIVE 7D", color: "amber", priority: 6 });
-  }
-  if ((client.scheduled_count || 0) === 0) {
-    issues.push({ badge: "EMPTY QUEUE", color: "blue", priority: 7 });
-  }
+  if (daysAgo(client.last_post_at) > 7) issues.push({ badge: "INACTIVE 7D", color: "amber", priority: 6 });
+  if ((client.scheduled_count || 0) === 0) issues.push({ badge: "EMPTY QUEUE", color: "blue", priority: 7 });
   return issues.sort((a, b) => a.priority - b.priority);
 }
 
@@ -78,53 +92,198 @@ function getFixRoute(clientId, issues) {
   return `/clients/${clientId}`;
 }
 
+// ─── Panel components ─────────────────────────────────────────────────────────
+
 function DailySpend({ series, todayTotal, yesterdayTotal }) {
   const trend = yesterdayTotal > 0
     ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
     : null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 p-4" data-testid="daily-spend-chart">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">AI Spend — Last 7 Days</div>
-        <TrendingUp size={13} className="text-zinc-600" />
+    <Card testId="daily-spend-chart">
+      <CardHeader label="AI Spend — Last 7 Days" icon={TrendingUp} />
+      <div className="p-4">
+        <ResponsiveContainer width="100%" height={130}>
+          <BarChart data={series} barSize={14}>
+            <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} width={38} tickFormatter={(v) => `$${v.toFixed(3)}`} />
+            <Tooltip
+              contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 0, fontFamily: "IBM Plex Mono", fontSize: 11 }}
+              labelStyle={{ color: "#a1a1aa" }}
+              itemStyle={{ color: "#fff" }}
+              formatter={(v) => [`$${Number(v).toFixed(6)}`, "cost"]}
+            />
+            <Bar dataKey="cost" fill="#ffffff" radius={0} />
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-3">
+          <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Today</span>
+          <span className="text-sm font-mono text-white">${Number(todayTotal).toFixed(4)}</span>
+          {trend !== null && (
+            <span
+              data-testid="spend-trend-chip"
+              className={`text-[10px] font-mono px-1.5 py-0.5 border ${trend >= 0 ? "text-amber-400 border-amber-500/30" : "text-emerald-400 border-emerald-500/30"}`}
+            >
+              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
+            </span>
+          )}
+        </div>
       </div>
-      <ResponsiveContainer width="100%" height={130}>
-        <BarChart data={series} barSize={14}>
-          <XAxis
-            dataKey="date"
-            tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }}
-            axisLine={false}
-            tickLine={false}
-            width={38}
-            tickFormatter={(v) => `$${v.toFixed(3)}`}
-          />
-          <Tooltip
-            contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 0, fontFamily: "IBM Plex Mono", fontSize: 11 }}
-            labelStyle={{ color: "#a1a1aa" }}
-            itemStyle={{ color: "#fff" }}
-            formatter={(v) => [`$${Number(v).toFixed(6)}`, "cost"]}
-          />
-          <Bar dataKey="cost" fill="#ffffff" radius={0} />
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="mt-3 flex items-center gap-3">
-        <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Today</span>
-        <span className="text-sm font-mono text-white">${Number(todayTotal).toFixed(4)}</span>
-        {trend !== null && (
-          <span data-testid="spend-trend-chip" className={`text-[10px] font-mono px-1.5 py-0.5 border ${trend >= 0 ? "text-amber-400 border-amber-500/30" : "text-emerald-400 border-emerald-500/30"}`}>
-            {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
-          </span>
-        )}
-      </div>
-    </div>
+    </Card>
   );
 }
+
+function PostsChart({ timeSeries }) {
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader label="Posts Published — Last 14 Days" icon={Activity} />
+      <div className="p-4">
+        <ResponsiveContainer width="100%" height={160}>
+          <AreaChart data={timeSeries}>
+            <defs>
+              <linearGradient id="postGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#fff" stopOpacity={0.1} />
+                <stop offset="95%" stopColor="#fff" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} width={25} />
+            <Tooltip
+              contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 0, fontFamily: "IBM Plex Mono", fontSize: 11 }}
+              labelStyle={{ color: "#a1a1aa" }}
+              itemStyle={{ color: "#fff" }}
+            />
+            <Area type="monotone" dataKey="posts" stroke="#fff" strokeWidth={1.5} fill="url(#postGrad)" dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
+  );
+}
+
+function ClientStatusCard({ clientsWithIssues, navigate }) {
+  return (
+    <Card>
+      <CardHeader
+        label="Client Status"
+        action={
+          <button
+            onClick={() => navigate("/clients")}
+            className="text-[11px] text-zinc-500 hover:text-white transition-colors duration-150 font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          >
+            View All →
+          </button>
+        }
+      />
+      <div>
+        {clientsWithIssues.map((client) => (
+          <div
+            key={client.id}
+            className="px-4 py-3 border-b border-zinc-800 last:border-b-0 hover:bg-zinc-800/40 transition-colors duration-150 cursor-pointer"
+            onClick={() => navigate(`/clients/${client.id}`)}
+            data-testid={`client-row-${client.id}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                {client.avatar}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">{client.name}</span>
+                  <Circle size={6} className={`fill-current ${STATUS_STYLES[client.status] || "text-zinc-500"}`} />
+                </div>
+                <div className="text-[11px] text-zinc-500 font-mono">{client.industry}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-mono text-white">{client.posts_today}</div>
+                <div className="text-[10px] text-zinc-600 font-mono">today</div>
+              </div>
+            </div>
+            <div className="flex gap-1 mt-2 ml-11 flex-wrap">
+              {(client.platforms || []).slice(0, 6).map((p) => (
+                <span key={p} className="text-[9px] font-mono px-1.5 py-0.5 border border-zinc-700 text-zinc-400">
+                  {p.toUpperCase()}
+                </span>
+              ))}
+            </div>
+            {(() => {
+              const issues = client._issues;
+              if (issues.length === 0) return null;
+              const fixRoute = getFixRoute(client.id, issues);
+              const showAddContent = !fixRoute && issues.some((i) => i.badge === "EMPTY QUEUE");
+              return (
+                <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
+                  {issues.map(({ badge, color }) => (
+                    <span key={badge} className={`text-[9px] font-mono px-1.5 py-0.5 border ${BADGE_COLORS[color]}`}>
+                      {badge}
+                    </span>
+                  ))}
+                  <div className="ml-auto flex gap-1.5 flex-shrink-0">
+                    {fixRoute && (
+                      <button
+                        type="button"
+                        data-testid={`client-fix-btn-${client.id}`}
+                        onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
+                        className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                      >
+                        Fix →
+                      </button>
+                    )}
+                    {showAddContent && (
+                      <button
+                        type="button"
+                        data-testid={`client-add-content-btn-${client.id}`}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
+                        className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                      >
+                        Add Content →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function RecentActivityCard({ activity, navigate }) {
+  return (
+    <Card>
+      <CardHeader
+        label="Recent Activity"
+        action={
+          <button
+            onClick={() => navigate("/logs")}
+            className="text-[11px] text-zinc-500 hover:text-white transition-colors duration-150 font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          >
+            View Logs →
+          </button>
+        }
+      />
+      <div>
+        {(activity || []).slice(0, 8).map((log, i) => (
+          <div key={log.id || i} className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
+            <div className="flex items-start gap-2">
+              <span className={`text-[10px] font-mono font-semibold uppercase w-14 flex-shrink-0 mt-0.5 ${LOG_LEVEL_STYLES[log.level] || "text-zinc-400"}`}>
+                {log.level}
+              </span>
+              <span className="text-xs text-zinc-300 font-mono leading-relaxed">{log.message}</span>
+            </div>
+            <div className="text-[10px] text-zinc-600 font-mono mt-0.5 ml-16">
+              {log.created_at ? new Date(log.created_at).toLocaleTimeString() : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -154,7 +313,7 @@ export default function Dashboard() {
         const sp = await axios.get(`${API}/dashboard/spend?days=7`);
         setSpend(sp.data);
       } catch {
-        // spend data is non-critical; dashboard continues without it
+        // spend is non-critical; dashboard continues without it
       }
     } catch (e) {
       console.error(e);
@@ -187,9 +346,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6" data-testid="dashboard-page">
+    <div className="p-6 space-y-4" data-testid="dashboard-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between py-1">
         <div>
           <h1 className="text-xl font-bold text-white">Command Center</h1>
           <p className="text-xs text-zinc-500 font-mono mt-0.5">
@@ -200,50 +359,48 @@ export default function Dashboard() {
           data-testid="trigger-automation-btn"
           onClick={triggerAutomation}
           disabled={triggering}
-          className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-400"
         >
           <Zap size={14} className={triggering ? "animate-pulse" : ""} />
           {triggering ? "Running..." : "Run Automation"}
         </button>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Active Clients" value={overview?.active_clients ?? 0} sub={`of ${overview?.total_clients ?? 0} total`} accent="text-white" />
-        <StatCard icon={Send} label="Posts Today" value={overview?.posts_today ?? 0} sub="published successfully" accent="text-emerald-400" />
-        <StatCard icon={Clock} label="Queue Size" value={overview?.queue_size ?? 0} sub={`${overview?.scheduled ?? 0} scheduled · ${overview?.drafts ?? 0} drafts`} accent="text-amber-400" />
-        <StatCard icon={CheckCircle2} label="Success Rate" value={`${overview?.success_rate ?? 0}%`} sub={`${overview?.published ?? 0} published · ${overview?.failed ?? 0} failed`} accent="text-blue-400" />
+        <StatCard
+          icon={Users} label="Active Clients"
+          value={overview?.active_clients ?? 0}
+          sub={`of ${overview?.total_clients ?? 0} total`}
+          accentClass="text-white"
+          testId="stat-card-active-clients"
+        />
+        <StatCard
+          icon={Send} label="Posts Today"
+          value={overview?.posts_today ?? 0}
+          sub="published successfully"
+          accentClass="text-emerald-400"
+          testId="stat-card-posts-today"
+        />
+        <StatCard
+          icon={Clock} label="Queue Size"
+          value={overview?.queue_size ?? 0}
+          sub={`${overview?.scheduled ?? 0} scheduled · ${overview?.drafts ?? 0} drafts`}
+          accentClass="text-amber-400"
+          testId="stat-card-queue-size"
+        />
+        <StatCard
+          icon={CheckCircle2} label="Success Rate"
+          value={`${overview?.success_rate ?? 0}%`}
+          sub={`${overview?.published ?? 0} published · ${overview?.failed ?? 0} failed`}
+          accentClass="text-blue-400"
+          testId="stat-card-success-rate"
+        />
       </div>
 
-      {/* Chart + Clients */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Time Series Chart */}
-        <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">Posts Published — Last 14 Days</div>
-            <TrendingUp size={13} className="text-zinc-600" />
-          </div>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={timeSeries}>
-              <defs>
-                <linearGradient id="postGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#fff" stopOpacity={0.1} />
-                  <stop offset="95%" stopColor="#fff" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} width={25} />
-              <Tooltip
-                contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 0, fontFamily: "IBM Plex Mono", fontSize: 11 }}
-                labelStyle={{ color: "#a1a1aa" }}
-                itemStyle={{ color: "#fff" }}
-              />
-              <Area type="monotone" dataKey="posts" stroke="#fff" strokeWidth={1.5} fill="url(#postGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Daily AI Spend */}
+        <PostsChart timeSeries={timeSeries} />
         <DailySpend
           series={spend.series}
           todayTotal={spend.today_total}
@@ -251,119 +408,10 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Clients Status + Recent Activity */}
+      {/* Client Status + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Client Status */}
-        <div className="bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-            <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">Client Status</div>
-            <button onClick={() => navigate("/clients")} className="text-xs text-zinc-500 hover:text-white transition-colors duration-150 font-mono">
-              View All →
-            </button>
-          </div>
-          <div>
-            {clientsWithIssues.map((client) => (
-              <div
-                key={client.id}
-                className="data-row px-4 py-3 cursor-pointer"
-                onClick={() => navigate(`/clients/${client.id}`)}
-                data-testid={`client-row-${client.id}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                    {client.avatar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-white">{client.name}</span>
-                      <Circle size={6} className={`fill-current ${STATUS_STYLES[client.status] || "text-zinc-500"}`} />
-                    </div>
-                    <div className="text-xs text-zinc-500 font-mono">{client.industry}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono text-white">{client.posts_today}</div>
-                    <div className="text-[10px] text-zinc-600 font-mono">today</div>
-                  </div>
-                </div>
-                <div className="flex gap-1 mt-2 ml-11">
-                  {(client.platforms || []).slice(0, 6).map((p) => (
-                    <span
-                      key={p}
-                      className="text-[9px] font-mono px-1.5 py-0.5 border border-zinc-700 text-zinc-400"
-                    >
-                      {p.toUpperCase()}
-                    </span>
-                  ))}
-                </div>
-                {(() => {
-                  const issues = client._issues;
-                  if (issues.length === 0) return null;
-                  const fixRoute = getFixRoute(client.id, issues);
-                  const showAddContent = !fixRoute && issues.some((i) => i.badge === "EMPTY QUEUE");
-                  return (
-                    <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
-                      {issues.map(({ badge, color }) => (
-                        <span
-                          key={badge}
-                          className={`text-[9px] font-mono px-1.5 py-0.5 border ${BADGE_COLORS[color]}`}
-                        >
-                          {badge}
-                        </span>
-                      ))}
-                      <div className="ml-auto flex gap-1.5 flex-shrink-0">
-                        {fixRoute && (
-                          <button
-                            type="button"
-                            data-testid={`client-fix-btn-${client.id}`}
-                            onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
-                            className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
-                          >
-                            Fix →
-                          </button>
-                        )}
-                        {showAddContent && (
-                          <button
-                            type="button"
-                            data-testid={`client-add-content-btn-${client.id}`}
-                            onClick={(e) => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
-                            className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
-                          >
-                            Add Content →
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-            <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">Recent Activity</div>
-            <button onClick={() => navigate("/logs")} className="text-xs text-zinc-500 hover:text-white transition-colors duration-150 font-mono">
-              View Logs →
-            </button>
-          </div>
-          <div className="divide-y divide-zinc-800">
-            {(overview?.recent_activity || []).slice(0, 8).map((log, i) => (
-              <div key={log.id || i} className="px-4 py-2.5">
-                <div className="flex items-start gap-2">
-                  <span className={`text-[10px] font-mono font-semibold uppercase w-14 flex-shrink-0 mt-0.5 ${LOG_LEVEL_STYLES[log.level] || "text-zinc-400"}`}>
-                    {log.level}
-                  </span>
-                  <span className="text-xs text-zinc-300 font-mono leading-relaxed">{log.message}</span>
-                </div>
-                <div className="text-[10px] text-zinc-600 font-mono mt-0.5 ml-16">
-                  {log.created_at ? new Date(log.created_at).toLocaleTimeString() : ""}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ClientStatusCard clientsWithIssues={clientsWithIssues} navigate={navigate} />
+        <RecentActivityCard activity={overview?.recent_activity} navigate={navigate} />
       </div>
     </div>
   );
