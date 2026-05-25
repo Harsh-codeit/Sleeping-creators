@@ -28,6 +28,32 @@ export default function Step2({ form, set }) {
     set("daily_life", next.join("\n"));
   };
 
+  const parseAgeRange = (str) => {
+    const m = /(\d+)[^\d]+(\d+)/.exec(str || "18–35 years");
+    return { lo: m ? parseInt(m[1]) : 18, hi: m ? parseInt(m[2]) : 35 };
+  };
+  const [ageLo, setAgeLo] = useState(() => parseAgeRange(form.audience_age_range).lo);
+  const [ageHi, setAgeHi] = useState(() => parseAgeRange(form.audience_age_range).hi);
+
+  const genLabel = (age) => {
+    if (age >= 65) return "Boomer";
+    if (age >= 45) return "Gen X";
+    if (age >= 29) return "Millennial";
+    return "Gen Z";
+  };
+
+  const handleAgeLo = (v) => {
+    const next = Math.min(parseInt(v), ageHi - 1);
+    setAgeLo(next);
+    set("audience_age_range", `${next}–${ageHi} years`);
+  };
+
+  const handleAgeHi = (v) => {
+    const next = Math.max(parseInt(v), ageLo + 1);
+    setAgeHi(next);
+    set("audience_age_range", `${ageLo}–${next} years`);
+  };
+
   return (
     <div className="space-y-8">
       {/* ── 2A — Your Story & Business ───────────────────────────── */}
@@ -105,12 +131,41 @@ export default function Step2({ form, set }) {
 
         <div>
           <Label>Audience Age Range</Label>
-          <Input
-            testid="ob-age-range"
-            value={form.audience_age_range ?? ""}
-            onChange={(e) => set("audience_age_range", e.target.value)}
-            placeholder="25-40 years"
-          />
+          <div className="space-y-3 pt-1">
+            <div className="text-sm font-mono text-white text-center">
+              {ageLo} – {ageHi} years
+            </div>
+            <div className="relative h-6">
+              <input
+                data-testid="ob-age-lo"
+                type="range"
+                min={13}
+                max={80}
+                value={ageLo}
+                onChange={(e) => handleAgeLo(e.target.value)}
+                className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-zinc-600 [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-zinc-700"
+              />
+              <input
+                data-testid="ob-age-hi"
+                type="range"
+                min={13}
+                max={80}
+                value={ageHi}
+                onChange={(e) => handleAgeHi(e.target.value)}
+                className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-zinc-400 [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-zinc-600 [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-transparent"
+              />
+            </div>
+            <div className="flex justify-between">
+              <div className="text-center">
+                <div className="text-[10px] font-mono text-zinc-500">{ageLo}</div>
+                <div className="text-[9px] font-mono text-zinc-600">{genLabel(ageLo)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[10px] font-mono text-zinc-500">{ageHi}</div>
+                <div className="text-[9px] font-mono text-zinc-600">{genLabel(ageHi)}</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <MultiCheckbox
