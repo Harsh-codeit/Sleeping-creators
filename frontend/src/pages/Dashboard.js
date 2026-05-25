@@ -83,7 +83,6 @@ function computeHealthIssues(client, bundleConfigured) {
   if (!ob.niche || !ob.industry_label || (!ob.brand_name && !client.brand_name))
     issues.push({ badge: "PROFILE INCOMPLETE", color: "amber", priority: 5 });
   if (daysAgo(client.last_post_at) > 7) issues.push({ badge: "INACTIVE 7D", color: "amber", priority: 6 });
-  if ((client.scheduled_count || 0) === 0) issues.push({ badge: "EMPTY QUEUE", color: "blue", priority: 7 });
   return issues.sort((a, b) => a.priority - b.priority);
 }
 
@@ -214,7 +213,6 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
               const issues = client._issues;
               if (issues.length === 0) return null;
               const fixRoute = getFixRoute(client.id, issues);
-              const showAddContent = !fixRoute && issues.some((i) => i.badge === "EMPTY QUEUE");
               return (
                 <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
                   {issues.map(({ badge, color }) => (
@@ -222,28 +220,16 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
                       {badge}
                     </span>
                   ))}
-                  <div className="ml-auto flex gap-1.5 flex-shrink-0">
-                    {fixRoute && (
-                      <button
-                        type="button"
-                        data-testid={`client-fix-btn-${client.id}`}
-                        onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
-                        className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
-                      >
-                        Fix →
-                      </button>
-                    )}
-                    {showAddContent && (
-                      <button
-                        type="button"
-                        data-testid={`client-add-content-btn-${client.id}`}
-                        onClick={(e) => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
-                        className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
-                      >
-                        Add Content →
-                      </button>
-                    )}
-                  </div>
+                  {fixRoute && (
+                    <button
+                      type="button"
+                      data-testid={`client-fix-btn-${client.id}`}
+                      onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
+                      className="ml-auto text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                    >
+                      Fix →
+                    </button>
+                  )}
                 </div>
               );
             })()}
