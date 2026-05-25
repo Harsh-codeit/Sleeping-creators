@@ -38,7 +38,7 @@ function DailySpend({ series, todayTotal, yesterdayTotal }) {
     : null;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 p-4">
+    <div className="bg-zinc-900 border border-zinc-800 p-4" data-testid="daily-spend-chart">
       <div className="flex items-center justify-between mb-4">
         <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">AI Spend — Last 7 Days</div>
         <TrendingUp size={13} className="text-zinc-600" />
@@ -71,7 +71,7 @@ function DailySpend({ series, todayTotal, yesterdayTotal }) {
         <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Today</span>
         <span className="text-sm font-mono text-white">${Number(todayTotal).toFixed(4)}</span>
         {trend !== null && (
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 border ${trend >= 0 ? "text-amber-400 border-amber-500/30" : "text-emerald-400 border-emerald-500/30"}`}>
+          <span data-testid="spend-trend-chip" className={`text-[10px] font-mono px-1.5 py-0.5 border ${trend >= 0 ? "text-amber-400 border-amber-500/30" : "text-emerald-400 border-emerald-500/30"}`}>
             {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
           </span>
         )}
@@ -91,16 +91,20 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     try {
-      const [ov, cl, ts, sp] = await Promise.all([
+      const [ov, cl, ts] = await Promise.all([
         axios.get(`${API}/dashboard/overview`),
         axios.get(`${API}/clients`),
         axios.get(`${API}/dashboard/time-series?days=14`),
-        axios.get(`${API}/dashboard/spend?days=7`),
       ]);
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      setSpend(sp.data);
+      try {
+        const sp = await axios.get(`${API}/dashboard/spend?days=7`);
+        setSpend(sp.data);
+      } catch {
+        // spend data is non-critical; dashboard continues without it
+      }
     } catch (e) {
       console.error(e);
     } finally {
