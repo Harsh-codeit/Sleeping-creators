@@ -177,6 +177,9 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
         }
       />
       <div>
+        {clientsWithIssues.length === 0 && (
+          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">All clients healthy</div>
+        )}
         {clientsWithIssues.map((client) => (
           <div
             key={client.id}
@@ -296,7 +299,9 @@ export default function Dashboard() {
   const [triggering, setTriggering] = useState(false);
 
   const clientsWithIssues = useMemo(
-    () => clients.map((c) => ({ ...c, _issues: computeHealthIssues(c, overview?.bundle_configured) })),
+    () => clients
+      .map((c) => ({ ...c, _issues: computeHealthIssues(c, overview?.bundle_configured) }))
+      .filter((c) => c._issues.length > 0),
     [clients, overview?.bundle_configured]
   );
 
