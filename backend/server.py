@@ -2156,6 +2156,7 @@ async def lifespan(app: FastAPI):
     await db.posts.create_index([("published_at", -1)])
     await db.posts.create_index([("client_id", 1), ("status", 1)])
     await db.posts.create_index([("status", 1), ("published_at", -1)])
+    await db.posts.create_index([("status", 1), ("client_id", 1)])
     # Clean up any ig-temp dirs left over from a crash during a previous fallback publish
     _ig_temp = Path(__file__).parent / "static" / "ig-temp"
     if _ig_temp.exists():
@@ -2247,9 +2248,9 @@ async def list_clients():
     clients = await db.clients.find({}, {"_id": 0}).to_list(1000)
     scheduled_raw = await db.posts.aggregate([
         {"$match": {"status": "scheduled"}},
-        {"$group": {"_id": "$client_id", "n": {"$sum": 1}}},
+        {"$group": {"_id": "$client_id", "count": {"$sum": 1}}},
     ]).to_list(None)
-    scheduled_map = {r["_id"]: r["n"] for r in scheduled_raw}
+    scheduled_map = {r["_id"]: r["count"] for r in scheduled_raw}
     for c in clients:
         c["scheduled_count"] = scheduled_map.get(c["id"], 0)
     return clients

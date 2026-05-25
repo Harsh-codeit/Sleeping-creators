@@ -95,7 +95,7 @@ def test_list_clients_includes_scheduled_count(mock_db, _):
 
     mock_db.clients.find.side_effect = _find_cursor
     mock_db.posts.aggregate.return_value = _cursor([
-        {"_id": "c1", "n": 3},
+        {"_id": "c1", "count": 3},
     ])
 
     resp = client.get("/api/clients", headers=AUTH)
