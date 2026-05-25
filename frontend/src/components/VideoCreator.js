@@ -274,7 +274,7 @@ export function VideoCreator() {
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
   // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
-  const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState(64);
+  const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState(2000);
   const [generating, setGenerating] = useState(false);
   const [clips, setClips] = useState([]);
   const [selectedClips, setSelectedClips] = useState([]);
@@ -427,7 +427,7 @@ export function VideoCreator() {
       setCaption(draft.caption || "");
       setHashtags(draft.hashtags || "");
       setThumbnailOffsetMs(
-        typeof draft.thumbnailOffsetMs === "number" ? draft.thumbnailOffsetMs : 64
+        typeof draft.thumbnailOffsetMs === "number" ? draft.thumbnailOffsetMs : 2000
       );
       setSelectedClips(draft.selectedClips || []);
       setStep(Math.min(draft.step || 1, template ? 5 : 2));
@@ -504,7 +504,7 @@ export function VideoCreator() {
         caption: caption.trim() || undefined,
         hashtags: hashtagArr.length ? hashtagArr : undefined,
         generated_merge_values: Object.keys(filled).length ? filled : undefined,
-        instagram_thumbnail_offset_ms: Number.isFinite(thumbnailOffsetMs) ? thumbnailOffsetMs : 64,
+        instagram_thumbnail_offset_ms: Number.isFinite(thumbnailOffsetMs) ? thumbnailOffsetMs : 2000,
       };
       const r = await axios.post(`${API}/videos/create`, body);
       setPostId(r.data.post_id);
@@ -1154,7 +1154,7 @@ export function VideoCreator() {
                         className="w-32 bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
                       />
                       <div className="text-[10px] font-mono text-zinc-500 mt-1.5">
-                        Frame timestamp used as the Reel cover photo. Default 64ms picks just past the first frame.
+                        Frame timestamp used as the Reel cover photo. e.g. 2000 = 2 seconds into the video.
                       </div>
                     </div>
                   </div>

@@ -1076,18 +1076,18 @@ def _build_platform_data(post: dict, platform: str, upload_ids: list[str]) -> di
             base["shareToFeed"] = True
             offset_raw = post.get("instagram_thumbnail_offset_ms")
             try:
-                offset_ms = int(offset_raw) if offset_raw is not None else 64
+                offset_ms = int(offset_raw) if offset_raw is not None else 2000
             except (TypeError, ValueError):
-                offset_ms = 64
+                offset_ms = 2000
             base["thumbnailOffset"] = max(0, offset_ms)
     elif platform == "tiktok":
         if is_video:
             base["type"] = "VIDEO"
             offset_raw = post.get("tiktok_thumbnail_offset_ms")
             try:
-                offset_ms = int(offset_raw) if offset_raw is not None else 64
+                offset_ms = int(offset_raw) if offset_raw is not None else 2000
             except (TypeError, ValueError):
-                offset_ms = 64
+                offset_ms = 2000
             base["thumbnailOffset"] = max(0, offset_ms)
     elif platform == "youtube":
         base["title"] = post.get("title") or post.get("text", "")[:100]

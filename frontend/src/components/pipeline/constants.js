@@ -110,7 +110,7 @@ export const EMPTY_FORM = {
   video_clip_strategy: "random",   // random | sequential
   video_audio_tags: [],            // pick random track whose mood_tags intersect any of these
   // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
-  instagram_thumbnail_offset_ms: 64,
+  instagram_thumbnail_offset_ms: 2000,
 };
 
 export const VIDEO_FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
