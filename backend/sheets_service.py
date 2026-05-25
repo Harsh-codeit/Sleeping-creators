@@ -16,6 +16,63 @@ import gspread
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
+# ── Brand palette ─────────────────────────────────────────────────────────────
+
+def _rgb(r, g, b):
+    return {"red": r / 255, "green": g / 255, "blue": b / 255}
+
+BRAND = {
+    "lime":        _rgb(204, 255, 0),    # #CCFF00
+    "black":       _rgb(0,   0,   0),    # #000000
+    "white":       _rgb(255, 255, 255),  # #FFFFFF
+    "grey_row":    _rgb(245, 245, 245),  # #F5F5F5
+    "green":       _rgb(52,  168, 83),   # #34A853
+    "red":         _rgb(234, 67,  53),   # #EA4335
+    "amber":       _rgb(251, 188, 4),    # #FBBC04
+    "grey_status": _rgb(158, 158, 158),  # #9E9E9E
+}
+
+
+def _title_fmt() -> dict:
+    return {
+        "backgroundColor": BRAND["black"],
+        "textFormat": {"foregroundColor": BRAND["lime"], "bold": True, "fontSize": 11},
+        "horizontalAlignment": "LEFT",
+    }
+
+
+def _header_fmt() -> dict:
+    return {
+        "backgroundColor": BRAND["black"],
+        "textFormat": {"foregroundColor": BRAND["white"], "bold": True, "fontSize": 10},
+        "horizontalAlignment": "LEFT",
+    }
+
+
+def _section_fmt() -> dict:
+    return {
+        "backgroundColor": BRAND["lime"],
+        "textFormat": {"foregroundColor": BRAND["black"], "bold": True, "fontSize": 9},
+        "horizontalAlignment": "LEFT",
+    }
+
+
+def _row_fmt(index: int) -> dict:
+    return {
+        "backgroundColor": BRAND["white"] if index % 2 == 0 else BRAND["grey_row"],
+        "textFormat": {"foregroundColor": BRAND["black"], "fontSize": 9},
+    }
+
+
+def _status_color(status: str) -> dict:
+    return {
+        "published": BRAND["green"],
+        "failed":    BRAND["red"],
+        "scheduled": BRAND["amber"],
+        "draft":     BRAND["grey_status"],
+    }.get(status, BRAND["white"])
+
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
