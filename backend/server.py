@@ -3214,6 +3214,47 @@ async def dashboard_time_series(days: int = 14):
     return result
 
 
+@api_router.get("/dashboard/spend")
+async def dashboard_spend(days: int = 7):
+    start = (datetime.now(timezone.utc) - timedelta(days=days)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).isoformat()
+
+    pipeline = [
+        {"$match": {"created_at": {"$gte": start}}},
+        {"$group": {
+            "_id": {"$substr": ["$created_at", 0, 10]},
+            "cost": {"$sum": "$cost_usd"},
+            "tokens": {"$sum": "$total_tokens"},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    rows = await db.token_usage.aggregate(pipeline).to_list(None)
+    by_date = {r["_id"]: {"cost": r["cost"], "tokens": r["tokens"]} for r in rows}
+
+    result = []
+    for i in range(days - 1, -1, -1):
+        day = datetime.now(timezone.utc) - timedelta(days=i)
+        date_str = day.strftime("%Y-%m-%d")
+        entry = by_date.get(date_str, {"cost": 0.0, "tokens": 0})
+        result.append({
+            "date": day.strftime("%m/%d"),
+            "cost": round(entry["cost"], 6),
+            "tokens": entry["tokens"],
+        })
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    today_total = round(by_date.get(today_str, {"cost": 0.0})["cost"], 6)
+    yesterday_total = round(by_date.get(yesterday_str, {"cost": 0.0})["cost"], 6)
+
+    return {
+        "series": result,
+        "today_total": today_total,
+        "yesterday_total": yesterday_total,
+    }
+
+
 @api_router.get("/analytics/clients/{client_id}")
 async def analytics_client(client_id: str):
     client = await db.clients.find_one({"id": client_id}, {"_id": 0})
