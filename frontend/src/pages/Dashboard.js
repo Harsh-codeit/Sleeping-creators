@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, CalendarClock, GitBranch } from "lucide-react";
+import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, CalendarClock, AlertTriangle } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -275,40 +275,51 @@ function UpcomingQueueCard({ upcoming }) {
   );
 }
 
-const PIPELINE_STATUS_STYLES = {
-  active:  "text-emerald-400",
-  paused:  "text-amber-400",
-  error:   "text-red-400",
-  draft:   "text-zinc-500",
-};
+const SOURCE_LABEL = { post: "POST", pipeline: "PIPELINE", log: "LOG" };
+const SOURCE_STYLES = { post: "text-red-400", pipeline: "text-amber-400", log: "text-zinc-500" };
 
-function PipelineHealthCard({ pipelines }) {
-  if (!pipelines) return null;
+function ErrorsReportCard({ errors, navigate }) {
+  if (!errors) return null;
   return (
     <Card>
-      <CardHeader label="Pipeline Health" icon={GitBranch} />
+      <CardHeader
+        label="Errors Report"
+        icon={AlertTriangle}
+        action={
+          <button
+            onClick={() => navigate("/logs")}
+            className="text-[11px] text-zinc-500 hover:text-white transition-colors duration-150 font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          >
+            View Logs →
+          </button>
+        }
+      />
       <div>
-        {pipelines.length === 0 && (
-          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No pipelines</div>
+        {errors.length === 0 && (
+          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No errors</div>
         )}
-        {pipelines.map((pl, i) => {
-          const nextRun = pl.next_run_at ? new Date(pl.next_run_at) : null;
-          const nextStr = nextRun
-            ? nextRun.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " + nextRun.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-            : null;
+        {errors.map((err, i) => {
+          const ts = err.ts ? new Date(err.ts) : null;
+          const timeStr = ts
+            ? ts.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+            : "";
           return (
-            <div key={pl.id || i} className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
-              <div className="flex items-center gap-2">
-                <Circle size={6} className={`fill-current flex-shrink-0 ${PIPELINE_STATUS_STYLES[pl.status] || "text-zinc-500"}`} />
-                <span className="text-xs font-mono text-white truncate flex-1">{pl.client_name}</span>
-                <span className="text-[9px] font-mono text-zinc-500 flex-shrink-0">{pl.name}</span>
+            <div key={i} className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
+              <div className="flex items-start gap-2">
+                <span className={`text-[9px] font-mono font-semibold uppercase flex-shrink-0 mt-0.5 w-16 ${SOURCE_STYLES[err.source]}`}>
+                  {SOURCE_LABEL[err.source]}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono text-white truncate">{err.label}</span>
+                    {err.sub && err.sub !== "log" && (
+                      <span className="text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500 flex-shrink-0">{err.sub.toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="text-[10px] font-mono text-zinc-500 truncate mt-0.5" title={err.detail}>{err.detail}</div>
+                </div>
               </div>
-              {pl.status === "error" && pl.last_error && (
-                <div className="mt-0.5 ml-4 text-[10px] font-mono text-red-400 truncate" title={pl.last_error}>{pl.last_error}</div>
-              )}
-              {pl.status !== "error" && nextStr && (
-                <div className="mt-0.5 ml-4 text-[10px] font-mono text-zinc-600">next {nextStr}</div>
-              )}
+              {timeStr && <div className="text-[10px] font-mono text-zinc-700 mt-0.5 ml-[4.5rem]">{timeStr}</div>}
             </div>
           );
         })}
@@ -326,7 +337,7 @@ export default function Dashboard() {
   const [timeSeries, setTimeSeries] = useState([]);
   const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
   const [upcoming, setUpcoming] = useState([]);
-  const [pipelines, setPipelines] = useState([]);
+  const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
 
@@ -347,14 +358,14 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      const [sp, uq, pl] = await Promise.allSettled([
+      const [sp, uq, er] = await Promise.allSettled([
         axios.get(`${API}/dashboard/spend?days=7`),
         axios.get(`${API}/dashboard/upcoming`),
-        axios.get(`${API}/dashboard/pipelines`),
+        axios.get(`${API}/dashboard/errors`),
       ]);
       if (sp.status === "fulfilled") setSpend(sp.value.data);
       if (uq.status === "fulfilled") setUpcoming(uq.value.data);
-      if (pl.status === "fulfilled") setPipelines(pl.value.data);
+      if (er.status === "fulfilled") setErrors(er.value.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -452,7 +463,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ClientStatusCard clientsWithIssues={clientsWithIssues} navigate={navigate} />
         <UpcomingQueueCard upcoming={upcoming} />
-        <PipelineHealthCard pipelines={pipelines} />
+        <ErrorsReportCard errors={errors} navigate={navigate} />
       </div>
     </div>
   );

@@ -3233,6 +3233,51 @@ async def dashboard_pipelines():
     return pipelines
 
 
+@api_router.get("/dashboard/errors")
+async def dashboard_errors():
+    failed_posts, pipeline_errors, error_logs = await asyncio.gather(
+        db.posts.find(
+            {"status": "failed", "error_message": {"$nin": [None, ""]}},
+            {"_id": 0, "id": 1, "client_name": 1, "platform": 1, "error_message": 1, "updated_at": 1, "created_at": 1},
+        ).sort("updated_at", -1).to_list(10),
+        db.pipelines.find(
+            {"status": "error", "last_error": {"$nin": [None, ""]}},
+            {"_id": 0, "id": 1, "name": 1, "client_name": 1, "last_error": 1, "next_run_at": 1},
+        ).to_list(20),
+        db.logs.find(
+            {"level": "error"},
+            {"_id": 0, "id": 1, "message": 1, "client_name": 1, "created_at": 1},
+        ).sort("created_at", -1).to_list(10),
+    )
+    items = []
+    for p in failed_posts:
+        items.append({
+            "source": "post",
+            "label": p.get("client_name") or "Unknown",
+            "detail": p.get("error_message", ""),
+            "sub": (p.get("platform") or "").upper(),
+            "ts": p.get("updated_at") or p.get("created_at") or "",
+        })
+    for pl in pipeline_errors:
+        items.append({
+            "source": "pipeline",
+            "label": pl.get("client_name") or "Unknown",
+            "detail": pl.get("last_error", ""),
+            "sub": pl.get("name", "pipeline"),
+            "ts": pl.get("next_run_at") or "",
+        })
+    for log in error_logs:
+        items.append({
+            "source": "log",
+            "label": log.get("client_name") or "System",
+            "detail": log.get("message", ""),
+            "sub": "log",
+            "ts": log.get("created_at") or "",
+        })
+    items.sort(key=lambda x: x["ts"], reverse=True)
+    return items[:20]
+
+
 @api_router.get("/dashboard/time-series")
 async def dashboard_time_series(days: int = 14):
     start = (datetime.now(timezone.utc) - timedelta(days=days)).replace(
