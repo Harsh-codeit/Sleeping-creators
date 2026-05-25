@@ -28,10 +28,10 @@ const INITIAL = {
   // — Step 1B: Social & Online —
   instagram_handle: "", instagram_profile_url: "", instagram_access_link: "", instagram_password: "",
   website_url: "", linkedin_url: "", youtube_url: "", twitter_url: "",
-  pr_links: [""],
+  pr_media_links: "",
   // — Step 1C: Assets (Drive links) —
   profile_photo_link: "",
-  google_drive_images: "", google_drive_videos: "",
+  high_quality_photos_link: "", video_clips_link: "",
   // — Step 1D: Account Health —
   account_suspended: false, paid_ads_run: false,
   // — Step 2A: Story & Business —
@@ -65,7 +65,7 @@ const INITIAL = {
 // (audience_emotional_state, brand_vibe, language, platforms) are NOT in this
 // list — they only contain explicitly-selected values.
 const ARRAY_FIELDS_TO_FILTER = [
-  "pr_links", "competitor_accounts", "not_to_do_list",
+  "competitor_accounts", "not_to_do_list",
   "solutions_provided", "audience_problems", "audience_desires",
   "audience_myths", "audience_failed_attempts", "unique_selling_points",
   "frequent_questions", "love_topics",
@@ -135,10 +135,10 @@ function Review({ form }) {
         { label: "LinkedIn",        value: form.linkedin_url },
         { label: "YouTube",         value: form.youtube_url },
         { label: "Twitter / X",     value: form.twitter_url },
-        { label: "PR / Media",      value: form.pr_links },
+        { label: "PR / Media",      value: form.pr_media_links },
         { label: "Profile Photo",   value: form.profile_photo_link },
-        { label: "Photos (Drive)",  value: form.google_drive_images },
-        { label: "Videos (Drive)",  value: form.google_drive_videos },
+        { label: "Photos (Drive)",  value: form.high_quality_photos_link },
+        { label: "Videos (Drive)",  value: form.video_clips_link },
         { label: "Account Flagged", value: form.account_suspended },
         { label: "Paid Ads Run",    value: form.paid_ads_run },
       ]} />
