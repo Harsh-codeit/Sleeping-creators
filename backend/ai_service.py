@@ -136,7 +136,12 @@ def _apply_carousel_cta(data: dict, client: dict, topic: str | None = None, cta_
     cta = _build_carousel_cta(client, topic, cta_keyword, cta_offer)
     slides = data.get("slides", [])
     if slides:
+        # Replace last slide with CTA-only content — clear topic fields so
+        # rich templates (which read heading/body directly) don't bleed topic content.
         slides[-1]["content"] = cta["slide_content"]
+        slides[-1]["heading"] = ""
+        slides[-1]["body"] = ""
+        slides[-1].pop("callout", None)
     data["cta_heading"] = cta["cta_heading"]
     data["cta_sub"] = cta["cta_sub"]
     data["cta_text"] = cta["cta_text"]
