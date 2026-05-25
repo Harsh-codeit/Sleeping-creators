@@ -386,8 +386,6 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             <ELabel optional>Website URL</ELabel>
             <EInput value={editForm.website_url} onChange={e => set("website_url", e.target.value)} placeholder="https://acme.com" type="url" data-testid="edit-website" />
           </div>
-          <EMultiInput label="PR / Media Links" values={editForm.pr_links} onChange={v => set("pr_links", v)}
-            placeholder="https://techcrunch.com/article/..." optional />
           <div className="grid grid-cols-2 gap-4">
             <div>
               <ELabel optional>Instagram Handle</ELabel>
@@ -1808,7 +1806,6 @@ export default function ClientDetail() {
     try {
       const payload = {
         ...editForm,
-        pr_links: editForm.pr_links.filter(Boolean),
         competitor_accounts: editForm.competitor_accounts.filter(Boolean),
         not_to_do_list: editForm.not_to_do_list.filter(Boolean),
       };
