@@ -3240,7 +3240,7 @@ async def dashboard_spend(days: int = 7):
         result.append({
             "date": day.strftime("%m/%d"),
             "cost": round(entry["cost"], 6),
-            "tokens": entry["tokens"],
+            "tokens": int(entry["tokens"]),
         })
 
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
