@@ -1716,6 +1716,7 @@ export default function ClientDetail() {
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
   const [neverCoverInput, setNeverCoverInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
+  const [audienceIntelOpen, setAudienceIntelOpen] = useState(false);
   const [hookGenKeyword, setHookGenKeyword] = useState("");
   const [hookGenLoading, setHookGenLoading] = useState(false);
   const [competitorInsight, setCompetitorInsight] = useState(null);
@@ -2149,6 +2150,50 @@ export default function ClientDetail() {
           <div className="space-y-4">
             <DriveImagesFolderCard client={client} clientId={id} setClient={setClient} />
             <DriveVideosFolderCard client={client} clientId={id} setClient={setClient} />
+            {/* Contact & Access card */}
+            {(() => {
+              const ob = client.onboarding_data || {};
+              const contactFields = [
+                { label: "Email",     value: ob.email },
+                { label: "WhatsApp",  value: ob.whatsapp },
+                { label: "Location",  value: ob.city_country },
+                { label: "Website",   value: ob.website_url },
+                { label: "LinkedIn",  value: ob.linkedin_url },
+                { label: "YouTube",   value: ob.youtube_url },
+                { label: "Twitter",   value: ob.twitter_url },
+              ].filter(f => f.value);
+              const hasContact = contactFields.length > 0 || ob.account_suspended != null || ob.paid_ads_run != null;
+              if (!hasContact) return null;
+              return (
+                <div className="bg-zinc-900 border border-zinc-800 p-4">
+                  <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Contact & Access</div>
+                  <div className="space-y-1.5">
+                    {contactFields.map(f => (
+                      <div key={f.label} className="flex justify-between py-1 border-b border-zinc-800 last:border-0">
+                        <span className="text-xs font-mono text-zinc-500">{f.label}</span>
+                        <span className="text-xs font-mono text-zinc-300 text-right max-w-48 truncate">{f.value}</span>
+                      </div>
+                    ))}
+                    {ob.account_suspended != null && (
+                      <div className="flex justify-between py-1 border-b border-zinc-800">
+                        <span className="text-xs font-mono text-zinc-500">Suspended</span>
+                        <span className={`text-xs font-mono ${ob.account_suspended ? "text-red-400" : "text-emerald-500"}`}>
+                          {ob.account_suspended ? "Yes" : "No"}
+                        </span>
+                      </div>
+                    )}
+                    {ob.paid_ads_run != null && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-xs font-mono text-zinc-500">Paid Ads Run</span>
+                        <span className={`text-xs font-mono ${ob.paid_ads_run ? "text-amber-400" : "text-zinc-400"}`}>
+                          {ob.paid_ads_run ? "Yes" : "No"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="bg-zinc-900 border border-zinc-800 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-[10px] font-mono text-zinc-500 uppercase">Performance</div>
@@ -2384,6 +2429,76 @@ export default function ClientDetail() {
               </div>
             </div>
           </div>
+
+          {/* Niche & Content Direction card */}
+          {(() => {
+            const ob = client.onboarding_data || {};
+            const lang = Array.isArray(ob.language) ? ob.language[0] : ob.language;
+            const fields = [
+              { label: "Niche",            value: ob.niche },
+              { label: "Signature Topic",  value: ob.signature_topic },
+              { label: "Language",         value: lang },
+              { label: "Disliked Content", value: ob.disliked_content },
+            ].filter(f => f.value);
+            if (!fields.length) return null;
+            return (
+              <div className="bg-zinc-900 border border-zinc-800 p-4">
+                <div className="text-[10px] font-mono text-zinc-500 uppercase mb-4">Niche & Content Direction</div>
+                <div className="space-y-2">
+                  {fields.map(f => (
+                    <div key={f.label}>
+                      <div className="text-[10px] font-mono text-zinc-600 mb-0.5">{f.label}</div>
+                      <div className="text-xs text-zinc-300 whitespace-pre-wrap">{f.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Audience Intelligence card */}
+          {(() => {
+            const ob = client.onboarding_data || {};
+            const sections = [
+              { label: "Solutions Provided",        items: ob.solutions_provided },
+              { label: "Audience Problems",          items: ob.audience_problems },
+              { label: "Desires & Dream Outcomes",   items: ob.audience_desires },
+              { label: "Myths They Believe",         items: ob.audience_myths },
+              { label: "Things They Tried",          items: ob.audience_failed_attempts },
+              { label: "Unique Selling Points",      items: ob.unique_selling_points },
+              { label: "Frequently Asked Questions", items: ob.frequent_questions },
+              { label: "Topics I Love",              items: ob.love_topics },
+            ].filter(s => Array.isArray(s.items) && s.items.filter(Boolean).length > 0);
+            if (!sections.length) return null;
+            return (
+              <div className="bg-zinc-900 border border-zinc-800 p-4">
+                <button
+                  type="button"
+                  onClick={() => setAudienceIntelOpen(o => !o)}
+                  className="w-full flex items-center justify-between text-left"
+                >
+                  <div className="text-[10px] font-mono text-zinc-500 uppercase">Audience Intelligence</div>
+                  <span className="text-zinc-600 text-xs">{audienceIntelOpen ? "▲" : "▼"}</span>
+                </button>
+                {audienceIntelOpen && (
+                  <div className="mt-4 space-y-4">
+                    {sections.map(s => (
+                      <div key={s.label}>
+                        <div className="text-[10px] font-mono text-zinc-600 mb-1.5">{s.label}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {s.items.filter(Boolean).map((item, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Video Hooks card */}
           <div className="bg-zinc-900 border border-zinc-800 p-4">
@@ -2776,7 +2891,21 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "Competitors" && (
-        <CompetitorTab clientId={id} />
+        <>
+          {(client.onboarding_data?.competitor_accounts?.filter(Boolean).length > 0) && (
+            <div className="mb-4 bg-zinc-900 border border-zinc-800 p-4">
+              <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">From Onboarding</div>
+              <div className="flex flex-wrap gap-2">
+                {client.onboarding_data.competitor_accounts.filter(Boolean).map((acc, i) => (
+                  <span key={i} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300">
+                    @{acc.replace(/^@/, "")}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <CompetitorTab clientId={id} />
+        </>
       )}
 
       {activeTab === "Trends" && (
