@@ -6742,6 +6742,7 @@ async def _run_full_sync(client_id: str) -> None:
 
         await sheets_service.sync_client_info_tab(refresh_token, sheet_id, client)
         await sheets_service.sync_posts_tab(refresh_token, sheet_id, posts)
+        await sheets_service.sync_performance_tab(refresh_token, sheet_id, client)
         await sheets_service.sync_competitors_tab(refresh_token, sheet_id, competitors)
         await sheets_service.sync_trends_tab(refresh_token, sheet_id, trends)
 
