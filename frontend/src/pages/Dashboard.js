@@ -210,22 +210,35 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
               const issues = client._issues;
               if (issues.length === 0) return null;
               const fixRoute = getFixRoute(client.id, issues);
+              const errorDetail =
+                issues.some((i) => i.badge === "POST FAILED") && client.last_post_error
+                  ? client.last_post_error
+                  : issues.some((i) => i.badge === "BLOCKED") && client.instagram_account_warning
+                  ? client.instagram_account_warning
+                  : null;
               return (
-                <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
-                  {issues.map(({ badge, color }) => (
-                    <span key={badge} className={`text-[9px] font-mono px-1.5 py-0.5 border ${BADGE_COLORS[color]}`}>
-                      {badge}
-                    </span>
-                  ))}
-                  {fixRoute && (
-                    <button
-                      type="button"
-                      data-testid={`client-fix-btn-${client.id}`}
-                      onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
-                      className="ml-auto text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
-                    >
-                      Fix →
-                    </button>
+                <div className="mt-1.5 ml-11">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {issues.map(({ badge, color }) => (
+                      <span key={badge} className={`text-[9px] font-mono px-1.5 py-0.5 border ${BADGE_COLORS[color]}`}>
+                        {badge}
+                      </span>
+                    ))}
+                    {fixRoute && (
+                      <button
+                        type="button"
+                        data-testid={`client-fix-btn-${client.id}`}
+                        onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
+                        className="ml-auto text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                      >
+                        Fix →
+                      </button>
+                    )}
+                  </div>
+                  {errorDetail && (
+                    <div className="mt-1 text-[10px] font-mono text-zinc-500 truncate max-w-xs" title={errorDetail}>
+                      {errorDetail}
+                    </div>
                   )}
                 </div>
               );

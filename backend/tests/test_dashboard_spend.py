@@ -94,9 +94,11 @@ def test_list_clients_includes_scheduled_count(mock_db, _):
         return cur
 
     mock_db.clients.find.side_effect = _find_cursor
-    mock_db.posts.aggregate.return_value = _cursor([
-        {"_id": "c1", "count": 3},
-    ])
+    # aggregate called twice: scheduled count, then last_post_error
+    mock_db.posts.aggregate.side_effect = [
+        _cursor([{"_id": "c1", "count": 3}]),
+        _cursor([]),
+    ]
 
     resp = client.get("/api/clients", headers=AUTH)
     assert resp.status_code == 200
@@ -106,6 +108,7 @@ def test_list_clients_includes_scheduled_count(mock_db, _):
     c2 = next(c for c in body if c["id"] == "c2")
     assert c1["scheduled_count"] == 3
     assert c2["scheduled_count"] == 0
+    assert c1["last_post_error"] is None
 
 
 @patch("server._check_token", return_value=True)
@@ -117,8 +120,9 @@ def test_list_clients_scheduled_count_zero_when_no_posts(mock_db, _):
         return cur
 
     mock_db.clients.find.side_effect = _find_cursor
-    mock_db.posts.aggregate.return_value = _cursor([])
+    mock_db.posts.aggregate.side_effect = [_cursor([]), _cursor([])]
 
     resp = client.get("/api/clients", headers=AUTH)
     assert resp.status_code == 200
     assert resp.json()[0]["scheduled_count"] == 0
+    assert resp.json()[0]["last_post_error"] is None

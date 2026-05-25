@@ -2245,14 +2245,23 @@ app.add_middleware(
 
 @api_router.get("/clients")
 async def list_clients():
-    clients = await db.clients.find({}, {"_id": 0}).to_list(1000)
-    scheduled_raw = await db.posts.aggregate([
-        {"$match": {"status": "scheduled"}},
-        {"$group": {"_id": "$client_id", "count": {"$sum": 1}}},
-    ]).to_list(None)
+    clients, scheduled_raw, failed_raw = await asyncio.gather(
+        db.clients.find({}, {"_id": 0}).to_list(1000),
+        db.posts.aggregate([
+            {"$match": {"status": "scheduled"}},
+            {"$group": {"_id": "$client_id", "count": {"$sum": 1}}},
+        ]).to_list(None),
+        db.posts.aggregate([
+            {"$match": {"status": "failed", "error_message": {"$nin": [None, ""]}}},
+            {"$sort": {"created_at": -1}},
+            {"$group": {"_id": "$client_id", "error": {"$first": "$error_message"}}},
+        ]).to_list(None),
+    )
     scheduled_map = {r["_id"]: r["count"] for r in scheduled_raw}
+    failed_map = {r["_id"]: r["error"] for r in failed_raw}
     for c in clients:
         c["scheduled_count"] = scheduled_map.get(c["id"], 0)
+        c["last_post_error"] = failed_map.get(c["id"])
     return clients
 
 @api_router.post("/clients", status_code=201)
