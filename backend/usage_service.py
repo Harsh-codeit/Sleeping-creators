@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 MODEL_PRICING = {
     "claude-sonnet-4-5":         {"input": 3.00e-6, "output": 15.00e-6},
+    "claude-sonnet-4-6":         {"input": 3.00e-6, "output": 15.00e-6},
     "claude-haiku-4-5-20251001": {"input": 0.80e-6, "output":  4.00e-6},
 }
 

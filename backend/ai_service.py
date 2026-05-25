@@ -629,7 +629,8 @@ Return ONLY this JSON (no markdown, no explanation):
         raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
         data = __import__("json").loads(raw)
         if db is not None:
-            await record_usage(db, resp.usage.input_tokens, resp.usage.output_tokens, "single_image_hook")
+            await record_usage(db, resp, generation_type="single_image_hook",
+                               client_id=client.get("id"), client_name=client.get("name"))
     except Exception as e:
         logger.warning(f"Single image hook generation failed ({e}), using fallback")
         data = {

@@ -7,6 +7,7 @@ import tempfile
 from typing import Optional
 from datetime import datetime, timezone
 from client_utils import _get_tone
+from usage_service import record_usage
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ Return ONLY valid JSON, no markdown fences, no explanation:
 {{"title": "...", "prompt": "..."}}"""
 
 
-async def generate_video_hook(client: dict, keyword: str = "") -> dict:
+async def generate_video_hook(client: dict, keyword: str = "", db=None) -> dict:
     """One Claude call → {title: str, prompt: str} for a reusable hook.
 
     Uses a custom prompt (per-client override or global setting) when configured
@@ -97,6 +98,9 @@ async def generate_video_hook(client: dict, keyword: str = "") -> dict:
         max_tokens=400,
         messages=[{"role": "user", "content": prompt}],
     )
+    if db is not None:
+        await record_usage(db, msg, generation_type="video_hook",
+                           client_id=client.get("id"), client_name=client.get("name"))
     raw = msg.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```", 2)[1]
@@ -134,7 +138,7 @@ Fields:
 """
 
 
-async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str) -> dict:
+async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str, db=None) -> dict:
     """Call Claude once to fill all ai_text fields. Returns {find_name: text}.
 
     Uses a custom prompt (per-client override or global setting) when configured,
@@ -188,6 +192,9 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str)
         max_tokens=1000,
         messages=[{"role": "user", "content": prompt}],
     )
+    if db is not None:
+        await record_usage(db, msg, generation_type="video_ai_text",
+                           client_id=client.get("id"), client_name=client.get("name"))
     raw = msg.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```", 2)[1]
@@ -269,6 +276,7 @@ async def generate_video_content(
     prompt: str,
     client: dict,
     ai_text_fields: list[dict],
+    db=None,
 ) -> dict:
     """One Claude call → {merge_values: {FIELD: text}, caption: str, hashtags: [str]}.
 
@@ -330,7 +338,10 @@ async def generate_video_content(
             **_strategy_block(client),
         )
 
-    data = _generate_content_json(full_prompt)
+    data, _usage_msg = _generate_content_json(full_prompt)
+    if db is not None:
+        await record_usage(db, _usage_msg, generation_type="video_content",
+                           client_id=client.get("id"), client_name=client.get("name"))
     caption = _smart_truncate_caption(data.get("caption") or "", 2000)
     hashtags = [h for h in (data.get("hashtags") or []) if isinstance(h, str)][:6]
     return {
@@ -407,7 +418,7 @@ def _generate_content_json(full_prompt: str) -> dict:
         last_raw = msg.content[0].text if msg.content else ""
         data = _parse_content_json(last_raw)
         if data is not None:
-            return data
+            return data, msg
         logger.warning(
             "video content JSON parse failed (attempt %d, max_tokens=%d, stop_reason=%s); raw head=%r",
             attempt, max_tokens, getattr(msg, "stop_reason", None), last_raw[:300],

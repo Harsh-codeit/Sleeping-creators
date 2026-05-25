@@ -1501,7 +1501,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             ai_text_fields = [f for f in template_doc.get("merge_fields", []) if f.get("role") == "ai_text"]
             try:
                 from video_render_service import generate_video_content
-                r = await generate_video_content(prompt_text, client, ai_text_fields)
+                r = await generate_video_content(prompt_text, client, ai_text_fields, db=db)
                 generated_merge_values = r.get("merge_values") or {}
                 caption = r.get("caption") or ""
                 hashtags = r.get("hashtags") or []
@@ -7232,12 +7232,15 @@ async def generate_cta_text(req: CTAGenerateRequest):
         f"Return ONLY valid JSON, no explanation."
     )
     import anthropic as _anthropic, json as _json
+    from usage_service import record_usage as _record_usage
     _ac = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
     msg = _ac.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=200,
         messages=[{"role": "user", "content": prompt}],
     )
+    await _record_usage(db, msg, generation_type="cta_text",
+                        client_id=req.client_id, client_name=client.get("name"))
     raw = msg.content[0].text.strip()
     try:
         data = _json.loads(raw)
@@ -7386,7 +7389,7 @@ async def generate_video_text_route(req: VideoGenerateTextRequest):
     if not ai_text_fields:
         return {}
     topic = req.topic or client.get("name", "")
-    return await generate_ai_text(ai_text_fields, client, topic)
+    return await generate_ai_text(ai_text_fields, client, topic, db=db)
 
 
 @api_router.post("/videos/generate-content")
@@ -7400,7 +7403,7 @@ async def generate_video_content_route(req: VideoGenerateContentRequest):
         raise HTTPException(404, "Client not found")
     from video_render_service import generate_video_content
     ai_text_fields = [f for f in template.get("merge_fields", []) if f.get("role") == "ai_text"]
-    return await generate_video_content(req.prompt, client, ai_text_fields)
+    return await generate_video_content(req.prompt, client, ai_text_fields, db=db)
 
 
 class GenerateVideoHookRequest(BaseModel):
@@ -7416,7 +7419,7 @@ async def generate_video_hook_route(client_id: str, req: GenerateVideoHookReques
         raise HTTPException(404, "Client not found")
     from video_render_service import generate_video_hook
     try:
-        return await generate_video_hook(client, req.keyword or "")
+        return await generate_video_hook(client, req.keyword or "", db=db)
     except Exception as e:
         logger.exception("generate_video_hook failed")
         raise HTTPException(500, f"Generation failed: {e}")
@@ -7819,6 +7822,7 @@ Return ONLY a valid JSON object with EXACTLY these keys. Be specific to this cli
 Return ONLY valid JSON. No markdown. No explanation."""
 
     import anthropic as _anthropic, json as _json, re as _re
+    from usage_service import record_usage as _record_usage
     try:
         _ac = _anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
         msg = await _ac.messages.create(
@@ -7829,6 +7833,7 @@ Return ONLY valid JSON. No markdown. No explanation."""
         raw = msg.content[0].text.strip()
     except Exception as e:
         raise HTTPException(500, f"Claude API error: {e}")
+    await _record_usage(db, msg, generation_type="competitor_profile", client_id=client_id)
     try:
         data = _json.loads(raw)
     except Exception:
