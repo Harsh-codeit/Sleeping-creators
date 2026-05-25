@@ -32,6 +32,44 @@ function StatCard({ icon: Icon, label, value, sub, accent }) {
   );
 }
 
+const BADGE_COLORS = {
+  red:   "text-red-400 border-red-500/30",
+  amber: "text-amber-400 border-amber-500/30",
+  blue:  "text-blue-400 border-blue-500/30",
+};
+
+function daysAgo(isoString) {
+  if (!isoString) return Infinity;
+  return (Date.now() - new Date(isoString).getTime()) / (1000 * 60 * 60 * 24);
+}
+
+function computeHealthIssues(client) {
+  const issues = [];
+  if (!client.bundle_api_key) {
+    issues.push({ badge: "NO BUNDLE", color: "red", priority: 1 });
+  }
+  if ((client.platforms || []).includes("instagram") && !client.instagram_connected) {
+    issues.push({ badge: "NO INSTAGRAM", color: "red", priority: 2 });
+  }
+  if (client.instagram_publish_blocked) {
+    issues.push({ badge: "BLOCKED", color: "red", priority: 3 });
+  }
+  if ((client.posts_failed || 0) > 0) {
+    issues.push({ badge: "POST FAILED", color: "red", priority: 4 });
+  }
+  const ob = client.onboarding_data || {};
+  if (!ob.niche || !ob.industry_label || (!ob.brand_name && !client.brand_name)) {
+    issues.push({ badge: "PROFILE INCOMPLETE", color: "amber", priority: 5 });
+  }
+  if (daysAgo(client.last_post_at) > 7) {
+    issues.push({ badge: "INACTIVE 7D", color: "amber", priority: 6 });
+  }
+  if ((client.scheduled_count || 0) === 0) {
+    issues.push({ badge: "EMPTY QUEUE", color: "blue", priority: 7 });
+  }
+  return issues.sort((a, b) => a.priority - b.priority);
+}
+
 function DailySpend({ series, todayTotal, yesterdayTotal }) {
   const trend = yesterdayTotal > 0
     ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
@@ -244,6 +282,22 @@ export default function Dashboard() {
                     </span>
                   ))}
                 </div>
+                {(() => {
+                  const issues = computeHealthIssues(client);
+                  if (issues.length === 0) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
+                      {issues.map(({ badge, color }) => (
+                        <span
+                          key={badge}
+                          className={`text-[9px] font-mono px-1.5 py-0.5 border ${BADGE_COLORS[color]}`}
+                        >
+                          {badge}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
