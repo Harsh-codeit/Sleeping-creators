@@ -2109,7 +2109,7 @@ async def lifespan(app: FastAPI):
     )
     scheduler.add_job(refresh_all_trends, 'interval', weeks=1, id='trend_refresh',
                       start_date=_now + timedelta(seconds=270))
-    scheduler.add_job(sync_all_sheets, 'interval', hours=6, id='sheets_outbound_sync',
+    scheduler.add_job(sync_all_sheets, 'interval', minutes=15, id='sheets_outbound_sync',
                       start_date=_now + timedelta(seconds=330))
     scheduler.add_job(pull_sheet_approvals, 'interval', minutes=15, id='sheets_inbound_sync',
                       start_date=_now + timedelta(seconds=390))
