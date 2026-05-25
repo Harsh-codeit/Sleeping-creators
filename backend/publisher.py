@@ -1373,6 +1373,10 @@ async def publish_video_instagram(post: dict, client: dict) -> dict:
     try:
         async with aiohttp.ClientSession() as session:
             # Step 1: Create video container
+            try:
+                thumb_offset = max(0, int(post.get("instagram_thumbnail_offset_ms") or 64))
+            except (TypeError, ValueError):
+                thumb_offset = 64
             container_resp = await session.post(
                 f"{IG_GRAPH}/me/media",
                 params={
@@ -1380,6 +1384,7 @@ async def publish_video_instagram(post: dict, client: dict) -> dict:
                     "video_url": video_url,
                     "caption": caption,
                     "share_to_feed": "true",
+                    "thumb_offset": thumb_offset,
                 },
                 data={"access_token": token},
             )
