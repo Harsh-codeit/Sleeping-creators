@@ -1804,6 +1804,8 @@ export default function ClientDetail() {
         ...editForm,
         competitor_accounts: editForm.competitor_accounts.filter(Boolean),
         not_to_do_list: editForm.not_to_do_list.filter(Boolean),
+        drive_images_folder_id: editForm.high_quality_photos_link,
+        drive_folder_id: editForm.video_clips_link,
       };
       const resp = await axios.put(`${API}/clients/${id}`, payload);
       setClient(resp.data);
