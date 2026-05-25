@@ -74,7 +74,8 @@ function daysAgo(isoString) {
 function computeHealthIssues(client, bundleConfigured) {
   const issues = [];
   if (!bundleConfigured) issues.push({ badge: "NO BUNDLE", color: "red", priority: 1 });
-  if ((client.platforms || []).includes("instagram") && !client.instagram_connected)
+  const igConnected = client.instagram_connected || (client.bundle_platforms || []).includes("instagram");
+  if ((client.platforms || []).includes("instagram") && !igConnected)
     issues.push({ badge: "NO INSTAGRAM", color: "red", priority: 2 });
   if (client.instagram_publish_blocked) issues.push({ badge: "BLOCKED", color: "red", priority: 3 });
   if ((client.posts_failed || 0) > 0) issues.push({ badge: "POST FAILED", color: "red", priority: 4 });
