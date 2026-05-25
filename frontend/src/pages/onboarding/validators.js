@@ -39,7 +39,7 @@ function checkMultiSelects(form, pairs) {
 }
 
 export function validateStep1(form) {
-  const stringErr = checkStrings(form, [
+  return checkStrings(form, [
     ["name",                  "Client / full name"],
     ["brand_name",            "Brand name"],
     ["email",                 "Email"],
@@ -48,16 +48,8 @@ export function validateStep1(form) {
     ["instagram_handle",      "Instagram username"],
     ["instagram_profile_url", "Instagram profile URL"],
     ["instagram_password",    "Instagram password"],
-    ["website_url",           "Website URL"],
-    ["linkedin_url",          "LinkedIn URL"],
-    ["youtube_url",           "YouTube URL"],
-    ["twitter_url",           "Twitter / X URL"],
-    ["profile_photo_link",    "Profile photo Drive link"],
-    ["google_drive_images",   "Photos Drive link"],
-    ["google_drive_videos",   "Videos Drive link"],
+    ["profile_photo_link",    "Profile photo"],
   ]);
-  if (stringErr) return stringErr;
-  return checkArrays(form, [["pr_links", "PR / Media links"]]);
 }
 
 export function validateStep2(form) {
