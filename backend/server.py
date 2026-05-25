@@ -3227,7 +3227,7 @@ async def dashboard_time_series(days: int = 14):
 @api_router.get("/dashboard/spend")
 async def dashboard_spend(days: int = Query(default=7, ge=1, le=90)):
     now = datetime.now(timezone.utc)
-    start = (now - timedelta(days=days)).replace(
+    start = (now - timedelta(days=days - 1)).replace(
         hour=0, minute=0, second=0, microsecond=0
     ).isoformat()
 
