@@ -148,3 +148,40 @@ def test_sync_performance_tab_empty_when_no_bundle():
     with patch("sheets_service._sync_tab_sync", fake_sync):
         asyncio.run(sheets_service.sync_performance_tab("tok", "sid", {}))
     assert captured["rows"] == []
+
+
+def test_sync_posts_tab_includes_error_and_approval_columns():
+    """sync_posts_tab must write 9 columns including Error and Approval."""
+    import asyncio
+    import sheets_service
+
+    posts = [{"_id": "p1", "platform": "instagram", "content_type": "carousel",
+              "text": "hello", "status": "published", "approval_status": "approved",
+              "error_message": None, "scheduled_at": "2026-05-25T09:00:00",
+              "published_at": "2026-05-25T09:01:00"}]
+    captured = {}
+    def fake_sync(rt, sid, tab, rows):
+        captured["rows"] = rows
+    with patch("sheets_service._sync_tab_sync", fake_sync):
+        asyncio.run(sheets_service.sync_posts_tab("tok", "sid", posts))
+    assert len(captured["rows"]) == 1
+    row = captured["rows"][0]
+    assert len(row) == 9  # ID, Platform, Type, Content, Status, Approval, Error, Scheduled, Published
+    assert row[4] == "published"
+    assert row[5] == "approved"
+    assert row[6] is None or row[6] == ""
+
+
+def test_sync_client_info_has_section_rows():
+    """sync_client_info_tab must include section label rows (single-value rows starting with ──)."""
+    import asyncio
+    import sheets_service
+
+    client = {"name": "Acme", "onboarding_data": {}}
+    captured = {}
+    def fake_sync(rt, sid, tab, rows):
+        captured["rows"] = rows
+    with patch("sheets_service._sync_tab_sync", fake_sync):
+        asyncio.run(sheets_service.sync_client_info_tab("tok", "sid", client))
+    section_rows = [r for r in captured["rows"] if len(r) >= 1 and str(r[0]).startswith("──")]
+    assert len(section_rows) >= 4, "expected at least 4 section label rows"

@@ -254,15 +254,18 @@ async def create_sheet(refresh_token: str, client_name: str, share_email: str) -
 
 
 async def sync_client_info_tab(refresh_token: str, sheet_id: str, client: dict) -> None:
-    o = client.get("onboarding_data", {})
+    o = client.get("onboarding_data") or {}
 
     def _list(val):
         if isinstance(val, list):
             return ", ".join(str(v) for v in val)
         return str(val) if val else ""
 
+    def _section(label):
+        return [f"── {label} ──────────────────────────────────"]
+
     rows = [
-        # ── Core ──────────────────────────────────────────
+        _section("PROFILE"),
         ["Name",                      client.get("name", "")],
         ["Industry",                  client.get("industry", "")],
         ["Bio",                       client.get("bio", "")],
@@ -270,13 +273,12 @@ async def sync_client_info_tab(refresh_token: str, sheet_id: str, client: dict) 
         ["Target Audience",           client.get("target_audience", "")],
         ["Platforms",                 _list(client.get("platforms", []))],
         ["Language",                  o.get("language", "")],
-        # ── Contact ───────────────────────────────────────
-        ["Username",                  o.get("username", "")],
+        _section("CONTACT"),
         ["Email",                     o.get("email", "")],
         ["WhatsApp",                  o.get("whatsapp", "")],
         ["Website",                   o.get("website_url", "")],
         ["Instagram Handle",          o.get("instagram_handle", "")],
-        # ── Brand & Content ───────────────────────────────
+        _section("BRAND & CONTENT"),
         ["Niche",                     o.get("niche", "")],
         ["Problem Solved",            o.get("problem_solved", "")],
         ["Brand Vibe",                o.get("brand_vibe", "")],
@@ -285,10 +287,10 @@ async def sync_client_info_tab(refresh_token: str, sheet_id: str, client: dict) 
         ["Bio Template",              o.get("bio_template", "")],
         ["Lead Magnets",              _list(o.get("lead_magnets", []))],
         ["Not To Do List",            _list(o.get("not_to_do_list", []))],
-        # ── Automation ────────────────────────────────────
+        _section("AUTOMATION"),
         ["Automation Keywords",       _list(o.get("automation_keywords", []))],
         ["Competitor Accounts",       _list(o.get("competitor_accounts", []))],
-        # ── Assets & Links ────────────────────────────────
+        _section("ASSETS"),
         ["Branding Assets Link",      o.get("branding_assets_link", "")],
         ["Google Drive Images",       o.get("google_drive_images", "")],
         ["Google Drive Videos",       o.get("google_drive_videos", "")],
@@ -304,11 +306,13 @@ async def sync_client_info_tab(refresh_token: str, sheet_id: str, client: dict) 
 async def sync_posts_tab(refresh_token: str, sheet_id: str, posts: list) -> None:
     rows = [
         [
-            str(p["_id"]),
+            str(p.get("id") or p.get("_id", "")),
             p.get("platform", ""),
             p.get("content_type", ""),
-            p.get("text", "")[:500],
+            (p.get("text") or p.get("caption") or "")[:300],
             p.get("status", ""),
+            p.get("approval_status") or "pending",
+            p.get("error_message") or "",
             p.get("scheduled_at") or "",
             p.get("published_at") or "",
         ]
