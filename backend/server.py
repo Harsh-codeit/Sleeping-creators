@@ -2747,6 +2747,24 @@ async def onboard_client(data: OnboardingCreate):
     await db.clients.insert_one({**client})
     await add_log("success", f"Client '{data.name}' onboarded via wizard", None, data.name)
 
+    # Auto-add competitor_accounts from onboarding into the competitors collection
+    if data.competitor_accounts:
+        comp_docs = [
+            {
+                "id": str(uuid.uuid4()),
+                "client_id": client["id"],
+                "handle": h.strip() if h.strip().startswith("@") else f"@{h.strip()}",
+                "platform": "instagram",
+                "added_by": "onboarding",
+                "last_scraped_at": None,
+                "is_active": True,
+                "created_at": now_iso(),
+            }
+            for h in data.competitor_accounts if h and h.strip()
+        ]
+        if comp_docs:
+            await db.competitors.insert_many(comp_docs)
+
     # Auto-create default pipeline using the template configured in settings
     try:
         app_settings = await db.settings.find_one({"key": "global"}, {"_id": 0}) or {}
