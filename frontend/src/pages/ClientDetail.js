@@ -614,10 +614,6 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
               <EInput value={editForm.video_clips_link} onChange={e => set("video_clips_link", e.target.value)} placeholder="https://drive.google.com/..." type="url" data-testid="edit-video-clips-link" />
             </div>
           </div>
-          <div>
-            <ELabel optional>Carousel Drive Images Folder</ELabel>
-            <EInput value={editForm.drive_images_folder_id} onChange={e => set("drive_images_folder_id", e.target.value)} placeholder="Folder URL or ID — used for Drive Image elements in carousel export" data-testid="edit-drive-images-folder" />
-          </div>
         </div>
       </div>
 
