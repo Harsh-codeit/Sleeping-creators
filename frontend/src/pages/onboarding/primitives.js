@@ -36,6 +36,11 @@ export function MultiInput({ label, values, onChange, placeholder, testid, optio
   const add = () => onChange([...values, ""]);
   const remove = (i) => onChange(values.filter((_, idx) => idx !== i));
   const update = (i, v) => onChange(values.map((x, idx) => idx === i ? v : x));
+  const dupSet = new Set(
+    values.map((v, i) => ({ v: v.trim().toLowerCase(), i }))
+      .filter(({ v, i }) => v && values.findIndex((x, j) => j !== i && x.trim().toLowerCase() === v) !== -1)
+      .map(({ i }) => i)
+  );
   return (
     <div>
       <Label optional={optional}>{label}</Label>
@@ -47,7 +52,7 @@ export function MultiInput({ label, values, onChange, placeholder, testid, optio
               value={val}
               onChange={e => update(i, e.target.value)}
               placeholder={placeholder}
-              className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150"
+              className={`flex-1 bg-zinc-950 border px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors duration-150 ${dupSet.has(i) ? "border-red-500 focus:border-red-400" : "border-zinc-700 focus:border-zinc-400"}`}
             />
             {values.length > 1 && (
               <button
@@ -59,6 +64,7 @@ export function MultiInput({ label, values, onChange, placeholder, testid, optio
               </button>
             )}
           </div>
+          {dupSet.has(i) && <p className="text-[10px] text-red-400 font-mono mt-0.5">Duplicate entry</p>}
         ))}
         <button
           type="button"
@@ -169,6 +175,11 @@ export function CappedMultiInput({ label, values, onChange, cap, placeholder, te
   };
   const remove = (i) => onChange(safe.filter((_, idx) => idx !== i));
   const update = (i, v) => onChange(safe.map((x, idx) => idx === i ? v : x));
+  const dupSet = new Set(
+    safe.map((v, i) => ({ v: v.trim().toLowerCase(), i }))
+      .filter(({ v, i }) => v && safe.findIndex((x, j) => j !== i && x.trim().toLowerCase() === v) !== -1)
+      .map(({ i }) => i)
+  );
   return (
     <div>
       <Label optional={optional}>
@@ -177,23 +188,26 @@ export function CappedMultiInput({ label, values, onChange, cap, placeholder, te
       </Label>
       <div className="space-y-2">
         {safe.map((val, i) => (
-          <div key={i} className="flex gap-2">
-            <input
-              data-testid={`${testid}-${i}`}
-              value={val}
-              onChange={e => update(i, e.target.value)}
-              placeholder={placeholder}
-              className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150"
-            />
-            {safe.length > 1 && (
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="px-2 text-zinc-600 hover:text-red-400 border border-zinc-700 hover:border-red-900 transition-colors duration-150"
-              >
-                <X size={13} />
-              </button>
-            )}
+          <div key={i}>
+            <div className="flex gap-2">
+              <input
+                data-testid={`${testid}-${i}`}
+                value={val}
+                onChange={e => update(i, e.target.value)}
+                placeholder={placeholder}
+                className={`flex-1 bg-zinc-950 border px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors duration-150 ${dupSet.has(i) ? "border-red-500 focus:border-red-400" : "border-zinc-700 focus:border-zinc-400"}`}
+              />
+              {safe.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="px-2 text-zinc-600 hover:text-red-400 border border-zinc-700 hover:border-red-900 transition-colors duration-150"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {dupSet.has(i) && <p className="text-[10px] text-red-400 font-mono mt-0.5">Duplicate entry</p>}
           </div>
         ))}
         {safe.length < cap && (
@@ -242,6 +256,11 @@ export function SelectMultiInput({ label, values, onChange, options, placeholder
   const update = (i, v) => onChange(safe.map((x, idx) => idx === i ? v : x));
   const filled = safe.filter(v => v && String(v).trim()).length;
   const ok = !minItems || filled >= minItems;
+  const dupSet = new Set(
+    safe.map((v, i) => ({ v: String(v).trim().toLowerCase(), i }))
+      .filter(({ v, i }) => v && safe.findIndex((x, j) => j !== i && String(x).trim().toLowerCase() === v) !== -1)
+      .map(({ i }) => i)
+  );
   return (
     <div>
       <Label>
@@ -254,27 +273,30 @@ export function SelectMultiInput({ label, values, onChange, options, placeholder
       </Label>
       <div className="space-y-2">
         {safe.map((val, i) => (
-          <div key={i} className="flex gap-2">
-            <select
-              data-testid={`${testid}-${i}`}
-              value={val}
-              onChange={e => update(i, e.target.value)}
-              className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150 appearance-none"
-            >
-              <option value="" disabled>{placeholder || "Select..."}</option>
-              {options.map(opt => (
-                <option key={opt} value={opt} className="bg-zinc-950">{opt}</option>
-              ))}
-            </select>
-            {safe.length > 1 && (
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                className="px-2 text-zinc-600 hover:text-red-400 border border-zinc-700 hover:border-red-900 transition-colors duration-150"
+          <div key={i}>
+            <div className="flex gap-2">
+              <select
+                data-testid={`${testid}-${i}`}
+                value={val}
+                onChange={e => update(i, e.target.value)}
+                className={`flex-1 bg-zinc-950 border px-3 py-2.5 text-sm text-white focus:outline-none transition-colors duration-150 appearance-none ${dupSet.has(i) ? "border-red-500 focus:border-red-400" : "border-zinc-700 focus:border-zinc-400"}`}
               >
-                <X size={13} />
-              </button>
-            )}
+                <option value="" disabled>{placeholder || "Select..."}</option>
+                {options.map(opt => (
+                  <option key={opt} value={opt} className="bg-zinc-950">{opt}</option>
+                ))}
+              </select>
+              {safe.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  className="px-2 text-zinc-600 hover:text-red-400 border border-zinc-700 hover:border-red-900 transition-colors duration-150"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {dupSet.has(i) && <p className="text-[10px] text-red-400 font-mono mt-0.5">Duplicate entry</p>}
           </div>
         ))}
         <button

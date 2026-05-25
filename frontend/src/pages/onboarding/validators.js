@@ -14,6 +14,15 @@
 const isEmptyStr = (v) => !(v && String(v).trim());
 const isEmptyArr = (v) => !Array.isArray(v) || v.filter(x => x && String(x).trim()).length === 0;
 
+function checkDuplicates(form, pairs) {
+  for (const [key, label] of pairs) {
+    const arr = Array.isArray(form[key]) ? form[key] : [];
+    const filled = arr.map(v => String(v).trim().toLowerCase()).filter(Boolean);
+    if (new Set(filled).size !== filled.length) return `${label} — remove duplicate entries`;
+  }
+  return null;
+}
+
 function checkStrings(form, pairs) {
   for (const [key, label] of pairs) {
     if (isEmptyStr(form[key])) return `${label} is required`;
@@ -56,9 +65,9 @@ export function validateStep1(form) {
     ["google_drive_videos",   "Videos Drive link"],
   ]);
   if (stringErr) return stringErr;
-  return checkArrays(form, [
-    ["pr_links", "PR / Media links"],
-  ]);
+  const arrErr = checkArrays(form, [["pr_links", "PR / Media links"]]);
+  if (arrErr) return arrErr;
+  return checkDuplicates(form, [["pr_links", "PR / Media links"]]);
 }
 
 export function validateStep2(form) {
@@ -88,6 +97,17 @@ export function validateStep2(form) {
     ["love_topics",              "Topics you love"],
   ]);
   if (arrErr) return arrErr;
+  const dupErr2 = checkDuplicates(form, [
+    ["solutions_provided",       "Solutions you provide"],
+    ["audience_problems",        "Audience problems"],
+    ["audience_desires",         "Audience desires"],
+    ["audience_myths",           "Audience myths"],
+    ["audience_failed_attempts", "Failed attempts"],
+    ["unique_selling_points",    "Unique selling points"],
+    ["frequent_questions",       "Frequently asked questions"],
+    ["love_topics",              "Topics you love"],
+  ]);
+  if (dupErr2) return dupErr2;
 
   // Conditional: case studies required only when has_case_studies === true
   if (form.has_case_studies === true) {
@@ -118,7 +138,12 @@ export function validateStep3(form) {
   const langVal = Array.isArray(form.language) ? form.language[0] : form.language;
   if (!langVal || !String(langVal).trim()) return "Content language — please select a language";
 
-  return checkArrays(form, [
+  const arrErr3 = checkArrays(form, [
+    ["competitor_accounts", "Competitor accounts"],
+    ["not_to_do_list",      "Topics to avoid"],
+  ]);
+  if (arrErr3) return arrErr3;
+  return checkDuplicates(form, [
     ["competitor_accounts", "Competitor accounts"],
     ["not_to_do_list",      "Topics to avoid"],
   ]);
