@@ -78,13 +78,14 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# Tab order and headers — single source of truth
-TAB_HEADERS = {
-    "Client Info": ["Field", "Value"],
-    "Posts": ["ID", "Platform", "Type", "Content", "Status", "Scheduled At", "Published At"],
-    "Competitors": ["Handle", "Platform", "Engagement Score", "Followers", "Last Scraped"],
-    "Trends": ["Keyword", "Popularity Score", "Type", "Source", "Fetched At"],
-}
+TAB_DEFINITIONS = [
+    ("Dashboard",    []),
+    ("Client Info",  ["Field", "Value"]),
+    ("Posts",        ["ID", "Platform", "Type", "Content (preview)", "Status", "Approval", "Error", "Scheduled At", "Published At"]),
+    ("Performance",  ["Platform", "Followers", "Likes", "Comments", "Impressions", "Engagement Rate %", "Refreshed At"]),
+    ("Competitors",  ["Handle", "Platform", "Engagement Score", "Followers", "Last Scraped"]),
+    ("Trends",       ["Keyword", "Popularity Score", "Type", "Source", "Fetched At"]),
+]
 
 # Only these status values are accepted from inbound sheet edits
 ALLOWED_INBOUND_STATUSES = {"approved", "rejected"}
@@ -117,24 +118,40 @@ def _get_gc(refresh_token: str) -> gspread.Client:
 
 # ── Blocking helpers (run via asyncio.to_thread) ──────────────────────────────
 
+def _apply_tab_header_formatting_sync(ws, tab_name: str, headers: list) -> None:
+    """Write title row + header row with brand formatting. Freezes first 2 rows."""
+    if not headers:
+        ws.update("A1", [[f"SLEEPING CREATORS — {tab_name.upper()}"]])
+        ws.format("A1", _title_fmt())
+        ws.freeze(rows=1)
+        return
+    ws.update("A1", [[f"SLEEPING CREATORS — {tab_name.upper()}"]])
+    ws.format("A1:Z1", _title_fmt())
+    ws.update("A2", [headers])
+    ws.format(f"A2:{chr(64 + len(headers))}2", _header_fmt())
+    ws.freeze(rows=2)
+
+
+def _add_charts_to_sheet(sh) -> None:
+    """Placeholder for chart insertion (implemented in Task 3)."""
+
+
 def _create_sheet_sync(refresh_token: str, client_name: str, share_email: str) -> dict:
     gc = _get_gc(refresh_token)
     sh = gc.create(f"Sleeping Creators — {client_name}")
 
     first = True
-    for tab_name, headers in TAB_HEADERS.items():
+    for tab_name, headers in TAB_DEFINITIONS:
         if first:
             ws = sh.sheet1
             ws.update_title(tab_name)
             first = False
         else:
-            ws = sh.add_worksheet(title=tab_name, rows=500, cols=len(headers))
-        ws.update("A1", [headers])
-        ws.format("A1:Z1", {"textFormat": {"bold": True}})
+            ws = sh.add_worksheet(title=tab_name, rows=1000, cols=max(len(headers), 10))
+        _apply_tab_header_formatting_sync(ws, tab_name, headers)
 
-    # Share with client as editor so they can update the Posts Status column
     sh.share(share_email, perm_type="user", role="writer", notify=True)
-
+    _add_charts_to_sheet(sh)
     return {"sheet_id": sh.id, "sheet_url": sh.url}
 
 
