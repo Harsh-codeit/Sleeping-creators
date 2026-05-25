@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Label,
   Input,
@@ -15,6 +16,18 @@ import {
  * Contract: ({ form, set }) where set is (key, value) => void.
  */
 export default function Step2({ form, set }) {
+  const [dailyParts, setDailyParts] = useState(() => {
+    const parts = (form.daily_life || "").split("\n");
+    return [parts[0] || "", parts[1] || "", parts[2] || "", parts[3] || ""];
+  });
+
+  const updateDailyLife = (idx, val) => {
+    const next = [...dailyParts];
+    next[idx] = val;
+    setDailyParts(next);
+    set("daily_life", next.join("\n"));
+  };
+
   return (
     <div className="space-y-8">
       {/* ── 2A — Your Story & Business ───────────────────────────── */}
@@ -53,13 +66,25 @@ export default function Step2({ form, set }) {
 
         <div>
           <Label>Describe your daily life right now</Label>
-          <Textarea
-            testid="ob-daily-life"
-            rows={4}
-            value={form.daily_life ?? ""}
-            onChange={(e) => set("daily_life", e.target.value)}
-            placeholder="Morning to night — what's your typical day? (3-5 honest sentences)"
-          />
+          <div className="space-y-2">
+            {[
+              { label: "Morning routine", idx: 0, placeholder: "6am — wake up, gym, coffee…" },
+              { label: "Afternoon",       idx: 1, placeholder: "Calls, client work, lunch…" },
+              { label: "Evening",         idx: 2, placeholder: "Dinner, family time, wind down…" },
+              { label: "Lifestyle",       idx: 3, placeholder: "Hobbies, passions, anything extra…" },
+            ].map(({ label, idx, placeholder }) => (
+              <div key={idx} className="flex items-center gap-3">
+                <span className="text-[10px] font-mono text-zinc-600 w-28 flex-shrink-0">{label}</span>
+                <input
+                  data-testid={`ob-daily-life-${idx}`}
+                  value={dailyParts[idx]}
+                  onChange={(e) => updateDailyLife(idx, e.target.value)}
+                  placeholder={placeholder}
+                  className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150"
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
