@@ -303,6 +303,7 @@ function DriveImagesFolderCard({ client, clientId, setClient }) {
 
 function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, completing }) {
   const set = (key, val) => setEditForm(f => ({ ...f, [key]: val }));
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <div className="max-w-2xl space-y-5" data-testid="edit-profile-tab">
 
@@ -1699,7 +1700,6 @@ export default function ClientDetail() {
   const [neverCoverInput, setNeverCoverInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
   const [audienceIntelOpen, setAudienceIntelOpen] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [hookGenKeyword, setHookGenKeyword] = useState("");
   const [hookGenLoading, setHookGenLoading] = useState(false);
   const [competitorInsight, setCompetitorInsight] = useState(null);
