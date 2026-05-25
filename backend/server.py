@@ -2771,6 +2771,43 @@ async def onboard_client(data: OnboardingCreate):
     except Exception as e:
         logger.warning(f"Auto-pipeline creation failed for {client['id']}: {e}")
 
+    # Schedule onboarding welcome email 30 minutes after signup
+    if data.email:
+        send_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+        ig = f"@{data.instagram_handle}" if data.instagram_handle else ""
+        niche_line = f"<p style='color:#555;margin-bottom:8px'>Niche: {data.niche}</p>" if data.niche else ""
+        ig_line = f"<p style='color:#555;margin-bottom:8px'>Instagram: {ig}</p>" if ig else ""
+        onboarding_html = f"""<html><body style="font-family:sans-serif;color:#111;max-width:600px;margin:auto;padding:32px">
+<h1 style="font-size:22px;margin-bottom:4px">Welcome to Sleeping Creators, {data.name}!</h1>
+<p style="color:#888;font-size:13px;margin-bottom:24px">Your account is set up and automation is ready to go.</p>
+{ig_line}{niche_line}
+<hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+<h2 style="font-size:16px;margin-bottom:12px">What happens next</h2>
+<ul style="color:#555;line-height:1.8;padding-left:20px;margin:0">
+  <li>Your daily content pipeline has been created automatically</li>
+  <li>Posts will start scheduling based on your configured posting times</li>
+  <li>You can review and approve content before it goes live</li>
+</ul>
+<hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+<p style="color:#888;font-size:12px">Sleeping Creators — automated content engine</p>
+</body></html>"""
+        try:
+            await db.scheduled_emails.insert_one({
+                "type": "onboarding",
+                "client_id": client["id"],
+                "to": data.email,
+                "cc": [],
+                "subject": f"Welcome to Sleeping Creators, {data.name}!",
+                "html": onboarding_html,
+                "scheduled_at": send_at,
+                "status": "pending",
+                "created_by": "system",
+                "created_at": now_iso(),
+                "sent_at": None, "resend_id": None, "delivery_status": None, "error": None,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to schedule onboarding email for {client['id']}: {e}")
+
     return client
 
 # ─── Post Routes ──────────────────────────────────────────────────────────────
