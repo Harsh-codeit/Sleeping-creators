@@ -72,6 +72,13 @@ function computeHealthIssues(client, bundleConfigured) {
   return issues.sort((a, b) => a.priority - b.priority);
 }
 
+function getFixRoute(clientId, issues) {
+  const top = issues.find((i) => i.color === "red" || i.color === "amber");
+  if (!top) return null;
+  if (top.badge === "POST FAILED") return `/logs?client=${clientId}`;
+  return `/clients/${clientId}`;
+}
+
 function DailySpend({ series, todayTotal, yesterdayTotal }) {
   const trend = yesterdayTotal > 0
     ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
@@ -292,6 +299,10 @@ export default function Dashboard() {
                 {(() => {
                   const issues = client._issues;
                   if (issues.length === 0) return null;
+                  const fixRoute = getFixRoute(client.id, issues);
+                  const showAddContent = issues.some(
+                    (i) => i.badge === "EMPTY QUEUE" || i.badge === "INACTIVE 7D"
+                  );
                   return (
                     <div className="flex items-center gap-1.5 mt-1.5 ml-11 flex-wrap">
                       {issues.map(({ badge, color }) => (
@@ -302,6 +313,26 @@ export default function Dashboard() {
                           {badge}
                         </span>
                       ))}
+                      <div className="ml-auto flex gap-1.5 flex-shrink-0">
+                        {fixRoute && (
+                          <button
+                            data-testid={`client-fix-btn-${client.id}`}
+                            onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
+                            className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                          >
+                            Fix →
+                          </button>
+                        )}
+                        {showAddContent && (
+                          <button
+                            data-testid={`client-add-content-btn-${client.id}`}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
+                            className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                          >
+                            Add Content →
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
