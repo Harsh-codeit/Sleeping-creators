@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, RefreshCw, Zap } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -37,24 +37,75 @@ function StatCard({ icon: Icon, label, value, sub, accent }) {
   );
 }
 
+function DailySpend({ series, todayTotal, yesterdayTotal }) {
+  const trend = yesterdayTotal > 0
+    ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
+    : null;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest">AI Spend — Last 7 Days</div>
+        <TrendingUp size={13} className="text-zinc-600" />
+      </div>
+      <ResponsiveContainer width="100%" height={130}>
+        <BarChart data={series} barSize={14}>
+          <XAxis
+            dataKey="date"
+            tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }}
+            axisLine={false}
+            tickLine={false}
+            width={38}
+            tickFormatter={(v) => `$${v.toFixed(3)}`}
+          />
+          <Tooltip
+            contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 0, fontFamily: "IBM Plex Mono", fontSize: 11 }}
+            labelStyle={{ color: "#a1a1aa" }}
+            itemStyle={{ color: "#fff" }}
+            formatter={(v) => [`$${Number(v).toFixed(6)}`, "cost"]}
+          />
+          <Bar dataKey="cost" fill="#ffffff" radius={0} />
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="mt-3 flex items-center gap-3">
+        <span className="text-xs font-mono text-zinc-500 uppercase tracking-widest">Today</span>
+        <span className="text-sm font-mono text-white">${Number(todayTotal).toFixed(4)}</span>
+        {trend !== null && (
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 border ${trend >= 0 ? "text-amber-400 border-amber-500/30" : "text-emerald-400 border-emerald-500/30"}`}>
+            {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [overview, setOverview] = useState(null);
   const [clients, setClients] = useState([]);
   const [timeSeries, setTimeSeries] = useState([]);
+  const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [ov, cl, ts] = await Promise.all([
+      const [ov, cl, ts, sp] = await Promise.all([
         axios.get(`${API}/dashboard/overview`),
         axios.get(`${API}/clients`),
-        axios.get(`${API}/dashboard/time-series?days=14`)
+        axios.get(`${API}/dashboard/time-series?days=14`),
+        axios.get(`${API}/dashboard/spend?days=7`),
       ]);
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
+      setSpend(sp.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -142,30 +193,12 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Platform Distribution */}
-        <div className="bg-zinc-900 border border-zinc-800 p-4">
-          <div className="text-xs font-mono text-zinc-400 uppercase tracking-widest mb-4">Platform Distribution</div>
-          <div className="space-y-2">
-            {Object.entries(overview?.platform_distribution || {}).map(([platform, count]) => {
-              const total = Object.values(overview?.platform_distribution || {}).reduce((a, b) => a + b, 0);
-              const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-              return (
-                <div key={platform}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-mono text-zinc-300 capitalize">{platform}</span>
-                    <span className="text-xs font-mono text-zinc-500">{count} ({pct}%)</span>
-                  </div>
-                  <div className="h-1 bg-zinc-800">
-                    <div className="h-1 bg-white transition-all duration-500" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-            {Object.keys(overview?.platform_distribution || {}).length === 0 && (
-              <div className="text-xs text-zinc-600 font-mono">No published posts yet</div>
-            )}
-          </div>
-        </div>
+        {/* Daily AI Spend */}
+        <DailySpend
+          series={spend.series}
+          todayTotal={spend.today_total}
+          yesterdayTotal={spend.yesterday_total}
+        />
       </div>
 
       {/* Clients Status + Recent Activity */}
