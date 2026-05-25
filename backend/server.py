@@ -1153,6 +1153,7 @@ async def process_scheduled_posts():
                         await _maybe_auto_flag_winner(post["id"], post["client_id"], result.get("metrics", {}))
                         await db.clients.update_one({"id": post["client_id"]}, {"$inc": {"posts_today": 1, "posts_total": 1}, "$set": {"last_post_at": now_iso()}})
                         await add_log("success", f"Published post on {post['platform']} for {post['client_name']}", post["client_id"], post["client_name"], post["id"], post["platform"])
+                        asyncio.create_task(_trigger_sheet_sync(post["client_id"], ["Posts"]))
                     else:
                         retry_count = post.get("retry_count", 0) + 1
                         _MAX_RETRIES = 3
@@ -1203,6 +1204,7 @@ async def process_scheduled_posts():
                             await db.posts.update_one({"id": post["id"]}, update_op)
                             await db.clients.update_one({"id": post["client_id"]}, {"$inc": {"posts_failed": 1}})
                             await add_log("error", f"Failed to publish on {post['platform']} after {_MAX_RETRIES} attempts: {result.get('error', 'Unknown error')}", post["client_id"], post["client_name"], post["id"], post["platform"])
+                            asyncio.create_task(_trigger_sheet_sync(post["client_id"], ["Posts"]))
                             from telegram_service import send_alert
                             bot_token = settings.get("telegram_bot_token", "")
                             chat_id = settings.get("telegram_chat_id", "")
@@ -2353,6 +2355,7 @@ async def update_client(client_id: str, data: ClientUpdate):
 
     await db.clients.update_one({"id": client_id}, {"$set": set_doc})
     client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    asyncio.create_task(_trigger_sheet_sync(client_id, ["Client Info"]))
     return client
 
 @api_router.post("/clients/{client_id}/recompute-derived")
@@ -2808,6 +2811,7 @@ async def onboard_client(data: OnboardingCreate):
         except Exception as e:
             logger.warning(f"Failed to schedule onboarding email for {client['id']}: {e}")
 
+    asyncio.create_task(_trigger_sheet_sync(client["id"], None))
     return client
 
 # ─── Post Routes ──────────────────────────────────────────────────────────────
@@ -3520,6 +3524,7 @@ async def analytics_client_refresh(client_id: str):
             "bundle.socials_refreshed_at": refreshed_at,
         }},
     )
+    asyncio.create_task(_trigger_sheet_sync(client_id, ["Performance"]))
     return {"socials": socials, "socials_refreshed_at": refreshed_at}
 
 
