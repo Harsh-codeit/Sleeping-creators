@@ -6,11 +6,6 @@ import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, RefreshCw, Zap } 
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const PLATFORM_COLORS = {
-  instagram: "#E1306C", facebook: "#1877F2", linkedin: "#0A66C2",
-  twitter: "#1DA1F2", threads: "#000000", youtube: "#FF0000"
-};
-
 const STATUS_STYLES = {
   active: "text-emerald-400",
   paused: "text-amber-400",
