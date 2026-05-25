@@ -6748,6 +6748,48 @@ async def _run_full_sync(client_id: str) -> None:
         logging.error(f"[sheets] full sync failed for client {client_id}: {e}")
 
 
+async def _run_partial_sync(client_id: str, tabs: list) -> None:
+    """Sync only the specified tabs for a client. Used by event hooks for targeted updates."""
+    try:
+        refresh_token = await _get_google_refresh_token()
+        if not refresh_token:
+            return
+        client = await db.clients.find_one({"id": client_id})
+        if not client:
+            return
+        gs = client.get("google_sheet", {})
+        sheet_id = gs.get("sheet_id")
+        if not sheet_id:
+            return
+
+        if "Posts" in tabs:
+            posts = await db.posts.find({"client_id": client_id}).to_list(None)
+            await sheets_service.sync_posts_tab(refresh_token, sheet_id, posts)
+        if "Client Info" in tabs:
+            await sheets_service.sync_client_info_tab(refresh_token, sheet_id, client)
+        if "Performance" in tabs:
+            await sheets_service.sync_performance_tab(refresh_token, sheet_id, client)
+
+        await db.clients.update_one(
+            {"id": client_id},
+            {"$set": {"google_sheet.last_synced_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    except Exception as e:
+        logging.error(f"[sheets] partial sync ({tabs}) failed for {client_id}: {e}")
+
+
+async def _trigger_sheet_sync(client_id: str, tabs: list | None = None) -> None:
+    """Fire-and-forget: schedule a sheet sync without blocking the caller.
+    tabs=None means full sync; tabs=['Posts'] means only Posts tab."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0, "google_sheet": 1})
+    if not client or not (client.get("google_sheet") or {}).get("sheet_id"):
+        return
+    if tabs is None:
+        asyncio.create_task(_run_full_sync(client_id))
+    else:
+        asyncio.create_task(_run_partial_sync(client_id, tabs))
+
+
 # ── Google OAuth2 routes (admin one-time setup) ───────────────────────────────
 
 def _google_flow():
