@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, Trophy, AlertTriangle } from "lucide-react";
+import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, Trophy, AlertTriangle, ChevronDown } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -153,6 +153,25 @@ function PostsChart({ timeSeries }) {
 }
 
 function ClientStatusCard({ clientsWithIssues, navigate }) {
+  const [expanded, setExpanded] = useState(new Set());
+
+  const issueGroups = useMemo(() => {
+    const groups = {};
+    for (const client of clientsWithIssues) {
+      const top = client._issues[0];
+      if (!top) continue;
+      if (!groups[top.badge]) groups[top.badge] = { badge: top.badge, color: top.color, clients: [] };
+      groups[top.badge].clients.push(client);
+    }
+    return Object.values(groups).sort((a, b) => b.clients.length - a.clients.length);
+  }, [clientsWithIssues]);
+
+  const toggle = (key) => setExpanded((prev) => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
   return (
     <Card>
       <CardHeader
@@ -167,78 +186,66 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
         }
       />
       <div>
-        {clientsWithIssues.length === 0 && (
+        {issueGroups.length === 0 && (
           <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">All clients healthy</div>
         )}
-        {clientsWithIssues.map((client) => (
-          <div
-            key={client.id}
-            className="px-4 py-3 border-b border-zinc-800 last:border-b-0 hover:bg-zinc-800/40 transition-colors duration-150 cursor-pointer"
-            onClick={() => navigate(`/clients/${client.id}`)}
-            data-testid={`client-row-${client.id}`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                {client.avatar}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white">{client.name}</span>
-                  <Circle size={6} className={`fill-current ${STATUS_STYLES[client.status] || "text-zinc-500"}`} />
-                </div>
-                <div className="text-[11px] text-zinc-500 font-mono">{client.industry}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-mono text-white">{client.posts_today}</div>
-                <div className="text-[10px] text-zinc-600 font-mono">today</div>
-              </div>
-            </div>
-            <div className="flex gap-1 mt-2 ml-11 flex-wrap">
-              {(client.platforms || []).slice(0, 6).map((p) => (
-                <span key={p} className="text-[9px] font-mono px-1.5 py-0.5 border border-zinc-700 text-zinc-400">
-                  {p.toUpperCase()}
+        {issueGroups.map((group) => {
+          const isOpen = expanded.has(group.badge);
+          return (
+            <div key={group.badge}>
+              <div
+                className="px-4 py-3 border-b border-zinc-800 flex items-center gap-3 hover:bg-zinc-800/40 transition-colors duration-150 cursor-pointer"
+                onClick={() => toggle(group.badge)}
+              >
+                <span className={`text-[9px] font-mono px-1.5 py-0.5 border flex-shrink-0 ${BADGE_COLORS[group.color]}`}>
+                  {group.badge}
                 </span>
-              ))}
-            </div>
-            {(() => {
-              const issues = client._issues;
-              if (issues.length === 0) return null;
-              const fixRoute = getFixRoute(client.id, issues);
-              const errorDetail =
-                issues.some((i) => i.badge === "POST FAILED") && client.last_post_error
-                  ? client.last_post_error
-                  : issues.some((i) => i.badge === "BLOCKED") && client.instagram_account_warning
-                  ? client.instagram_account_warning
-                  : null;
-              return (
-                <div className="mt-1.5 ml-11">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {issues.map(({ badge, color }) => (
-                      <span key={badge} className={`text-[9px] font-mono px-1.5 py-0.5 border ${BADGE_COLORS[color]}`}>
-                        {badge}
-                      </span>
-                    ))}
-                    {fixRoute && (
+                <span className="text-[11px] font-mono text-zinc-400 flex-1">
+                  {group.clients.length} client{group.clients.length !== 1 ? "s" : ""}
+                </span>
+                <ChevronDown size={12} className={`text-zinc-600 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
+              </div>
+              {isOpen && group.clients.map((client) => {
+                const errorDetail =
+                  client._issues.some((i) => i.badge === "POST FAILED") && client.last_post_error
+                    ? client.last_post_error
+                    : client._issues.some((i) => i.badge === "BLOCKED") && client.instagram_account_warning
+                    ? client.instagram_account_warning
+                    : null;
+                return (
+                  <div
+                    key={client.id}
+                    className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0 bg-zinc-950 hover:bg-zinc-800/30 transition-colors duration-150 cursor-pointer"
+                    onClick={() => navigate(`/clients/${client.id}`)}
+                    data-testid={`client-row-${client.id}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
+                        {client.avatar}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-white">{client.name}</span>
+                          <Circle size={5} className={`fill-current ${STATUS_STYLES[client.status] || "text-zinc-500"}`} />
+                        </div>
+                        {errorDetail && (
+                          <div className="text-[10px] font-mono text-zinc-500 truncate" title={errorDetail}>{errorDetail}</div>
+                        )}
+                      </div>
                       <button
                         type="button"
-                        data-testid={`client-fix-btn-${client.id}`}
-                        onClick={(e) => { e.stopPropagation(); navigate(fixRoute); }}
-                        className="ml-auto text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer focus:ring-2 focus:ring-zinc-500 focus:outline-none"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
+                        className="text-[10px] font-mono border border-zinc-700 px-2 py-0.5 hover:bg-zinc-800 hover:border-zinc-500 transition-colors duration-150 cursor-pointer flex-shrink-0"
                       >
                         Fix →
                       </button>
-                    )}
-                  </div>
-                  {errorDetail && (
-                    <div className="mt-1 text-[10px] font-mono text-zinc-500 truncate max-w-xs" title={errorDetail}>
-                      {errorDetail}
                     </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        ))}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
@@ -308,7 +315,28 @@ const SOURCE_LABEL = { post: "POST", pipeline: "PIPELINE", log: "LOG" };
 const SOURCE_STYLES = { post: "text-red-400", pipeline: "text-amber-400", log: "text-zinc-500" };
 
 function ErrorsReportCard({ errors, navigate }) {
+  const [expanded, setExpanded] = useState(new Set());
+
+  const errorGroups = useMemo(() => {
+    const groups = {};
+    for (const err of errors) {
+      const key = `${err.source}::${err.detail}`;
+      if (!groups[key]) groups[key] = { source: err.source, detail: err.detail, clients: [] };
+      if (err.label && !groups[key].clients.includes(err.label)) {
+        groups[key].clients.push({ name: err.label, sub: err.sub, ts: err.ts });
+      }
+    }
+    return Object.values(groups).sort((a, b) => b.clients.length - a.clients.length);
+  }, [errors]);
+
+  const toggle = (key) => setExpanded((prev) => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
   if (!errors) return null;
+
   return (
     <Card>
       <CardHeader
@@ -324,31 +352,64 @@ function ErrorsReportCard({ errors, navigate }) {
         }
       />
       <div>
-        {errors.length === 0 && (
+        {errorGroups.length === 0 && (
           <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No errors</div>
         )}
-        {errors.map((err, i) => {
-          const ts = err.ts ? new Date(err.ts) : null;
-          const timeStr = ts
-            ? ts.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-            : "";
+        {errorGroups.map((group) => {
+          const key = `${group.source}::${group.detail}`;
+          const isOpen = expanded.has(key);
+          const multi = group.clients.length > 1;
           return (
-            <div key={i} className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
-              <div className="flex items-start gap-2">
-                <span className={`text-[9px] font-mono font-semibold uppercase flex-shrink-0 mt-0.5 w-16 ${SOURCE_STYLES[err.source]}`}>
-                  {SOURCE_LABEL[err.source]}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-mono text-white truncate">{err.label}</span>
-                    {err.sub && err.sub !== "log" && (
-                      <span className="text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500 flex-shrink-0">{err.sub.toUpperCase()}</span>
+            <div key={key}>
+              <div
+                className={`px-4 py-2.5 border-b border-zinc-800 ${multi ? "hover:bg-zinc-800/40 cursor-pointer" : ""} transition-colors duration-150`}
+                onClick={() => multi && toggle(key)}
+              >
+                <div className="flex items-start gap-2">
+                  <span className={`text-[9px] font-mono font-semibold uppercase flex-shrink-0 mt-0.5 w-14 ${SOURCE_STYLES[group.source]}`}>
+                    {SOURCE_LABEL[group.source]}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-zinc-500 truncate flex-1" title={group.detail}>{group.detail}</span>
+                      {multi && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 border border-zinc-700 text-zinc-400 flex-shrink-0">
+                          {group.clients.length} clients
+                        </span>
+                      )}
+                      {!multi && group.clients[0]?.sub && group.clients[0].sub !== "log" && (
+                        <span className="text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500 flex-shrink-0">
+                          {group.clients[0].sub.toUpperCase()}
+                        </span>
+                      )}
+                      {multi && (
+                        <ChevronDown size={11} className={`text-zinc-600 flex-shrink-0 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
+                      )}
+                    </div>
+                    {!multi && (
+                      <div className="text-[11px] font-mono text-white mt-0.5">{group.clients[0]?.name}</div>
                     )}
                   </div>
-                  <div className="text-[10px] font-mono text-zinc-500 truncate mt-0.5" title={err.detail}>{err.detail}</div>
                 </div>
               </div>
-              {timeStr && <div className="text-[10px] font-mono text-zinc-700 mt-0.5 ml-[4.5rem]">{timeStr}</div>}
+              {isOpen && group.clients.map((c, i) => {
+                const ts = c.ts ? new Date(c.ts) : null;
+                const timeStr = ts
+                  ? ts.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+                  : "";
+                return (
+                  <div key={i} className="px-4 py-2 border-b border-zinc-800 last:border-b-0 bg-zinc-950 flex items-center gap-2">
+                    <div className="w-14 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[11px] font-mono text-white">{c.name}</span>
+                      {c.sub && c.sub !== "log" && (
+                        <span className="ml-2 text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500">{c.sub.toUpperCase()}</span>
+                      )}
+                    </div>
+                    {timeStr && <span className="text-[10px] font-mono text-zinc-700 flex-shrink-0">{timeStr}</span>}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
