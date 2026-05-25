@@ -3214,6 +3214,25 @@ async def dashboard_overview():
     }
 
 
+@api_router.get("/dashboard/upcoming")
+async def dashboard_upcoming():
+    now = datetime.now(timezone.utc).isoformat()
+    posts = await db.posts.find(
+        {"status": "scheduled", "scheduled_at": {"$gte": now}},
+        {"_id": 0, "id": 1, "client_id": 1, "client_name": 1, "platform": 1, "scheduled_at": 1, "content_type": 1},
+    ).sort("scheduled_at", 1).to_list(8)
+    return posts
+
+
+@api_router.get("/dashboard/pipelines")
+async def dashboard_pipelines():
+    pipelines = await db.pipelines.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "client_id": 1, "client_name": 1, "status": 1, "next_run_at": 1, "last_error": 1, "content_type": 1},
+    ).sort("client_name", 1).to_list(100)
+    return pipelines
+
+
 @api_router.get("/dashboard/time-series")
 async def dashboard_time_series(days: int = 14):
     start = (datetime.now(timezone.utc) - timedelta(days=days)).replace(

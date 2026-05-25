@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity } from "lucide-react";
+import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, CalendarClock, GitBranch } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -12,12 +12,6 @@ const STATUS_STYLES = {
   error: "text-red-400",
 };
 
-const LOG_LEVEL_STYLES = {
-  success: "text-emerald-400",
-  info: "text-blue-400",
-  warning: "text-amber-400",
-  error: "text-red-400",
-};
 
 const BADGE_COLORS = {
   red:   "text-red-400 border-red-500/30",
@@ -250,34 +244,74 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
   );
 }
 
-function RecentActivityCard({ activity, navigate }) {
+const PLATFORM_SHORT = { instagram: "IG", facebook: "FB", tiktok: "TT", linkedin: "LI", twitter: "TW", youtube: "YT", threads: "TH", pinterest: "PT" };
+
+function UpcomingQueueCard({ upcoming }) {
+  if (!upcoming) return null;
   return (
     <Card>
-      <CardHeader
-        label="Recent Activity"
-        action={
-          <button
-            onClick={() => navigate("/logs")}
-            className="text-[11px] text-zinc-500 hover:text-white transition-colors duration-150 font-mono cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-500"
-          >
-            View Logs →
-          </button>
-        }
-      />
+      <CardHeader label="Upcoming Queue" icon={CalendarClock} />
       <div>
-        {(activity || []).slice(0, 8).map((log, i) => (
-          <div key={log.id || i} className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
-            <div className="flex items-start gap-2">
-              <span className={`text-[10px] font-mono font-semibold uppercase w-14 flex-shrink-0 mt-0.5 ${LOG_LEVEL_STYLES[log.level] || "text-zinc-400"}`}>
-                {log.level}
+        {upcoming.length === 0 && (
+          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No posts scheduled</div>
+        )}
+        {upcoming.map((post, i) => {
+          const d = post.scheduled_at ? new Date(post.scheduled_at) : null;
+          const timeStr = d
+            ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+            : "—";
+          return (
+            <div key={post.id || i} className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
+              <span className="text-[9px] font-mono px-1.5 py-0.5 border border-zinc-700 text-zinc-400 flex-shrink-0 w-7 text-center">
+                {PLATFORM_SHORT[post.platform] || (post.platform || "?").slice(0, 2).toUpperCase()}
               </span>
-              <span className="text-xs text-zinc-300 font-mono leading-relaxed">{log.message}</span>
+              <span className="text-xs font-mono text-white truncate flex-1">{post.client_name || post.client_id}</span>
+              <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">{timeStr}</span>
             </div>
-            <div className="text-[10px] text-zinc-600 font-mono mt-0.5 ml-16">
-              {log.created_at ? new Date(log.created_at).toLocaleTimeString() : ""}
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+const PIPELINE_STATUS_STYLES = {
+  active:  "text-emerald-400",
+  paused:  "text-amber-400",
+  error:   "text-red-400",
+  draft:   "text-zinc-500",
+};
+
+function PipelineHealthCard({ pipelines }) {
+  if (!pipelines) return null;
+  return (
+    <Card>
+      <CardHeader label="Pipeline Health" icon={GitBranch} />
+      <div>
+        {pipelines.length === 0 && (
+          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No pipelines</div>
+        )}
+        {pipelines.map((pl, i) => {
+          const nextRun = pl.next_run_at ? new Date(pl.next_run_at) : null;
+          const nextStr = nextRun
+            ? nextRun.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " + nextRun.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+            : null;
+          return (
+            <div key={pl.id || i} className="px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
+              <div className="flex items-center gap-2">
+                <Circle size={6} className={`fill-current flex-shrink-0 ${PIPELINE_STATUS_STYLES[pl.status] || "text-zinc-500"}`} />
+                <span className="text-xs font-mono text-white truncate flex-1">{pl.client_name}</span>
+                <span className="text-[9px] font-mono text-zinc-500 flex-shrink-0">{pl.name}</span>
+              </div>
+              {pl.status === "error" && pl.last_error && (
+                <div className="mt-0.5 ml-4 text-[10px] font-mono text-red-400 truncate" title={pl.last_error}>{pl.last_error}</div>
+              )}
+              {pl.status !== "error" && nextStr && (
+                <div className="mt-0.5 ml-4 text-[10px] font-mono text-zinc-600">next {nextStr}</div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
@@ -291,6 +325,8 @@ export default function Dashboard() {
   const [clients, setClients] = useState([]);
   const [timeSeries, setTimeSeries] = useState([]);
   const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
+  const [upcoming, setUpcoming] = useState([]);
+  const [pipelines, setPipelines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
 
@@ -311,12 +347,14 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      try {
-        const sp = await axios.get(`${API}/dashboard/spend?days=7`);
-        setSpend(sp.data);
-      } catch {
-        // spend is non-critical; dashboard continues without it
-      }
+      const [sp, uq, pl] = await Promise.allSettled([
+        axios.get(`${API}/dashboard/spend?days=7`),
+        axios.get(`${API}/dashboard/upcoming`),
+        axios.get(`${API}/dashboard/pipelines`),
+      ]);
+      if (sp.status === "fulfilled") setSpend(sp.value.data);
+      if (uq.status === "fulfilled") setUpcoming(uq.value.data);
+      if (pl.status === "fulfilled") setPipelines(pl.value.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -410,10 +448,11 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Client Status + Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Client Issues + Upcoming + Pipelines */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ClientStatusCard clientsWithIssues={clientsWithIssues} navigate={navigate} />
-        <RecentActivityCard activity={overview?.recent_activity} navigate={navigate} />
+        <UpcomingQueueCard upcoming={upcoming} />
+        <PipelineHealthCard pipelines={pipelines} />
       </div>
     </div>
   );
