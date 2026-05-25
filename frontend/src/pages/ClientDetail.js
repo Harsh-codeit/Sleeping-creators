@@ -67,7 +67,9 @@ function initEditForm(client) {
     // Step 2B additions
     target_audience_description: ob.target_audience_description || "",
     audience_age_range: ob.audience_age_range || "",
-    audience_emotional_state: Array.isArray(ob.audience_emotional_state) ? ob.audience_emotional_state : [],
+    audience_emotional_state: (Array.isArray(ob.audience_emotional_state) ? ob.audience_emotional_state : [])
+      .map(s => { const p = s.replace(/^[^a-zA-Z]+/, '').trim(); return EDIT_EMOTIONAL_STATES.includes(p) ? p : (EDIT_EMOTIONAL_STATES.includes(s) ? s : null); })
+      .filter(Boolean),
     // Step 2C additions (8 capped-5 lists)
     solutions_provided: ob.solutions_provided?.length ? ob.solutions_provided : [""],
     audience_problems: ob.audience_problems?.length ? ob.audience_problems : [""],
@@ -491,36 +493,18 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             <EInput value={editForm.audience_age_range} onChange={e => set("audience_age_range", e.target.value)} placeholder="25-40 years" data-testid="edit-audience-age-range" />
           </div>
           <div>
-            <ELabel>Account Goals</ELabel>
-            <div className="flex gap-2">
-              {EDIT_GOALS.map(g => (
-                <button key={g.value} type="button" onClick={() => set("account_goals", g.value)}
-                  data-testid={`edit-goal-${g.value}`}
-                  className={`flex-1 py-2 px-3 border text-xs font-mono transition-all duration-150 ${editForm.account_goals === g.value ? "border-white bg-white/5 text-white" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
-                  {g.label}
-                </button>
+            <ELabel>Language</ELabel>
+            <select
+              data-testid="edit-language"
+              value={Array.isArray(editForm.language) ? (editForm.language[0] ?? "") : (editForm.language ?? "")}
+              onChange={e => set("language", e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150"
+            >
+              <option value="" disabled>Select a language</option>
+              {EDIT_LANGUAGE_OPTIONS.map(l => (
+                <option key={l} value={l} className="bg-zinc-950">{l}</option>
               ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <ELabel optional>CTA Link</ELabel>
-              <EInput value={editForm.cta_link} onChange={e => set("cta_link", e.target.value)} placeholder="https://acme.com/book-demo" type="url" data-testid="edit-cta" />
-            </div>
-            <div>
-              <ELabel>Language</ELabel>
-              <select
-                data-testid="edit-language"
-                value={Array.isArray(editForm.language) ? (editForm.language[0] ?? "") : (editForm.language ?? "")}
-                onChange={e => set("language", e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-400 transition-colors duration-150"
-              >
-                <option value="" disabled>Select a language</option>
-                {EDIT_LANGUAGE_OPTIONS.map(l => (
-                  <option key={l} value={l} className="bg-zinc-950">{l}</option>
-                ))}
-              </select>
-            </div>
+            </select>
           </div>
           <div>
             <ELabel>Next Step After View</ELabel>
