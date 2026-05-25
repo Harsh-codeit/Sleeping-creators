@@ -2108,8 +2108,8 @@ export default function ClientDetail() {
             <div className="bg-zinc-900 border border-zinc-800 p-4">
               <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Profile Photo</div>
               <div className="flex items-center gap-4">
-                {(client.profile_photo_url || client.profile_photo_link) ? (
-                  <img src={client.profile_photo_url || client.profile_photo_link} alt={client.name}
+                {(client.profile_photo_url || client.onboarding_data?.profile_photo_link) ? (
+                  <img src={client.profile_photo_url || client.onboarding_data?.profile_photo_link} alt={client.name}
                     className="w-14 h-14 rounded-full object-cover border border-zinc-700" />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-lg font-bold text-white">
