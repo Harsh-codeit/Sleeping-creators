@@ -111,3 +111,40 @@ def test_add_charts_calls_batch_update():
     call_args = mock_spreadsheets.batchUpdate.call_args
     requests = call_args[1]["body"]["requests"]
     assert len(requests) == 3
+
+
+def test_sync_performance_tab_builds_correct_rows():
+    """sync_performance_tab must write one row per social platform with correct columns."""
+    import asyncio
+    import sheets_service
+
+    socials = [
+        {"platform": "instagram", "followers": 1200, "likes": 80, "comments": 10,
+         "impressions": 5000, "engagement_rate": 7.5, "refreshed_at": "2026-05-25T10:00:00+00:00"},
+        {"platform": "linkedin",  "followers": 500,  "likes": 20, "comments": 5,
+         "impressions": 1000, "engagement_rate": 5.0, "refreshed_at": "2026-05-25T10:00:00+00:00"},
+    ]
+    client = {"bundle": {"socials": socials}}
+
+    captured = {}
+    def fake_sync(refresh_token, sheet_id, tab_name, rows):
+        captured["rows"] = rows
+    with patch("sheets_service._sync_tab_sync", fake_sync):
+        asyncio.run(sheets_service.sync_performance_tab("tok", "sid", client))
+
+    assert len(captured["rows"]) == 2
+    assert captured["rows"][0] == ["instagram", 1200, 80, 10, 5000, 7.5, "2026-05-25T10:00:00"]
+    assert captured["rows"][1] == ["linkedin",  500,  20, 5,  1000, 5.0, "2026-05-25T10:00:00"]
+
+
+def test_sync_performance_tab_empty_when_no_bundle():
+    """sync_performance_tab must write zero rows when bundle.socials is absent."""
+    import asyncio
+    import sheets_service
+
+    captured = {}
+    def fake_sync(refresh_token, sheet_id, tab_name, rows):
+        captured["rows"] = rows
+    with patch("sheets_service._sync_tab_sync", fake_sync):
+        asyncio.run(sheets_service.sync_performance_tab("tok", "sid", {}))
+    assert captured["rows"] == []

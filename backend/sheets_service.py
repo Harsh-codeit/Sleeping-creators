@@ -345,6 +345,23 @@ async def sync_trends_tab(refresh_token: str, sheet_id: str, trends: list) -> No
     await asyncio.to_thread(_sync_tab_sync, refresh_token, sheet_id, "Trends", rows)
 
 
+async def sync_performance_tab(refresh_token: str, sheet_id: str, client: dict) -> None:
+    socials = (client.get("bundle") or {}).get("socials") or []
+    rows = [
+        [
+            s.get("platform", ""),
+            s.get("followers", 0) or 0,
+            s.get("likes", 0) or 0,
+            s.get("comments", 0) or 0,
+            s.get("impressions", 0) or 0,
+            s.get("engagement_rate", 0) or 0,
+            str(s.get("refreshed_at", ""))[:19],
+        ]
+        for s in socials
+    ]
+    await asyncio.to_thread(_sync_tab_sync, refresh_token, sheet_id, "Performance", rows)
+
+
 async def read_post_statuses(refresh_token: str, sheet_id: str) -> list:
     """Read ID + Status columns from the Posts tab for inbound sync."""
     return await asyncio.to_thread(_read_posts_statuses_sync, refresh_token, sheet_id)
