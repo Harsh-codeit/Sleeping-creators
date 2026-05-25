@@ -2735,6 +2735,12 @@ async def onboard_client(data: OnboardingCreate):
         "created_at": now_iso()
     }
 
+    # Promote drive links from onboarding_data to root fields used by the overview cards
+    if data.google_drive_images:
+        client["drive_images_folder_id"] = data.google_drive_images
+    if data.google_drive_videos:
+        client["drive_folder_id"] = data.google_drive_videos
+
     # Recompute all derived mirrors and expand dot-path keys into nested doc
     _expand_derived_into_doc(client, _recompute_derived(client))
 
