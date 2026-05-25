@@ -603,6 +603,9 @@ class OnboardingCreate(BaseModel):
     youtube_url: str = ""
     twitter_url: str = ""
     pr_links: List[str] = []
+    pr_media_links: str = ""
+    high_quality_photos_link: str = ""
+    video_clips_link: str = ""
 
     # — Step 1C: Assets (Drive links) —
     profile_photo_link: str = ""
@@ -698,6 +701,9 @@ class AffiliateClientData(BaseModel):
     pr_links: List[str] = []
     google_drive_images: str = ""
     google_drive_videos: str = ""
+    pr_media_links: str = ""
+    high_quality_photos_link: str = ""
+    video_clips_link: str = ""
     profile_photo_link: str = ""
     logo_link: str = ""
     account_suspended: bool = False
@@ -2291,6 +2297,7 @@ _ONBOARDING_KEYS = frozenset({
     "has_case_studies", "case_study_1", "case_study_2", "signature_topic",
     "niche_working_topics", "niche_oversaturated_topics", "niche_underserved_topics",
     "disliked_content", "next_step_after_view", "lead_magnet_link",
+    "pr_media_links", "high_quality_photos_link", "video_clips_link",
 })
 
 @api_router.put("/clients/{client_id}")
