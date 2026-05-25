@@ -2722,11 +2722,12 @@ async def onboard_client(data: OnboardingCreate):
 
     # Auto-create default pipeline using the template configured in settings
     try:
-        app_settings = await db.settings.find_one({}, {"_id": 0}) or {}
+        app_settings = await db.settings.find_one({"key": "global"}, {"_id": 0}) or {}
         default_template = app_settings.get("default_carousel_template") or None
         delay_hours = int(app_settings.get("onboard_pipeline_delay_hours") or 0)
         posting_time = app_settings.get("onboard_pipeline_posting_time") or "09:00"
         slide_count = app_settings.get("onboard_pipeline_slide_count") or None
+        require_approval = bool(app_settings.get("require_approval", False))
         created = await create_pipeline(client["id"], PipelineCreate(
             name="Daily Content",
             pipeline_type="standard",
@@ -2737,7 +2738,7 @@ async def onboard_client(data: OnboardingCreate):
             platforms=client["platforms"],
             schedule_type="specific_times",
             specific_times=[posting_time],
-            require_approval=False,
+            require_approval=require_approval,
         ))
         if delay_hours > 0:
             start_after = datetime.now(timezone.utc) + timedelta(hours=delay_hours)
