@@ -2245,6 +2245,13 @@ app.add_middleware(
 @api_router.get("/clients")
 async def list_clients():
     clients = await db.clients.find({}, {"_id": 0}).to_list(1000)
+    scheduled_raw = await db.posts.aggregate([
+        {"$match": {"status": "scheduled"}},
+        {"$group": {"_id": "$client_id", "n": {"$sum": 1}}},
+    ]).to_list(None)
+    scheduled_map = {r["_id"]: r["n"] for r in scheduled_raw}
+    for c in clients:
+        c["scheduled_count"] = scheduled_map.get(c["id"], 0)
     return clients
 
 @api_router.post("/clients", status_code=201)

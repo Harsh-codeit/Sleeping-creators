@@ -76,3 +76,49 @@ def test_spend_days_param_rejects_out_of_range(mock_db, _):
 
     resp2 = client.get("/api/dashboard/spend?days=91", headers=AUTH)
     assert resp2.status_code == 422
+
+
+# ─── GET /api/clients — scheduled_count ──────────────────────────────────────
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_list_clients_includes_scheduled_count(mock_db, _):
+    clients_data = [
+        {"id": "c1", "name": "Client A"},
+        {"id": "c2", "name": "Client B"},
+    ]
+
+    def _find_cursor(*_args, **_kwargs):
+        cur = MagicMock()
+        cur.to_list = AsyncMock(return_value=clients_data)
+        return cur
+
+    mock_db.clients.find.side_effect = _find_cursor
+    mock_db.posts.aggregate.return_value = _cursor([
+        {"_id": "c1", "n": 3},
+    ])
+
+    resp = client.get("/api/clients", headers=AUTH)
+    assert resp.status_code == 200
+    body = resp.json()
+
+    c1 = next(c for c in body if c["id"] == "c1")
+    c2 = next(c for c in body if c["id"] == "c2")
+    assert c1["scheduled_count"] == 3
+    assert c2["scheduled_count"] == 0
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_list_clients_scheduled_count_zero_when_no_posts(mock_db, _):
+    def _find_cursor(*_args, **_kwargs):
+        cur = MagicMock()
+        cur.to_list = AsyncMock(return_value=[{"id": "c1", "name": "X"}])
+        return cur
+
+    mock_db.clients.find.side_effect = _find_cursor
+    mock_db.posts.aggregate.return_value = _cursor([])
+
+    resp = client.get("/api/clients", headers=AUTH)
+    assert resp.status_code == 200
+    assert resp.json()[0]["scheduled_count"] == 0
