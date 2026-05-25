@@ -2114,6 +2114,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(purge_published_media, 'interval', hours=1, id='purge_media',
                       start_date=_now + timedelta(seconds=450))
     scheduler.add_job(fire_scheduled_emails, 'interval', seconds=60, id='fire_scheduled_emails')
+    scheduler.add_job(refresh_all_analytics, 'cron', hour=2, minute=0, id='daily_analytics_sync')
     scheduler.start()
     # Verify competitor weekly scan job is registered and log next fire time
     _competitor_job = scheduler.get_job('competitor_weekly_scan')
@@ -3233,6 +3234,42 @@ async def dashboard_pipelines():
     return pipelines
 
 
+@api_router.get("/dashboard/top-performers")
+async def dashboard_top_performers():
+    clients = await db.clients.find(
+        {"bundle.socials": {"$exists": True, "$ne": []}},
+        {"_id": 0, "id": 1, "name": 1, "avatar": 1, "bundle": 1},
+    ).to_list(None)
+    result = []
+    for c in clients:
+        socials = (c.get("bundle") or {}).get("socials") or []
+        refreshed_at = (c.get("bundle") or {}).get("socials_refreshed_at")
+        if not socials:
+            continue
+        followers = sum(s.get("followers", 0) or 0 for s in socials)
+        likes = sum(s.get("likes", 0) or 0 for s in socials)
+        comments = sum(s.get("comments", 0) or 0 for s in socials)
+        impressions = sum(s.get("impressions", 0) or 0 for s in socials)
+        new_followers = sum(s.get("new_followers", 0) or 0 for s in socials)
+        engagement_rate = round((likes + comments) / followers * 100, 2) if followers > 0 else 0
+        platforms = [s["platform"] for s in socials if s.get("platform")]
+        result.append({
+            "id": c["id"],
+            "name": c.get("name", ""),
+            "avatar": c.get("avatar", ""),
+            "followers": followers,
+            "new_followers": new_followers,
+            "impressions": impressions,
+            "likes": likes,
+            "comments": comments,
+            "engagement_rate": engagement_rate,
+            "platforms": platforms,
+            "refreshed_at": refreshed_at,
+        })
+    result.sort(key=lambda x: x["engagement_rate"], reverse=True)
+    return result[:8]
+
+
 @api_router.get("/dashboard/errors")
 async def dashboard_errors():
     failed_posts, pipeline_errors, error_logs = await asyncio.gather(
@@ -3441,6 +3478,54 @@ async def analytics_client_refresh(client_id: str):
         }},
     )
     return {"socials": socials, "socials_refreshed_at": refreshed_at}
+
+
+async def refresh_all_analytics():
+    """Daily cron: refresh Bundle analytics for every connected client."""
+    settings = await get_settings()
+    api_key = settings.get("bundle_api_key", "")
+    if not api_key:
+        return
+    clients = await db.clients.find(
+        {"bundle_team_id": {"$exists": True, "$nin": [None, ""]}},
+        {"_id": 0, "id": 1, "name": 1, "bundle_team_id": 1, "bundle_platforms": 1},
+    ).to_list(None)
+    refreshed_at = now_iso()
+    for client in clients:
+        team_id = client.get("bundle_team_id")
+        platforms = client.get("bundle_platforms") or []
+        if not team_id or not platforms:
+            continue
+        socials = []
+        for platform in platforms:
+            try:
+                data = await bundle_service.get_social_account_analytics(api_key, team_id, platform)
+                items = data.get("items") or []
+                acct = data.get("socialAccount") or {}
+                item = items[0] if items else {}
+                socials.append({
+                    "platform":           platform,
+                    "username":           acct.get("username"),
+                    "avatar_url":         acct.get("avatarUrl"),
+                    "followers":          item.get("followers", 0) or 0,
+                    "following":          item.get("following", 0) or 0,
+                    "new_followers":      item.get("newFollowers") or item.get("followerGrowth") or 0,
+                    "impressions":        item.get("impressions", 0) or 0,
+                    "likes":              item.get("likes", 0) or 0,
+                    "comments":           item.get("comments", 0) or 0,
+                    "shares":             item.get("shares") or item.get("reposts") or 0,
+                    "profile_views":      item.get("profileViews") or item.get("profileVisits") or 0,
+                    "post_count":         item.get("postCount", 0) or 0,
+                    "refreshed_at":       refreshed_at,
+                })
+            except Exception as e:
+                logger.warning("Daily analytics refresh failed client=%s platform=%s: %s", client["id"], platform, e)
+        if socials:
+            await db.clients.update_one(
+                {"id": client["id"]},
+                {"$set": {"bundle.socials": socials, "bundle.socials_refreshed_at": refreshed_at}},
+            )
+    logger.info("Daily analytics refresh complete — %d clients", len(clients))
 
 
 @api_router.get("/analytics/clients/{client_id}/ig-stats")

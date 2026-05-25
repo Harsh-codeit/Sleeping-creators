@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, CalendarClock, AlertTriangle } from "lucide-react";
+import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, Trophy, AlertTriangle } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -246,30 +246,54 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
 
 const PLATFORM_SHORT = { instagram: "IG", facebook: "FB", tiktok: "TT", linkedin: "LI", twitter: "TW", youtube: "YT", threads: "TH", pinterest: "PT" };
 
-function UpcomingQueueCard({ upcoming }) {
-  if (!upcoming) return null;
+function fmt(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return String(n);
+}
+
+function TopPerformersCard({ performers, navigate }) {
+  if (!performers) return null;
+  const syncedAt = performers[0]?.refreshed_at
+    ? new Date(performers[0].refreshed_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   return (
     <Card>
-      <CardHeader label="Upcoming Queue" icon={CalendarClock} />
-      <div>
-        {upcoming.length === 0 && (
-          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No posts scheduled</div>
+      <CardHeader
+        label="Top Performers"
+        icon={Trophy}
+        action={syncedAt && (
+          <span className="text-[10px] font-mono text-zinc-600">synced {syncedAt}</span>
         )}
-        {upcoming.map((post, i) => {
-          const d = post.scheduled_at ? new Date(post.scheduled_at) : null;
-          const timeStr = d
-            ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-            : "—";
-          return (
-            <div key={post.id || i} className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-800 last:border-b-0">
-              <span className="text-[9px] font-mono px-1.5 py-0.5 border border-zinc-700 text-zinc-400 flex-shrink-0 w-7 text-center">
-                {PLATFORM_SHORT[post.platform] || (post.platform || "?").slice(0, 2).toUpperCase()}
-              </span>
-              <span className="text-xs font-mono text-white truncate flex-1">{post.client_name || post.client_id}</span>
-              <span className="text-[10px] font-mono text-zinc-500 flex-shrink-0">{timeStr}</span>
+      />
+      <div>
+        {performers.length === 0 && (
+          <div className="px-4 py-6 text-center text-[11px] font-mono text-zinc-600">No analytics data yet</div>
+        )}
+        {performers.map((p, i) => (
+          <div
+            key={p.id}
+            className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-800 last:border-b-0 hover:bg-zinc-800/40 transition-colors duration-150 cursor-pointer"
+            onClick={() => navigate(`/clients/${p.id}`)}
+          >
+            <span className="text-[10px] font-mono text-zinc-600 w-4 flex-shrink-0">{i + 1}</span>
+            <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
+              {p.avatar || (p.name || "?").slice(0, 2).toUpperCase()}
             </div>
-          );
-        })}
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-mono text-white truncate">{p.name}</div>
+              <div className="flex gap-1 mt-0.5">
+                {(p.platforms || []).slice(0, 3).map((pl) => (
+                  <span key={pl} className="text-[8px] font-mono text-zinc-600">{PLATFORM_SHORT[pl] || pl.slice(0, 2).toUpperCase()}</span>
+                ))}
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="text-xs font-mono text-white">{fmt(p.followers)}</div>
+              <div className="text-[10px] font-mono text-emerald-400">{p.engagement_rate}%</div>
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   );
@@ -336,7 +360,7 @@ export default function Dashboard() {
   const [clients, setClients] = useState([]);
   const [timeSeries, setTimeSeries] = useState([]);
   const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
-  const [upcoming, setUpcoming] = useState([]);
+  const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
@@ -360,11 +384,11 @@ export default function Dashboard() {
       setTimeSeries(ts.data);
       const [sp, uq, er] = await Promise.allSettled([
         axios.get(`${API}/dashboard/spend?days=7`),
-        axios.get(`${API}/dashboard/upcoming`),
+        axios.get(`${API}/dashboard/top-performers`),
         axios.get(`${API}/dashboard/errors`),
       ]);
       if (sp.status === "fulfilled") setSpend(sp.value.data);
-      if (uq.status === "fulfilled") setUpcoming(uq.value.data);
+      if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
     } catch (e) {
       console.error(e);
@@ -462,7 +486,7 @@ export default function Dashboard() {
       {/* Client Issues + Upcoming + Pipelines */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ClientStatusCard clientsWithIssues={clientsWithIssues} navigate={navigate} />
-        <UpcomingQueueCard upcoming={upcoming} />
+        <TopPerformersCard performers={performers} navigate={navigate} />
         <ErrorsReportCard errors={errors} navigate={navigate} />
       </div>
     </div>
