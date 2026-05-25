@@ -3,6 +3,7 @@ import {
   Textarea,
   SubsectionHeader,
   MultiCheckbox,
+  CappedMultiInput,
 } from "../primitives";
 
 const NOT_TO_DO_PROMPTS = [

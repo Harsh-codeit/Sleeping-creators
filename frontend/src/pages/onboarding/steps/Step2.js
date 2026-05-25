@@ -171,13 +171,11 @@ export default function Step2({ form, set }) {
         <MultiCheckbox
           label="Audience Emotional State"
           options={[
-            "Ambitious",
-            "Stressed",
-            "Confused",
-            "Motivated",
-            "Depressed",
-            "Directionless",
-            "Lonely",
+            "🔥 Ambitious", "😰 Overwhelmed", "😕 Confused", "💪 Motivated",
+            "😔 Stuck", "🌀 Directionless", "😞 Lonely", "💸 Broke",
+            "🙏 Hopeful", "😤 Frustrated", "🤯 Burned Out", "😟 Anxious",
+            "✨ Inspired", "😴 Bored", "🤔 Unsure", "💔 Heartbroken",
+            "🎯 Focused", "😩 Exhausted", "🌟 Driven", "😔 Depressed",
           ]}
           values={form.audience_emotional_state ?? []}
           onChange={(v) => set("audience_emotional_state", v)}

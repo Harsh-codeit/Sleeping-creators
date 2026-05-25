@@ -10,17 +10,18 @@ import {
  */
 export default function Step4({ form, set }) {
   const goals = [
-    { value: "leads", label: "Get More Leads", desc: "Generate inbound DMs and inquiries" },
-    { value: "reach", label: "Grow Reach & Awareness", desc: "Maximize impressions and shares" },
-    { value: "followers", label: "Grow Followers", desc: "Build a larger audience over time" },
+    { value: "Get More Leads", label: "Get More Leads", desc: "Generate inbound DMs and inquiries" },
+    { value: "Grow Reach & Awareness", label: "Grow Reach & Awareness", desc: "Maximize impressions and shares" },
+    { value: "Grow Followers", label: "Grow Followers", desc: "Build a larger audience over time" },
+    { value: "Visibility and Influence", label: "Visibility and Influence", desc: "Build authority and brand presence" },
   ];
 
   const nextSteps = [
-    { value: "dm", label: "DM you", desc: "Start a conversation in DMs" },
-    { value: "link", label: "Click a link", desc: "Visit a landing page" },
-    { value: "call", label: "Book a call", desc: "Schedule a meeting" },
-    { value: "enrol", label: "Enrol directly", desc: "Sign up for an offer" },
-    { value: "other", label: "Other", desc: "Something else" },
+    { value: "DM you", label: "DM you", desc: "Start a conversation in DMs" },
+    { value: "Click a link", label: "Click a link", desc: "Visit a landing page" },
+    { value: "Book a call", label: "Book a call", desc: "Schedule a meeting" },
+    { value: "Enrol directly", label: "Enrol directly", desc: "Sign up for an offer" },
+    { value: "Other", label: "Other", desc: "Something else" },
   ];
 
   const selectedGoal = form.account_goals ?? "followers";

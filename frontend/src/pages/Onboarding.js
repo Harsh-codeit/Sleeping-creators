@@ -53,7 +53,7 @@ const INITIAL = {
   // — Step 3D: Boundaries —
   disliked_content: "", not_to_do_list: [""],
   // — Step 4A: Goal & Next Step —
-  account_goals: "followers", next_step_after_view: "",
+  account_goals: "Grow Followers", next_step_after_view: "",
   // — Step 4B: CTA —
   cta_link: "",
   // — Platforms (default: instagram) —
