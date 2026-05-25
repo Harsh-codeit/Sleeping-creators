@@ -27,7 +27,7 @@ function initEditForm(client) {
     whatsapp: ob.whatsapp || "",
     email: ob.email || "",
     website_url: ob.website_url || "",
-    pr_links: ob.pr_links?.length ? ob.pr_links : [""],
+    pr_media_links: ob.pr_media_links || (ob.pr_links || []).join("\n") || "",
     instagram_handle: ob.instagram_handle || "",
     instagram_access_link: ob.instagram_access_link || "",
     instagram_password: ob.instagram_password || "",
@@ -38,8 +38,8 @@ function initEditForm(client) {
     cta_link: ob.cta_link || "",
     language: Array.isArray(ob.language) ? (ob.language[0] ?? "English") : (ob.language || "English"),
     branding_assets_link: ob.branding_assets_link || "",
-    google_drive_images: ob.google_drive_images || "",
-    google_drive_videos: ob.google_drive_videos || "",
+    high_quality_photos_link: ob.high_quality_photos_link || ob.google_drive_images || "",
+    video_clips_link: ob.video_clips_link || ob.google_drive_videos || "",
     drive_images_folder_id: ob.drive_images_folder_id || "",
     competitor_accounts: ob.competitor_accounts?.length ? ob.competitor_accounts : [""],
     not_to_do_list: ob.not_to_do_list?.length ? ob.not_to_do_list : [""],
@@ -602,14 +602,18 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
               <EInput value={editForm.lead_magnet_link} onChange={e => set("lead_magnet_link", e.target.value)} placeholder="Drive link for the lead magnet asset" type="url" data-testid="edit-lead-magnet-link" />
             </div>
           </div>
+          <div>
+            <ELabel optional>PR / Media Links</ELabel>
+            <ETextarea rows={2} value={editForm.pr_media_links || ""} onChange={e => set("pr_media_links", e.target.value)} placeholder="Press links, media mentions — one per line" data-testid="edit-pr-media-links" />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <ELabel optional>Google Drive — Images</ELabel>
-              <EInput value={editForm.google_drive_images} onChange={e => set("google_drive_images", e.target.value)} placeholder="https://drive.google.com/..." type="url" data-testid="edit-drive-images" />
+              <ELabel optional>High Quality Photos — Drive URL</ELabel>
+              <EInput value={editForm.high_quality_photos_link} onChange={e => set("high_quality_photos_link", e.target.value)} placeholder="https://drive.google.com/..." type="url" data-testid="edit-high-quality-photos-link" />
             </div>
             <div>
-              <ELabel optional>Google Drive — Videos</ELabel>
-              <EInput value={editForm.google_drive_videos} onChange={e => set("google_drive_videos", e.target.value)} placeholder="https://drive.google.com/..." type="url" data-testid="edit-drive-videos" />
+              <ELabel optional>Video Clips — Drive URL</ELabel>
+              <EInput value={editForm.video_clips_link} onChange={e => set("video_clips_link", e.target.value)} placeholder="https://drive.google.com/..." type="url" data-testid="edit-video-clips-link" />
             </div>
           </div>
           <div>
