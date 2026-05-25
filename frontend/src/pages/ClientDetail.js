@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, Search, Star, Film, Image, CheckCircle } from "lucide-react";
+import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, EyeOff, Search, Star, Film, Image, CheckCircle } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
@@ -318,16 +318,7 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             <ELabel optional>Brand Name</ELabel>
             <EInput value={editForm.brand_name} onChange={e => set("brand_name", e.target.value)} placeholder="The public-facing brand name" data-testid="edit-brand-name" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <ELabel optional>Username</ELabel>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 text-sm font-mono">@</span>
-                <input value={editForm.username} onChange={e => set("username", e.target.value)} placeholder="handle"
-                  data-testid="edit-username"
-                  className="w-full bg-zinc-950 border border-zinc-700 pl-7 pr-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150" />
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <ELabel optional>WhatsApp</ELabel>
               <EInput value={editForm.whatsapp} onChange={e => set("whatsapp", e.target.value)} placeholder="+1 234 567 8900" data-testid="edit-whatsapp" />
@@ -398,7 +389,24 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
             </div>
             <div>
               <ELabel>Instagram Password</ELabel>
-              <EInput type="password" autoComplete="new-password" value={editForm.instagram_password} onChange={e => set("instagram_password", e.target.value)} placeholder="Stored as a string for account re-verification" data-testid="edit-ig-password" />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={editForm.instagram_password}
+                  onChange={e => set("instagram_password", e.target.value)}
+                  placeholder="Stored for account re-verification"
+                  data-testid="edit-ig-password"
+                  className="w-full bg-zinc-950 border border-zinc-700 pl-3 pr-10 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -421,15 +429,9 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
               <EInput value={editForm.youtube_url} onChange={e => set("youtube_url", e.target.value)} placeholder="https://youtube.com/@channel" type="url" data-testid="edit-youtube-url" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <ELabel optional>Twitter / X URL</ELabel>
-              <EInput value={editForm.twitter_url} onChange={e => set("twitter_url", e.target.value)} placeholder="https://twitter.com/handle" type="url" data-testid="edit-twitter-url" />
-            </div>
-            <div>
-              <ELabel optional>Logo Link</ELabel>
-              <EInput value={editForm.logo_link} onChange={e => set("logo_link", e.target.value)} placeholder="Drive / Dropbox / direct image URL" type="url" data-testid="edit-logo-link" />
-            </div>
+          <div>
+            <ELabel optional>Twitter / X URL</ELabel>
+            <EInput value={editForm.twitter_url} onChange={e => set("twitter_url", e.target.value)} placeholder="https://twitter.com/handle" type="url" data-testid="edit-twitter-url" />
           </div>
         </div>
       </div>
@@ -441,10 +443,6 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
           <div>
             <ELabel optional>Niche / Target Market</ELabel>
             <EInput value={editForm.niche} onChange={e => set("niche", e.target.value)} placeholder="e.g. Health-conscious adults 25-40, B2B SaaS CTOs" data-testid="edit-niche" />
-          </div>
-          <div>
-            <ELabel optional>Problem the Client Solves</ELabel>
-            <ETextarea value={editForm.problem_solved} onChange={e => set("problem_solved", e.target.value)} placeholder="Describe what their product/service helps customers achieve..." data-testid="edit-problem" />
           </div>
           <div>
             <ELabel>Brand Vibe / Tone of Voice</ELabel>
@@ -474,10 +472,6 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
           <div>
             <ELabel optional>Business Description</ELabel>
             <ETextarea rows={4} value={editForm.business_description} onChange={e => set("business_description", e.target.value)} placeholder="What do you do? How do you help people?" data-testid="edit-business-description" />
-          </div>
-          <div>
-            <ELabel optional>Industry Label</ELabel>
-            <EInput value={editForm.industry_label} onChange={e => set("industry_label", e.target.value)} placeholder="Short category label, e.g. Fitness" data-testid="edit-industry-label" />
           </div>
           <div>
             <ELabel optional>Daily Life</ELabel>
@@ -590,15 +584,9 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
       <div className="bg-zinc-900 border border-zinc-800 p-5">
         <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">Content Assets</div>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <ELabel optional>Branding Assets Link</ELabel>
-              <EInput value={editForm.branding_assets_link} onChange={e => set("branding_assets_link", e.target.value)} placeholder="Google Drive / Dropbox link to logos, brand kit..." type="url" data-testid="edit-branding" />
-            </div>
-            <div>
-              <ELabel optional>Lead Magnet Link</ELabel>
-              <EInput value={editForm.lead_magnet_link} onChange={e => set("lead_magnet_link", e.target.value)} placeholder="Drive link for the lead magnet asset" type="url" data-testid="edit-lead-magnet-link" />
-            </div>
+          <div>
+            <ELabel optional>Lead Magnet Link</ELabel>
+            <EInput value={editForm.lead_magnet_link} onChange={e => set("lead_magnet_link", e.target.value)} placeholder="Drive link for the lead magnet asset" type="url" data-testid="edit-lead-magnet-link" />
           </div>
           <div>
             <ELabel optional>PR / Media Links</ELabel>
@@ -1711,6 +1699,7 @@ export default function ClientDetail() {
   const [neverCoverInput, setNeverCoverInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
   const [audienceIntelOpen, setAudienceIntelOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [hookGenKeyword, setHookGenKeyword] = useState("");
   const [hookGenLoading, setHookGenLoading] = useState(false);
   const [competitorInsight, setCompetitorInsight] = useState(null);
