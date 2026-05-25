@@ -1,13 +1,37 @@
+import { useState, useRef } from "react";
+import axios from "axios";
 import {
   Label,
   Input,
-  MultiInput,
+  Textarea,
   SubsectionHeader,
   YesNoToggle,
   PrefixedInput,
 } from "../primitives";
 
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
 export default function Step1({ form, set }) {
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    setUploading(true);
+    try {
+      const res = await axios.post(`${API}/upload`, fd);
+      set("profile_photo_link", res.data.url);
+    } catch {
+      // silently ignore upload errors
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* ── 1A — Personal & Contact Details ─────────────────────────── */}
@@ -160,13 +184,16 @@ export default function Step1({ form, set }) {
             />
           </div>
 
-          <MultiInput
-            label="PR / Media Links"
-            values={Array.isArray(form.pr_links) && form.pr_links.length ? form.pr_links : [""]}
-            onChange={(v) => set("pr_links", v)}
-            placeholder="https://..."
-            testid="ob-pr"
-          />
+          <div>
+            <Label optional>PR / Media Links</Label>
+            <Textarea
+              testid="ob-pr-media-links"
+              rows={3}
+              value={form.pr_media_links ?? ""}
+              onChange={(e) => set("pr_media_links", e.target.value)}
+              placeholder="Paste any press / media links — one per line or comma-separated"
+            />
+          </div>
         </div>
       </div>
 
@@ -180,34 +207,61 @@ export default function Step1({ form, set }) {
 
         <div className="space-y-4">
           <div>
-            <Label>Profile Photo (Drive Link)</Label>
-            <Input
-              testid="ob-profile-photo-link"
-              type="url"
-              value={form.profile_photo_link ?? ""}
-              onChange={(e) => set("profile_photo_link", e.target.value)}
-              placeholder="Drive link to 1:1 close-up profile photo"
+            <Label>Profile Photo</Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              data-testid="ob-profile-photo-file"
+              onChange={handlePhotoUpload}
             />
+            {form.profile_photo_link ? (
+              <div className="flex items-center gap-3">
+                <img
+                  src={form.profile_photo_link}
+                  alt="Profile"
+                  className="w-10 h-10 rounded-full object-cover border border-zinc-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => set("profile_photo_link", "")}
+                  className="text-xs font-mono text-zinc-500 hover:text-red-400 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                data-testid="ob-profile-photo-upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-500 hover:text-white hover:border-zinc-400 transition-colors duration-150 text-left disabled:opacity-50"
+              >
+                {uploading ? "Uploading…" : "Click to upload photo"}
+              </button>
+            )}
           </div>
 
           <div>
-            <Label>Photo Library (Drive Link)</Label>
+            <Label optional>20+ High Quality Photos — Google Drive URL</Label>
             <Input
-              testid="ob-google-drive-images"
+              testid="ob-high-quality-photos-link"
               type="url"
-              value={form.google_drive_images ?? ""}
-              onChange={(e) => set("google_drive_images", e.target.value)}
+              value={form.high_quality_photos_link ?? ""}
+              onChange={(e) => set("high_quality_photos_link", e.target.value)}
               placeholder="Drive link to 20+ high-quality photos"
             />
           </div>
 
           <div>
-            <Label>Video Clips (Drive Link)</Label>
+            <Label optional>20+ Video Clips — Google Drive URL</Label>
             <Input
-              testid="ob-google-drive-videos"
+              testid="ob-video-clips-link"
               type="url"
-              value={form.google_drive_videos ?? ""}
-              onChange={(e) => set("google_drive_videos", e.target.value)}
+              value={form.video_clips_link ?? ""}
+              onChange={(e) => set("video_clips_link", e.target.value)}
               placeholder="Drive link to 20+ short video clips"
             />
           </div>
