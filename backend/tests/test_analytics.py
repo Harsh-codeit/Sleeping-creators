@@ -207,7 +207,11 @@ def test_get_no_bundle_field_returns_empty_totals(mock_db, _):
     assert body["bundle_connected"] is False
     assert body["bundle"] == {"socials": [], "socials_refreshed_at": None}
     assert body["totals"] == {
-        "followers": 0, "impressions": 0, "likes": 0, "comments": 0, "post_count": 0,
+        "followers": 0, "following": 0, "new_followers": 0,
+        "impressions": 0, "impressions_unique": 0,
+        "views": 0, "views_unique": 0,
+        "likes": 0, "comments": 0, "shares": 0, "saves": 0,
+        "profile_views": 0, "post_count": 0, "engagement_rate": 0,
     }
     assert body["platform_breakdown"] == {}
 
