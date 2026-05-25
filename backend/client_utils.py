@@ -55,6 +55,11 @@ def _recompute_derived(client: dict) -> dict:
 
     # deliberately NOT writing strategy.language (orphan — zero readers)
 
+    # mirror profile photo from onboarding_data to root-level profile_photo_url
+    photo = (ob.get("profile_photo_link") or "").strip()
+    if photo and not client.get("profile_photo_url"):
+        set_doc["profile_photo_url"] = photo
+
     set_doc["schema_version"] = 2
     return set_doc
 

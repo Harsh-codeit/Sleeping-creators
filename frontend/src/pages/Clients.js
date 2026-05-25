@@ -473,9 +473,9 @@ export default function Clients() {
               data-testid={`client-table-row-${client.id}`}
             >
               <div className="col-span-3 flex items-center gap-2.5">
-                {client.profile_photo_url ? (
+                {(client.profile_photo_url || client.onboarding_data?.profile_photo_link) ? (
                   <img
-                    src={client.profile_photo_url}
+                    src={client.profile_photo_url || client.onboarding_data?.profile_photo_link}
                     alt={client.name}
                     className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-zinc-700"
                     onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
@@ -483,7 +483,7 @@ export default function Clients() {
                 ) : null}
                 <div
                   className="w-8 h-8 bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                  style={{ display: client.profile_photo_url ? "none" : "flex" }}
+                  style={{ display: (client.profile_photo_url || client.onboarding_data?.profile_photo_link) ? "none" : "flex" }}
                 >
                   {client.avatar}
                 </div>
