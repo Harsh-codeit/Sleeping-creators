@@ -20,10 +20,14 @@ def _cursor(rows):
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
-def test_spend_returns_correct_shape(mock_db, _):
+def test_spend_returns_correct_shape_and_totals(mock_db, _):
+    from datetime import datetime, timezone, timedelta
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
     mock_db.token_usage.aggregate.return_value = _cursor([
-        {"_id": "2026-05-24", "cost": 0.002100, "tokens": 500},
-        {"_id": "2026-05-25", "cost": 0.004200, "tokens": 1000},
+        {"_id": yesterday, "cost": 0.002100, "tokens": 500},
+        {"_id": today,     "cost": 0.004200, "tokens": 1000},
     ])
     resp = client.get("/api/dashboard/spend?days=7", headers=AUTH)
     assert resp.status_code == 200
@@ -36,6 +40,9 @@ def test_spend_returns_correct_shape(mock_db, _):
         assert "date" in entry
         assert "cost" in entry
         assert "tokens" in entry
+    # Verify the summary totals match the injected data
+    assert abs(body["today_total"] - 0.004200) < 1e-9
+    assert abs(body["yesterday_total"] - 0.002100) < 1e-9
 
 
 @patch("server._check_token", return_value=True)
@@ -58,3 +65,14 @@ def test_spend_days_param_controls_series_length(mock_db, _):
     resp = client.get("/api/dashboard/spend?days=14", headers=AUTH)
     assert resp.status_code == 200
     assert len(resp.json()["series"]) == 14
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_spend_days_param_rejects_out_of_range(mock_db, _):
+    mock_db.token_usage.aggregate.return_value = _cursor([])
+    resp = client.get("/api/dashboard/spend?days=0", headers=AUTH)
+    assert resp.status_code == 422  # FastAPI validation error
+
+    resp2 = client.get("/api/dashboard/spend?days=91", headers=AUTH)
+    assert resp2.status_code == 422

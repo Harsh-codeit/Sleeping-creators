@@ -3215,8 +3215,9 @@ async def dashboard_time_series(days: int = 14):
 
 
 @api_router.get("/dashboard/spend")
-async def dashboard_spend(days: int = 7):
-    start = (datetime.now(timezone.utc) - timedelta(days=days)).replace(
+async def dashboard_spend(days: int = Query(default=7, ge=1, le=90)):
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=days)).replace(
         hour=0, minute=0, second=0, microsecond=0
     ).isoformat()
 
@@ -3234,7 +3235,7 @@ async def dashboard_spend(days: int = 7):
 
     result = []
     for i in range(days - 1, -1, -1):
-        day = datetime.now(timezone.utc) - timedelta(days=i)
+        day = now - timedelta(days=i)
         date_str = day.strftime("%Y-%m-%d")
         entry = by_date.get(date_str, {"cost": 0.0, "tokens": 0})
         result.append({
@@ -3243,8 +3244,8 @@ async def dashboard_spend(days: int = 7):
             "tokens": int(entry["tokens"]),
         })
 
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    today_str = now.strftime("%Y-%m-%d")
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     today_total = round(by_date.get(today_str, {"cost": 0.0})["cost"], 6)
     yesterday_total = round(by_date.get(yesterday_str, {"cost": 0.0})["cost"], 6)
 
