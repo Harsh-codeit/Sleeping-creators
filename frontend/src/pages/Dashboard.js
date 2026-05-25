@@ -79,9 +79,6 @@ function computeHealthIssues(client, bundleConfigured) {
     issues.push({ badge: "NO INSTAGRAM", color: "red", priority: 2 });
   if (client.instagram_publish_blocked) issues.push({ badge: "BLOCKED", color: "red", priority: 3 });
   if ((client.posts_failed || 0) > 0) issues.push({ badge: "POST FAILED", color: "red", priority: 4 });
-  const ob = client.onboarding_data || {};
-  if (!ob.niche || !ob.industry_label || (!ob.brand_name && !client.brand_name))
-    issues.push({ badge: "PROFILE INCOMPLETE", color: "amber", priority: 5 });
   if (daysAgo(client.last_post_at) > 7) issues.push({ badge: "INACTIVE 7D", color: "amber", priority: 6 });
   return issues.sort((a, b) => a.priority - b.priority);
 }
