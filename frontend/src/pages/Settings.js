@@ -5,6 +5,21 @@ import { Save, Send, Zap, Bot, Settings2, Lock, FileSpreadsheet, CheckCircle2, A
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+function localToUTC(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+function utcToLocal(hhmm) {
+  if (!hhmm) return hhmm;
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date();
+  d.setUTCHours(h, m, 0, 0);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState({});
@@ -312,7 +327,7 @@ export default function Settings() {
             <div>
               <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Daily Posting Time</label>
               {(() => {
-                const raw = form.onboard_pipeline_posting_time || "09:00";
+                const raw = utcToLocal(form.onboard_pipeline_posting_time || "09:00");
                 const [hStr, mStr] = raw.split(":");
                 const h24 = parseInt(hStr, 10);
                 const ampm = h24 >= 12 ? "PM" : "AM";
@@ -320,7 +335,8 @@ export default function Settings() {
                 const setTime = (newH12, newAmpm, newMin) => {
                   let h = newH12 % 12;
                   if (newAmpm === "PM") h += 12;
-                  updateForm("onboard_pipeline_posting_time", `${String(h).padStart(2, "0")}:${newMin}`);
+                  const localHHMM = `${String(h).padStart(2, "0")}:${newMin}`;
+                  updateForm("onboard_pipeline_posting_time", localToUTC(localHHMM));
                 };
                 return (
                   <div className="flex items-center gap-1">
@@ -356,7 +372,7 @@ export default function Settings() {
                   </div>
                 );
               })()}
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">Time of day the daily post fires for all new clients.</div>
+              <div className="text-[10px] text-zinc-600 font-mono mt-1">Time of day the daily post fires for all new clients (your local timezone).</div>
             </div>
             <div>
               <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Delay Before First Post (hours)</label>
