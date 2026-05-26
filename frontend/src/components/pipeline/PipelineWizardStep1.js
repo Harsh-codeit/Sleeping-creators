@@ -2,16 +2,59 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PIPELINE_TYPES, TYPE_HINTS, PRESETS } from "./constants";
 
+const CAROUSEL_PIPELINE_TYPES = PIPELINE_TYPES.filter(t => t.value !== "video");
+
 export default function PipelineWizardStep1({ form, onChange }) {
   const [presetsOpen, setPresetsOpen] = useState(false);
+  const isVideo = form.pipeline_type === "video";
+
+  const selectContentType = (type) => {
+    if (type === "video") {
+      onChange("content_type", "video");
+      onChange("pipeline_type", "video");
+    } else {
+      onChange("content_type", "carousel");
+      if (form.pipeline_type === "video") onChange("pipeline_type", "standard");
+    }
+  };
 
   return (
     <div className="space-y-5">
-      {/* Type grid */}
+      {/* Content Type */}
+      <div>
+        <label className="label-xs">Content Type</label>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { value: "carousel", label: "Carousel", desc: "Multi-slide image post" },
+            { value: "video",    label: "Video",    desc: "Pick a clip, apply a template, publish automatically" },
+          ].map(({ value, label, desc }) => {
+            const selected = isVideo ? value === "video" : value === "carousel";
+            return (
+              <button
+                key={value}
+                type="button"
+                data-testid={`content-type-${value}`}
+                onClick={() => selectContentType(value)}
+                className={`flex items-start gap-2.5 p-3 border text-left transition-colors duration-150 ${
+                  selected ? "bg-zinc-800 border-white" : "border-zinc-700 hover:border-zinc-500"
+                }`}
+              >
+                <div>
+                  <div className="text-xs font-mono font-bold text-white">{label}</div>
+                  <div className="text-[10px] font-mono mt-0.5 text-zinc-500">{desc}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Pipeline Type — only for carousel */}
+      {!isVideo && (
       <div>
         <label className="label-xs">Pipeline Type</label>
         <div className="grid grid-cols-2 gap-2">
-          {PIPELINE_TYPES.map(({ value, label, desc, icon: Icon }) => {
+          {CAROUSEL_PIPELINE_TYPES.map(({ value, label, desc, icon: Icon }) => {
             const selected = form.pipeline_type === value;
             return (
               <button
@@ -39,13 +82,13 @@ export default function PipelineWizardStep1({ form, onChange }) {
             );
           })}
         </div>
-        {/* Type hint */}
         {TYPE_HINTS[form.pipeline_type] && (
           <div className="mt-2 text-[10px] font-mono text-zinc-500 border border-dashed border-zinc-800 px-3 py-2 leading-relaxed">
             {TYPE_HINTS[form.pipeline_type]}
           </div>
         )}
       </div>
+      )}
 
       {/* Pipeline name */}
       <div>
