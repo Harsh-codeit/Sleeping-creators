@@ -2578,9 +2578,9 @@ async def generate_content_plan(client_id: str):
         "Return ONLY valid JSON — no markdown, no explanation. "
         "Each item must have exactly these keys: "
         "day (string), date (YYYY-MM-DD), topic (string), format (carousel|video|reel), "
-        "caption (string, full Instagram-ready caption with line breaks and emojis), "
-        "template_id (string, one of: dark_card, full_white, floating_card, dark_card_rich, full_white_rich, floating_card_rich), "
-        "slide_count (integer 4-8), rationale (string, 1 sentence)."
+        "caption (string, full Instagram-ready caption with line breaks — NO emojis), "
+        "rationale (string, 1 sentence). "
+        "Do not include emojis anywhere in the output."
     )
     user_msg = (
         f"Client niche: {niche}\n"
@@ -2705,8 +2705,8 @@ async def schedule_content_plan(client_id: str, req: ContentPlanScheduleRequest)
                 "pipeline_id": pipeline_id,
                 "pipeline_name": pipeline_name,
                 "pipeline_type": "standard",
-                "carousel_template": item.template_id or "dark_card",
-                "carousel_slide_count": item.slide_count,
+                "carousel_template": (pipeline or {}).get("carousel_template") or "dark_card",
+                "carousel_slide_count": (pipeline or {}).get("carousel_slide_count") or 5,
                 "carousel_topic": item.topic,
                 "engagement_score": 0,
                 "created_at": now_str,

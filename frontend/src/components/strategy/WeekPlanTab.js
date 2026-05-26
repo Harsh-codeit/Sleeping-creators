@@ -146,29 +146,29 @@ export default function WeekPlanTab({ clientId, initialPlan }) {
           const caption = editedCaptions[i] ?? item.caption;
           const isExpanded = expanded[i];
 
-          const borderClass = state === "approved"
-            ? "border-l-4 border-l-emerald-500"
-            : state === "skipped"
-            ? "opacity-40"
-            : "";
+          const dimClass = state === "skipped" ? "opacity-40" : "";
+          const borderClass = state === "approved" ? "border border-emerald-600" : "border border-zinc-800";
 
           return (
-            <div key={i} className={`bg-zinc-900 border border-zinc-800 p-4 ${borderClass}`}>
+            <div key={i} className={`bg-zinc-900 p-4 ${borderClass} ${dimClass}`}>
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <span className="text-[10px] font-mono text-zinc-500 uppercase">{item.day}</span>
                   <span className="text-[10px] font-mono text-zinc-700 ml-2">{item.date}</span>
                 </div>
-                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-zinc-700 text-zinc-400 uppercase">
-                  {item.format}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {state === "approved" && (
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-emerald-900 text-emerald-400 uppercase">
+                      Approved
+                    </span>
+                  )}
+                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-zinc-700 text-zinc-400 uppercase">
+                    {item.format}
+                  </span>
+                </div>
               </div>
 
-              <div className="text-sm font-semibold text-white mb-1 leading-tight">{item.topic}</div>
-
-              <div className="text-[10px] font-mono text-zinc-600 mb-2">
-                {item.template_id?.replace(/_/g, " ")} · {item.slide_count} slides
-              </div>
+              <div className="text-sm font-semibold text-white mb-2 leading-tight">{item.topic}</div>
 
               {isEditing ? (
                 <textarea
