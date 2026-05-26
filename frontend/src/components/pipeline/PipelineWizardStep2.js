@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, X } from "lucide-react";
 import {
   API, BUILT_IN_TEMPLATES, TYPE_SETTINGS, SLIDE_FORMATS, buildCtaButtonText,
   VIDEO_FILTERS, VIDEO_HOOK_STRATEGIES,
@@ -11,7 +11,14 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
   const [customTemplates, setCustomTemplates] = useState([]);
   const [musicTracks, setMusicTracks] = useState([]);
   const [playingId, setPlayingId] = useState(null);
+  const [musicModal, setMusicModal] = useState(null); // null | "tags" | "tracks"
   const audioRef = useRef(null);
+
+  const closeModal = () => {
+    if (audioRef.current) audioRef.current.pause();
+    setPlayingId(null);
+    setMusicModal(null);
+  };
 
   useEffect(() => {
     axios.get(`${API}/templates`).then(r => {
@@ -129,146 +136,76 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
         {/* Music */}
         <div>
           <label className="label-xs">Music</label>
-
-          {/* Mode selector */}
-          <div className="flex gap-1.5 mb-3">
-            {[
-              { value: "tags",   label: "By Tag" },
-              { value: "tracks", label: "Pick Tracks" },
-              { value: "none",   label: "None" },
-            ].map(m => (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => setAudioMode(m.value)}
-                className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
-                  audioMode === m.value
-                    ? "bg-white text-black border-white"
-                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
+          <div className="flex gap-1.5 mb-2">
+            <button
+              type="button"
+              onClick={() => { setAudioMode("tags"); setMusicModal("tags"); }}
+              className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                audioMode === "tags" ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+              }`}
+            >
+              By Tag {audioTags.length > 0 && `(${audioTags.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAudioMode("tracks"); setMusicModal("tracks"); }}
+              className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                audioMode === "tracks" ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+              }`}
+            >
+              Pick Tracks {audioIds.length > 0 && `(${audioIds.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAudioMode("none")}
+              className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                audioMode === "none" ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+              }`}
+            >
+              None
+            </button>
           </div>
 
-          {/* By Tag */}
-          {audioMode === "tags" && (
-            allTags.length === 0 ? (
-              <div className="text-[11px] font-mono text-zinc-500 border border-dashed border-zinc-700 px-3 py-2">
-                No mood tags found. Add tags to tracks on the Music page first.
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-1.5">
-                  {allTags.map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => toggleTag(tag)}
-                      className={`py-1 px-2.5 text-[11px] font-mono border transition-colors duration-150 ${
-                        tagSet.has(tag)
-                          ? "border-white text-white bg-zinc-900"
-                          : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-                {audioTags.length > 0 && (
-                  <p className="text-[10px] font-mono text-zinc-500 mt-1.5">
-                    {matchCount === 0
-                      ? <span className="text-amber-400">No tracks match — falls back to template default</span>
-                      : `${matchCount} track${matchCount === 1 ? "" : "s"} match — one picked at random per run`}
-                  </p>
-                )}
-              </>
-            )
-          )}
-
-          {/* Pick Tracks */}
-          {audioMode === "tracks" && (
-            <div className="space-y-3">
-              {musicTracks.length === 0 ? (
-                <div className="text-[11px] font-mono text-zinc-500 border border-dashed border-zinc-700 px-3 py-2">
-                  No tracks in library yet. Add them from the Music page.
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {musicTracks.map(track => {
-                    const selected = audioIds.includes(track.id);
-                    const isPlaying = playingId === track.id;
-                    return (
-                      <div
-                        key={track.id}
-                        className={`flex items-center gap-2 px-3 py-2 border cursor-pointer transition-colors duration-150 ${
-                          selected ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600"
-                        }`}
-                        onClick={() => toggleTrack(track.id)}
-                      >
-                        {/* Play preview */}
-                        <button
-                          type="button"
-                          onClick={e => { e.stopPropagation(); togglePlay(track); }}
-                          className="w-6 h-6 flex items-center justify-center flex-shrink-0 text-zinc-400 hover:text-white transition-colors"
-                        >
-                          {isPlaying ? <Pause size={11} /> : <Play size={11} />}
-                        </button>
-
-                        <span className="font-mono text-[11px] text-zinc-300 flex-1 truncate">{track.name}</span>
-
-                        {track.duration && (
-                          <span className="font-mono text-[10px] text-zinc-600 flex-shrink-0">
-                            {Math.round(track.duration)}s
-                          </span>
-                        )}
-
-                        {/* Checkbox indicator */}
-                        <span className={`w-4 h-4 border flex-shrink-0 flex items-center justify-center transition-colors ${
-                          selected ? "border-white bg-white" : "border-zinc-600"
-                        }`}>
-                          {selected && <span className="text-black text-[9px] font-bold">✓</span>}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Strategy */}
-              {audioIds.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-mono text-zinc-500 mb-1.5">
-                    {audioIds.length} track{audioIds.length === 1 ? "" : "s"} selected — play order:
-                  </p>
-                  <div className="flex gap-1.5">
-                    {[
-                      { value: "rotate", label: "Rotate", desc: "Cycle through in order" },
-                      { value: "random", label: "Random", desc: "Pick one at random each run" },
-                    ].map(s => (
-                      <button
-                        key={s.value}
-                        type="button"
-                        title={s.desc}
-                        onClick={() => onChange("video_audio_strategy", s.value)}
-                        className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
-                          audioStrategy === s.value
-                            ? "bg-white text-black border-white"
-                            : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-                        }`}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* Summary line */}
+          {audioMode === "tags" && audioTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {audioTags.map(tag => (
+                <span key={tag} className="font-mono text-[10px] px-2 py-0.5 border border-zinc-700 bg-zinc-900 text-zinc-300 flex items-center gap-1">
+                  {tag}
+                  <button type="button" onClick={() => toggleTag(tag)} className="text-zinc-500 hover:text-red-400"><X size={9} /></button>
+                </span>
+              ))}
+              <button type="button" onClick={() => setMusicModal("tags")} className="text-[10px] font-mono text-zinc-500 hover:text-white transition-colors">edit</button>
             </div>
           )}
-
+          {audioMode === "tracks" && audioIds.length > 0 && (
+            <div className="space-y-2 mt-1">
+              <div className="flex flex-wrap gap-1.5">
+                {audioIds.map(id => {
+                  const t = musicTracks.find(x => x.id === id);
+                  return (
+                    <span key={id} className="font-mono text-[10px] px-2 py-0.5 border border-zinc-700 bg-zinc-900 text-zinc-300 flex items-center gap-1 max-w-[180px]">
+                      <span className="truncate">{t?.name || id}</span>
+                      <button type="button" onClick={() => toggleTrack(id)} className="text-zinc-500 hover:text-red-400 flex-shrink-0"><X size={9} /></button>
+                    </span>
+                  );
+                })}
+                <button type="button" onClick={() => setMusicModal("tracks")} className="text-[10px] font-mono text-zinc-500 hover:text-white transition-colors">edit</button>
+              </div>
+              <div className="flex gap-1.5">
+                {[{ value: "rotate", label: "Rotate" }, { value: "random", label: "Random" }].map(s => (
+                  <button key={s.value} type="button" onClick={() => onChange("video_audio_strategy", s.value)}
+                    className={`py-1 px-2.5 text-[10px] font-mono border transition-colors duration-150 ${
+                      audioStrategy === s.value ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                    }`}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {audioMode === "none" && (
-            <p className="text-[10px] font-mono text-zinc-600">Uses the template's default soundtrack.</p>
+            <p className="text-[10px] font-mono text-zinc-600 mt-1">Uses the template's default soundtrack.</p>
           )}
         </div>
 
@@ -287,6 +224,111 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
         </label>
 
         <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
+
+        {/* ── By Tag popup ── */}
+        {musicModal === "tags" && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={closeModal}>
+            <div className="bg-zinc-950 border border-zinc-800 w-[420px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="h-11 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
+                <span className="text-xs font-semibold text-white">Select Tags</span>
+                <button onClick={closeModal} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                {allTags.length === 0 ? (
+                  <p className="text-[11px] font-mono text-zinc-500">No mood tags found. Add tags to tracks on the Music page first.</p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {allTags.map(tag => (
+                        <button key={tag} type="button" onClick={() => toggleTag(tag)}
+                          className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                            tagSet.has(tag) ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                          }`}>
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                    {audioTags.length > 0 && (
+                      <p className="text-[10px] font-mono text-zinc-500 mt-3">
+                        {matchCount === 0
+                          ? <span className="text-amber-400">No tracks match — falls back to template default</span>
+                          : `${matchCount} track${matchCount === 1 ? "" : "s"} match — one picked at random per run`}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="px-4 py-3 border-t border-zinc-800">
+                <button onClick={closeModal} className="w-full py-2 bg-white text-black text-xs font-mono font-bold hover:bg-zinc-200 transition-colors">
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Pick Tracks popup ── */}
+        {musicModal === "tracks" && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center" onClick={closeModal}>
+            <div className="bg-zinc-950 border border-zinc-800 w-[480px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="h-11 flex items-center justify-between px-4 border-b border-zinc-800 flex-shrink-0">
+                <span className="text-xs font-semibold text-white">
+                  Pick Tracks {audioIds.length > 0 && <span className="text-zinc-400 font-normal">· {audioIds.length} selected</span>}
+                </span>
+                <button onClick={closeModal} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {musicTracks.length === 0 ? (
+                  <p className="py-10 text-center font-mono text-xs text-zinc-600">No tracks in library yet.</p>
+                ) : (
+                  <div className="divide-y divide-zinc-800/50">
+                    {musicTracks.map(track => {
+                      const selected = audioIds.includes(track.id);
+                      const isPlaying = playingId === track.id;
+                      return (
+                        <div key={track.id} onClick={() => toggleTrack(track.id)}
+                          className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${selected ? "bg-zinc-900" : "hover:bg-zinc-900/50"}`}>
+                          <button type="button" onClick={e => { e.stopPropagation(); togglePlay(track); }}
+                            className="w-7 h-7 flex items-center justify-center border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors flex-shrink-0">
+                            {isPlaying ? <Pause size={11} /> : <Play size={11} />}
+                          </button>
+                          <span className="font-mono text-[11px] text-zinc-300 flex-1 truncate">{track.name}</span>
+                          {track.duration && <span className="font-mono text-[10px] text-zinc-600 flex-shrink-0">{Math.round(track.duration)}s</span>}
+                          <span className={`w-4 h-4 border flex-shrink-0 flex items-center justify-center transition-colors ${selected ? "border-white bg-white" : "border-zinc-600"}`}>
+                            {selected && <span className="text-black text-[9px] font-bold">✓</span>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {audioIds.length > 0 && (
+                <div className="px-4 py-3 border-t border-zinc-800 flex items-center gap-3">
+                  <span className="text-[10px] font-mono text-zinc-500">Play order:</span>
+                  {[{ value: "rotate", label: "Rotate" }, { value: "random", label: "Random" }].map(s => (
+                    <button key={s.value} type="button" onClick={() => onChange("video_audio_strategy", s.value)}
+                      className={`py-1 px-2.5 text-[10px] font-mono border transition-colors duration-150 ${
+                        audioStrategy === s.value ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                      }`}>
+                      {s.label}
+                    </button>
+                  ))}
+                  <button onClick={closeModal} className="ml-auto py-1.5 px-4 bg-white text-black text-xs font-mono font-bold hover:bg-zinc-200 transition-colors">
+                    Done
+                  </button>
+                </div>
+              )}
+              {audioIds.length === 0 && (
+                <div className="px-4 py-3 border-t border-zinc-800">
+                  <button onClick={closeModal} className="w-full py-2 bg-white text-black text-xs font-mono font-bold hover:bg-zinc-200 transition-colors">
+                    Done
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
