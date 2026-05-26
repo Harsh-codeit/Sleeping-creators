@@ -675,8 +675,9 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
   const calp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
     : (permissions?.calendar ?? { view: true, create: true, edit: true, delete: true });
   const totalSlides = slideCount(post);
+  const isVideo = post.kind === "video";
   const [form, setForm] = useState({
-    text: post.text || "",
+    text: post.caption || post.text || "",
     platform: post.platform || "instagram",
     scheduled_at: post.scheduled_at ? format(parseISO(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : "",
     slideCount: totalSlides,
@@ -690,7 +691,7 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
   useEffect(() => {
     const sc = slideCount(post);
     setForm({
-      text: post.text || "",
+      text: post.caption || post.text || "",
       platform: post.platform || "instagram",
       scheduled_at: post.scheduled_at ? format(parseISO(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : "",
       slideCount: sc,
@@ -802,11 +803,28 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
         {/* Content */}
         <div>
           <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">Content</label>
+          {/* Video player */}
+          {isVideo && (
+            post.r2_video_url ? (
+              <video
+                src={post.r2_video_url}
+                controls
+                className="w-full bg-black border border-zinc-700 mb-2 max-h-64 object-contain"
+              />
+            ) : (
+              <div className="w-full h-36 bg-zinc-950 border border-zinc-700 flex flex-col items-center justify-center gap-2 mb-2">
+                <div className="w-4 h-4 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
+                <span className="text-[10px] font-mono text-zinc-500">Rendering video…</span>
+              </div>
+            )
+          )}
+          {/* Caption / text */}
           <textarea
             value={form.text}
             onChange={e => setForm(f => ({ ...f, text: e.target.value }))}
             disabled={isViewOnly}
-            rows={6}
+            rows={isVideo ? 3 : 6}
+            placeholder={isVideo ? "Caption" : ""}
             className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-zinc-500 resize-none disabled:opacity-50"
           />
         </div>
