@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Zap, Check, X, Edit2, ChevronDown, ChevronUp, Calendar } from "lucide-react";
+import { Zap, X, Edit2, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function WeekPlanTab({ clientId, initialPlan }) {
   const [plan, setPlan] = useState(initialPlan && initialPlan.length > 0 ? initialPlan : null);
   const [generating, setGenerating] = useState(false);
-  const [approvals, setApprovals] = useState({});
+  const [skipped, setSkipped] = useState({});
   const [editing, setEditing] = useState({});
   const [editedCaptions, setEditedCaptions] = useState({});
   const [pipelines, setPipelines] = useState([]);
@@ -29,7 +29,7 @@ export default function WeekPlanTab({ clientId, initialPlan }) {
   const generate = async () => {
     setGenerating(true);
     setPlan(null);
-    setApprovals({});
+    setSkipped({});
     setEditing({});
     setEditedCaptions({});
     try {
@@ -42,25 +42,21 @@ export default function WeekPlanTab({ clientId, initialPlan }) {
     }
   };
 
-  const approve = (i) => setApprovals(a => ({ ...a, [i]: "approved" }));
-  const skip = (i) => setApprovals(a => ({ ...a, [i]: "skipped" }));
-  const unapprove = (i) => setApprovals(a => { const n = { ...a }; delete n[i]; return n; });
-
-  const approvedCount = Object.values(approvals).filter(v => v === "approved").length;
+  const activeCount = (plan || []).filter((_, i) => !skipped[i]).length;
 
   const scheduleAll = async () => {
-    if (approvedCount === 0) return;
+    if (activeCount === 0) return;
     setScheduling(true);
-    const approvedPosts = (plan || [])
+    const posts = (plan || [])
       .map((item, i) => ({ ...item, caption: editedCaptions[i] ?? item.caption }))
-      .filter((_, i) => approvals[i] === "approved");
+      .filter((_, i) => !skipped[i]);
     try {
       const resp = await axios.post(`${API}/clients/${clientId}/content-plan/schedule`, {
-        posts: approvedPosts,
+        posts,
         pipeline_id: selectedPipeline,
       });
       toast.success(`Scheduled ${resp.data.scheduled} posts — visible in Posts tab`);
-      setApprovals({});
+      setSkipped({});
       setPlan(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Scheduling failed");
@@ -108,7 +104,7 @@ export default function WeekPlanTab({ clientId, initialPlan }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="text-sm font-semibold text-white">Week of {weekLabel}</div>
-          <div className="text-[11px] font-mono text-zinc-500">{approvedCount} post{approvedCount !== 1 ? "s" : ""} approved</div>
+          <div className="text-[11px] font-mono text-zinc-500">{activeCount} post{activeCount !== 1 ? "s" : ""} queued</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {pipelines.length > 1 && (
@@ -130,42 +126,32 @@ export default function WeekPlanTab({ clientId, initialPlan }) {
           </button>
           <button
             onClick={scheduleAll}
-            disabled={approvedCount === 0 || scheduling}
+            disabled={activeCount === 0 || scheduling}
             className="flex items-center gap-2 px-4 py-1.5 bg-white text-black text-xs font-bold hover:bg-zinc-200 transition-colors disabled:opacity-40"
           >
             <Calendar size={11} />
-            {scheduling ? "Scheduling…" : `Schedule ${approvedCount} posts →`}
+            {scheduling ? "Scheduling…" : `Schedule ${activeCount} posts →`}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {(plan || []).map((item, i) => {
-          const state = approvals[i];
+          const isSkipped = skipped[i];
           const isEditing = editing[i];
           const caption = editedCaptions[i] ?? item.caption;
           const isExpanded = expanded[i];
 
-          const dimClass = state === "skipped" ? "opacity-40" : "";
-          const borderClass = state === "approved" ? "border border-emerald-600" : "border border-zinc-800";
-
           return (
-            <div key={i} className={`bg-zinc-900 p-4 ${borderClass} ${dimClass}`}>
+            <div key={i} className={`bg-zinc-900 border border-zinc-800 p-4 ${isSkipped ? "opacity-40" : ""}`}>
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <span className="text-[10px] font-mono text-zinc-500 uppercase">{item.day}</span>
                   <span className="text-[10px] font-mono text-zinc-700 ml-2">{item.date}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {state === "approved" && (
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-emerald-900 text-emerald-400 uppercase">
-                      Approved
-                    </span>
-                  )}
-                  <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-zinc-700 text-zinc-400 uppercase">
-                    {item.format}
-                  </span>
-                </div>
+                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 border border-zinc-700 text-zinc-400 uppercase">
+                  {item.format}
+                </span>
               </div>
 
               <div className="text-sm font-semibold text-white mb-2 leading-tight">{item.topic}</div>
@@ -192,27 +178,18 @@ export default function WeekPlanTab({ clientId, initialPlan }) {
               )}
 
               <div className="flex items-center gap-2 mt-2 border-t border-zinc-800 pt-2">
-                {state === "approved" ? (
-                  <button onClick={() => unapprove(i)} className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 hover:text-zinc-300">
-                    <Check size={10} /> Approved
-                  </button>
-                ) : (
-                  <button onClick={() => approve(i)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border border-zinc-700 text-zinc-400 hover:text-white hover:border-emerald-600 transition-colors">
-                    <Check size={10} /> Approve
-                  </button>
-                )}
                 <button
                   onClick={() => setEditing(ed => ({ ...ed, [i]: !isEditing }))}
                   className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border border-zinc-700 text-zinc-400 hover:text-white transition-colors"
                 >
                   <Edit2 size={10} /> {isEditing ? "Done" : "Edit"}
                 </button>
-                {state !== "skipped" ? (
-                  <button onClick={() => skip(i)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border border-zinc-700 text-zinc-400 hover:text-red-400 transition-colors ml-auto">
+                {!isSkipped ? (
+                  <button onClick={() => setSkipped(s => ({ ...s, [i]: true }))} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border border-zinc-700 text-zinc-400 hover:text-red-400 transition-colors ml-auto">
                     <X size={10} /> Skip
                   </button>
                 ) : (
-                  <button onClick={() => unapprove(i)} className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 ml-auto">undo skip</button>
+                  <button onClick={() => setSkipped(s => { const n = { ...s }; delete n[i]; return n; })} className="text-[10px] font-mono text-zinc-600 hover:text-zinc-400 ml-auto">undo skip</button>
                 )}
               </div>
             </div>
