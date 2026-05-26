@@ -5,9 +5,8 @@ import { Zap, Check, X, Edit2, ChevronDown, ChevronUp, Calendar } from "lucide-r
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function WeekPlanTab({ clientId }) {
-  const [plan, setPlan] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function WeekPlanTab({ clientId, initialPlan }) {
+  const [plan, setPlan] = useState(initialPlan && initialPlan.length > 0 ? initialPlan : null);
   const [generating, setGenerating] = useState(false);
   const [approvals, setApprovals] = useState({});
   const [editing, setEditing] = useState({});
@@ -18,17 +17,13 @@ export default function WeekPlanTab({ clientId }) {
   const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
-    Promise.all([
-      axios.get(`${API}/clients/${clientId}/content-plan`).then(r => {
-        const saved = r.data.plan;
-        if (saved && saved.length > 0) setPlan(saved);
-      }).catch(() => {}),
-      axios.get(`${API}/clients/${clientId}/pipelines`).then(r => {
+    axios.get(`${API}/clients/${clientId}/pipelines`)
+      .then(r => {
         const active = (r.data || []).filter(p => p.status === "active");
         setPipelines(active);
         if (active.length > 0) setSelectedPipeline(active[0].id);
-      }).catch(() => {}),
-    ]).finally(() => setLoading(false));
+      })
+      .catch(() => {});
   }, [clientId]);
 
   const generate = async () => {
@@ -73,10 +68,6 @@ export default function WeekPlanTab({ clientId }) {
       setScheduling(false);
     }
   };
-
-  if (loading) {
-    return <div className="text-zinc-500 font-mono text-sm animate-pulse py-12 text-center">Loading…</div>;
-  }
 
   if (!plan && !generating) {
     return (

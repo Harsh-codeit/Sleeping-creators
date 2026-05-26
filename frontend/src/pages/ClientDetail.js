@@ -2652,7 +2652,7 @@ export default function ClientDetail() {
           )}
 
           {strategyTab === "week" && (
-            <WeekPlanTab clientId={id} />
+            <WeekPlanTab clientId={id} initialPlan={client.content_plan || null} />
           )}
 
           {strategyTab === "report" && (
