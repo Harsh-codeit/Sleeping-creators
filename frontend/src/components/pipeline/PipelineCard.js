@@ -1,4 +1,4 @@
-import { Play, Zap, MoreHorizontal } from "lucide-react";
+import { Play, Zap, MoreHorizontal, RotateCcw } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
@@ -14,6 +14,7 @@ export default function PipelineCard({
   onPause,
   onResume,
   onDelete,
+  onReset,
   onRunNow,
   onEdit,
   running,
@@ -102,6 +103,13 @@ export default function PipelineCard({
               className="text-xs font-mono cursor-pointer focus:bg-zinc-800"
             >
               {isPaused ? "Resume" : "Pause"}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onReset(pipeline.id)}
+              className="text-xs font-mono cursor-pointer focus:bg-zinc-800 flex items-center gap-1.5"
+            >
+              <RotateCcw size={11} />
+              Reset to zero
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-zinc-800" />
             <DropdownMenuItem

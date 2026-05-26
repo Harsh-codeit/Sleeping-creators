@@ -77,6 +77,15 @@ export default function PipelineManager({ clientId, clientPlatforms = [], client
     } catch { toast.error("Failed to delete"); }
   };
 
+  const resetPipeline = async (id) => {
+    if (!window.confirm("Reset this pipeline? This clears all rotation cursors and run counters so it starts fresh.")) return;
+    try {
+      const resp = await axios.post(`${API}/clients/${clientId}/pipelines/${id}/reset`);
+      setPipelines(prev => prev.map(p => p.id === id ? { ...p, ...resp.data } : p));
+      toast.success("Pipeline reset to zero");
+    } catch { toast.error("Failed to reset pipeline"); }
+  };
+
   const runNow = async (pipeline) => {
     setRunning(prev => ({ ...prev, [pipeline.id]: true }));
     const isVideo = pipeline.pipeline_type === "video";
@@ -166,6 +175,7 @@ export default function PipelineManager({ clientId, clientPlatforms = [], client
               onPause={pausePipeline}
               onResume={resumePipeline}
               onDelete={deletePipeline}
+              onReset={resetPipeline}
               onRunNow={runNow}
               onEdit={openEdit}
               running={running}

@@ -5842,6 +5842,28 @@ async def resume_pipeline(client_id: str, pipeline_id: str):
     await db.pipelines.update_one({"id": pipeline_id}, {"$set": {"status": "active", "next_run_at": next_run}})
     return {"status": "active", "next_run_at": next_run}
 
+@api_router.post("/clients/{client_id}/pipelines/{pipeline_id}/reset")
+async def reset_pipeline(client_id: str, pipeline_id: str):
+    """Reset all rotation cursors and run counters to zero so the pipeline starts fresh."""
+    pipeline = await db.pipelines.find_one({"id": pipeline_id}, {"_id": 0})
+    if not pipeline:
+        raise HTTPException(404, "Pipeline not found")
+    now = datetime.now(timezone.utc)
+    next_run = calculate_next_run(pipeline, now)
+    reset_fields = {
+        "next_hook_index": 0,
+        "next_clip_index": 0,
+        "next_audio_index": 0,
+        "total_runs": 0,
+        "successful_runs": 0,
+        "last_run_at": None,
+        "last_error": None,
+        "next_run_at": next_run,
+        "status": "active",
+    }
+    await db.pipelines.update_one({"id": pipeline_id}, {"$set": reset_fields})
+    return {**reset_fields, "id": pipeline_id}
+
 @api_router.post("/clients/{client_id}/pipelines/{pipeline_id}/run")
 async def run_pipeline_now(client_id: str, pipeline_id: str, publish: bool = Query(True)):
     """Manually run a pipeline. By default the resulting post(s) auto-publish
