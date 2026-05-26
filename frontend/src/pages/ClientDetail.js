@@ -2261,7 +2261,7 @@ export default function ClientDetail() {
       {activeTab === "Strategy" && (
         <div className="space-y-0">
           {/* Sub-tab bar */}
-          <div className="flex items-center gap-0 border-b border-zinc-800 mb-4">
+          <div className="flex border border-zinc-800 mb-4 w-fit">
             {[
               { key: "overview", label: "Overview" },
               { key: "week",     label: "Week Plan" },
@@ -2270,10 +2270,10 @@ export default function ClientDetail() {
               <button
                 key={key}
                 onClick={() => setStrategyTab(key)}
-                className={`px-4 py-2 text-xs font-mono font-semibold border-b-2 transition-colors ${
+                className={`px-4 py-1.5 text-xs font-mono uppercase border-r border-zinc-800 last:border-0 transition-colors ${
                   strategyTab === key
-                    ? "border-white text-white"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                    ? "bg-white text-black font-semibold"
+                    : "text-zinc-500 hover:text-white"
                 }`}
               >
                 {label}
