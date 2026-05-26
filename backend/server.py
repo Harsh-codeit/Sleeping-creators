@@ -592,6 +592,7 @@ class PipelineUpdate(BaseModel):
     post_time: Optional[str] = None
     video_audio_ids: Optional[List[str]] = None
     video_audio_strategy: Optional[str] = None
+    next_audio_index: Optional[int] = None
 
 class OnboardingCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1531,10 +1532,36 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             except Exception as _ge:
                 logger.warning(f"Pipeline {pipeline_id} AI content gen failed: {_ge}")
 
-        # Resolve audio override: pinned URL wins, else tag-pick, else template default
+        # Resolve audio override:
+        #   1) Pick Tracks (video_audio_ids) — rotate or random from selected tracks
+        #   2) By Tag (video_audio_tags) — random track matching any tag
+        #   3) Pinned URL (video_audio_url) — legacy single-track pin
+        #   4) Template default
         resolved_audio_url = pipeline.get("video_audio_url") or ""
         audio_tags = pipeline.get("video_audio_tags") or []
+        audio_ids = pipeline.get("video_audio_ids") or []
         audio_pick_strategy = "url" if resolved_audio_url else "default"
+
+        if not resolved_audio_url and audio_ids:
+            id_tracks = await db.music_tracks.find(
+                {"id": {"$in": audio_ids}},
+                {"_id": 0, "r2_url": 1, "name": 1, "id": 1},
+            ).to_list(500)
+            if id_tracks:
+                strat = pipeline.get("video_audio_strategy") or "rotate"
+                if strat == "rotate":
+                    cursor = pipeline.get("next_audio_index", 0) or 0
+                    chosen_track = id_tracks[cursor % len(id_tracks)]
+                    await db.pipelines.update_one(
+                        {"id": pipeline_id},
+                        {"$set": {"next_audio_index": (cursor + 1) % len(id_tracks)}}
+                    )
+                else:
+                    chosen_track = _random.choice(id_tracks)
+                resolved_audio_url = chosen_track.get("r2_url") or ""
+                audio_pick_strategy = "ids"
+                logger.info(f"Pipeline {pipeline_id}: id-pick chose '{chosen_track.get('name')}' (strategy={strat})")
+
         if not resolved_audio_url and audio_tags:
             candidates = await db.music_tracks.find(
                 {"mood_tags": {"$in": audio_tags}},
