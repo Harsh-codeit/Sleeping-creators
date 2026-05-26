@@ -8,7 +8,6 @@ import Clients from "./pages/Clients";
 import ClientDetail from "./pages/ClientDetail";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
-import Logs from "./pages/Logs";
 import Carousel from "./pages/Carousel";
 import CalendarPage from "./pages/CalendarPage";
 import TemplateLibrary from "./pages/TemplateLibrary";
@@ -16,16 +15,13 @@ import TemplateBuilder from "./pages/TemplateBuilder";
 import Onboarding from "./pages/Onboarding";
 import InstagramCallback from "./pages/InstagramCallback";
 import FacebookCallback from "./pages/FacebookCallback";
-import GlobalLibrary from "./pages/GlobalLibrary";
 import UsagePage from "./pages/UsagePage";
-import MusicLibraryPage from "./pages/MusicLibraryPage";
 import Login from "./pages/Login";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import { UserProvider } from "./context/UserContext";
 import { PermissionGate } from "./components/PermissionGate";
 import TeamPage from "./pages/TeamPage";
-import VideoTemplatesAdmin from "./pages/VideoTemplatesAdmin";
 import MailCenter from "./pages/MailCenter";
 
 // Set axios auth header synchronously on load so it's ready before any
@@ -93,13 +89,12 @@ function App() {
                 <Route path="templates/:id/clone" element={<PermissionGate resource="templates"><TemplateBuilder /></PermissionGate>} />
                 <Route path="calendar" element={<PermissionGate resource="calendar"><CalendarPage /></PermissionGate>} />
                 <Route path="analytics" element={<PermissionGate resource="analytics"><Analytics /></PermissionGate>} />
-                <Route path="dropbox" element={<PermissionGate resource="dropbox"><GlobalLibrary /></PermissionGate>} />
                 <Route path="settings" element={<PermissionGate resource="settings"><Settings /></PermissionGate>} />
-                <Route path="logs" element={<PermissionGate resource="logs"><Logs /></PermissionGate>} />
                 <Route path="usage" element={<PermissionGate resource="usage"><UsagePage /></PermissionGate>} />
                 <Route path="carousel" element={<PermissionGate resource="studio"><Carousel /></PermissionGate>} />
-                <Route path="music" element={<PermissionGate resource="music"><MusicLibraryPage /></PermissionGate>} />
-                <Route path="video-templates" element={<PermissionGate resource="video_templates"><VideoTemplatesAdmin /></PermissionGate>} />
+                <Route path="music" element={<Navigate to="/templates?tab=music" replace />} />
+                <Route path="video-templates" element={<Navigate to="/templates?tab=video" replace />} />
+                <Route path="logs" element={<Navigate to="/settings?tab=logs" replace />} />
                 <Route path="onboarding" element={<Onboarding />} />
                 <Route path="team" element={<PermissionGate ownerOnly><TeamPage /></PermissionGate>} />
                 <Route path="mail" element={<PermissionGate ownerOnly><MailCenter /></PermissionGate>} />

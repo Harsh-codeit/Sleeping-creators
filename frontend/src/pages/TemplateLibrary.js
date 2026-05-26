@@ -1,21 +1,25 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Copy, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Search, Pencil, Copy, Trash2 } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import VideoTemplatesAdmin from "./VideoTemplatesAdmin";
+import MusicLibraryPage from "./MusicLibraryPage";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function TemplateLibrary() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const contentTab = searchParams.get("tab") || "carousel";
+  const setContentTab = (t) => setSearchParams({ tab: t });
   const { role, permissions } = useUser();
   const tp = role === "owner" ? { view: true, create: true, edit: true, delete: true }
     : (permissions?.templates ?? { view: true, create: true, edit: true, delete: true });
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [contentTab, setContentTab] = useState("carousel");
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -58,7 +62,7 @@ export default function TemplateLibrary() {
   return (
     <div className="h-full bg-zinc-950 flex flex-col overflow-hidden">
 
-      {/* Header + Search */}
+      {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
         <h1 className="text-lg font-bold text-white tracking-tight">Templates</h1>
         {tp.create && contentTab === "carousel" && (
@@ -69,28 +73,23 @@ export default function TemplateLibrary() {
             <Plus size={14} /> Create Template
           </button>
         )}
-        {contentTab === "video" && (
-          <button
-            onClick={() => navigate("/video-templates")}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors"
-          >
-            <ExternalLink size={14} /> Manage in Video Templates
-          </button>
-        )}
       </div>
 
+      {/* Tab bar + search (search only for carousel) */}
       <div className="flex items-center gap-4 px-6 py-3 border-b border-zinc-800">
-        <div className="relative max-w-xs flex-1">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search templates…"
-            className="w-full bg-zinc-900 border border-zinc-700 pl-9 pr-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-          />
-        </div>
-        <div className="flex border border-zinc-800">
-          {[["carousel", "Carousel"], ["video", "Video"]].map(([val, label]) => (
+        {contentTab === "carousel" && (
+          <div className="relative max-w-xs flex-1">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search templates…"
+              className="w-full bg-zinc-900 border border-zinc-700 pl-9 pr-3 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+            />
+          </div>
+        )}
+        <div className="flex border border-zinc-800 ml-auto">
+          {[["carousel", "Carousel"], ["video", "Video"], ["music", "Music"]].map(([val, label]) => (
             <button
               key={val}
               onClick={() => setContentTab(val)}
@@ -164,18 +163,11 @@ export default function TemplateLibrary() {
           )
         )}
 
-        {/* ── Video tab — managed in VideoTemplatesAdmin ── */}
-        {contentTab === "video" && (
-          <div className="flex flex-col items-center justify-center py-24 gap-3">
-            <p className="text-zinc-400 text-sm">Video templates are managed in the Video Templates registry.</p>
-            <button
-              onClick={() => navigate("/video-templates")}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors"
-            >
-              <ExternalLink size={12} /> Go to Video Templates
-            </button>
-          </div>
-        )}
+        {/* ── Video tab ── */}
+        {contentTab === "video" && <VideoTemplatesAdmin />}
+
+        {/* ── Music tab ── */}
+        {contentTab === "music" && <MusicLibraryPage />}
       </div>
     </div>
   );

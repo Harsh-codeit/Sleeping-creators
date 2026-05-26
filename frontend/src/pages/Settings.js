@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { Save, Send, Zap, Bot, Settings2, Lock, FileSpreadsheet, CheckCircle2, AlertCircle, Link, Copy } from "lucide-react";
+import { useUser } from "../context/UserContext";
+import Logs from "./Logs";
+import TeamPage from "./TeamPage";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -21,6 +25,12 @@ function utcToLocal(hhmm) {
 }
 
 export default function Settings() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "general";
+  const setTab = (t) => setSearchParams({ tab: t });
+  const { role } = useUser();
+  const isOwner = role === "owner";
+
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
@@ -82,17 +92,41 @@ export default function Settings() {
 
   const updateForm = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-full text-zinc-500 font-mono text-sm animate-pulse">LOADING SETTINGS...</div>;
-  }
-
   return (
-    <div className="p-6 max-w-2xl" data-testid="settings-page">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-white">Settings</h1>
-        <p className="text-xs text-zinc-500 font-mono mt-0.5">Global automation & integration configuration</p>
+    <div className="h-full bg-zinc-950 flex flex-col" data-testid="settings-page">
+      {/* Tab bar */}
+      <div className="flex items-center gap-0 px-6 pt-4 border-b border-zinc-800 flex-shrink-0">
+        <h1 className="text-lg font-bold text-white tracking-tight mr-6">Settings</h1>
+        {[
+          { key: "general", label: "General" },
+          { key: "logs",    label: "Logs" },
+          ...(isOwner ? [{ key: "team", label: "Team & Permissions" }] : []),
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-3 text-xs font-mono font-semibold border-b-2 transition-colors ${
+              activeTab === key
+                ? "border-white text-white"
+                : "border-transparent text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
+      {/* Logs tab */}
+      {activeTab === "logs" && <Logs />}
+
+      {/* Team tab */}
+      {activeTab === "team" && isOwner && <TeamPage />}
+
+      {/* General tab */}
+      {activeTab === "general" && (loading ? (
+        <div className="flex items-center justify-center h-full text-zinc-500 font-mono text-sm animate-pulse">LOADING SETTINGS...</div>
+      ) : (
+      <div className="p-6 max-w-2xl overflow-y-auto">
       <div className="space-y-6">
         {/* Telegram */}
         <div className="bg-zinc-900 border border-zinc-800 p-5">
@@ -417,6 +451,8 @@ export default function Settings() {
         {/* Change Password */}
         <ChangePassword />
       </div>
+      </div>
+      ))}
     </div>
   );
 }
