@@ -2703,135 +2703,112 @@ export default function ClientDetail() {
               ))}
             </div>
 
-            <div className="bg-zinc-900 border border-zinc-800">
-              <div className="grid grid-cols-12 gap-2 px-4 py-2 border-b border-zinc-800 text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
-                <div className="col-span-5">Content</div>
-                <div className="col-span-2">Platform</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Date</div>
-                <div className="col-span-1 text-right">Act.</div>
+            {filtered.length === 0 ? (
+              <div className="py-8 text-center text-zinc-600 font-mono text-sm">
+                {posts.length === 0 ? (
+                  <>No posts yet. <button onClick={openGenerateModal} className="text-white underline ml-1">Generate with AI</button></>
+                ) : (
+                  <>No {postKindFilter} posts.</>
+                )}
               </div>
-              {filtered.length === 0 ? (
-                <div className="px-4 py-8 text-center text-zinc-600 font-mono text-sm">
-                  {posts.length === 0 ? (
-                    <>No posts yet. <button onClick={openGenerateModal} className="text-white underline ml-1">Generate with AI</button></>
-                  ) : (
-                    <>No {postKindFilter} posts.</>
-                  )}
-                </div>
-              ) : (
-                filtered.map(post => {
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {filtered.map(post => {
                   const isVideo = post.kind === "video";
                   const actions = getPostActions(post);
                   return (
-                    <div key={post.id} className="grid grid-cols-12 gap-2 px-4 py-3 data-row" data-testid={`post-row-${post.id}`}>
-                      <div className="col-span-5 flex items-center gap-3 min-w-0">
-                        {/* Thumbnail — 9:16 mini for video, 1:1 for carousel */}
-                        <div className={`flex-shrink-0 bg-zinc-800 overflow-hidden ${isVideo ? "w-8 h-14" : "w-12 h-12"}`}>
-                          {isVideo ? (
-                            post.r2_snapshot_url ? (
-                              <img src={post.r2_snapshot_url} alt="" className="w-full h-full object-cover" />
-                            ) : post.r2_video_url ? (
-                              <video src={post.r2_video_url} muted preload="metadata" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Film size={12} className="text-zinc-700" />
-                              </div>
-                            )
+                    <div key={post.id} className="bg-zinc-900 border border-zinc-800 flex gap-3 p-3" data-testid={`post-row-${post.id}`}>
+                      {/* Thumbnail */}
+                      <div className={`flex-shrink-0 bg-zinc-800 overflow-hidden ${isVideo ? "w-10 h-16" : "w-14 h-14"}`}>
+                        {isVideo ? (
+                          post.r2_snapshot_url ? (
+                            <img src={post.r2_snapshot_url} alt="" className="w-full h-full object-cover" />
+                          ) : post.r2_video_url ? (
+                            <video src={post.r2_video_url} muted preload="metadata" className="w-full h-full object-cover" />
                           ) : (
-                            post.image_url ? (
-                              <img src={post.image_url} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Image size={12} className="text-zinc-700" />
-                              </div>
-                            )
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Film size={14} className="text-zinc-700" />
+                            </div>
+                          )
+                        ) : (
+                          post.image_url ? (
+                            <img src={post.image_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Image size={14} className="text-zinc-700" />
+                            </div>
+                          )
+                        )}
+                      </div>
+
+                      {/* Body */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div>
                           <p className="text-xs text-white font-semibold truncate leading-tight">
                             {post.topic || post.title || (isVideo ? "Untitled video" : "Untitled")}
                           </p>
-                          <p className="text-[10px] text-zinc-500 font-mono line-clamp-1 mt-0.5">
+                          <p className="text-[10px] text-zinc-500 font-mono line-clamp-2 mt-0.5">
                             {post.caption || post.text || "—"}
                           </p>
                           {post.error_message && (
-                            <p className="text-[10px] text-red-400 font-mono mt-0.5 truncate">⚠ {post.error_message.slice(0, 90)}</p>
+                            <p className="text-[10px] text-red-400 font-mono mt-0.5 truncate">⚠ {post.error_message.slice(0, 80)}</p>
                           )}
                           {post.competitor_hook_text && (
-                            <div className="text-[10px] font-mono text-zinc-500 mt-1 truncate" title={post.competitor_hook_text}>
-                              Hook from {post.competitor_username ? `@${post.competitor_username}` : "competitor"}: "{post.competitor_hook_text}"
+                            <div className="text-[10px] font-mono text-zinc-600 mt-0.5 truncate">
+                              Hook: "{post.competitor_hook_text}"
                             </div>
                           )}
                         </div>
-                      </div>
-                      <div className="col-span-2 flex items-center text-xs font-mono text-zinc-500 capitalize">{post.platform}</div>
-                      <div className="col-span-2 flex items-center">
-                        <StatusBadge status={post.status} />
-                      </div>
-                      <div className="col-span-2 flex items-center text-[10px] font-mono text-zinc-600">
-                        {post.created_at ? new Date(post.created_at).toLocaleDateString() : "—"}
-                      </div>
-                      <div className="col-span-1 flex items-center justify-end gap-1">
-                        {/* View — video posts with playable MP4 */}
-                        {isVideo && post.r2_video_url && (
-                          <button
-                            onClick={() => setViewingVideoPost(post)}
-                            title="Preview video"
-                            className="p-1 text-zinc-600 hover:text-white transition-colors duration-150"
-                          >
-                            <Eye size={11} />
-                          </button>
-                        )}
-                        {/* Retry — failed renders only */}
-                        {actions.retry && (
-                          <button
-                            onClick={() => retryRender(post)}
-                            disabled={retryingPostId === post.id}
-                            title="Retry render"
-                            className="p-1 text-zinc-600 hover:text-cyan-400 transition-colors duration-150 disabled:opacity-40"
-                          >
-                            <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
-                          </button>
-                        )}
-                        {/* Re-render — succeeded / pending_approval posts */}
-                        {actions.rerender && (
-                          <button
-                            onClick={() => retryRender(post)}
-                            disabled={retryingPostId === post.id}
-                            title="Re-render video"
-                            className="p-1 text-zinc-600 hover:text-violet-400 transition-colors duration-150 disabled:opacity-40"
-                          >
-                            <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
-                          </button>
-                        )}
-                        {/* Publish — carousel-only */}
-                        {actions.publish && (
-                          <button onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors duration-150 disabled:opacity-40">
-                            <Send size={11} />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => toggleWinner(post)}
-                          disabled={togglingWinner === post.id}
-                          aria-label={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
-                          title={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
-                          className={`p-1 transition-colors duration-150 disabled:opacity-40 ${post.is_winner ? "text-amber-400" : "text-zinc-600 hover:text-amber-400"}`}
-                        >
-                          <Star size={11} className={post.is_winner ? "fill-current" : ""} />
-                        </button>
-                        {post.is_winner && post.winner_source === "auto" && (
-                          <span className="text-[8px] font-mono text-zinc-600 uppercase">auto</span>
-                        )}
-                        <button onClick={() => deletePost(post.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors duration-150">
-                          <Trash2 size={11} />
-                        </button>
+
+                        {/* Footer row */}
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-800">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-zinc-500 capitalize">{post.platform}</span>
+                            <StatusBadge status={post.status} />
+                            <span className="text-[10px] font-mono text-zinc-700">
+                              {post.created_at ? new Date(post.created_at).toLocaleDateString() : ""}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            {isVideo && post.r2_video_url && (
+                              <button onClick={() => setViewingVideoPost(post)} title="Preview video" className="p-1 text-zinc-600 hover:text-white transition-colors">
+                                <Eye size={11} />
+                              </button>
+                            )}
+                            {actions.retry && (
+                              <button onClick={() => retryRender(post)} disabled={retryingPostId === post.id} title="Retry render" className="p-1 text-zinc-600 hover:text-cyan-400 transition-colors disabled:opacity-40">
+                                <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
+                              </button>
+                            )}
+                            {actions.rerender && (
+                              <button onClick={() => retryRender(post)} disabled={retryingPostId === post.id} title="Re-render" className="p-1 text-zinc-600 hover:text-violet-400 transition-colors disabled:opacity-40">
+                                <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
+                              </button>
+                            )}
+                            {actions.publish && (
+                              <button onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors disabled:opacity-40">
+                                <Send size={11} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => toggleWinner(post)}
+                              disabled={togglingWinner === post.id}
+                              title={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
+                              className={`p-1 transition-colors disabled:opacity-40 ${post.is_winner ? "text-amber-400" : "text-zinc-600 hover:text-amber-400"}`}
+                            >
+                              <Star size={11} className={post.is_winner ? "fill-current" : ""} />
+                            </button>
+                            <button onClick={() => deletePost(post.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors">
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
 
             {/* Video preview modal */}
             {viewingVideoPost && (
