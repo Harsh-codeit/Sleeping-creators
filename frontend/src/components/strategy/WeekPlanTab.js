@@ -4,25 +4,10 @@ import { toast } from "sonner";
 import { Zap, Check, X, Edit2, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-function loadSavedPlan(clientId) {
-  try {
-    const raw = localStorage.getItem(`content_plan_${clientId}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function savePlan(clientId, plan) {
-  try {
-    localStorage.setItem(`content_plan_${clientId}`, JSON.stringify(plan));
-  } catch {}
-}
-
-function clearSavedPlan(clientId) {
-  try { localStorage.removeItem(`content_plan_${clientId}`); } catch {}
-}
 
 export default function WeekPlanTab({ clientId }) {
-  const [plan, setPlan] = useState(() => loadSavedPlan(clientId));
+  const [plan, setPlan] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [approvals, setApprovals] = useState({});
   const [editing, setEditing] = useState({});
@@ -33,26 +18,28 @@ export default function WeekPlanTab({ clientId }) {
   const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
-    axios.get(`${API}/clients/${clientId}/pipelines`)
-      .then(r => {
+    Promise.all([
+      axios.get(`${API}/clients/${clientId}/content-plan`).then(r => {
+        const saved = r.data.plan;
+        if (saved && saved.length > 0) setPlan(saved);
+      }).catch(() => {}),
+      axios.get(`${API}/clients/${clientId}/pipelines`).then(r => {
         const active = (r.data || []).filter(p => p.status === "active");
         setPipelines(active);
         if (active.length > 0) setSelectedPipeline(active[0].id);
-      })
-      .catch(() => {});
+      }).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, [clientId]);
 
   const generate = async () => {
     setGenerating(true);
     setPlan(null);
-    clearSavedPlan(clientId);
     setApprovals({});
     setEditing({});
     setEditedCaptions({});
     try {
       const resp = await axios.post(`${API}/clients/${clientId}/content-plan/generate`);
       setPlan(resp.data.plan);
-      savePlan(clientId, resp.data.plan);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Generation failed");
     } finally {
@@ -80,13 +67,16 @@ export default function WeekPlanTab({ clientId }) {
       toast.success(`Scheduled ${resp.data.scheduled} posts — visible in Posts tab`);
       setApprovals({});
       setPlan(null);
-      clearSavedPlan(clientId);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Scheduling failed");
     } finally {
       setScheduling(false);
     }
   };
+
+  if (loading) {
+    return <div className="text-zinc-500 font-mono text-sm animate-pulse py-12 text-center">Loading…</div>;
+  }
 
   if (!plan && !generating) {
     return (

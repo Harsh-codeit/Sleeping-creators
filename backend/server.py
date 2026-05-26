@@ -2633,7 +2633,18 @@ async def generate_content_plan(client_id: str):
             raise HTTPException(500, "AI returned non-parseable content plan")
         plan = _json.loads(m.group())
 
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$set": {"content_plan": plan, "content_plan_generated_at": datetime.now(timezone.utc).isoformat()}}
+    )
     return {"plan": plan}
+
+@api_router.get("/clients/{client_id}/content-plan")
+async def get_content_plan(client_id: str):
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0, "content_plan": 1})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    return {"plan": client.get("content_plan") or []}
 
 @api_router.post("/clients/{client_id}/content-plan/schedule")
 async def schedule_content_plan(client_id: str, req: ContentPlanScheduleRequest):
@@ -2705,6 +2716,10 @@ async def schedule_content_plan(client_id: str, req: ContentPlanScheduleRequest)
             post_doc.pop("_id", None)
             created_posts.append(post_doc)
 
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$unset": {"content_plan": "", "content_plan_generated_at": ""}}
+    )
     return {"scheduled": len(created_posts), "posts": [p["id"] for p in created_posts]}
 
 @api_router.get("/clients/{client_id}/trends")
