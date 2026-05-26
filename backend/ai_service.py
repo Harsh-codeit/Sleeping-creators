@@ -123,12 +123,11 @@ def _build_carousel_cta(client: dict, topic: str | None = None, cta_keyword: str
             ),
         }
 
-    default_topic = _clean_cta_value(topic) or client.get("industry", "industry insights")
     return {
         "cta_heading": "Found this helpful?",
-        "cta_sub": f"Follow for more {default_topic} like this",
+        "cta_sub": "Follow for more",
         "cta_text": "Follow",
-        "slide_content": f"Follow {handle} for more {default_topic}.\n\nSave this post.",
+        "slide_content": f"Follow {handle} for more.\n\nSave this post.",
     }
 
 
