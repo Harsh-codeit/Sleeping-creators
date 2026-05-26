@@ -10,7 +10,7 @@ import PipelineWizardStep3 from "./PipelineWizardStep3";
 import PipelineWizardStepSource from "./PipelineWizardStepSource";
 
 const STEPS_DEFAULT = ["Type", "Content", "Schedule"];
-const STEPS_VIDEO   = ["Type", "Source", "Content", "Schedule"];
+const STEPS_VIDEO   = ["Type", "Media", "Schedule"];
 
 function ProgressBar({ step, steps: STEPS }) {
   return (
@@ -68,6 +68,8 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
         carousel_slide_count: initial.carousel_slide_count ?? EMPTY_FORM.carousel_slide_count,
         carousel_template: initial.carousel_template ?? EMPTY_FORM.carousel_template,
         specific_times: initial.specific_times || ["09:00"],
+        days_between_posts: initial.days_between_posts ?? EMPTY_FORM.days_between_posts,
+        post_time: initial.post_time || EMPTY_FORM.post_time,
         cta_keyword: initial.cta_keyword || "",
         cta_offer: initial.cta_offer || "",
         global_instructions: initial.global_instructions || "",
@@ -119,9 +121,15 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
           {step === 0 && <PipelineWizardStep1 form={form} onChange={onChange} />}
           {isVideo ? (
             <>
-              {step === 1 && <PipelineWizardStepSource form={form} onChange={onChange} clientId={clientId} />}
-              {step === 2 && <PipelineWizardStep2 form={form} onChange={onChange} clientId={clientId} />}
-              {step === 3 && <PipelineWizardStep3 form={form} onChange={onChange} />}
+              {step === 1 && (
+                <div className="space-y-8">
+                  <PipelineWizardStepSource form={form} onChange={onChange} clientId={clientId} />
+                  <div className="border-t border-zinc-800 pt-6">
+                    <PipelineWizardStep2 form={form} onChange={onChange} clientId={clientId} />
+                  </div>
+                </div>
+              )}
+              {step === 2 && <PipelineWizardStep3 form={form} onChange={onChange} />}
             </>
           ) : (
             <>

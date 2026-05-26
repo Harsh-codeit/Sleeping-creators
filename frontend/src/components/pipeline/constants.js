@@ -111,6 +111,9 @@ export const EMPTY_FORM = {
   video_audio_tags: [],            // pick random track whose mood_tags intersect any of these
   // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
   instagram_thumbnail_offset_ms: 2000,
+  // Video gap scheduling
+  days_between_posts: 1,
+  post_time: "09:00",
 };
 
 export const VIDEO_FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
@@ -218,6 +221,12 @@ function to12h(hhmm) {
 }
 
 export function scheduleLabel(p) {
+  if (p.days_between_posts) {
+    const t = to12h(utcToLocal(p.post_time || "09:00"));
+    const short = new Date().toLocaleTimeString("en", { timeZoneName: "short" }).split(" ").pop();
+    const d = p.days_between_posts;
+    return `Every ${d} day${d === 1 ? "" : "s"} at ${t} (${short})`;
+  }
   if (p.schedule_type === "specific_times") {
     const localTimes = (p.specific_times || []).map(t => to12h(utcToLocal(t))).join(", ");
     const short = new Date().toLocaleTimeString("en", { timeZoneName: "short" }).split(" ").pop();

@@ -554,6 +554,9 @@ class PipelineCreate(BaseModel):
     next_clip_index: Optional[int] = 0            # sequential rotation cursor
     video_audio_tags: List[str] = []              # pick random track whose mood_tags intersect any of these
     instagram_thumbnail_offset_ms: Optional[int] = 64  # Reel cover frame timestamp in ms
+    # Gap scheduling (video)
+    days_between_posts: Optional[int] = None  # None = use interval_hours logic
+    post_time: Optional[str] = None           # "HH:MM" UTC, used with days_between_posts
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -582,6 +585,8 @@ class PipelineUpdate(BaseModel):
     video_clip_strategy: Optional[str] = None
     video_audio_tags: Optional[List[str]] = None
     instagram_thumbnail_offset_ms: Optional[int] = None
+    days_between_posts: Optional[int] = None
+    post_time: Optional[str] = None
 
 class OnboardingCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1237,6 +1242,17 @@ async def daily_content_reset():
 # ─── Pipeline Execution ───────────────────────────────────────────────────────
 
 def calculate_next_run(pipeline: dict, now: datetime) -> str:
+    # Video gap scheduling: post every N days at a fixed time
+    days = pipeline.get("days_between_posts")
+    if days:
+        post_time = pipeline.get("post_time", "09:00") or "09:00"
+        try:
+            h, m = map(int, post_time.split(":"))
+        except Exception:
+            h, m = 9, 0
+        next_run = (now + timedelta(days=int(days))).replace(hour=h, minute=m, second=0, microsecond=0)
+        return next_run.isoformat()
+
     schedule_type = pipeline.get("schedule_type", "interval")
     if schedule_type == "specific_times":
         times = sorted(pipeline.get("specific_times", []))

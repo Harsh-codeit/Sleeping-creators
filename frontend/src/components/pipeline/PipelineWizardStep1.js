@@ -7,35 +7,6 @@ export default function PipelineWizardStep1({ form, onChange }) {
 
   return (
     <div className="space-y-5">
-      {/* Content type */}
-      <div>
-        <label className="label-xs">Content Type</label>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { value: "carousel",  label: "Carousel",   desc: "Multi-slide image post" },
-            { value: "text_post", label: "Text Post",  desc: "Caption-only post" },
-          ].map(({ value, label, desc }) => {
-            const selected = form.content_type === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                data-testid={`content-type-${value}`}
-                onClick={() => onChange("content_type", value)}
-                className={`flex items-start gap-2.5 p-3 border text-left transition-colors duration-150 ${
-                  selected ? "bg-zinc-800 border-white" : "border-zinc-700 hover:border-zinc-500"
-                }`}
-              >
-                <div>
-                  <div className="text-xs font-mono font-bold text-white">{label}</div>
-                  <div className="text-[10px] font-mono mt-0.5 text-zinc-500">{desc}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Type grid */}
       <div>
         <label className="label-xs">Pipeline Type</label>
