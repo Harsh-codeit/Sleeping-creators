@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, EyeOff, Search, Star, Film, Image, CheckCircle } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
+import WeekPlanTab from "@/components/strategy/WeekPlanTab";
+import ReportTab from "@/components/strategy/ReportTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
 import { render } from "@react-email/render";
 import { ContentStrategyOnboardingEmail } from "../emails/ContentStrategyOnboardingEmail";
@@ -1666,6 +1668,13 @@ export default function ClientDetail() {
   const [posts, setPosts] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [activeTab, setActiveTab] = useState("Overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const strategyTab = searchParams.get("strategyTab") || "overview";
+  const setStrategyTab = (t) => setSearchParams(prev => {
+    const next = new URLSearchParams(prev);
+    next.set("strategyTab", t);
+    return next;
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -2250,7 +2259,30 @@ export default function ClientDetail() {
       )}
 
       {activeTab === "Strategy" && (
-        <div className="max-w-2xl space-y-3">
+        <div className="space-y-0">
+          {/* Sub-tab bar */}
+          <div className="flex items-center gap-0 border-b border-zinc-800 mb-4">
+            {[
+              { key: "overview", label: "Overview" },
+              { key: "week",     label: "Week Plan" },
+              { key: "report",   label: "Report" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setStrategyTab(key)}
+                className={`px-4 py-2 text-xs font-mono font-semibold border-b-2 transition-colors ${
+                  strategyTab === key
+                    ? "border-white text-white"
+                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {strategyTab === "overview" && (
+          <div className="max-w-2xl space-y-3">
           {/* Content Strategy card */}
           <div className="bg-zinc-900 border border-zinc-800 p-4">
             <div className="text-[10px] font-mono text-zinc-500 uppercase mb-4">Content Strategy</div>
@@ -2616,6 +2648,19 @@ export default function ClientDetail() {
             <Save size={13} />
             {saving ? "Saving..." : "Save Strategy"}
           </button>
+          </div>
+          )}
+
+          {strategyTab === "week" && (
+            <WeekPlanTab clientId={id} />
+          )}
+
+          {strategyTab === "report" && (
+            <ReportTab
+              clientId={id}
+              onNavigate={(tab) => setActiveTab(tab)}
+            />
+          )}
         </div>
       )}
 

@@ -352,6 +352,20 @@ class GenerateRequest(BaseModel):
     topic: Optional[str] = None
     scheduled_at: Optional[str] = None
 
+class ContentPlanScheduleItem(BaseModel):
+    day: str
+    date: str
+    topic: str
+    format: str
+    caption: str
+    template_id: str
+    slide_count: int = 5
+    rationale: str = ""
+
+class ContentPlanScheduleRequest(BaseModel):
+    posts: List[ContentPlanScheduleItem]
+    pipeline_id: Optional[str] = None
+
 class SheetCreateRequest(BaseModel):
     share_with_email: str
 
@@ -2523,6 +2537,175 @@ async def refresh_competitor_strategy(client_id: str):
     except Exception as e:
         logger.error(f"refresh_competitor_strategy error for client {client_id}: {e}")
         raise HTTPException(500, "Unexpected error generating competitor strategy")
+
+@api_router.post("/clients/{client_id}/content-plan/generate")
+async def generate_content_plan(client_id: str):
+    import anthropic, json as _json, re as _re
+    from usage_service import record_usage
+    from trend_service import get_cached_trends
+
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    onboarding = client.get("onboarding_data", {})
+    niche = onboarding.get("niche") or client.get("industry", "general")
+    strategy = client.get("strategy", {})
+    themes = strategy.get("content_themes") or strategy.get("themes", "")
+    topics_include = strategy.get("topics_include", [])
+    topics_exclude = strategy.get("topics_exclude", [])
+    competitor_strategy = client.get("competitor_strategy", {})
+    competitor_insight = competitor_strategy.get("insight_summary", "") if competitor_strategy else ""
+    competitor_themes = competitor_strategy.get("themes", []) if competitor_strategy else []
+
+    trends = await get_cached_trends(client_id, db, limit=10)
+    trend_topics = [t.get("hashtag") or t.get("topic", "") for t in (trends or []) if t.get("hashtag") or t.get("topic")]
+
+    pipeline = await db.pipelines.find_one(
+        {"client_id": client_id, "status": "active", "pipeline_type": {"$in": ["standard", "trend"]}},
+        {"_id": 0}
+    )
+    default_template = (pipeline or {}).get("carousel_template", "dark_card")
+
+    from datetime import date, timedelta
+    start_date = date.today() + timedelta(days=1)
+    days = [(start_date + timedelta(days=i)).strftime("%A %Y-%m-%d") for i in range(7)]
+    days_block = "\n".join(f"- {d}" for d in days)
+
+    system_msg = (
+        "You are an expert social media content strategist. "
+        "Generate a 7-day content plan as a JSON array. "
+        "Return ONLY valid JSON — no markdown, no explanation. "
+        "Each item must have exactly these keys: "
+        "day (string), date (YYYY-MM-DD), topic (string), format (carousel|video|reel), "
+        "caption (string, full Instagram-ready caption with line breaks and emojis), "
+        "template_id (string, one of: dark_card, full_white, floating_card, dark_card_rich, full_white_rich, floating_card_rich), "
+        "slide_count (integer 4-8), rationale (string, 1 sentence)."
+    )
+    user_msg = (
+        f"Client niche: {niche}\n"
+        f"Content themes: {themes}\n"
+        f"Topics to include: {', '.join(topics_include) if topics_include else 'none specified'}\n"
+        f"Topics to avoid: {', '.join(topics_exclude) if topics_exclude else 'none'}\n"
+        f"Trending topics this week: {', '.join(trend_topics[:8]) if trend_topics else 'none'}\n"
+        f"Competitor insight: {competitor_insight}\n"
+        f"Competitor themes: {', '.join(competitor_themes) if competitor_themes else 'none'}\n"
+        f"Default template: {default_template}\n\n"
+        f"Plan for these 7 days:\n{days_block}\n\n"
+        "Return the JSON array of 7 content plan items now."
+    )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(500, "ANTHROPIC_API_KEY not configured")
+
+    try:
+        ai_client = anthropic.AsyncAnthropic(api_key=api_key)
+        message = await ai_client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=3000,
+            system=system_msg,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        await record_usage(db, message, generation_type="content_plan",
+                           client_id=client_id, client_name=client.get("name"))
+        raw_text = message.content[0].text.strip()
+    except Exception as e:
+        logger.error(f"generate_content_plan: Claude API error: {e}")
+        raise HTTPException(500, f"AI generation failed: {e}")
+
+    try:
+        cleaned = raw_text
+        if "```" in cleaned:
+            for part in cleaned.split("```"):
+                p = part.strip()
+                if p.startswith("json"):
+                    p = p[4:].strip()
+                if p.startswith("["):
+                    cleaned = p
+                    break
+        plan = _json.loads(cleaned)
+        if not isinstance(plan, list) or len(plan) == 0:
+            raise ValueError("Expected a non-empty JSON array")
+    except Exception:
+        m = _re.search(r"\[.*\]", raw_text, _re.DOTALL)
+        if not m:
+            raise HTTPException(500, "AI returned non-parseable content plan")
+        plan = _json.loads(m.group())
+
+    return {"plan": plan}
+
+@api_router.post("/clients/{client_id}/content-plan/schedule")
+async def schedule_content_plan(client_id: str, req: ContentPlanScheduleRequest):
+    from datetime import datetime as dt, timezone, timedelta
+
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    pipeline = None
+    if req.pipeline_id:
+        pipeline = await db.pipelines.find_one({"id": req.pipeline_id, "client_id": client_id}, {"_id": 0})
+    if not pipeline:
+        pipeline = await db.pipelines.find_one(
+            {"client_id": client_id, "status": "active"},
+            {"_id": 0}
+        )
+
+    platforms = (pipeline or {}).get("platforms", ["instagram"])
+    require_approval = (pipeline or {}).get("require_approval", False)
+    post_time_str = (pipeline or {}).get("post_time", "09:00") or "09:00"
+    pipeline_id = (pipeline or {}).get("id")
+    pipeline_name = (pipeline or {}).get("name", "Content Plan")
+
+    try:
+        ph, pm = map(int, post_time_str.split(":"))
+    except Exception:
+        ph, pm = 9, 0
+
+    created_posts = []
+    now_str = datetime.now(timezone.utc).isoformat()
+
+    for item in req.posts:
+        try:
+            post_date = dt.strptime(item.date, "%Y-%m-%d").replace(
+                hour=ph, minute=pm, second=0, tzinfo=timezone.utc
+            )
+        except Exception:
+            post_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+        for platform in platforms:
+            post_doc = {
+                "id": str(uuid.uuid4()),
+                "client_id": client_id,
+                "client_name": client.get("name", ""),
+                "platform": platform,
+                "content_type": "carousel",
+                "text": item.caption,
+                "image_url": None,
+                "hashtags": client.get("strategy", {}).get("hashtags", []),
+                "status": "draft" if require_approval else "scheduled",
+                "approval_token": str(uuid.uuid4()) if require_approval else None,
+                "scheduled_at": post_date.isoformat(),
+                "published_at": None,
+                "error_message": None,
+                "performance": {"likes": 0, "comments": 0, "shares": 0, "impressions": 0},
+                "ai_generated": True,
+                "pipeline_id": pipeline_id,
+                "pipeline_name": pipeline_name,
+                "pipeline_type": "standard",
+                "carousel_template": item.template_id or "dark_card",
+                "carousel_slide_count": item.slide_count,
+                "carousel_topic": item.topic,
+                "engagement_score": 0,
+                "created_at": now_str,
+                "source": "content_plan",
+            }
+            await db.posts.insert_one(post_doc)
+            post_doc.pop("_id", None)
+            created_posts.append(post_doc)
+
+    return {"scheduled": len(created_posts), "posts": [p["id"] for p in created_posts]}
 
 @api_router.get("/clients/{client_id}/trends")
 async def list_client_trends(client_id: str, limit: int = 20):
