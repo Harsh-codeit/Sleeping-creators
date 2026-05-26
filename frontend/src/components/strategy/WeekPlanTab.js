@@ -4,24 +4,16 @@ import { toast } from "sonner";
 import { Zap, Check, X, Edit2, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const PLAN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
 function loadSavedPlan(clientId) {
   try {
     const raw = localStorage.getItem(`content_plan_${clientId}`);
-    if (!raw) return null;
-    const { plan, savedAt } = JSON.parse(raw);
-    if (Date.now() - savedAt > PLAN_TTL_MS) {
-      localStorage.removeItem(`content_plan_${clientId}`);
-      return null;
-    }
-    return plan;
+    return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
 function savePlan(clientId, plan) {
   try {
-    localStorage.setItem(`content_plan_${clientId}`, JSON.stringify({ plan, savedAt: Date.now() }));
+    localStorage.setItem(`content_plan_${clientId}`, JSON.stringify(plan));
   } catch {}
 }
 
