@@ -4,9 +4,33 @@ import { toast } from "sonner";
 import { Zap, Check, X, Edit2, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const PLAN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function loadSavedPlan(clientId) {
+  try {
+    const raw = localStorage.getItem(`content_plan_${clientId}`);
+    if (!raw) return null;
+    const { plan, savedAt } = JSON.parse(raw);
+    if (Date.now() - savedAt > PLAN_TTL_MS) {
+      localStorage.removeItem(`content_plan_${clientId}`);
+      return null;
+    }
+    return plan;
+  } catch { return null; }
+}
+
+function savePlan(clientId, plan) {
+  try {
+    localStorage.setItem(`content_plan_${clientId}`, JSON.stringify({ plan, savedAt: Date.now() }));
+  } catch {}
+}
+
+function clearSavedPlan(clientId) {
+  try { localStorage.removeItem(`content_plan_${clientId}`); } catch {}
+}
 
 export default function WeekPlanTab({ clientId }) {
-  const [plan, setPlan] = useState(null);
+  const [plan, setPlan] = useState(() => loadSavedPlan(clientId));
   const [generating, setGenerating] = useState(false);
   const [approvals, setApprovals] = useState({});
   const [editing, setEditing] = useState({});
@@ -29,12 +53,14 @@ export default function WeekPlanTab({ clientId }) {
   const generate = async () => {
     setGenerating(true);
     setPlan(null);
+    clearSavedPlan(clientId);
     setApprovals({});
     setEditing({});
     setEditedCaptions({});
     try {
       const resp = await axios.post(`${API}/clients/${clientId}/content-plan/generate`);
       setPlan(resp.data.plan);
+      savePlan(clientId, resp.data.plan);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Generation failed");
     } finally {
@@ -62,6 +88,7 @@ export default function WeekPlanTab({ clientId }) {
       toast.success(`Scheduled ${resp.data.scheduled} posts — visible in Posts tab`);
       setApprovals({});
       setPlan(null);
+      clearSavedPlan(clientId);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Scheduling failed");
     } finally {
