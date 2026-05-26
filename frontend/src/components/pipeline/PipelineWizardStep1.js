@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { PIPELINE_TYPES, TYPE_HINTS, PRESETS } from "./constants";
 
-const CAROUSEL_PIPELINE_TYPES = PIPELINE_TYPES.filter(t => t.value !== "video");
+const CAROUSEL_PIPELINE_TYPES = PIPELINE_TYPES.filter(t => t.value === "standard" || t.value === "trend");
 
 export default function PipelineWizardStep1({ form, onChange }) {
   const [presetsOpen, setPresetsOpen] = useState(false);
