@@ -557,6 +557,9 @@ class PipelineCreate(BaseModel):
     # Gap scheduling (video)
     days_between_posts: Optional[int] = None  # None = use interval_hours logic
     post_time: Optional[str] = None           # "HH:MM" UTC, used with days_between_posts
+    # Music multi-select
+    video_audio_ids: List[str] = []           # selected track IDs
+    video_audio_strategy: Optional[str] = "rotate"  # rotate | random
 
 class PipelineUpdate(BaseModel):
     name: Optional[str] = None
@@ -587,6 +590,8 @@ class PipelineUpdate(BaseModel):
     instagram_thumbnail_offset_ms: Optional[int] = None
     days_between_posts: Optional[int] = None
     post_time: Optional[str] = None
+    video_audio_ids: Optional[List[str]] = None
+    video_audio_strategy: Optional[str] = None
 
 class OnboardingCreate(BaseModel):
     model_config = ConfigDict(extra="ignore")

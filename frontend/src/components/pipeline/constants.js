@@ -114,6 +114,9 @@ export const EMPTY_FORM = {
   // Video gap scheduling
   days_between_posts: 1,
   post_time: "09:00",
+  // Music multi-select
+  video_audio_ids: [],
+  video_audio_strategy: "rotate",
 };
 
 export const VIDEO_FILTERS = ["greyscale", "boost", "contrast", "darken", "lighten", "muted", "negative", "blur"];
