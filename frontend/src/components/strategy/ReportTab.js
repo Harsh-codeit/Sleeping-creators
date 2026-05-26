@@ -104,26 +104,15 @@ export default function ReportTab({ clientId, onNavigate }) {
   })();
 
   const bundleData = analytics?.bundle || analytics;
-  const postsThisMonth = bundleData?.posts_this_month ?? analytics?.posts_this_month ?? null;
-  const avgEngagement = (() => {
-    const posts = analytics?.posts || [];
-    if (posts.length === 0) return null;
-    const total = posts.reduce((s, p) => s + (p.engagement_score || 0), 0);
-    return Math.round(total / posts.length);
-  })();
-  const bestFormat = (() => {
-    const posts = analytics?.posts || [];
-    if (posts.length === 0) return null;
-    const byFormat = {};
-    posts.forEach(p => {
-      const f = p.content_type || "carousel";
-      if (!byFormat[f]) byFormat[f] = { total: 0, count: 0 };
-      byFormat[f].total += p.engagement_score || 0;
-      byFormat[f].count += 1;
-    });
-    return Object.entries(byFormat)
-      .map(([f, d]) => ({ format: f, avg: d.count > 0 ? d.total / d.count : 0 }))
-      .sort((a, b) => b.avg - a.avg)[0]?.format || null;
+  const totals = analytics?.totals || {};
+  const postsThisMonth = totals.post_count ?? null;
+  const avgEngagement = totals.engagement_rate != null
+    ? `${totals.engagement_rate}%`
+    : null;
+  const topPlatform = (() => {
+    const breakdown = analytics?.platform_breakdown || {};
+    return Object.entries(breakdown)
+      .sort((a, b) => (b[1].followers || 0) - (a[1].followers || 0))[0]?.[0] || null;
   })();
 
   if (loading) {
@@ -196,14 +185,14 @@ export default function ReportTab({ clientId, onNavigate }) {
       {/* Section 3: Client Profile */}
       <div className="bg-zinc-900 border border-zinc-800 p-4">
         <SectionHeader icon={BarChart3} title="Client Profile" onLink={() => onNavigate?.("Analytics")} />
-        {!analytics ? (
-          <p className="text-xs font-mono text-zinc-600">No analytics data yet. Connect Bundle.social in Settings.</p>
+        {!analytics || (!postsThisMonth && !avgEngagement && !topPlatform) ? (
+          <p className="text-xs font-mono text-zinc-600">No analytics data yet. Connect Bundle.social in Settings or refresh.</p>
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {postsThisMonth !== null && <KpiCard label="Posts This Month" value={postsThisMonth} />}
-              {avgEngagement !== null && <KpiCard label="Avg Engagement" value={avgEngagement} sub="per post" />}
-              {bestFormat && <KpiCard label="Best Format" value={bestFormat} sub="highest avg engagement" />}
+              {postsThisMonth !== null && <KpiCard label="Total Posts" value={postsThisMonth} />}
+              {avgEngagement !== null && <KpiCard label="Engagement Rate" value={avgEngagement} sub="likes + comments / followers" />}
+              {topPlatform && <KpiCard label="Top Platform" value={topPlatform} sub="by followers" />}
             </div>
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-mono text-zinc-600">
