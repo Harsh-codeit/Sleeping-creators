@@ -1,8 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Pencil, Trash2, Music } from "lucide-react";
-import WaveformEditor from "./WaveformEditor";
 import { MoodTagPicker } from "./MoodTagPicker";
 import { VideoField } from "./VideoField";
 
@@ -17,7 +16,6 @@ function fmtDuration(secs) {
 export function MusicTrackCard({ track, onDeleted, onUpdated, canDelete = true }) {
   const [editing, setEditing] = useState(false);
   const [moodTags, setMoodTags] = useState(track.mood_tags || []);
-  const [segments, setSegments] = useState(track.segments || []);
   const [saving, setSaving] = useState(false);
 
   const handleDelete = async () => {
@@ -34,7 +32,7 @@ export function MusicTrackCard({ track, onDeleted, onUpdated, canDelete = true }
   const handleSave = async () => {
     setSaving(true);
     try {
-      const r = await axios.put(`${API}/music/${track.id}`, { mood_tags: moodTags, segments });
+      const r = await axios.put(`${API}/music/${track.id}`, { mood_tags: moodTags });
       toast.success("Track updated");
       onUpdated(r.data);
       setEditing(false);
@@ -44,8 +42,6 @@ export function MusicTrackCard({ track, onDeleted, onUpdated, canDelete = true }
       setSaving(false);
     }
   };
-
-  const handleSegmentsChange = useCallback((segs) => setSegments(segs), []);
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors">
@@ -94,14 +90,6 @@ export function MusicTrackCard({ track, onDeleted, onUpdated, canDelete = true }
         <div className="border-t border-zinc-800 p-4 space-y-4">
           <VideoField label="Mood Tags">
             <MoodTagPicker value={moodTags} onChange={setMoodTags} />
-          </VideoField>
-
-          <VideoField label="Waveform — drag regions to set segments">
-            <WaveformEditor
-              audioUrl={track.r2_url}
-              initialSegments={track.segments || []}
-              onChange={handleSegmentsChange}
-            />
           </VideoField>
 
           <div className="flex gap-2 pt-1">
