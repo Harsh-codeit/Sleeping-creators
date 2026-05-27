@@ -9,6 +9,7 @@ import {
 
 export default function PipelineWizardStep2({ form, onChange, clientId }) {
   const [customTemplates, setCustomTemplates] = useState([]);
+  const [videoTemplates, setVideoTemplates] = useState([]);
   const [musicTracks, setMusicTracks] = useState([]);
   const [playingId, setPlayingId] = useState(null);
   const [musicModal, setMusicModal] = useState(null); // null | "tags" | "tracks"
@@ -29,6 +30,12 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
           .map(t => ({ value: t.id, label: t.name }))
       );
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    axios.get(`${API}/shotstack-templates?status=active`)
+      .then(r => setVideoTemplates((r.data || []).map(t => ({ value: t.id, label: t.name }))))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -99,7 +106,7 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
             >
               Random
             </button>
-            {allTemplates.map(t => (
+            {videoTemplates.map(t => (
               <button
                 key={t.value}
                 type="button"
@@ -122,7 +129,7 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
               ? "Picks a different active template at random each run."
               : !form.video_template_id
                 ? "No template selected."
-                : allTemplates.find(t => t.value === form.video_template_id)?.label || form.video_template_id}
+                : videoTemplates.find(t => t.value === form.video_template_id)?.label || form.video_template_id}
           </p>
         </div>
 
