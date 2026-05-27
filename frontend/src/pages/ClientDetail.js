@@ -758,16 +758,24 @@ function ProfilePhotoEditor({ client, setClient, clientId }) {
         className="hidden"
         data-testid="profile-photo-file-input"
       />
-      {!client.profile_photo_url && (
+      <div className="flex gap-2">
         <button
           data-testid="upload-photo-btn"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="w-full py-1.5 text-xs bg-white text-black font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
+          className="flex-1 py-1.5 text-xs bg-white text-black font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
         >
-          {uploading ? "Uploading..." : "Upload Photo"}
+          {uploading ? "Uploading..." : client.profile_photo_url ? "Change Photo" : "Upload Photo"}
         </button>
-      )}
+        {client.profile_photo_url && (
+          <button
+            onClick={removePhoto}
+            className="px-3 py-1.5 text-xs border border-zinc-700 text-zinc-500 hover:text-red-400 hover:border-red-900 transition-colors duration-150"
+          >
+            Remove
+          </button>
+        )}
+      </div>
       <p className="text-[9px] font-mono text-zinc-600">JPEG · PNG · WebP · max 5MB</p>
     </div>
   );
@@ -2075,74 +2083,10 @@ export default function ClientDetail() {
                 </div>
               </div>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 p-4">
-              <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Client Info</div>
-              {client.bio && (
-                <div className="py-1.5 border-b border-zinc-800">
-                  <div className="text-[10px] font-mono text-zinc-500 mb-1">About</div>
-                  <div className="text-xs text-zinc-300 whitespace-pre-wrap">{client.bio}</div>
-                </div>
-              )}
-              {[
-                { label: "Industry", value: client.industry || "—" },
-                { label: "Brand Voice", value: client.brand_voice || "—" },
-                { label: "Target Audience", value: client.target_audience || "—" },
-                { label: "Platforms", value: (client.platforms || []).join(", ") || "—" },
-              ].map(f => (
-                <div key={f.label} className="flex justify-between py-1.5 border-b border-zinc-800 last:border-0">
-                  <span className="text-xs font-mono text-zinc-500">{f.label}</span>
-                  <span className="text-xs font-mono text-zinc-300 text-right max-w-48 truncate">{f.value}</span>
-                </div>
-              ))}
-            </div>
           </div>
           <div className="space-y-4">
             <DriveImagesFolderCard client={client} clientId={id} setClient={setClient} />
             <DriveVideosFolderCard client={client} clientId={id} setClient={setClient} />
-            {/* Contact & Access card */}
-            {(() => {
-              const ob = client.onboarding_data || {};
-              const contactFields = [
-                { label: "Email",     value: ob.email },
-                { label: "WhatsApp",  value: ob.whatsapp },
-                { label: "Location",  value: ob.city_country },
-                { label: "Website",   value: ob.website_url },
-                { label: "LinkedIn",  value: ob.linkedin_url },
-                { label: "YouTube",   value: ob.youtube_url },
-                { label: "Twitter",   value: ob.twitter_url },
-              ].filter(f => f.value);
-              const hasContact = contactFields.length > 0 || ob.account_suspended != null || ob.paid_ads_run != null;
-              if (!hasContact) return null;
-              return (
-                <div className="bg-zinc-900 border border-zinc-800 p-4">
-                  <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Contact & Access</div>
-                  <div className="space-y-1.5">
-                    {contactFields.map(f => (
-                      <div key={f.label} className="flex justify-between py-1 border-b border-zinc-800 last:border-0">
-                        <span className="text-xs font-mono text-zinc-500">{f.label}</span>
-                        <span className="text-xs font-mono text-zinc-300 text-right max-w-48 truncate">{f.value}</span>
-                      </div>
-                    ))}
-                    {ob.account_suspended != null && (
-                      <div className="flex justify-between py-1 border-b border-zinc-800">
-                        <span className="text-xs font-mono text-zinc-500">Suspended</span>
-                        <span className={`text-xs font-mono ${ob.account_suspended ? "text-red-400" : "text-emerald-500"}`}>
-                          {ob.account_suspended ? "Yes" : "No"}
-                        </span>
-                      </div>
-                    )}
-                    {ob.paid_ads_run != null && (
-                      <div className="flex justify-between py-1">
-                        <span className="text-xs font-mono text-zinc-500">Paid Ads Run</span>
-                        <span className={`text-xs font-mono ${ob.paid_ads_run ? "text-amber-400" : "text-zinc-400"}`}>
-                          {ob.paid_ads_run ? "Yes" : "No"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
             <div className="bg-zinc-900 border border-zinc-800 p-4">
               <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Story Automation</div>
               <div className="flex items-center justify-between">

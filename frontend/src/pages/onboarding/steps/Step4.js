@@ -17,11 +17,11 @@ export default function Step4({ form, set }) {
   ];
 
   const nextSteps = [
-    { value: "DM you", label: "DM you", desc: "Start a conversation in DMs" },
-    { value: "Click a link", label: "Click a link", desc: "Visit a landing page" },
-    { value: "Book a call", label: "Book a call", desc: "Schedule a meeting" },
-    { value: "Enrol directly", label: "Enrol directly", desc: "Sign up for an offer" },
-    { value: "Other", label: "Other", desc: "Something else" },
+    { value: "dm",    label: "DM Me",       desc: "Start a conversation in DMs" },
+    { value: "link",  label: "Visit Link",  desc: "Visit a landing page" },
+    { value: "call",  label: "Book Call",   desc: "Schedule a meeting" },
+    { value: "enrol", label: "Enrol Now",   desc: "Sign up for an offer" },
+    { value: "other", label: "Other",       desc: "Something else" },
   ];
 
   const selectedGoal = form.account_goals ?? "followers";

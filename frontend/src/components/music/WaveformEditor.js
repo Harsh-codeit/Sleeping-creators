@@ -15,7 +15,6 @@ export default function WaveformEditor({ audioUrl, initialSegments = [], onChang
   const wsRef = useRef(null);
   const regionsRef = useRef(null);
   const [ready, setReady] = useState(false);
-  const [loadError, setLoadError] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [segments, setSegments] = useState(initialSegments);
   const [editingSegId, setEditingSegId] = useState(null);
@@ -58,11 +57,6 @@ export default function WaveformEditor({ audioUrl, initialSegments = [], onChang
         });
       });
 
-      ws.on("error", () => {
-        if (destroyed) return;
-        setLoadError(true);
-      });
-
       // WaveSurfer v7: region events fire on the plugin instance, not ws
       wsRegions.on("region-updated", (region) => {
         setSegments((prev) =>
@@ -83,7 +77,6 @@ export default function WaveformEditor({ audioUrl, initialSegments = [], onChang
     return () => {
       destroyed = true;
       setReady(false);
-      setLoadError(false);
       setPlaying(false);
       setEditingSegId(null);
       setSegments(initialSegments);
@@ -141,14 +134,9 @@ export default function WaveformEditor({ audioUrl, initialSegments = [], onChang
     <div className="space-y-3">
       <div className="bg-zinc-950 border border-zinc-800 p-3">
         <div ref={containerRef} />
-        {!ready && !loadError && (
+        {!ready && (
           <div className="flex items-center justify-center h-16 text-zinc-600 text-xs font-mono">
             Loading waveform…
-          </div>
-        )}
-        {loadError && (
-          <div className="flex items-center justify-center h-16 text-red-500 text-xs font-mono">
-            Failed to load audio — check the file URL or CORS settings.
           </div>
         )}
       </div>

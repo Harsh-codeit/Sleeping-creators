@@ -555,6 +555,7 @@ class PipelineCreate(BaseModel):
     require_approval: bool = False
     # Video pipeline fields
     video_template_id: Optional[str] = None
+    video_template_strategy: Optional[str] = "pick"  # pick | random
     drive_folder_id: Optional[str] = None
     overlay_text: Optional[str] = None
     video_cta_text: Optional[str] = None
@@ -594,6 +595,7 @@ class PipelineUpdate(BaseModel):
     require_approval: Optional[bool] = None
     status: Optional[str] = None
     video_template_id: Optional[str] = None
+    video_template_strategy: Optional[str] = None
     video_filter_name: Optional[str] = None
     video_audio_url: Optional[str] = None
     video_hook_strategy: Optional[str] = None
@@ -1453,15 +1455,23 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         # 3) Pick clips for the template's clip slots
         # 4) Create a post doc shaped like POST /videos/create produces
         # 5) Enqueue via the same worker — submit_render_for_post handles the rest
-        video_template_id = pipeline.get("video_template_id")
-        if not video_template_id:
-            await add_log("warning", f"Pipeline '{pipeline['name']}': no video template configured", pipeline["client_id"], client["name"])
-            return 0
-
-        template_doc = await db.shotstack_templates.find_one({"id": video_template_id, "status": "active"})
-        if not template_doc:
-            await add_log("warning", f"Pipeline '{pipeline['name']}': Shotstack template not active", pipeline["client_id"], client["name"])
-            return 0
+        video_template_strategy = pipeline.get("video_template_strategy", "pick")
+        if video_template_strategy == "random":
+            active_templates = await db.shotstack_templates.find({"status": "active"}).to_list(None)
+            if not active_templates:
+                await add_log("warning", f"Pipeline '{pipeline['name']}': no active video templates found for random selection", pipeline["client_id"], client["name"])
+                return 0
+            template_doc = random.choice(active_templates)
+            video_template_id = template_doc["id"]
+        else:
+            video_template_id = pipeline.get("video_template_id")
+            if not video_template_id:
+                await add_log("warning", f"Pipeline '{pipeline['name']}': no video template configured", pipeline["client_id"], client["name"])
+                return 0
+            template_doc = await db.shotstack_templates.find_one({"id": video_template_id, "status": "active"})
+            if not template_doc:
+                await add_log("warning", f"Pipeline '{pipeline['name']}': Shotstack template not active", pipeline["client_id"], client["name"])
+                return 0
 
         # Required clips: count clip-role merge fields on the template
         required_clip_count = sum(1 for f in template_doc.get("merge_fields", []) if f.get("role") == "clip")
@@ -3145,6 +3155,10 @@ async def resume_client(client_id: str):
 
 @api_router.post("/clients/onboard", status_code=201)
 async def onboard_client(data: OnboardingCreate):
+    # Normalize next_step_after_view to short-key format
+    raw_ns = (data.next_step_after_view or "").strip().lower()
+    data.next_step_after_view = _NEXT_STEP_NORMALIZE.get(raw_ns, data.next_step_after_view)
+
     # All onboarding concepts in one place — the SSOT
     onboarding_data = data.model_dump(exclude={"name", "platforms"})
 
@@ -6178,6 +6192,7 @@ async def create_pipeline(client_id: str, data: PipelineCreate):
         "specific_times": data.specific_times,
         "require_approval": data.require_approval,
         "video_template_id": data.video_template_id,
+        "video_template_strategy": data.video_template_strategy or "pick",
         "drive_folder_id": data.drive_folder_id,
         "overlay_text": data.overlay_text,
         "video_cta_text": data.video_cta_text,
@@ -8510,6 +8525,14 @@ async def mail_webhook(request: Request):
 
 app.include_router(api_router)
 
+_NEXT_STEP_NORMALIZE = {
+    "dm you": "dm", "dms": "dm", "dm": "dm",
+    "click a link": "link", "visit link": "link", "link": "link",
+    "book a call": "call", "book call": "call", "call": "call",
+    "enrol directly": "enrol", "enrol now": "enrol", "enrol": "enrol",
+    "other": "other",
+}
+
 @app.post("/api/webhooks/affiliate/new-client", include_in_schema=False)
 async def affiliate_new_client(
     body: AffiliateNewClientWebhook,
@@ -8521,6 +8544,10 @@ async def affiliate_new_client(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     cd = body.client_data
+    # Normalize next_step_after_view to the short-key format used by the dashboard
+    raw_next_step = (cd.next_step_after_view or "").strip().lower()
+    cd.next_step_after_view = _NEXT_STEP_NORMALIZE.get(raw_next_step, cd.next_step_after_view)
+
     onboarding_data = OnboardingCreate(
         name=cd.name,
         brand_name=cd.brand_name,

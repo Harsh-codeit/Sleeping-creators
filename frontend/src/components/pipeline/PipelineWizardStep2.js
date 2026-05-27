@@ -79,8 +79,53 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
       onChange("video_audio_tags", tagSet.has(tag) ? audioTags.filter(t => t !== tag) : [...audioTags, tag]);
     };
 
+    const templateStrategy = form.video_template_strategy || "pick";
+
     return (
       <div className="space-y-6">
+        {/* Template */}
+        <div>
+          <label className="label-xs">Template</label>
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              type="button"
+              title="Pick a different template at random each run"
+              onClick={() => onChange("video_template_strategy", "random")}
+              className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                templateStrategy === "random"
+                  ? "bg-white text-black border-white"
+                  : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+              }`}
+            >
+              Random
+            </button>
+            {allTemplates.map(t => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => {
+                  onChange("video_template_strategy", "pick");
+                  onChange("video_template_id", t.value);
+                }}
+                className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                  templateStrategy === "pick" && form.video_template_id === t.value
+                    ? "bg-white text-black border-white"
+                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">
+            {templateStrategy === "random"
+              ? "Picks a different active template at random each run."
+              : !form.video_template_id
+                ? "No template selected."
+                : allTemplates.find(t => t.value === form.video_template_id)?.label || form.video_template_id}
+          </p>
+        </div>
+
         {/* Hook strategy */}
         <div>
           <label className="label-xs">Caption Hook</label>

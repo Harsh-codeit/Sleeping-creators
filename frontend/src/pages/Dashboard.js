@@ -154,7 +154,7 @@ function PostsChart({ timeSeries }) {
   );
 }
 
-function ClientStatusCard({ clientsWithIssues, navigate }) {
+function ClientStatusCard({ clientsWithIssues, allClients, navigate }) {
   const [expanded, setExpanded] = useState(new Set());
 
   const issueGroups = useMemo(() => {
@@ -165,8 +165,25 @@ function ClientStatusCard({ clientsWithIssues, navigate }) {
       if (!groups[top.badge]) groups[top.badge] = { badge: top.badge, color: top.color, clients: [] };
       groups[top.badge].clients.push(client);
     }
-    return Object.values(groups).sort((a, b) => b.clients.length - a.clients.length);
-  }, [clientsWithIssues]);
+    const sorted = Object.values(groups)
+      .sort((a, b) => b.clients.length - a.clients.length)
+      .map(group => ({
+        ...group,
+        clients: [...group.clients].sort((a, b) =>
+          (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1)
+        ),
+      }));
+
+    // Always show NO PIPELINE independently — includes all active clients with no pipeline
+    const noPipelineClients = (allClients || []).filter(
+      c => c.status === "active" && (c.pipeline_count || 0) === 0
+    );
+    if (noPipelineClients.length > 0 && !groups["NO PIPELINE"]) {
+      sorted.push({ badge: "NO PIPELINE", color: "red", clients: noPipelineClients });
+    }
+
+    return sorted;
+  }, [clientsWithIssues, allClients]);
 
   const toggle = (key) => setExpanded((prev) => {
     const next = new Set(prev);
@@ -553,7 +570,7 @@ export default function Dashboard() {
 
       {/* Client Issues + Upcoming + Pipelines */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ClientStatusCard clientsWithIssues={clientsWithIssues} navigate={navigate} />
+        <ClientStatusCard clientsWithIssues={clientsWithIssues} allClients={clients} navigate={navigate} />
         <TopPerformersCard performers={performers} navigate={navigate} />
         <ErrorsReportCard errors={errors} navigate={navigate} />
       </div>

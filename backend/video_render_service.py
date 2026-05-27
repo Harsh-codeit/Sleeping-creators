@@ -685,16 +685,30 @@ def _platform_overrides_for_video(post: dict, platforms: list[str]) -> dict:
     caption = post.get("caption", "") or ""
     hashtags = post.get("hashtags") or []
 
+    def _parse_offset(raw, default=2000):
+        try:
+            return max(0, int(raw)) if raw is not None else default
+        except (TypeError, ValueError):
+            return default
+
     out = {}
     for p in platforms:
         bp = bundle_service.PLATFORM_MAP.get(p)
         if not bp:
             continue
         limit = bundle_service.PLATFORM_TEXT_LIMITS.get(bp, 2000)
-        out[bp] = {
+        override = {
             "text": _fit_text_to_limit(caption, hashtags, limit),
             "uploadIds": post.get("_upload_ids", []),
         }
+        if p == "instagram":
+            override["type"] = "REEL"
+            override["shareToFeed"] = True
+            override["thumbnailOffset"] = _parse_offset(post.get("instagram_thumbnail_offset_ms"), 2000)
+        elif p == "tiktok":
+            override["type"] = "VIDEO"
+            override["thumbnailOffset"] = _parse_offset(post.get("tiktok_thumbnail_offset_ms"), 2000)
+        out[bp] = override
     return out
 
 

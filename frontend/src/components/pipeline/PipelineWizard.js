@@ -72,6 +72,7 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
         post_time: initial.post_time || EMPTY_FORM.post_time,
         video_audio_ids: initial.video_audio_ids || [],
         video_audio_strategy: initial.video_audio_strategy || "rotate",
+        video_template_strategy: initial.video_template_strategy || "pick",
         cta_keyword: initial.cta_keyword || "",
         cta_offer: initial.cta_offer || "",
         global_instructions: initial.global_instructions || "",
@@ -91,7 +92,7 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
   // Validation per step
   const canNext = () => {
     if (step === 0) return Boolean(form.pipeline_type) && form.name.trim().length > 0;
-    if (isVideo && step === 1) return Boolean(form.video_template_id);
+    if (isVideo && step === 1) return form.video_template_strategy === "random" || Boolean(form.video_template_id);
     return true;
   };
   const canSubmit = () => form.platforms.length > 0;
