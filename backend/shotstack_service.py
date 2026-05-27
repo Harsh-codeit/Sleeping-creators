@@ -393,7 +393,7 @@ def _apply_video_transcode(template_data: dict) -> dict:
                 continue
             asset = clip.get("asset")
             if isinstance(asset, dict) and asset.get("type") == "video":
-                asset["transcode"] = False
+                asset["transcode"] = True
     return data
 
 
