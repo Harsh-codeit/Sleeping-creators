@@ -1833,6 +1833,181 @@ async def refresh_all_trends():
         logger.error(f"refresh_all_trends error: {e}")
         await add_log("error", f"Trend refresh scheduler failed: {e}")
 
+async def _generate_and_schedule_plan_for_client(client: dict):
+    """Generate a content plan and immediately schedule all 7 posts for one client."""
+    import anthropic, json as _json, re as _re
+    from usage_service import record_usage
+    from trend_service import get_cached_trends
+    from datetime import date, timedelta
+
+    client_id = client["id"]
+    client_name = client.get("name", client_id)
+
+    pipeline = await db.pipelines.find_one(
+        {"client_id": client_id, "status": "active"},
+        {"_id": 0}
+    )
+    if not pipeline:
+        logger.info(f"auto_content_plan: no active pipeline for client {client_id}, skipping")
+        return
+
+    onboarding = client.get("onboarding_data", {})
+    niche = onboarding.get("niche") or client.get("industry", "general")
+    strategy = client.get("strategy", {})
+    themes = strategy.get("content_themes") or strategy.get("themes", "")
+    topics_include = strategy.get("topics_include", [])
+    topics_exclude = strategy.get("topics_exclude", [])
+    competitor_strategy = client.get("competitor_strategy", {})
+    competitor_insight = competitor_strategy.get("insight_summary", "") if competitor_strategy else ""
+    competitor_themes = competitor_strategy.get("themes", []) if competitor_strategy else []
+
+    trends = await get_cached_trends(client_id, db, limit=10)
+    trend_topics = [t.get("hashtag") or t.get("topic", "") for t in (trends or []) if t.get("hashtag") or t.get("topic")]
+
+    start_date = date.today() + timedelta(days=1)
+    days = [(start_date + timedelta(days=i)).strftime("%A %Y-%m-%d") for i in range(7)]
+    days_block = "\n".join(f"- {d}" for d in days)
+
+    system_msg = (
+        "You are an expert social media content strategist. "
+        "Generate a 7-day content plan as a JSON array. "
+        "Return ONLY valid JSON — no markdown, no explanation. "
+        "Each item must have exactly these keys: "
+        "day (string), date (YYYY-MM-DD), topic (string), format (carousel|video|reel), "
+        "caption (string, full Instagram-ready caption with line breaks — NO emojis), "
+        "rationale (string, 1 sentence). "
+        "Do not include emojis anywhere in the output."
+    )
+    user_msg = (
+        f"Client niche: {niche}\n"
+        f"Content themes: {themes}\n"
+        f"Topics to include: {', '.join(topics_include) if topics_include else 'none specified'}\n"
+        f"Topics to avoid: {', '.join(topics_exclude) if topics_exclude else 'none'}\n"
+        f"Trending topics this week: {', '.join(trend_topics[:8]) if trend_topics else 'none'}\n"
+        f"Competitor insight: {competitor_insight}\n"
+        f"Competitor themes: {', '.join(competitor_themes) if competitor_themes else 'none'}\n\n"
+        f"Plan for these 7 days:\n{days_block}\n\n"
+        "Return the JSON array of 7 content plan items now."
+    )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        logger.error("auto_content_plan: ANTHROPIC_API_KEY not set")
+        return
+
+    ai_client = anthropic.AsyncAnthropic(api_key=api_key)
+    message = await ai_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=3000,
+        system=system_msg,
+        messages=[{"role": "user", "content": user_msg}],
+    )
+    await record_usage(db, message, generation_type="content_plan_auto",
+                       client_id=client_id, client_name=client_name)
+    raw_text = message.content[0].text.strip()
+
+    try:
+        cleaned = raw_text
+        if "```" in cleaned:
+            for part in cleaned.split("```"):
+                p = part.strip()
+                if p.startswith("json"):
+                    p = p[4:].strip()
+                if p.startswith("["):
+                    cleaned = p
+                    break
+        plan = _json.loads(cleaned)
+        if not isinstance(plan, list) or len(plan) == 0:
+            raise ValueError("empty plan")
+    except Exception:
+        m = _re.search(r"\[.*\]", raw_text, _re.DOTALL)
+        if not m:
+            raise ValueError(f"unparseable plan for client {client_id}")
+        plan = _json.loads(m.group())
+
+    # Save plan to client doc
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$set": {"content_plan": plan, "content_plan_generated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    # Schedule all posts immediately
+    platforms = pipeline.get("platforms", ["instagram"])
+    require_approval = pipeline.get("require_approval", False)
+    post_time_str = pipeline.get("post_time", "09:00") or "09:00"
+    pipeline_id = pipeline.get("id")
+    pipeline_name = pipeline.get("name", "Content Plan")
+    carousel_template = pipeline.get("carousel_template") or "dark_card"
+    carousel_slide_count = pipeline.get("carousel_slide_count") or 5
+
+    try:
+        ph, pm = map(int, post_time_str.split(":"))
+    except Exception:
+        ph, pm = 9, 0
+
+    now_str = datetime.now(timezone.utc).isoformat()
+    created = 0
+    for item in plan:
+        try:
+            from datetime import datetime as dt
+            post_date = dt.strptime(item["date"], "%Y-%m-%d").replace(
+                hour=ph, minute=pm, second=0, tzinfo=timezone.utc
+            )
+        except Exception:
+            post_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+        for platform in platforms:
+            post_doc = {
+                "id": str(uuid.uuid4()),
+                "client_id": client_id,
+                "client_name": client_name,
+                "platform": platform,
+                "content_type": "carousel",
+                "text": item.get("caption", ""),
+                "image_url": None,
+                "hashtags": strategy.get("hashtags", []),
+                "status": "draft" if require_approval else "scheduled",
+                "approval_token": str(uuid.uuid4()) if require_approval else None,
+                "scheduled_at": post_date.isoformat(),
+                "published_at": None,
+                "error_message": None,
+                "performance": {"likes": 0, "comments": 0, "shares": 0, "impressions": 0},
+                "ai_generated": True,
+                "pipeline_id": pipeline_id,
+                "pipeline_name": pipeline_name,
+                "pipeline_type": "standard",
+                "carousel_template": carousel_template,
+                "carousel_slide_count": carousel_slide_count,
+                "carousel_topic": item.get("topic", ""),
+                "engagement_score": 0,
+                "created_at": now_str,
+                "source": "content_plan_auto",
+            }
+            await db.posts.insert_one(post_doc)
+            created += 1
+
+    # Clear plan from client doc after scheduling
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$unset": {"content_plan": "", "content_plan_generated_at": ""}}
+    )
+    logger.info(f"auto_content_plan: scheduled {created} posts for client {client_id} ({client_name})")
+    await add_log("info", f"Auto content plan: scheduled {created} posts", client_id, client_name)
+
+async def auto_generate_all_content_plans():
+    """Scheduler job: generate and schedule a weekly content plan for every active client."""
+    try:
+        clients = await db.clients.find({"status": "active"}, {"_id": 0}).to_list(1000)
+        logger.info(f"auto_content_plan: starting for {len(clients)} active clients")
+        for client in clients:
+            try:
+                await _generate_and_schedule_plan_for_client(client)
+            except Exception as e:
+                logger.error(f"auto_content_plan failed for client {client.get('id')}: {e}")
+                await add_log("error", f"Auto content plan failed: {e}", client.get("id"), client.get("name"))
+    except Exception as e:
+        logger.error(f"auto_generate_all_content_plans error: {e}")
+
 async def _run_competitor_scans():
     """Weekly job: scan all clients with active competitors."""
     from competitor_service import run_weekly_scan
@@ -2171,6 +2346,8 @@ async def lifespan(app: FastAPI):
     )
     scheduler.add_job(refresh_all_trends, 'interval', weeks=1, id='trend_refresh',
                       start_date=_now + timedelta(seconds=270))
+    scheduler.add_job(auto_generate_all_content_plans, 'cron',
+                      day_of_week='mon', hour=6, minute=0, id='auto_content_plans')
     scheduler.add_job(sync_all_sheets, 'interval', minutes=15, id='sheets_outbound_sync',
                       start_date=_now + timedelta(seconds=330))
     scheduler.add_job(pull_sheet_approvals, 'interval', minutes=15, id='sheets_inbound_sync',
@@ -2537,6 +2714,13 @@ async def refresh_competitor_strategy(client_id: str):
     except Exception as e:
         logger.error(f"refresh_competitor_strategy error for client {client_id}: {e}")
         raise HTTPException(500, "Unexpected error generating competitor strategy")
+
+@api_router.post("/admin/content-plan/generate-all")
+async def trigger_auto_content_plans():
+    """Manually trigger the weekly auto content plan job for all active clients."""
+    import asyncio
+    asyncio.create_task(auto_generate_all_content_plans())
+    return {"status": "started", "message": "Auto content plan generation started for all active clients"}
 
 @api_router.post("/clients/{client_id}/content-plan/generate")
 async def generate_content_plan(client_id: str):
