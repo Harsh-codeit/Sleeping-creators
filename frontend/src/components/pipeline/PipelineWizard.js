@@ -51,7 +51,7 @@ function ProgressBar({ step, steps: STEPS }) {
   );
 }
 
-export default function PipelineWizard({ open, onClose, onSave, saving, initial, clientId }) {
+export default function PipelineWizard({ open, onClose, onSave, saving, initial, clientId, defaultTopics = "" }) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({ ...EMPTY_FORM, platforms: [] });
 
@@ -78,9 +78,9 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
         max_posts_per_day: initial.max_posts_per_day ?? 10,
       });
     } else {
-      setForm({ ...EMPTY_FORM, platforms: [] });
+      setForm({ ...EMPTY_FORM, platforms: [], carousel_topics: defaultTopics });
     }
-  }, [open, initial]);
+  }, [open, initial, defaultTopics]);
 
   const onChange = (key, val) => setForm(f => ({ ...f, [key]: val }));
 

@@ -147,11 +147,10 @@ export default function Clients() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState("");
-  const [filterStatus,   setFilterStatus]   = useState("");
-  const [filterPlatform, setFilterPlatform] = useState("");
-  const [filterIG,       setFilterIG]       = useState("");
-  const [filterToday,    setFilterToday]    = useState(false);
-  const [filterFailed,   setFilterFailed]   = useState(false);
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterIG,     setFilterIG]     = useState("");
+  const [filterToday,  setFilterToday]  = useState(false);
+  const [filterFailed, setFilterFailed] = useState(false);
   const [auditing, setAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState(null);
 
@@ -209,23 +208,21 @@ export default function Clients() {
         !(c.industry || "").toLowerCase().includes(q)
       ) return false;
     }
-    if (filterStatus   && c.status !== filterStatus) return false;
-    if (filterPlatform && !(c.platforms || []).includes(filterPlatform)) return false;
-    if (filterIG === "connected"     && !c.instagram_connected) return false;
-    if (filterIG === "not_connected" &&  c.instagram_connected) return false;
+    if (filterStatus && c.status !== filterStatus) return false;
+    const igConnected = c.instagram_connected || (c.bundle_platforms || []).includes("instagram");
+    if (filterIG === "connected"     && !igConnected) return false;
+    if (filterIG === "not_connected" &&  igConnected) return false;
     if (filterToday  && !(c.posts_today  > 0)) return false;
     if (filterFailed && !(c.posts_failed > 0)) return false;
     return true;
   });
 
   const hasActiveFilters =
-    !!search.trim() || !!filterStatus || !!filterPlatform ||
-    !!filterIG || filterToday || filterFailed;
+    !!search.trim() || !!filterStatus || !!filterIG || filterToday || filterFailed;
 
   const clearAllFilters = () => {
     setSearch("");
     setFilterStatus("");
-    setFilterPlatform("");
     setFilterIG("");
     setFilterToday(false);
     setFilterFailed(false);
@@ -382,18 +379,6 @@ export default function Clients() {
           ))}
         </div>
 
-        {/* Platform — dropdown */}
-        <select
-          value={filterPlatform}
-          onChange={e => setFilterPlatform(e.target.value)}
-          className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-400 focus:outline-none"
-        >
-          <option value="">All Platforms</option>
-          {ALL_PLATFORMS.map(p => (
-            <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-          ))}
-        </select>
-
         {/* Instagram — dropdown */}
         <select
           value={filterIG}
@@ -405,9 +390,9 @@ export default function Clients() {
           <option value="not_connected">IG Not Connected</option>
         </select>
 
-        {/* Posts today — toggle chip */}
+        {/* Posts today — toggle chip (mutually exclusive with Has Failures) */}
         <button
-          onClick={() => setFilterToday(v => !v)}
+          onClick={() => { setFilterToday(v => !v); setFilterFailed(false); }}
           className={`px-3 py-1.5 text-xs font-mono border transition-colors duration-150 ${
             filterToday
               ? "bg-emerald-900/40 border-emerald-700 text-emerald-400"
@@ -417,9 +402,9 @@ export default function Clients() {
           Posts Today
         </button>
 
-        {/* Failed posts — toggle chip */}
+        {/* Failed posts — toggle chip (mutually exclusive with Posts Today) */}
         <button
-          onClick={() => setFilterFailed(v => !v)}
+          onClick={() => { setFilterFailed(v => !v); setFilterToday(false); }}
           className={`px-3 py-1.5 text-xs font-mono border transition-colors duration-150 ${
             filterFailed
               ? "bg-red-900/40 border-red-700 text-red-400"

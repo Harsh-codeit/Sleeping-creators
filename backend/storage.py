@@ -218,6 +218,18 @@ def generate_presigned_upload_url(key: str, content_type: str, expires: int = 36
     )
 
 
+def file_exists(key: str) -> bool:
+    """Return True if the object exists in the configured storage backend."""
+    if not _enabled:
+        return False
+    try:
+        s3 = _client()
+        s3.head_object(Bucket=_active_bucket(), Key=key)
+        return True
+    except Exception:
+        return False
+
+
 def delete_file(key: str) -> bool:
     """Delete a file from the configured storage backend. Returns True on success."""
     if not _enabled:

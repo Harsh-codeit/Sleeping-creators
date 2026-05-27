@@ -821,7 +821,10 @@ def _extract_r2_key(url: str | None, r2_base: str) -> str | None:
         return None
     base = r2_base.rstrip("/")
     if url.startswith(base + "/"):
-        return url[len(base) + 1:]
+        key = url[len(base) + 1:]
+        if key.startswith("clips/") or key.startswith("video-clips/"):
+            return None
+        return key
     return None
 
 
@@ -2487,7 +2490,7 @@ app.add_middleware(
 
 @api_router.get("/clients")
 async def list_clients():
-    clients, scheduled_raw, failed_raw = await asyncio.gather(
+    clients, scheduled_raw, failed_raw, pipeline_raw = await asyncio.gather(
         db.clients.find({}, {"_id": 0}).to_list(1000),
         db.posts.aggregate([
             {"$match": {"status": "scheduled"}},
@@ -2498,12 +2501,17 @@ async def list_clients():
             {"$sort": {"created_at": -1}},
             {"$group": {"_id": "$client_id", "error": {"$first": "$error_message"}}},
         ]).to_list(None),
+        db.pipelines.aggregate([
+            {"$group": {"_id": "$client_id", "count": {"$sum": 1}}},
+        ]).to_list(None),
     )
     scheduled_map = {r["_id"]: r["count"] for r in scheduled_raw}
     failed_map = {r["_id"]: r["error"] for r in failed_raw}
+    pipeline_map = {r["_id"]: r["count"] for r in pipeline_raw}
     for c in clients:
         c["scheduled_count"] = scheduled_map.get(c["id"], 0)
         c["last_post_error"] = failed_map.get(c["id"])
+        c["pipeline_count"] = pipeline_map.get(c["id"], 0)
     return clients
 
 @api_router.post("/clients", status_code=201)

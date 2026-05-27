@@ -65,13 +65,25 @@ async def get_probe_rotation(db, client_id: str, drive_file_id: str, r2_url: str
     return rotation
 
 
+def _r2_key_from_url(url: str) -> str | None:
+    """Extract the R2 object key from a public CDN URL."""
+    import os as _os
+    base = _os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+    if base and url and url.startswith(base + "/"):
+        return url[len(base) + 1:]
+    return None
+
+
 async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     """Return a public R2 URL for the given Drive clip, staging it if not cached.
 
     Cache invalidates when Drive's modifiedTime changes vs. the cached value.
     For uploaded clips (source='upload') with r2_url already set, returns directly.
+    If the cached R2 object no longer exists, re-downloads from Drive and re-uploads.
     """
-    # Uploaded clips already have r2_url — skip Drive entirely
+    import storage
+
+    # Uploaded clips already have r2_url — skip Drive entirely (no Drive source to fall back to)
     clip_doc = await db.drive_clips.find_one({"drive_file_id": drive_file_id, "client_id": client_id})
     if clip_doc and clip_doc.get("r2_url"):
         return clip_doc["r2_url"]
@@ -85,7 +97,16 @@ async def stage_clip(db, client_id: str, drive_file_id: str) -> str:
     if cached and cached.get("r2_url") and (
         not drive_mtime or cached.get("drive_modified_time") == drive_mtime
     ):
-        return cached["r2_url"]
+        cached_url = cached["r2_url"]
+        key = _r2_key_from_url(cached_url)
+        if key and not storage.file_exists(key):
+            logger.warning(
+                "stage_clip: cached R2 object missing for %s/%s — re-uploading from Drive",
+                client_id, drive_file_id,
+            )
+            await db.clip_cache.delete_one({"client_id": client_id, "drive_file_id": drive_file_id})
+        else:
+            return cached_url
 
     return await _download_and_upload(db, client_id, drive_file_id, refresh_token, drive_mtime)
 

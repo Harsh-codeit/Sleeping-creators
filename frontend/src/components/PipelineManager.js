@@ -122,6 +122,11 @@ export default function PipelineManager({ clientId, clientPlatforms = [], client
 
   const activeCount = pipelines.filter(p => p.status === "active").length;
 
+  const defaultTopics = [
+    client?.onboarding_data?.niche,
+    client?.onboarding_data?.signature_topic,
+  ].filter(Boolean).join(", ");
+
   return (
     <div data-testid="pipeline-manager">
       {/* Header row */}
@@ -192,6 +197,7 @@ export default function PipelineManager({ clientId, clientPlatforms = [], client
         saving={saving}
         initial={editingPipeline}
         clientId={clientId}
+        defaultTopics={editingPipeline ? "" : defaultTopics}
       />
     </div>
   );

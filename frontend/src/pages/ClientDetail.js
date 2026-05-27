@@ -1683,25 +1683,8 @@ export default function ClientDetail() {
   const [audienceIntelOpen, setAudienceIntelOpen] = useState(false);
   const [hookGenKeyword, setHookGenKeyword] = useState("");
   const [hookGenLoading, setHookGenLoading] = useState(false);
-  const [competitorInsight, setCompetitorInsight] = useState(null);
   const [togglingWinner, setTogglingWinner] = useState(null);
-  const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
   const [clientEmails, setClientEmails] = useState([]);
-
-  const refreshAnalytics = async () => {
-    if (refreshingAnalytics) return;
-    setRefreshingAnalytics(true);
-    try {
-      await axios.post(`${API}/analytics/clients/${id}/refresh`);
-      const { data } = await axios.get(`${API}/analytics/clients/${id}`);
-      setAnalytics(data);
-      toast.success("Analytics refreshed");
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to refresh analytics");
-    } finally {
-      setRefreshingAnalytics(false);
-    }
-  };
 
   const fetchClient = async () => {
     try {
@@ -1716,13 +1699,25 @@ export default function ClientDetail() {
       setEditForm(initEditForm(clientResp.data));
       const s = clientResp.data.strategy || {};
       const ob = clientResp.data.onboarding_data || {};
-      const defaultThemes = [ob.niche, ob.signature_topic].filter(Boolean).join(", ");
+      const loveTopics = Array.isArray(ob.love_topics) ? ob.love_topics.filter(Boolean) : [];
+      const defaultThemes = [ob.niche, ob.signature_topic, ...loveTopics].filter(Boolean).join(", ");
+      const savedHashtags = (s.hashtags || []).join(", ");
+      const defaultHashtags = savedHashtags || (clientResp.data.industry || "")
+        .split(/[\s/,]+/)
+        .map(w => w.trim())
+        .filter(w => w.length > 1)
+        .map(w => `#${w.charAt(0).toUpperCase()}${w.slice(1)}`)
+        .join(", ");
+      const savedTopics = (s.topics_include || []).map(e =>
+        typeof e === "string" ? { text: e, type: "topic" } : e
+      );
+      const defaultTopics = savedTopics.length > 0
+        ? savedTopics
+        : loveTopics.map(t => ({ text: t, type: "topic" }));
       setStrategyForm({
         themes: (s.themes || []).join(", ") || defaultThemes,
-        hashtags: (s.hashtags || []).join(", "),
-        topics_include: (s.topics_include || []).map(e =>
-          typeof e === "string" ? { text: e, type: "topic" } : e
-        ),
+        hashtags: defaultHashtags,
+        topics_include: defaultTopics,
         video_hooks: s.video_hooks || [],
         video_prompt: s.video_prompt || ""
       });
@@ -1733,19 +1728,6 @@ export default function ClientDetail() {
   useEffect(() => {
     fetchClient();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (activeTab !== "Overview") return;
-    Promise.all([
-      axios.get(`${API}/clients/${id}/competitor-posts`, { params: { limit: 1 } }),
-      axios.get(`${API}/clients/${id}/competitors`)
-    ]).then(([{ data: compPosts }, { data: comps }]) => {
-      if (compPosts[0]) {
-        const comp = comps.find(c => c.id === compPosts[0].competitor_id);
-        setCompetitorInsight({ ...compPosts[0], handle: comp?.handle });
-      }
-    }).catch(() => {});
-  }, [activeTab, id]);
 
   // Auto-refresh posts while any video is mid-render or publishing
   useEffect(() => {
@@ -2162,37 +2144,6 @@ export default function ClientDetail() {
               );
             })()}
             <div className="bg-zinc-900 border border-zinc-800 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] font-mono text-zinc-500 uppercase">Performance</div>
-                <button
-                  data-testid="refresh-analytics-btn"
-                  onClick={refreshAnalytics}
-                  disabled={refreshingAnalytics || !analytics?.bundle_connected}
-                  className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={analytics?.bundle_connected ? "Refresh analytics from Bundle" : "Connect to Bundle first"}
-                >
-                  <RefreshCw size={11} className={refreshingAnalytics ? "animate-spin" : ""} />
-                  {refreshingAnalytics ? "Refreshing…" : "Refresh"}
-                </button>
-              </div>
-              {[
-                { label: "Followers", value: (analytics?.totals?.followers ?? 0).toLocaleString() },
-                { label: "Impressions", value: (analytics?.totals?.impressions ?? 0).toLocaleString() },
-                { label: "Likes", value: (analytics?.totals?.likes ?? 0).toLocaleString() },
-                { label: "Comments", value: (analytics?.totals?.comments ?? 0).toLocaleString() },
-              ].map(f => (
-                <div key={f.label} className="flex justify-between py-1.5 border-b border-zinc-800 last:border-0">
-                  <span className="text-xs font-mono text-zinc-500">{f.label}</span>
-                  <span className="text-xs font-mono text-white">{f.value}</span>
-                </div>
-              ))}
-              {analytics?.bundle_connected === false && (
-                <div className="text-[10px] text-zinc-600 font-mono mt-2">
-                  Connect this client to Bundle to see analytics.
-                </div>
-              )}
-            </div>
-            <div className="bg-zinc-900 border border-zinc-800 p-4">
               <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Story Automation</div>
               <div className="flex items-center justify-between">
                 <div>
@@ -2220,30 +2171,6 @@ export default function ClientDetail() {
                 </button>
               </div>
             </div>
-            {competitorInsight && (
-              <div className="bg-zinc-900 border border-zinc-800 p-4">
-                <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Top Competitor Post</div>
-                <div className="space-y-1">
-                  {competitorInsight.handle && (
-                    <div className="flex justify-between py-1.5 border-b border-zinc-800">
-                      <span className="text-xs font-mono text-zinc-500">Handle</span>
-                      <span className="text-xs font-mono text-zinc-300">{competitorInsight.handle}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-1.5 border-b border-zinc-800">
-                    <span className="text-xs font-mono text-zinc-500">Score</span>
-                    <span className="text-xs font-mono text-amber-400">{competitorInsight.engagement_score?.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5 border-b border-zinc-800">
-                    <span className="text-xs font-mono text-zinc-500">Platform</span>
-                    <span className="text-xs font-mono text-zinc-400 uppercase">{competitorInsight.platform}</span>
-                  </div>
-                  <p className="text-[10px] text-zinc-500 pt-2 line-clamp-2">
-                    {competitorInsight.caption?.slice(0, 140) || "(no caption)"}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -2419,32 +2346,6 @@ export default function ClientDetail() {
               </div>
             </div>
           </div>
-
-          {/* Niche & Content Direction card */}
-          {(() => {
-            const ob = client.onboarding_data || {};
-            const lang = Array.isArray(ob.language) ? ob.language[0] : ob.language;
-            const fields = [
-              { label: "Niche",            value: ob.niche },
-              { label: "Signature Topic",  value: ob.signature_topic },
-              { label: "Language",         value: lang },
-              { label: "Disliked Content", value: ob.disliked_content },
-            ].filter(f => f.value);
-            if (!fields.length) return null;
-            return (
-              <div className="bg-zinc-900 border border-zinc-800 p-4">
-                <div className="text-[10px] font-mono text-zinc-500 uppercase mb-4">Niche & Content Direction</div>
-                <div className="space-y-2">
-                  {fields.map(f => (
-                    <div key={f.label}>
-                      <div className="text-[10px] font-mono text-zinc-600 mb-0.5">{f.label}</div>
-                      <div className="text-xs text-zinc-300 whitespace-pre-wrap">{f.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Audience Intelligence card */}
           {(() => {
