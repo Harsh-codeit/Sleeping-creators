@@ -98,7 +98,7 @@ export const EMPTY_FORM = {
   require_approval: false,
   // Video pipeline
   video_template_id: "",
-  video_template_strategy: "pick",  // pick | random
+  video_template_strategy: "random",  // pick | random
   drive_folder_id: "",
   overlay_text: "",
   video_cta_text: "",
