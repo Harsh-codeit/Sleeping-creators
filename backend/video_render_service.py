@@ -758,4 +758,20 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
         {"$set": {"status": "bundle_scheduled", "bundle_post_id": bundle_post_id}},
     )
     logger.info("bundle_scheduled post_id=%s bundle_post_id=%s", post["id"], bundle_post_id)
+
+    if post.get("also_post_story", True) and "instagram" in platforms:
+        try:
+            await bundle_service.create_post(
+                api_key=api_key,
+                team_id=team_id,
+                platforms=["instagram"],
+                text="",
+                post_date=post["scheduled_at"],
+                upload_ids=[upload_id],
+                platform_overrides={"INSTAGRAM": {"type": "STORY", "uploadIds": [upload_id]}},
+            )
+            logger.info("companion story scheduled for post %s", post["id"])
+        except Exception as e:
+            logger.warning("companion story failed (main post unaffected): %s", e)
+
     return bundle_post_id
