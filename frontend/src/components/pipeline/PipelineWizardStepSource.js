@@ -38,6 +38,8 @@ export default function PipelineWizardStepSource({ form, onChange, clientId }) {
         <VideoTemplatePicker
           value={form.video_template_id}
           onChange={(id) => onChange("video_template_id", id)}
+          strategy={form.video_template_strategy || "random"}
+          onStrategyChange={(s) => onChange("video_template_strategy", s)}
         />
       </div>
 

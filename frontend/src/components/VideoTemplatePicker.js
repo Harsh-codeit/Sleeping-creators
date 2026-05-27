@@ -92,7 +92,7 @@ function TemplateThumb({ template, selected, onClick }) {
   );
 }
 
-export function VideoTemplatePicker({ value, onChange }) {
+export function VideoTemplatePicker({ value, onChange, strategy, onStrategyChange }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -107,7 +107,7 @@ export function VideoTemplatePicker({ value, onChange }) {
     return <div className="font-mono text-xs text-zinc-500 py-4">Loading templates…</div>;
   }
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && !onStrategyChange) {
     return (
       <div className="font-mono text-xs text-zinc-600 py-6 border border-zinc-800 text-center">
         No active templates. Go to Video Templates and sync from Shotstack.
@@ -115,14 +115,40 @@ export function VideoTemplatePicker({ value, onChange }) {
     );
   }
 
+  const isRandom = strategy === "random";
+
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+      {onStrategyChange && (
+        <button
+          type="button"
+          onClick={() => { onStrategyChange("random"); onChange(null); }}
+          className={`text-left bg-zinc-900 border transition-colors duration-200 flex flex-col ${
+            isRandom ? "border-white" : "border-zinc-800 hover:border-zinc-600"
+          }`}
+        >
+          <div className="relative w-full aspect-[9/16] bg-zinc-800 overflow-hidden flex items-center justify-center">
+            <span className="text-2xl font-bold text-zinc-500">?</span>
+            {isRandom && (
+              <div className="absolute inset-0 bg-white/10 flex items-center justify-center pointer-events-none">
+                <div className="w-7 h-7 bg-white text-black flex items-center justify-center">
+                  <Check size={14} />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="px-2 py-1.5">
+            <div className="text-xs font-semibold text-white truncate leading-tight">Random</div>
+            <div className="text-[10px] font-mono text-zinc-500 mt-0.5">Different each run</div>
+          </div>
+        </button>
+      )}
       {rows.map(t => (
         <TemplateThumb
           key={t.id}
           template={t}
-          selected={value === t.id}
-          onClick={() => onChange(t.id)}
+          selected={!isRandom && value === t.id}
+          onClick={() => { onStrategyChange?.("pick"); onChange(t.id); }}
         />
       ))}
     </div>
