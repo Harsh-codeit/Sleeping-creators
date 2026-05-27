@@ -163,11 +163,6 @@ export const PRESETS = [
     config: { pipeline_type: "strategy", schedule_type: "specific_times", specific_times: ["09:00"], carousel_slide_count: 6 },
   },
   {
-    label: "Trending Now",
-    desc: "Trend · Every 6h",
-    config: { pipeline_type: "trend", schedule_type: "interval", interval_hours: 6, carousel_slide_count: 5 },
-  },
-  {
     label: "Competitor Watch",
     desc: "Competitor · Every 48h",
     config: { pipeline_type: "competitor", schedule_type: "interval", interval_hours: 48 },

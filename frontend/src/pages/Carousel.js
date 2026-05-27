@@ -299,15 +299,25 @@ const TEMPLATE_LABELS = { dark_card: "Dark Card", full_white: "Quote White", flo
 
 // ─── Option Pill ─────────────────────────────────────────────────────────────
 
-function OptionPill({ label, value, active, options, onChange }) {
+function OptionPill({ label, value, active, options, onChange, searchable }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef(null);
+  const searchRef = useRef(null);
 
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch(""); } };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    if (open && searchable && searchRef.current) searchRef.current.focus();
+  }, [open, searchable]);
+
+  const filtered = searchable && search
+    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
 
   return (
     <div className="relative" ref={ref}>
@@ -320,17 +330,32 @@ function OptionPill({ label, value, active, options, onChange }) {
         <ChevronDown size={9} className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 mb-1 bg-zinc-900 border border-zinc-700 shadow-lg z-50 min-w-[160px] max-h-48 overflow-y-auto scrollbar-thin">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-xs font-mono transition-colors duration-100
-                ${opt.value === value ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800 hover:text-white"}`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="absolute bottom-full left-0 mb-1 bg-zinc-900 border border-zinc-700 shadow-lg z-50 min-w-[180px] max-h-56 flex flex-col">
+          {searchable && (
+            <div className="p-1.5 border-b border-zinc-800 flex-shrink-0">
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="w-full bg-zinc-950 border border-zinc-700 px-2 py-1 text-[11px] font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+          )}
+          <div className="overflow-y-auto scrollbar-thin">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-[11px] font-mono text-zinc-600">No results</div>
+            ) : filtered.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
+                className={`w-full text-left px-3 py-2 text-xs font-mono transition-colors duration-100
+                  ${opt.value === value ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800 hover:text-white"}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1040,7 +1065,7 @@ export default function Carousel() {
             {/* Options row */}
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <OptionPill label="Client" value={selectedClient?.name || ""} active={!!selectedClientId}
-                options={clients.map(c => ({ value: c.id, label: c.name }))} onChange={setSelectedClientId} />
+                options={clients.map(c => ({ value: c.id, label: c.name }))} onChange={setSelectedClientId} searchable />
               <OptionPill label="Template" value={availableTemplates.find(t => t.value === template)?.label || template} active={true}
                 options={availableTemplates} onChange={setTemplate} />
               <OptionPill label="Platform" value={config.platform.charAt(0).toUpperCase() + config.platform.slice(1)} active={true}

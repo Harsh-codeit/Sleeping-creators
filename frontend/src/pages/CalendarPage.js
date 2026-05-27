@@ -80,6 +80,7 @@ export default function CalendarPage() {
   const [view, setView] = useState("month"); // month | week | day
   const [filterClient, setFilterClient] = useState("");
   const [filterPlatform, setFilterPlatform] = useState("");
+  const [filterKind, setFilterKind] = useState("");
   const [selectedPost, setSelectedPost] = useState(null);
   const [clientColorMap, setClientColorMap] = useState({});
 
@@ -171,7 +172,15 @@ export default function CalendarPage() {
     }
   };
 
-  const postsByDate = groupPostsByDate(posts);
+  const filteredPosts = filterKind
+    ? posts.filter(p => {
+        if (filterKind === "video") return p.kind === "video";
+        if (filterKind === "carousel") return p.kind === "carousel" || p.content_type === "carousel";
+        return true;
+      })
+    : posts;
+
+  const postsByDate = groupPostsByDate(filteredPosts);
 
   const headerLabel = view === "month"
     ? format(currentDate, "MMMM yyyy")
@@ -185,7 +194,7 @@ export default function CalendarPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-white">Calendar</h1>
-          <p className="text-xs text-zinc-500 font-mono mt-0.5">{posts.length} posts in view</p>
+          <p className="text-xs text-zinc-500 font-mono mt-0.5">{filteredPosts.length} posts in view</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => navigate(-1)} className="p-2 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">
@@ -244,6 +253,15 @@ export default function CalendarPage() {
             <option value="">All Platforms</option>
             {PLATFORMS.map(p => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
           </select>
+          <select
+            value={filterKind}
+            onChange={e => setFilterKind(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 text-xs font-mono text-zinc-400 focus:outline-none"
+          >
+            <option value="">All Types</option>
+            <option value="video">Video</option>
+            <option value="carousel">Carousel</option>
+          </select>
         </div>
       </div>
 
@@ -264,7 +282,7 @@ export default function CalendarPage() {
           ) : view === "week" ? (
             <WeekView
               currentDate={currentDate}
-              posts={posts}
+              posts={filteredPosts}
               clientColorMap={clientColorMap}
               onSelectPost={setSelectedPost}
               onDrop={handleDrop}
@@ -272,7 +290,7 @@ export default function CalendarPage() {
           ) : (
             <DayView
               currentDate={currentDate}
-              posts={posts}
+              posts={filteredPosts}
               clientColorMap={clientColorMap}
               onSelectPost={setSelectedPost}
               onDrop={handleDrop}

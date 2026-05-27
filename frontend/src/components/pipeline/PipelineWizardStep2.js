@@ -112,6 +112,36 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
           )}
         </div>
 
+        {/* Clip Selection */}
+        <div>
+          <label className="label-xs">Clip Selection</label>
+          <div className="flex gap-1.5">
+            {[
+              { value: "random",     label: "Random",     desc: "Pick a random clip each run" },
+              { value: "sequential", label: "Sequential", desc: "Cycle through clips in order" },
+            ].map(s => (
+              <button
+                key={s.value}
+                type="button"
+                title={s.desc}
+                onClick={() => onChange("video_clip_strategy", s.value)}
+                className={`py-1.5 px-3 text-[11px] font-mono border transition-colors duration-150 ${
+                  (form.video_clip_strategy || "random") === s.value
+                    ? "bg-white text-black border-white"
+                    : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">
+            {(form.video_clip_strategy || "random") === "random"
+              ? "Picks a random clip from your Drive folder each run."
+              : "Cycles through clips in folder order — never repeats until all are used."}
+          </p>
+        </div>
+
         {/* Filter */}
         <div>
           <label className="label-xs">Filter</label>
