@@ -19,6 +19,26 @@ const BADGE_COLORS = {
   blue:  "text-blue-400 border-blue-500/30",
 };
 
+const PROFILE_FIELDS = [
+  { key: "name" },
+  { key: "email" },
+  { key: "instagram_handle" },
+  { key: "personal_story" },
+  { key: "business_description" },
+  { key: "niche" },
+  { key: "target_audience_description" },
+  { key: "audience_emotional_state", isArray: true },
+  { key: "solutions_provided",        isArray: true },
+  { key: "audience_problems",         isArray: true },
+  { key: "unique_selling_points",     isArray: true },
+  { key: "signature_topic" },
+  { key: "brand_vibe",               isArray: true },
+  { key: "competitor_accounts",       isArray: true },
+  { key: "account_goals" },
+  { key: "next_step_after_view" },
+  { key: "cta_link" },
+];
+
 // ─── Design system primitives ────────────────────────────────────────────────
 
 function Card({ children, className = "", testId }) {
@@ -65,6 +85,16 @@ function daysAgo(isoString) {
   return (Date.now() - ms) / (1000 * 60 * 60 * 24);
 }
 
+function computeProfileCompletion(client) {
+  const total = PROFILE_FIELDS.length;
+  const filled = PROFILE_FIELDS.filter(({ key, isArray }) =>
+    isArray
+      ? Array.isArray(client[key]) && client[key].length > 0
+      : typeof client[key] === "string" && client[key].trim().length > 0
+  ).length;
+  return { pct: Math.round((filled / total) * 100), filled, total };
+}
+
 function computeHealthIssues(client, bundleConfigured) {
   const issues = [];
   if (!bundleConfigured) issues.push({ badge: "NO BUNDLE", color: "red", priority: 1 });
@@ -76,6 +106,8 @@ function computeHealthIssues(client, bundleConfigured) {
   if (client.status === "active" && (client.pipeline_count || 0) === 0)
     issues.push({ badge: "NO PIPELINE", color: "red", priority: 5 });
   if (daysAgo(client.last_post_at) > 7) issues.push({ badge: "INACTIVE 7D", color: "amber", priority: 6 });
+  const { pct, filled, total } = computeProfileCompletion(client);
+  if (pct < 100) issues.push({ badge: "INCOMPLETE PROFILE", color: "amber", priority: 7, pct, filled, total });
   return issues.sort((a, b) => a.priority - b.priority);
 }
 
@@ -231,6 +263,9 @@ function ClientStatusCard({ clientsWithIssues, allClients, navigate }) {
                     : client._issues.some((i) => i.badge === "BLOCKED") && client.instagram_account_warning
                     ? client.instagram_account_warning
                     : null;
+                const incompleteIssue = group.badge === "INCOMPLETE PROFILE"
+                  ? client._issues.find(i => i.badge === "INCOMPLETE PROFILE")
+                  : null;
                 return (
                   <div
                     key={client.id}
@@ -247,9 +282,23 @@ function ClientStatusCard({ clientsWithIssues, allClients, navigate }) {
                           <span className="text-xs font-semibold text-white">{client.name}</span>
                           <Circle size={5} className={`fill-current ${STATUS_STYLES[client.status] || "text-zinc-500"}`} />
                         </div>
-                        {errorDetail && (
+                        {incompleteIssue ? (
+                          <div className="mt-1">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1 bg-zinc-800 overflow-hidden">
+                                <div
+                                  className="h-full bg-amber-400 transition-all duration-300"
+                                  style={{ width: `${incompleteIssue.pct}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-mono text-amber-400 flex-shrink-0">
+                                {incompleteIssue.pct}% · {incompleteIssue.total - incompleteIssue.filled} fields left
+                              </span>
+                            </div>
+                          </div>
+                        ) : errorDetail ? (
                           <div className="text-[10px] font-mono text-zinc-500 truncate" title={errorDetail}>{errorDetail}</div>
-                        )}
+                        ) : null}
                       </div>
                       <button
                         type="button"
