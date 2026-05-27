@@ -274,7 +274,7 @@ export function VideoCreator() {
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
   // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
-  const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState(2000);
+  const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState(4000);
   const [alsoPostStory, setAlsoPostStory] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [clips, setClips] = useState([]);
@@ -429,7 +429,7 @@ export function VideoCreator() {
       setCaption(draft.caption || "");
       setHashtags(draft.hashtags || "");
       setThumbnailOffsetMs(
-        typeof draft.thumbnailOffsetMs === "number" ? draft.thumbnailOffsetMs : 2000
+        typeof draft.thumbnailOffsetMs === "number" ? draft.thumbnailOffsetMs : 4000
       );
       setAlsoPostStory(typeof draft.alsoPostStory === "boolean" ? draft.alsoPostStory : true);
       setSelectedClips(draft.selectedClips || []);
@@ -507,7 +507,7 @@ export function VideoCreator() {
         caption: caption.trim() || undefined,
         hashtags: hashtagArr.length ? hashtagArr : undefined,
         generated_merge_values: Object.keys(filled).length ? filled : undefined,
-        instagram_thumbnail_offset_ms: Number.isFinite(thumbnailOffsetMs) ? thumbnailOffsetMs : 2000,
+        instagram_thumbnail_offset_ms: Number.isFinite(thumbnailOffsetMs) ? thumbnailOffsetMs : 4000,
         also_post_story: alsoPostStory,
       };
       const r = await axios.post(`${API}/videos/create`, body);
@@ -1105,7 +1105,7 @@ export function VideoCreator() {
                     <div>
                       <div className="flex items-baseline justify-between mb-2">
                         <div className="text-xs font-semibold text-white">Caption</div>
-                        <span className={`text-[10px] font-mono ${captionLen > 2200 ? "text-red-400" : captionLen > 2000 ? "text-amber-400" : "text-zinc-600"}`}>
+                        <span className={`text-[10px] font-mono ${captionLen > 2200 ? "text-red-400" : captionLen > 4000 ? "text-amber-400" : "text-zinc-600"}`}>
                           {captionLen} / 2200
                         </span>
                       </div>
@@ -1158,7 +1158,7 @@ export function VideoCreator() {
                         className="w-32 bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200"
                       />
                       <div className="text-[10px] font-mono text-zinc-500 mt-1.5">
-                        Frame timestamp used as the Reel cover photo. e.g. 2000 = 2 seconds into the video.
+                        Frame timestamp used as the Reel cover photo. e.g. 4000 = 2 seconds into the video.
                       </div>
                     </div>
 

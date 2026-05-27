@@ -463,7 +463,7 @@ class VideoCreateRequest(BaseModel):
     hashtags: Optional[List[str]] = None
     prompt: Optional[str] = None
     filter_name: Optional[str] = None  # greyscale|boost|contrast|darken|lighten|muted|negative|blur
-    instagram_thumbnail_offset_ms: Optional[int] = 64  # Reel cover frame timestamp in ms
+    instagram_thumbnail_offset_ms: Optional[int] = 4000  # Reel cover frame timestamp in ms
     also_post_story: Optional[bool] = True
 
 class VideoGenerateTextRequest(BaseModel):
@@ -569,7 +569,7 @@ class PipelineCreate(BaseModel):
     video_clip_strategy: Optional[str] = "random" # random | sequential
     next_clip_index: Optional[int] = 0            # sequential rotation cursor
     video_audio_tags: List[str] = []              # pick random track whose mood_tags intersect any of these
-    instagram_thumbnail_offset_ms: Optional[int] = 64  # Reel cover frame timestamp in ms
+    instagram_thumbnail_offset_ms: Optional[int] = 4000  # Reel cover frame timestamp in ms
     # Gap scheduling (video)
     days_between_posts: Optional[int] = None  # None = use interval_hours logic
     post_time: Optional[str] = None           # "HH:MM" UTC, used with days_between_posts
@@ -1629,7 +1629,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             "topic": (chosen_hook or {}).get("title") or topic,
             "hook_id": (chosen_hook or {}).get("id"),
             "auto_publish_after_render": bool(auto_publish),
-            "instagram_thumbnail_offset_ms": pipeline.get("instagram_thumbnail_offset_ms", 64),
+            "instagram_thumbnail_offset_ms": pipeline.get("instagram_thumbnail_offset_ms", 4000),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -7880,7 +7880,7 @@ async def create_video_post_route(req: VideoCreateRequest):
         "instagram_thumbnail_offset_ms": (
             req.instagram_thumbnail_offset_ms
             if req.instagram_thumbnail_offset_ms is not None
-            else (pipeline or {}).get("instagram_thumbnail_offset_ms", 64)
+            else (pipeline or {}).get("instagram_thumbnail_offset_ms", 4000)
         ),
         "also_post_story": req.also_post_story if req.also_post_story is not None else True,
         "created_at": datetime.now(timezone.utc).isoformat(),
