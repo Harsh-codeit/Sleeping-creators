@@ -6,7 +6,6 @@ export function Label({ children, optional }) {
   return (
     <label className="block text-[10px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5">
       {children}
-      {optional && <span className="ml-1 text-zinc-600 normal-case tracking-normal">optional</span>}
     </label>
   );
 }
@@ -127,30 +126,42 @@ export function YesNoToggle({ label, value, onChange, optional, testid }) {
   );
 }
 
-export function MultiCheckbox({ label, options, values, onChange, optional, testid, columns = 3 }) {
+export function MultiCheckbox({ label, options, values, onChange, optional, testid, columns = 3, max }) {
   const safeValues = Array.isArray(values) ? values : [];
   const toggle = (v) => {
-    const next = safeValues.includes(v) ? safeValues.filter(x => x !== v) : [...safeValues, v];
-    onChange(next);
+    if (safeValues.includes(v)) {
+      onChange(safeValues.filter(x => x !== v));
+    } else {
+      if (max && safeValues.length >= max) return;
+      onChange([...safeValues, v]);
+    }
   };
   const colClass = columns === 2 ? "grid-cols-2" : columns === 4 ? "grid-cols-4" : "grid-cols-3";
+  const atMax = max && safeValues.length >= max;
   return (
     <div>
-      <Label optional={optional}>{label}</Label>
+      <Label optional={optional}>
+        {label}
+        {max && <span className="ml-2 normal-case tracking-normal text-zinc-600">{safeValues.length}/{max} max</span>}
+      </Label>
       <div className={`grid ${colClass} gap-2`}>
         {options.map(opt => {
           const value = typeof opt === "string" ? opt : opt.value;
           const display = typeof opt === "string" ? opt : opt.label;
           const selected = safeValues.includes(value);
+          const disabled = !selected && atMax;
           return (
             <button
               key={value}
               type="button"
               data-testid={`${testid}-${value}`}
               onClick={() => toggle(value)}
+              disabled={disabled}
               className={`relative py-2.5 px-3 border text-xs font-mono uppercase text-left overflow-hidden transition-all duration-150 ${
                 selected
                   ? "border-white text-white bg-white/5"
+                  : disabled
+                  ? "border-zinc-800 text-zinc-700 cursor-not-allowed"
                   : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
               }`}
             >

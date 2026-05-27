@@ -65,6 +65,7 @@ export default function Step3({ form, set }) {
             onChange={(v) => set("brand_vibe", v)}
             testid="ob-vibe"
             columns={4}
+            max={3}
           />
 
           <div>

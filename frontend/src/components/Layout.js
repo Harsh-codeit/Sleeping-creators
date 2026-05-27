@@ -2,7 +2,7 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, Users, LayoutTemplate, CalendarRange, BarChart3,
-  Settings, Circle, Layers, LogOut, Coins, UserCog, AlertTriangle, Mail
+  Settings, Circle, Layers, LogOut, AlertTriangle, Mail
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -17,9 +17,7 @@ const NAV = [
   { path: "/calendar",        label: "Calendar",  icon: CalendarRange,                  resource: "calendar" },
   { path: "/carousel",        label: "Studio",    icon: Layers,                         resource: "studio" },
   { path: "/analytics",       label: "Analytics", icon: BarChart3,                      resource: "analytics" },
-  { path: "/usage",           label: "Usage",     icon: Coins,                          resource: "usage" },
   { path: "/settings",        label: "Settings",  icon: Settings,                       resource: "settings" },
-  { path: "/team",            label: "Team",      icon: UserCog,       ownerOnly: true, resource: null },
   { path: "/mail",            label: "Mail",      icon: Mail,          ownerOnly: true, resource: null },
 ];
 

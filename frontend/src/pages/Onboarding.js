@@ -49,7 +49,7 @@ const INITIAL = {
   // — Step 3B: Competitive Landscape —
   niche_working_topics: "", niche_oversaturated_topics: "", niche_underserved_topics: "",
   // — Step 3C: Competitors (cap 8) —
-  competitor_accounts: [""],
+  competitor_accounts: ["", "", "", "", "", "", "", ""],
   // — Step 3D: Boundaries —
   disliked_content: "", not_to_do_list: [""],
   // — Step 4A: Goal & Next Step —
@@ -397,7 +397,7 @@ export default function Onboarding() {
                   className="flex items-center gap-2 px-6 py-2 text-sm bg-white text-black font-semibold hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150"
                   data-testid="ob-submit-btn"
                 >
-                  {submitting ? "Creating client..." : "Complete Onboarding"}
+                  {submitting ? "Creating client..." : "Submit"}
                   {!submitting && <Check size={14} />}
                 </button>
               )}

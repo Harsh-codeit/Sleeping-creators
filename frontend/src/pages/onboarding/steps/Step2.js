@@ -64,7 +64,7 @@ export default function Step2({ form, set }) {
           label="Tell us your personal story"
           value={form.personal_story ?? ""}
           onChange={(v) => set("personal_story", v)}
-          minWords={500}
+          minWords={200}
           rows={8}
           testid="ob-personal-story"
           placeholder="When did you start? Why? What failures? Achievements? Family/childhood? Your vision. Be real — this becomes content."
@@ -74,7 +74,7 @@ export default function Step2({ form, set }) {
           label="Tell us about your business"
           value={form.business_description ?? ""}
           onChange={(v) => set("business_description", v)}
-          minWords={300}
+          minWords={100}
           rows={6}
           testid="ob-business"
           placeholder="What do you do? How do you help people? What's your process or system and vision?"
@@ -86,8 +86,9 @@ export default function Step2({ form, set }) {
             testid="ob-niche"
             value={form.niche ?? ""}
             onChange={(e) => set("niche", e.target.value)}
-            placeholder="One-line niche statement: 'I help busy moms lose 10kg without a gym'"
+            placeholder="e.g. I help busy moms lose weight"
           />
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">Keep it to 6 words or less</p>
         </div>
 
         <div>
@@ -131,6 +132,7 @@ export default function Step2({ form, set }) {
 
         <div>
           <Label>Audience Age Range</Label>
+          <p className="text-[10px] font-mono text-zinc-600 mb-2">Drag both sliders to set the age range of your target audience</p>
           <div className="space-y-3 pt-1">
             <div className="text-sm font-mono text-white text-center">
               {ageLo} – {ageHi} years
@@ -171,16 +173,15 @@ export default function Step2({ form, set }) {
         <MultiCheckbox
           label="Audience Emotional State"
           options={[
-            "🔥 Ambitious", "😰 Overwhelmed", "😕 Confused", "💪 Motivated",
-            "😔 Stuck", "🌀 Directionless", "😞 Lonely", "💸 Broke",
-            "🙏 Hopeful", "😤 Frustrated", "🤯 Burned Out", "😟 Anxious",
-            "✨ Inspired", "😴 Bored", "🤔 Unsure", "💔 Heartbroken",
-            "🎯 Focused", "😩 Exhausted", "🌟 Driven", "😔 Depressed",
+            "Ambitious", "Overwhelmed", "Confused", "Motivated",
+            "Stuck", "Directionless", "Hopeful", "Frustrated",
+            "Burned Out", "Anxious",
           ]}
           values={form.audience_emotional_state ?? []}
           onChange={(v) => set("audience_emotional_state", v)}
           testid="ob-emotional"
           columns={4}
+          max={3}
         />
       </section>
 
@@ -192,14 +193,17 @@ export default function Step2({ form, set }) {
           hint="5 items each — the more specific, the better."
         />
 
-        <CappedMultiInput
-          label="5 Solutions You Provide"
-          values={form.solutions_provided ?? []}
-          onChange={(v) => set("solutions_provided", v)}
-          cap={5}
-          placeholder="What problems do you actually solve?"
-          testid="ob-solutions"
-        />
+        <div>
+          <CappedMultiInput
+            label="Solutions You Provide"
+            values={form.solutions_provided ?? []}
+            onChange={(v) => set("solutions_provided", v)}
+            cap={10}
+            placeholder="What problems do you actually solve?"
+            testid="ob-solutions"
+          />
+          <p className="text-[10px] font-mono text-zinc-600 mt-1.5">Add solutions that are unique to you — the more specific, the better the content output</p>
+        </div>
 
         <CappedMultiInput
           label="5 Problems Your Audience Faces"

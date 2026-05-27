@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, EyeOff, Search, Star, Film, Image, CheckCircle } from "lucide-react";
+import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, EyeOff, Search, Star, Film, Image } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
 import WeekPlanTab from "@/components/strategy/WeekPlanTab";
@@ -305,7 +305,7 @@ function DriveImagesFolderCard({ client, clientId, setClient }) {
   );
 }
 
-function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, completing }) {
+function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
   const set = (key, val) => setEditForm(f => ({ ...f, [key]: val }));
   const [showPassword, setShowPassword] = useState(false);
   return (
@@ -700,13 +700,8 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave, onComplete, com
         </div>
       </div>
 
-      {/* Save / Complete */}
-      <div className="flex items-center justify-between pb-8">
-        <button onClick={onComplete} disabled={completing || saving}
-          className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50 transition-colors duration-150">
-          <CheckCircle size={14} />
-          {completing ? "Scheduling…" : "Complete Onboarding"}
-        </button>
+      {/* Save */}
+      <div className="flex items-center justify-end pb-8">
         <button onClick={onSave} disabled={saving} data-testid="save-edit-btn"
           className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-semibold hover:bg-zinc-200 disabled:opacity-50 transition-colors duration-150">
           <Save size={14} />
@@ -763,21 +758,14 @@ function ProfilePhotoEditor({ client, setClient, clientId }) {
         className="hidden"
         data-testid="profile-photo-file-input"
       />
-      <button
-        data-testid="upload-photo-btn"
-        onClick={() => inputRef.current?.click()}
-        disabled={uploading}
-        className="w-full py-1.5 text-xs bg-white text-black font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
-      >
-        {uploading ? "Uploading..." : client.profile_photo_url ? "Change Photo" : "Upload Photo"}
-      </button>
-      {client.profile_photo_url && (
+      {!client.profile_photo_url && (
         <button
-          data-testid="remove-photo-btn"
-          onClick={removePhoto}
-          className="w-full py-1.5 text-xs border border-zinc-700 text-zinc-500 hover:text-red-400 hover:border-red-900 transition-colors duration-150"
+          data-testid="upload-photo-btn"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="w-full py-1.5 text-xs bg-white text-black font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
         >
-          Remove Photo
+          {uploading ? "Uploading..." : "Upload Photo"}
         </button>
       )}
       <p className="text-[9px] font-mono text-zinc-600">JPEG · PNG · WebP · max 5MB</p>
@@ -1727,8 +1715,10 @@ export default function ClientDetail() {
       setAnalytics(analyticsResp.data);
       setEditForm(initEditForm(clientResp.data));
       const s = clientResp.data.strategy || {};
+      const ob = clientResp.data.onboarding_data || {};
+      const defaultThemes = [ob.niche, ob.signature_topic].filter(Boolean).join(", ");
       setStrategyForm({
-        themes: (s.themes || []).join(", "),
+        themes: (s.themes || []).join(", ") || defaultThemes,
         hashtags: (s.hashtags || []).join(", "),
         topics_include: (s.topics_include || []).map(e =>
           typeof e === "string" ? { text: e, type: "topic" } : e
@@ -2917,8 +2907,6 @@ export default function ClientDetail() {
           setEditForm={setEditForm}
           saving={savingEdit}
           onSave={saveEditProfile}
-          onComplete={completeOnboarding}
-          completing={completingOnboarding}
         />
       )}
 
