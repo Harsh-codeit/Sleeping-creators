@@ -464,6 +464,7 @@ class VideoCreateRequest(BaseModel):
     prompt: Optional[str] = None
     filter_name: Optional[str] = None  # greyscale|boost|contrast|darken|lighten|muted|negative|blur
     instagram_thumbnail_offset_ms: Optional[int] = 64  # Reel cover frame timestamp in ms
+    also_post_story: Optional[bool] = True
 
 class VideoGenerateTextRequest(BaseModel):
     template_id: str
@@ -7881,6 +7882,7 @@ async def create_video_post_route(req: VideoCreateRequest):
             if req.instagram_thumbnail_offset_ms is not None
             else (pipeline or {}).get("instagram_thumbnail_offset_ms", 64)
         ),
+        "also_post_story": req.also_post_story if req.also_post_story is not None else True,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.posts.insert_one(post_doc)

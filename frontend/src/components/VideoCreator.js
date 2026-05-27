@@ -275,6 +275,7 @@ export function VideoCreator() {
   const [hashtags, setHashtags] = useState("");
   // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
   const [thumbnailOffsetMs, setThumbnailOffsetMs] = useState(2000);
+  const [alsoPostStory, setAlsoPostStory] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [clips, setClips] = useState([]);
   const [selectedClips, setSelectedClips] = useState([]);
@@ -385,13 +386,14 @@ export function VideoCreator() {
         selectedTrack,
         prompt, texts, caption, hashtags,
         thumbnailOffsetMs,
+        alsoPostStory,
         selectedClips,
       };
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(payload)); } catch {}
     }, 400);
     return () => clearTimeout(t);
   }, [step, selectedClient, selectedTemplate, filterName, musicUrl, selectedTrack,
-      prompt, texts, caption, hashtags, thumbnailOffsetMs, selectedClips, post, rendering]);
+      prompt, texts, caption, hashtags, thumbnailOffsetMs, alsoPostStory, selectedClips, post, rendering]);
 
   const clearDraft = () => {
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
@@ -429,6 +431,7 @@ export function VideoCreator() {
       setThumbnailOffsetMs(
         typeof draft.thumbnailOffsetMs === "number" ? draft.thumbnailOffsetMs : 2000
       );
+      setAlsoPostStory(typeof draft.alsoPostStory === "boolean" ? draft.alsoPostStory : true);
       setSelectedClips(draft.selectedClips || []);
       setStep(Math.min(draft.step || 1, template ? 5 : 2));
       setDraft(null);  // hide banner
@@ -505,6 +508,7 @@ export function VideoCreator() {
         hashtags: hashtagArr.length ? hashtagArr : undefined,
         generated_merge_values: Object.keys(filled).length ? filled : undefined,
         instagram_thumbnail_offset_ms: Number.isFinite(thumbnailOffsetMs) ? thumbnailOffsetMs : 2000,
+        also_post_story: alsoPostStory,
       };
       const r = await axios.post(`${API}/videos/create`, body);
       setPostId(r.data.post_id);
@@ -1155,6 +1159,22 @@ export function VideoCreator() {
                       />
                       <div className="text-[10px] font-mono text-zinc-500 mt-1.5">
                         Frame timestamp used as the Reel cover photo. e.g. 2000 = 2 seconds into the video.
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-semibold text-white">Also Post as Story</div>
+                        <button
+                          type="button"
+                          onClick={() => setAlsoPostStory(v => !v)}
+                          className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${alsoPostStory ? "bg-white" : "bg-zinc-700"}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform duration-200 ${alsoPostStory ? "translate-x-4 bg-black" : "translate-x-0 bg-zinc-400"}`} />
+                        </button>
+                      </div>
+                      <div className="text-[10px] font-mono text-zinc-500 mt-1.5">
+                        Publish the video as an Instagram Story immediately after the Reel.
                       </div>
                     </div>
                   </div>

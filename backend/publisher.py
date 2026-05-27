@@ -1415,10 +1415,42 @@ async def publish_video_instagram(post: dict, client: dict) -> dict:
                 data={"creation_id": container_id, "access_token": token},
             )
             pub_data = await pub_resp.json()
-            if "id" in pub_data:
-                return {"status": "published", "platform_post_id": pub_data["id"],
-                        "metrics": {"likes": 0, "comments": 0, "shares": 0, "impressions": 0}}
-            return {"status": "failed", "error": pub_data.get("error", {}).get("message", "Publish failed"), "metrics": {}}
+            if "id" not in pub_data:
+                return {"status": "failed", "error": pub_data.get("error", {}).get("message", "Publish failed"), "metrics": {}}
+
+            reel_result = {"status": "published", "platform_post_id": pub_data["id"],
+                           "metrics": {"likes": 0, "comments": 0, "shares": 0, "impressions": 0}}
+
+            # Best-effort Story companion
+            if post.get("also_post_story", True):
+                try:
+                    story_resp = await session.post(
+                        f"{IG_GRAPH}/me/media",
+                        params={"media_type": "STORIES", "video_url": video_url},
+                        data={"access_token": token},
+                    )
+                    story_data = await story_resp.json()
+                    if "id" in story_data:
+                        story_container_id = story_data["id"]
+                        for _ in range(24):
+                            await asyncio.sleep(5)
+                            st = await session.get(
+                                f"{IG_GRAPH}/{story_container_id}",
+                                params={"fields": "status_code", "access_token": token}
+                            )
+                            st_data = await st.json()
+                            if st_data.get("status_code") in ("FINISHED", "ERROR"):
+                                break
+                        if st_data.get("status_code") == "FINISHED":
+                            await session.post(
+                                f"{IG_GRAPH}/me/media_publish",
+                                data={"creation_id": story_container_id, "access_token": token},
+                            )
+                            logger.info("Story posted for video post %s", post.get("id", "")[:8])
+                except Exception as e:
+                    logger.warning("Story post failed (main post unaffected) for %s: %s", post.get("id", "")[:8], e)
+
+            return reel_result
     except Exception as e:
         return {"status": "failed", "error": str(e), "metrics": {}}
 
