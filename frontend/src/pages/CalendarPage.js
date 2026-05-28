@@ -592,6 +592,11 @@ function MiniCard({ post, color, onClick }) {
         </div>
         <div className="text-[9px] text-zinc-500 font-mono truncate flex items-center gap-1">
           {post.client_name} · {PLATFORM_SHORT[post.platform] || post.platform}
+          {(post.kind === "video" || post.content_type === "video") && (
+            <span className="text-[7px] font-mono px-1 py-0 border border-cyan-700 text-cyan-400 leading-tight">
+              VIDEO
+            </span>
+          )}
           {slides > 0 && (
             <span className="text-[7px] font-mono px-1 py-0 border border-zinc-600 text-zinc-400 leading-tight">
               {slides}sl
@@ -628,6 +633,11 @@ function TimeCard({ post, color, onClick }) {
         <div className="text-[10px] text-zinc-300 font-mono truncate">{post.client_name}</div>
         <div className="text-[9px] text-zinc-500 font-mono truncate flex items-center gap-1">
           {PLATFORM_SHORT[post.platform] || post.platform} · {post.content_type === "carousel" ? "Carousel" : "Post"}
+          {(post.kind === "video" || post.content_type === "video") && (
+            <span className="text-[7px] font-mono px-1 py-0 border border-cyan-700 text-cyan-400 leading-tight">
+              VIDEO
+            </span>
+          )}
           {slides > 0 && (
             <span className="text-[7px] font-mono px-1 py-0 border border-zinc-600 text-zinc-400 leading-tight">
               {slides} slides
