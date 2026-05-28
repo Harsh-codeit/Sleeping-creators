@@ -1630,6 +1630,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
             "hook_id": (chosen_hook or {}).get("id"),
             "auto_publish_after_render": bool(auto_publish),
             "instagram_thumbnail_offset_ms": pipeline.get("instagram_thumbnail_offset_ms", 4000),
+            "also_post_story": pipeline.get("also_post_story", True),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 

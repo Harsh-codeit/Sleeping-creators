@@ -1323,7 +1323,7 @@ async def publish(post: dict, client: dict, local_fallback: bool = False, publis
     platform = post.get("platform", "")
 
     # Video posts still use the Celery video worker pipeline
-    if post.get("content_type") == "video":
+    if post.get("content_type") == "video" or post.get("kind") == "video":
         return await publish_video(post, client)
 
     # All non-video posts go through Bundle
@@ -1344,9 +1344,11 @@ def _build_caption(post: dict) -> str:
 async def publish_video(post: dict, client: dict) -> dict:
     """Route video post to platform-specific video publisher."""
     platform = post.get("platform", "")
-    video_url = post.get("video_url", "")
+    video_url = post.get("video_url") or post.get("r2_video_url", "")
     if not video_url:
         return {"status": "failed", "error": "No video URL on post", "metrics": {}}
+    # Normalise so downstream handlers always see video_url
+    post = {**post, "video_url": video_url}
 
     dispatch = {
         "instagram": publish_video_instagram,
