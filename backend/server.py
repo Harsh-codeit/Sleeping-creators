@@ -4485,6 +4485,42 @@ async def bundle_setup(client_id: str):
         {"$set": {"bundle_team_id": team_id, "bundle_platforms": [], "bundle_connected_at": None}}
     )
 
+    # Schedule Instagram connect email to the client
+    client_email = client.get("email")
+    if client_email:
+        connect_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/") + f"/api/bundle/authorize/{client_id}"
+        ig_html = f"""<html><body style="font-family:sans-serif;color:#111;max-width:600px;margin:auto;padding:32px">
+<h1 style="font-size:22px;margin-bottom:4px">Connect your Instagram, {client['name']}</h1>
+<p style="color:#555;line-height:1.6;margin-bottom:28px">
+  Your Sleeping Creators account is ready.<br>
+  One last step — connect your Instagram so we can start publishing your content automatically.
+</p>
+<a href="{connect_url}"
+   style="display:inline-block;background:#000;color:#fff;padding:14px 28px;
+          border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">
+  Connect your Instagram
+</a>
+<hr style="border:none;border-top:1px solid #eee;margin:32px 0">
+<p style="color:#888;font-size:12px">Sleeping Creators — automated content engine</p>
+</body></html>"""
+        try:
+            send_at = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+            await db.scheduled_emails.insert_one({
+                "type": "bundle_connect",
+                "client_id": client_id,
+                "to": client_email,
+                "cc": [],
+                "subject": f"Connect your Instagram — {client['name']}",
+                "html": ig_html,
+                "scheduled_at": send_at,
+                "status": "pending",
+                "created_by": "system",
+                "created_at": now_iso(),
+                "sent_at": None, "resend_id": None, "delivery_status": None, "error": None,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to schedule bundle connect email for {client_id}: {e}")
+
     all_platforms = list(bundle_service.PLATFORM_MAP.keys())
     redirect_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/") + "/bundle-connected"
     portal_url = await bundle_service.create_portal_link(api_key, team_id, all_platforms, redirect_url, expires_in=60)
@@ -4509,6 +4545,25 @@ async def bundle_connect(client_id: str, platforms: str = "instagram,facebook,tw
     redirect_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/") + "/bundle-connected"
     portal_url = await bundle_service.create_portal_link(api_key, team_id, platform_list, redirect_url, expires_in=60)
     return {"portal_url": portal_url}
+
+@api_router.get("/bundle/authorize/{client_id}")
+async def bundle_authorize(client_id: str):
+    """Redirect-based Bundle.social portal link for email connect buttons."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    team_id = client.get("bundle_team_id")
+    if not team_id:
+        raise HTTPException(400, "Bundle team not set up — call POST /api/bundle/setup/{client_id} first")
+
+    settings = await get_settings()
+    api_key = settings.get("bundle_api_key", "")
+    if not api_key:
+        raise HTTPException(400, "Bundle API key not configured")
+
+    redirect_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/") + "/bundle-connected"
+    portal_url = await bundle_service.create_portal_link(api_key, team_id, ["instagram"], redirect_url, expires_in=1440)
+    return RedirectResponse(portal_url, status_code=302)
 
 @api_router.post("/bundle/refresh/{client_id}")
 async def bundle_refresh(client_id: str):

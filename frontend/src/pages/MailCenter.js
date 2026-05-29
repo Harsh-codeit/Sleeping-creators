@@ -9,6 +9,7 @@ import { InvoiceEmail } from '../emails/InvoiceEmail';
 import { ClientReportEmail } from '../emails/ClientReportEmail';
 import { ContentStrategyOnboardingEmail } from '../emails/ContentStrategyOnboardingEmail';
 import { InstagramAuditEmail } from '../emails/InstagramAuditEmail';
+import { InstagramConnectEmail } from '../emails/InstagramConnectEmail';
 
 function numberToWords(n) {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
@@ -33,6 +34,7 @@ const TEMPLATES = [
   { value: 'report',              label: 'Monthly' },
   { value: 'audit',               label: 'Audit' },
   { value: 'strategy_onboarding', label: 'Onboarding' },
+  { value: 'bundle_connect',      label: 'Connect IG' },
 ];
 
 const INPUT_CLS = "w-full bg-zinc-950 border border-zinc-800 text-white text-base px-3 py-2 rounded-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 focus:outline-none font-mono placeholder:text-zinc-600 transition-colors duration-200";
@@ -147,6 +149,9 @@ export default function MailCenter() {
         peakPostingTime: '7–9 PM IST',
       },
       strategy_onboarding: {},
+      bundle_connect: {
+        clientName: c.name ?? '',
+      },
     };
     const fill = fills[template];
     if (fill) setFields(f => ({ ...f, ...fill }));
@@ -173,6 +178,7 @@ export default function MailCenter() {
       report: `Here's everything your profile did this month - Sleeping Creators`,
       audit: `Your Instagram Audit is ready, have a look | Team Sleeping Creators`,
       strategy_onboarding: `We Got Your Form, Here's What Happens Next | Sleeping Creators`,
+      bundle_connect: `Connect your Instagram — ${name}`,
     };
     setSubject(subs[template] ?? '');
   }, [template, clientId, fields, clients]);
@@ -336,6 +342,13 @@ export default function MailCenter() {
       />;
     } else if (template === 'strategy_onboarding') {
       element = <ContentStrategyOnboardingEmail clientName={name} privacyPolicyUrl={fields.privacyPolicyUrl ?? '#'} baseUrl={baseUrl} />;
+    } else if (template === 'bundle_connect') {
+      const connectUrl = `${window.location.origin}/api/bundle/authorize/${clientId}`;
+      element = <InstagramConnectEmail
+        clientName={fields.clientName || name}
+        connectUrl={connectUrl}
+        baseUrl={baseUrl}
+      />;
     }
     if (!element) return;
     try {
