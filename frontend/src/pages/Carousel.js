@@ -1337,6 +1337,31 @@ export default function Carousel() {
                   className="hidden"
                   onChange={e => handleElementImageUpload(e.target.files?.[0], editingSlideIdx)}
                 />
+                {/* Existing elements list */}
+                {(editingSlide?.elements || []).length > 0 && (
+                  <div className="mb-2 space-y-1">
+                    {(editingSlide.elements || []).map((el, i) => (
+                      <div key={el.id} className="flex items-center justify-between px-2 py-1.5 bg-zinc-900 border border-zinc-800">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {el.url
+                            ? <img src={el.url} alt="" className="w-6 h-6 object-cover rounded" />
+                            : <span className="text-zinc-600 text-[10px]">☁</span>
+                          }
+                          <span className="text-[10px] font-mono text-zinc-400 truncate">
+                            {el.url ? `Image ${i + 1}` : "Drive Image"}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => deleteImageElement(editingSlideIdx, el.id)}
+                          className="text-zinc-600 hover:text-red-400 transition-colors ml-2 flex-shrink-0"
+                          title="Remove element"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <button
                   onClick={() => elementImageInputRef.current?.click()}
                   disabled={elementUploading}
