@@ -86,12 +86,15 @@ function daysAgo(isoString) {
 }
 
 function computeProfileCompletion(client) {
+  const ob = client.onboarding_data || {};
   const total = PROFILE_FIELDS.length;
-  const filled = PROFILE_FIELDS.filter(({ key, isArray }) =>
-    isArray
-      ? Array.isArray(client[key]) && client[key].length > 0
-      : typeof client[key] === "string" && client[key].trim().length > 0
-  ).length;
+  const filled = PROFILE_FIELDS.filter(({ key, isArray }) => {
+    // name lives at root; everything else lives under onboarding_data
+    const val = key === "name" ? client[key] : (ob[key] ?? client[key]);
+    return isArray
+      ? Array.isArray(val) && val.length > 0
+      : typeof val === "string" && val.trim().length > 0;
+  }).length;
   return { pct: Math.round((filled / total) * 100), filled, total };
 }
 
