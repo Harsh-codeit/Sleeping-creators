@@ -257,14 +257,15 @@ function ClientStatusCard({ clientsWithIssues, allClients, navigate }) {
                 <ChevronDown size={12} className={`text-zinc-600 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`} />
               </div>
               {isOpen && group.clients.map((client) => {
+                const issues = client._issues || [];
                 const errorDetail =
-                  client._issues.some((i) => i.badge === "POST FAILED") && client.last_post_error
+                  issues.some((i) => i.badge === "POST FAILED") && client.last_post_error
                     ? client.last_post_error
-                    : client._issues.some((i) => i.badge === "BLOCKED") && client.instagram_account_warning
+                    : issues.some((i) => i.badge === "BLOCKED") && client.instagram_account_warning
                     ? client.instagram_account_warning
                     : null;
                 const incompleteIssue = group.badge === "INCOMPLETE PROFILE"
-                  ? client._issues.find(i => i.badge === "INCOMPLETE PROFILE")
+                  ? issues.find(i => i.badge === "INCOMPLETE PROFILE")
                   : null;
                 return (
                   <div
