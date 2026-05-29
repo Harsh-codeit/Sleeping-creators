@@ -499,6 +499,27 @@ export default function Carousel() {
     });
   }, []);
 
+  // Re-fetch the selected client on window focus so author block changes made
+  // in ClientDetail are reflected immediately without a full page reload.
+  useEffect(() => {
+    const onFocus = () => {
+      if (!selectedClientId) return;
+      axios.get(`${API}/clients/${selectedClientId}`).then(r => {
+        const c = r.data;
+        setClients(prev => prev.map(cl => cl.id === c.id ? c : cl));
+        setConfig(prev => ({
+          ...prev,
+          authorName:      c.carousel_author_name    || c.name,
+          authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
+          authorTitle:     c.carousel_author_title   || c.industry || "",
+          profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
+        }));
+      }).catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [selectedClientId]);
+
   useEffect(() => {
     if (!selectedClientId) return;
     const c = clients.find(x => x.id === selectedClientId);

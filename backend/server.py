@@ -5440,6 +5440,18 @@ async def export_carousel(carousel_id: str):
                     _folder_override = _el["props"]["folder_id"]
                     break
 
+    # Always use the client's latest carousel_author_* fields so changes in the
+    # author block settings are reflected immediately without needing to re-save
+    # the carousel.
+    if carousel.get("client_id"):
+        _client = await db.clients.find_one({"id": carousel["client_id"]}, {"_id": 0}) or {}
+        if _client.get("carousel_author_name"):
+            carousel = {**carousel, "author_name": _client["carousel_author_name"]}
+        if _client.get("carousel_author_handle"):
+            carousel = {**carousel, "author_handle": _client["carousel_author_handle"]}
+        if _client.get("carousel_author_title"):
+            carousel = {**carousel, "author_title": _client["carousel_author_title"]}
+
     drive_image_path = None
     try:
         if carousel.get("drive_image_index") is not None:
