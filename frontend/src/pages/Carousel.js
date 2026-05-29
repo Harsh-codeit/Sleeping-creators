@@ -745,24 +745,43 @@ export default function Carousel() {
   };
 
   const downloadAll = async () => {
-    if (!exportedImages.length) return;
-    const toastId = toast.loading(`Zipping ${exportedImages.length} slides...`);
+    let images = exportedImages;
+    // Auto-export if no images ready yet
+    if (!images.length) {
+      if (!savedCarouselId) return toast.error("Save the carousel first");
+      const toastId = toast.loading("Exporting slides...");
+      try {
+        const resp = await axios.post(`${API}/carousels/${savedCarouselId}/export`);
+        images = resp.data.images || [];
+        setExportedImages(images);
+        toast.dismiss(toastId);
+      } catch (err) {
+        toast.error(err?.response?.data?.detail || "Export failed", { id: toastId });
+        return;
+      }
+    }
+    if (!images.length) return toast.error("No slides to download");
+    const toastId = toast.loading(`Zipping ${images.length} slides...`);
     try {
       const zip = new JSZip();
-      await Promise.all(exportedImages.map(async (url, i) => {
+      await Promise.all(images.map(async (url, i) => {
         const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Slide ${i + 1}: ${resp.status} ${resp.statusText}`);
         const blob = await resp.blob();
-        zip.file(`slide_${i + 1}.png`, blob);
+        const ext = url.endsWith(".jpg") || url.endsWith(".jpeg") ? "jpg" : "png";
+        zip.file(`slide_${i + 1}.${ext}`, blob);
       }));
       const content = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(content);
       a.download = "carousel_slides.zip";
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(a.href);
-      toast.success("Downloaded!", { id: toastId });
-    } catch {
-      toast.error("Download failed", { id: toastId });
+      toast.success(`Downloaded ${images.length} slides!`, { id: toastId });
+    } catch (err) {
+      toast.error(`Download failed: ${err.message || "unknown error"}`, { id: toastId });
     }
   };
 
@@ -910,7 +929,7 @@ export default function Carousel() {
               </button>
             </>
           )}
-          {exportedImages.length > 0 && (
+          {savedCarouselId && (
             <button onClick={downloadAll}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono border border-emerald-700 text-emerald-400 hover:bg-emerald-900/30 transition-colors duration-150">
               <Download size={12} /> Download All
