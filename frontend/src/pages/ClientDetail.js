@@ -2069,7 +2069,7 @@ export default function ClientDetail() {
               <Circle size={7} className={`fill-current ${STATUS_DOT[client.status] || "text-zinc-500"}`} />
               <span className="text-xs font-mono text-zinc-500 capitalize">{client.status}</span>
             </div>
-            <div className="text-xs text-zinc-500 font-mono">{client.industry}</div>
+            <div className="text-xs text-zinc-500 font-mono">{client.carousel_author_title || client.industry}</div>
           </div>
         </div>
         <div className="flex gap-2">
