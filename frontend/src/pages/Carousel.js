@@ -906,12 +906,9 @@ export default function Carousel() {
     setSavedCarouselId(carousel.id);
     setExportedImages(carousel.exported_images || []);
     setPostType(carousel.post_type || "carousel");
-    // Restore saved preview URLs so slides render instantly without re-fetching
-    const restored = {};
-    (carousel.slide_previews || []).forEach(p => {
-      restored[p.index] = { url: p.url, content_hash: p.content_hash };
-    });
-    setSlidePreviews(restored);
+    // Always clear cached previews so slides re-render with the current author fields.
+    // Restoring stale previews causes the wrong author title to flash until re-render.
+    setSlidePreviews({});
     toast.success("Carousel loaded");
   };
 
