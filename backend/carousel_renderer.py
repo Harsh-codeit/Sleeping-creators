@@ -449,17 +449,19 @@ async def render_post_as_image(post: dict, client: dict, base_url: str) -> str:
     )
     html_fn = TEMPLATE_MAP.get(template, _dark_card_html)
 
-    author_name   = client.get("name", "Brand")
-    author_handle = (
+    _default_name   = client.get("name", "Brand")
+    _default_handle = (
         client.get("onboarding_data", {}).get("instagram_handle")
         or client.get("instagram_username")
-        or author_name.lower().replace(" ", "")
+        or _default_name.lower().replace(" ", "")
     )
+    author_name   = client.get("carousel_author_name")   or _default_name
+    author_handle = client.get("carousel_author_handle") or _default_handle
     carousel_data = post.get("carousel_data") or {}
     config = {
         "author_name":       author_name,
         "author_handle":     author_handle,
-        "author_title":      client.get("industry", ""),
+        "author_title":      client.get("carousel_author_title") or client.get("industry", ""),
         "profile_photo_url": client.get("profile_photo_url", ""),
         "cta_heading":       carousel_data.get("cta_heading", "Found this helpful?"),
         "cta_sub":           carousel_data.get("cta_sub", "Follow for more insights like this"),
