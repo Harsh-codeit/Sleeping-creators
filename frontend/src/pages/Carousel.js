@@ -456,12 +456,12 @@ export default function Carousel() {
     }
   }, []);
 
-  // Debounced preview trigger — waits 1.2s after last change
+  // Debounced preview trigger — waits 600ms after last change
   const requestPreviews = useCallback((currentSlides, currentTemplate, currentConfig, currentDesignCtx) => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     previewTimerRef.current = setTimeout(() => {
       generatePreviews(currentSlides, currentTemplate, currentConfig, currentDesignCtx);
-    }, 1200);
+    }, 600);
   }, [generatePreviews]);
 
   // Trigger preview generation when slides, template, config, or design context change
@@ -522,19 +522,34 @@ export default function Carousel() {
 
   useEffect(() => {
     if (!selectedClientId) return;
-    const c = clients.find(x => x.id === selectedClientId);
-    if (c) {
+    // Always fetch the client fresh so carousel_author_* changes in ClientDetail
+    // are reflected immediately without needing a page reload.
+    axios.get(`${API}/clients/${selectedClientId}`).then(r => {
+      const c = r.data;
+      setClients(prev => prev.map(cl => cl.id === c.id ? c : cl));
       setConfig(prev => ({
         ...prev,
         clientId: selectedClientId,
         driveImageIndex: null,
-        authorName: c.carousel_author_name || c.name,
-        authorHandle: c.carousel_author_handle || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-        authorTitle: c.carousel_author_title || c.industry || "",
+        authorName:      c.carousel_author_name    || c.name,
+        authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
+        authorTitle:     c.carousel_author_title   || c.industry || "",
         profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
       }));
-    }
-  }, [selectedClientId, clients]);
+    }).catch(() => {
+      // Fallback to stale clients array if fetch fails
+      const c = clients.find(x => x.id === selectedClientId);
+      if (c) setConfig(prev => ({
+        ...prev,
+        clientId: selectedClientId,
+        driveImageIndex: null,
+        authorName:      c.carousel_author_name    || c.name,
+        authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
+        authorTitle:     c.carousel_author_title   || c.industry || "",
+        profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
+      }));
+    });
+  }, [selectedClientId]);
 
   const loadSavedCarousels = async () => {
     try { setSavedCarousels((await axios.get(`${API}/carousels`)).data); } catch {}
