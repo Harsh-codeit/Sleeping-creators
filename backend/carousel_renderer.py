@@ -518,16 +518,17 @@ async def render_carousel_post_images(post: dict, client: dict, base_url: str, c
         or "dark_card"
     )
 
-    author_name   = client.get("name", "Brand")
+    author_name   = client.get("carousel_author_name")   or client.get("name", "Brand")
     author_handle = (
-        client.get("onboarding_data", {}).get("instagram_handle")
+        client.get("carousel_author_handle")
+        or client.get("onboarding_data", {}).get("instagram_handle")
         or client.get("instagram_username")
         or author_name.lower().replace(" ", "")
     )
     config = {
         "author_name":       author_name,
         "author_handle":     author_handle,
-        "author_title":      client.get("industry", ""),
+        "author_title":      client.get("carousel_author_title") or client.get("industry", ""),
         "profile_photo_url": client.get("profile_photo_url", ""),
         "cta_heading":       carousel_data.get("cta_heading", "Found this helpful?"),
         "cta_sub":           carousel_data.get("cta_sub", "Follow for more insights like this"),
