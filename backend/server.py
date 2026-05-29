@@ -930,7 +930,7 @@ async def get_settings():
             "ai_model": "claude-sonnet-4-5-20250929",
             "ai_provider": "anthropic",
             "auto_publish": False,
-            "require_approval": True,
+            "require_approval": False,
             "posts_per_day_per_client": 3,
             "automation_enabled": True,
             "competitor_scrape_limit": 10,
@@ -7664,6 +7664,27 @@ async def register_clip(client_id: str, body: ClipRegisterRequest):
 
 class ClearClipCacheRequest(BaseModel):
     dry_run: bool = True
+
+@api_router.post("/admin/pipelines/disable-approval")
+async def admin_disable_pipeline_approval(request: Request):
+    """One-time fix: set require_approval=False on all pipelines that have it True.
+    Also reschedules any draft posts that have a future scheduled_at."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer ") or not _check_token(auth[7:]):
+        raise HTTPException(401, "Not authenticated")
+    pipeline_result = await db.pipelines.update_many(
+        {"require_approval": True},
+        {"$set": {"require_approval": False}}
+    )
+    post_result = await db.posts.update_many(
+        {"status": "draft", "scheduled_at": {"$gte": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"status": "scheduled"}}
+    )
+    return {
+        "pipelines_fixed": pipeline_result.modified_count,
+        "draft_posts_rescheduled": post_result.modified_count,
+    }
+
 
 @api_router.post("/admin/clips/clear-r2-cache")
 async def clear_clip_r2_cache(request: Request, body: ClearClipCacheRequest):
