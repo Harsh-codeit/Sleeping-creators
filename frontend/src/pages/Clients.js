@@ -480,7 +480,7 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-              <div className="col-span-2 flex items-center text-xs text-zinc-400 font-mono"><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{client.industry || "—"}</span></div>
+              <div className="col-span-2 flex items-center text-xs text-zinc-400 font-mono"><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{client.carousel_author_title || client.industry || "—"}</span></div>
               <div className="col-span-3 flex items-center flex-wrap gap-1">
                 {(client.platforms || []).slice(0, 4).map(p => (
                   <span key={p} className="text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500">
