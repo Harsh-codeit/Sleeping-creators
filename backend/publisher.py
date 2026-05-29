@@ -1276,12 +1276,12 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
 
     # Auto-story: publish a companion Instagram Story at proper 9:16.
     # Image/carousel posts are composited onto a blurred 1080×1920 canvas.
-    # Video posts only get a story when flagged is_vertical=True.
+    # Video posts use also_post_story flag (defaults True) to match publish_video_instagram behaviour.
     # Failures never affect the main post — best-effort only.
     if platform == "instagram" and client.get("auto_story_enabled", True):
         try:
             story_upload_id = None
-            if is_video and upload_ids and post.get("is_vertical"):
+            if is_video and upload_ids and post.get("also_post_story", True):
                 story_upload_id = upload_ids[0]
             elif not is_video:
                 source_url = (
