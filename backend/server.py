@@ -3813,9 +3813,11 @@ async def dashboard_top_performers():
 
 @api_router.get("/dashboard/errors")
 async def dashboard_errors():
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     failed_posts, pipeline_errors, error_logs = await asyncio.gather(
         db.posts.find(
-            {"status": "failed", "error_message": {"$nin": [None, ""]}},
+            {"status": "failed", "error_message": {"$nin": [None, ""]},
+             "updated_at": {"$gte": cutoff}},
             {"_id": 0, "id": 1, "client_name": 1, "platform": 1, "error_message": 1, "updated_at": 1, "created_at": 1},
         ).sort("updated_at", -1).to_list(10),
         db.pipelines.find(
@@ -3823,7 +3825,7 @@ async def dashboard_errors():
             {"_id": 0, "id": 1, "name": 1, "client_name": 1, "last_error": 1, "next_run_at": 1},
         ).to_list(20),
         db.logs.find(
-            {"level": "error"},
+            {"level": "error", "created_at": {"$gte": cutoff}},
             {"_id": 0, "id": 1, "message": 1, "client_name": 1, "created_at": 1},
         ).sort("created_at", -1).to_list(10),
     )
