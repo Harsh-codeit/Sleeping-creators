@@ -574,7 +574,7 @@ export default function Carousel() {
         ...prev,
         authorName: data.author_name || prev.authorName,
         authorHandle: data.author_handle || prev.authorHandle,
-        authorTitle: data.author_title || prev.authorTitle,
+        authorTitle: prev.authorTitle || data.author_title,
         driveImageIndex: data.drive_image_index ?? null,
       }));
       setEditingSlideIdx(0);

@@ -643,18 +643,19 @@ Return ONLY this JSON (no markdown, no explanation):
             "content": f"The biggest mistake in {industry}? Waiting for perfect conditions.",
             "author_name": name,
             "author_handle": f"@{name.lower().replace(' ', '')}",
-            "author_title": client.get("industry", ""),
+            "author_title": client.get("carousel_author_title") or client.get("industry", ""),
         }
 
     logger.info(f"Single image hook generated in {time.time()-t0:.1f}s — hook_type={data.get('hook_type')}")
 
     content = _humanize_content(data.get("content", ""))
+    _author_title = client.get("carousel_author_title") or client.get("industry", "")
     return {
         "title": data.get("title", topic or "Single image post"),
         "slides": [{"slide_number": 1, "content": content}],
         "author_name": data.get("author_name", name),
         "author_handle": data.get("author_handle", f"@{name.lower().replace(' ', '')}"),
-        "author_title": data.get("author_title", client.get("industry", "")),
+        "author_title": _author_title,
         "design_context": None,
     }
 
@@ -1140,7 +1141,7 @@ def _fallback_carousel(
         "title": f"5 Lessons from {name}",
         "author_name": name,
         "author_handle": handle,
-        "author_title": industry,
+        "author_title": client.get("carousel_author_title") or industry,
         "slides": default_slides[:slide_count]
     }
     return _apply_carousel_cta(data, client, topic, cta_keyword, cta_offer)
