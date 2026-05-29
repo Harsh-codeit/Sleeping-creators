@@ -8724,6 +8724,57 @@ async def affiliate_new_client(
 
     return {"sc_client_id": sc_client_id}
 
+
+class AffiliateBundlePortalRequest(BaseModel):
+    sc_client_id: str
+    redirect_url: str
+    platforms: List[str] = ["instagram"]
+
+
+@app.post("/api/webhooks/affiliate/bundle-portal", include_in_schema=False)
+async def affiliate_bundle_portal(
+    body: AffiliateBundlePortalRequest,
+    request: Request,
+):
+    """Inter-app endpoint: create a Bundle portal link for an affiliate-onboarded
+    client so they can connect Instagram inline in the affiliate onboarding form,
+    without checking email. Idempotent — reuses bundle_team_id if already set."""
+    secret = os.getenv("INTER_APP_SECRET", "")
+    incoming = request.headers.get("X-Inter-App-Secret", "")
+    if not secret or not incoming or incoming != secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    client = await db.clients.find_one({"id": body.sc_client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    settings = await get_settings()
+    api_key = settings.get("bundle_api_key", "")
+    if not api_key:
+        raise HTTPException(400, "Bundle API key not configured")
+
+    team_id = client.get("bundle_team_id")
+    if not team_id:
+        team = await bundle_service.create_team(api_key, client["name"])
+        team_id = team.get("id") or team.get("_id") or team.get("teamId", "")
+        if not team_id:
+            raise HTTPException(500, f"Bundle team creation failed: {team}")
+        await db.clients.update_one(
+            {"id": body.sc_client_id},
+            {"$set": {
+                "bundle_team_id": team_id,
+                "bundle_platforms": [],
+                "bundle_connected_at": None,
+                "bundle_setup_source": "affiliate_inline",
+            }},
+        )
+
+    portal_url = await bundle_service.create_portal_link(
+        api_key, team_id, body.platforms, body.redirect_url, expires_in=60
+    )
+    return {"portal_url": portal_url, "team_id": team_id}
+
+
 import json as _json
 
 @app.post("/webhooks/bundle", include_in_schema=False)
