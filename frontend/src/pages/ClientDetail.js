@@ -781,6 +781,77 @@ function ProfilePhotoEditor({ client, setClient, clientId }) {
   );
 }
 
+// ─── Carousel Author Block Card ───────────────────────────────────────────────
+
+function CarouselAuthorCard({ client, setClient, clientId }) {
+  const [form, setForm] = useState({
+    carousel_author_name:   client.carousel_author_name   || "",
+    carousel_author_handle: client.carousel_author_handle || "",
+    carousel_author_title:  client.carousel_author_title  || "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/clients/${clientId}`, form);
+      setClient(c => ({ ...c, ...form }));
+      toast.success("Author block saved");
+    } catch {
+      toast.error("Failed to save");
+    } finally { setSaving(false); }
+  }
+
+  const dirty =
+    form.carousel_author_name   !== (client.carousel_author_name   || "") ||
+    form.carousel_author_handle !== (client.carousel_author_handle || "") ||
+    form.carousel_author_title  !== (client.carousel_author_title  || "");
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 p-4">
+      <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Carousel Author Block</div>
+      <div className="space-y-2">
+        <div>
+          <div className="text-[9px] font-mono text-zinc-600 uppercase mb-1">Name</div>
+          <input
+            value={form.carousel_author_name}
+            onChange={e => setForm(f => ({ ...f, carousel_author_name: e.target.value }))}
+            placeholder={client.name}
+            className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs px-2 py-1.5 font-mono placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <div className="text-[9px] font-mono text-zinc-600 uppercase mb-1">Handle</div>
+          <input
+            value={form.carousel_author_handle}
+            onChange={e => setForm(f => ({ ...f, carousel_author_handle: e.target.value }))}
+            placeholder={`@${client.name?.toLowerCase().replace(/\s+/g, "") || "handle"}`}
+            className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs px-2 py-1.5 font-mono placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <div className="text-[9px] font-mono text-zinc-600 uppercase mb-1">Title / Role</div>
+          <input
+            value={form.carousel_author_title}
+            onChange={e => setForm(f => ({ ...f, carousel_author_title: e.target.value }))}
+            placeholder={client.onboarding_data?.niche || "Nutrition Coach"}
+            className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs px-2 py-1.5 font-mono placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
+          />
+        </div>
+        {dirty && (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="w-full py-1.5 text-xs bg-white text-black font-semibold hover:bg-zinc-200 transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Platforms Tab ────────────────────────────────────────────────────────────
 
 const ALL_BUNDLE_PLATFORMS = [
@@ -2083,6 +2154,8 @@ export default function ClientDetail() {
                 </div>
               </div>
             </div>
+            {/* Carousel Author Block */}
+            <CarouselAuthorCard client={client} setClient={setClient} clientId={id} />
           </div>
           <div className="space-y-4">
             <DriveImagesFolderCard client={client} clientId={id} setClient={setClient} />
