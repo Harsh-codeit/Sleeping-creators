@@ -60,11 +60,15 @@ export default function ClipPickerModal({ clientId, onSelect, onClose }) {
         { params: { filename: file.name, content_type: file.type || "video/mp4" } }
       );
 
-      // Upload directly to R2
-      await axios.put(upload_url, file, {
+      // Upload directly to R2 — use fetch, not axios, so the app's
+      // Authorization header is not forwarded to the R2 endpoint.
+      const r2 = await fetch(upload_url, {
+        method: "PUT",
         headers: { "Content-Type": file.type || "video/mp4" },
-        onUploadProgress: e => setUploadProgress(Math.round((e.loaded / e.total) * 100)),
+        body: file,
       });
+      if (!r2.ok) throw new Error(`R2 upload failed: ${r2.status}`);
+      setUploadProgress(100);
 
       // Register metadata with server
       const r = await axios.post(`${API}/clients/${clientId}/clips/register`, {
