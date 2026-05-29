@@ -141,9 +141,22 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("DELETE", r"^/api/music/[^/]+"):                     ("music", "delete"),
     # Video Templates (actual backend route: /shotstack-templates)
     ("GET",    r"^/api/shotstack-templates"):             ("video_templates", "view"),
-    ("POST",   r"^/api/shotstack-templates"):             ("video_templates", "create"),
+    ("POST",   r"^/api/shotstack-templates$"):            ("video_templates", "create"),
+    ("POST",   r"^/api/shotstack-templates/upload-audio"):("video_templates", "edit"),
     ("PATCH",  r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "edit"),
     ("DELETE", r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "delete"),
+    # Video Studio (create/generate routes)
+    ("POST",   r"^/api/videos/create"):                  ("studio", "create"),
+    ("POST",   r"^/api/videos/generate-content"):        ("studio", "create"),
+    ("POST",   r"^/api/videos/generate-text"):           ("studio", "create"),
+    ("POST",   r"^/api/videos/generate-cta-text"):       ("studio", "create"),
+    ("GET",    r"^/api/videos/job/"):                    ("studio", "view"),
+    # Bundle.social (client social account management)
+    ("POST",   r"^/api/bundle/setup/"):                  ("clients", "edit"),
+    ("GET",    r"^/api/bundle/connect/"):                ("clients", "view"),
+    ("POST",   r"^/api/bundle/refresh/"):                ("clients", "edit"),
+    ("GET",    r"^/api/bundle/posts/"):                  ("studio", "view"),
+    ("GET",    r"^/api/bundle/post/"):                   ("studio", "view"),
     # Analytics
     ("GET",    r"^/api/dashboard/"):                      ("analytics", "view"),
     ("GET",    r"^/api/analytics/"):                      ("analytics", "view"),
