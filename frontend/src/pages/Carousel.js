@@ -877,13 +877,19 @@ export default function Carousel() {
     } catch { toast.error("Failed to delete"); }
   };
 
-  const loadCarousel = (carousel) => {
+  const loadCarousel = async (carousel) => {
     setSelectedClientId(carousel.client_id || "");
     setTemplate(carousel.template || "dark_card");
     setCarouselTitle(carousel.title || "");
-    // Prefer the client's saved carousel_author_* fields over the carousel's own
-    // stored author data — so changes in the Carousel Author Block always apply.
-    const c = clients.find(x => x.id === carousel.client_id) || {};
+    // Always fetch the client fresh so carousel_author_* changes are reflected immediately
+    let c = clients.find(x => x.id === carousel.client_id) || {};
+    if (carousel.client_id) {
+      try {
+        const r = await axios.get(`${API}/clients/${carousel.client_id}`);
+        c = r.data;
+        setClients(prev => prev.map(cl => cl.id === c.id ? c : cl));
+      } catch {}
+    }
     setConfig(prev => ({
       ...prev,
       clientId: carousel.client_id || "",
