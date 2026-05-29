@@ -340,6 +340,9 @@ class ClientUpdate(BaseModel):
     auto_approve: Optional[bool] = None
     brand_overrides: Optional[dict] = None
     auto_story_enabled: Optional[bool] = None
+    carousel_author_name: Optional[str] = None
+    carousel_author_handle: Optional[str] = None
+    carousel_author_title: Optional[str] = None
 
 class PostCreate(BaseModel):
     client_id: str
