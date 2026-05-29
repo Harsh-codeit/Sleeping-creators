@@ -1322,11 +1322,16 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
 async def publish(post: dict, client: dict, local_fallback: bool = False, publish_now: bool = False) -> dict:
     platform = post.get("platform", "")
 
-    # Video posts still use the Celery video worker pipeline
+    # Video posts: use direct platform API when credentials are present.
+    # Instagram video falls back to Bundle when the client's direct OAuth token
+    # is missing (e.g. they connect through Bundle's own OAuth rather than ours).
     if post.get("content_type") == "video" or post.get("kind") == "video":
-        return await publish_video(post, client)
+        if platform != "instagram" or (
+            client.get("instagram_access_token") and client.get("instagram_user_id")
+        ):
+            return await publish_video(post, client)
 
-    # All non-video posts go through Bundle
+    # Non-video posts and Instagram video without direct credentials go through Bundle
     return await publish_bundle(post, client, publish_now=publish_now)
 
 
