@@ -4488,7 +4488,7 @@ async def bundle_setup(client_id: str):
     # Schedule Instagram connect email to the client
     client_email = client.get("email")
     if client_email:
-        connect_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/") + f"/api/bundle/authorize/{client_id}"
+        connect_url = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/") + f"/bundle-connect/{client_id}"
         ig_html = f"""<html><body style="font-family:sans-serif;color:#111;max-width:600px;margin:auto;padding:32px">
 <h1 style="font-size:22px;margin-bottom:4px">Connect your Instagram, {client['name']}</h1>
 <p style="color:#555;line-height:1.6;margin-bottom:28px">

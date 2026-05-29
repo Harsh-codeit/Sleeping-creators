@@ -343,7 +343,7 @@ export default function MailCenter() {
     } else if (template === 'strategy_onboarding') {
       element = <ContentStrategyOnboardingEmail clientName={name} privacyPolicyUrl={fields.privacyPolicyUrl ?? '#'} baseUrl={baseUrl} />;
     } else if (template === 'bundle_connect') {
-      const connectUrl = `${window.location.origin}/api/bundle/authorize/${clientId}`;
+      const connectUrl = `${window.location.origin}/bundle-connect/${clientId}`;
       element = <InstagramConnectEmail
         clientName={fields.clientName || name}
         connectUrl={connectUrl}

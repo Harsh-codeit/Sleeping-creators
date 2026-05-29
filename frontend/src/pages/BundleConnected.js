@@ -1,9 +1,17 @@
+import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
 
 export default function BundleConnected() {
   const [params] = useSearchParams();
   const error = params.get("error");
+
+  useEffect(() => {
+    if (window.opener && !error) {
+      window.opener.postMessage({ type: "BUNDLE_AUTH", success: true }, window.location.origin);
+      setTimeout(() => window.close(), 1800);
+    }
+  }, [error]);
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -20,7 +28,7 @@ export default function BundleConnected() {
             <p className="text-zinc-400 text-sm font-mono max-w-xs">
               You're all set — your content will start publishing automatically.
             </p>
-            <p className="text-zinc-600 text-xs font-mono">You can close this tab.</p>
+            <p className="text-zinc-600 text-xs font-mono">This window will close automatically...</p>
           </>
         )}
       </div>

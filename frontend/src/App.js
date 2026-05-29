@@ -15,6 +15,7 @@ import TemplateBuilder from "./pages/TemplateBuilder";
 import Onboarding from "./pages/Onboarding";
 import InstagramCallback from "./pages/InstagramCallback";
 import BundleConnected from "./pages/BundleConnected";
+import BundleConnect from "./pages/BundleConnect";
 import FacebookCallback from "./pages/FacebookCallback";
 import UsagePage from "./pages/UsagePage";
 import Login from "./pages/Login";
@@ -79,6 +80,7 @@ function App() {
           <Route path="/instagram/callback" element={<InstagramCallback />} />
           <Route path="/facebook/callback" element={<FacebookCallback />} />
           <Route path="/bundle-connected" element={<BundleConnected />} />
+          <Route path="/bundle-connect/:clientId" element={<BundleConnect />} />
           {token ? (
             <>
               <Route path="/" element={<Layout onLogout={handleLogout} />}>
