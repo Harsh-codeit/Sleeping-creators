@@ -112,6 +112,7 @@ export const EMPTY_FORM = {
   video_audio_tags: [],            // pick random track whose mood_tags intersect any of these
   // Instagram Reel cover-frame timestamp in ms (Bundle thumbnailOffset)
   instagram_thumbnail_offset_ms: 4000,
+  also_post_story: true,
   // Video gap scheduling
   days_between_posts: 1,
   post_time: "09:00",

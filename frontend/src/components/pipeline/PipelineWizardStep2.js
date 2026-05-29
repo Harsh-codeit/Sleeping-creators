@@ -253,6 +253,41 @@ export default function PipelineWizardStep2({ form, onChange, clientId }) {
           </span>
         </label>
 
+        {/* Thumbnail offset */}
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <span className="text-xs text-white font-semibold">Reel Cover Offset</span>
+            <span className="text-[10px] font-mono text-zinc-600">ms</span>
+          </div>
+          <input
+            type="number"
+            min={0}
+            step={500}
+            value={form.instagram_thumbnail_offset_ms ?? 4000}
+            onChange={e => {
+              const v = e.target.value;
+              onChange("instagram_thumbnail_offset_ms", v === "" ? 4000 : Math.max(0, parseInt(v, 10) || 0));
+            }}
+            className="w-32 bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors"
+          />
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">Frame used as the Reel cover photo (ms into video).</p>
+        </div>
+
+        {/* Also post story */}
+        <div className="flex items-center justify-between">
+          <span>
+            <span className="text-xs text-white font-semibold">Also Post as Story</span>
+            <span className="text-[10px] font-mono text-zinc-500 ml-1.5">publish Reel as Story too</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => onChange("also_post_story", form.also_post_story === false ? true : false)}
+            className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0 ${form.also_post_story !== false ? "bg-white" : "bg-zinc-700"}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform duration-200 ${form.also_post_story !== false ? "translate-x-4 bg-black" : "translate-x-0 bg-zinc-400"}`} />
+          </button>
+        </div>
+
         <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
 
         {/* ── By Tag popup ── */}
