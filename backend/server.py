@@ -47,7 +47,7 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/", "/api/bundle/authorize/")
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
