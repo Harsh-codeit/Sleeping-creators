@@ -76,12 +76,16 @@ _RENDER_H = SLIDE_H   # 1350
 
 
 def _inject_elements(html: str, elements: list, drive_image_src: str | None) -> str:
-    """Inject drive-sourced image elements as absolutely-positioned overlays into slide HTML."""
-    if not drive_image_src or not elements:
+    """Inject image elements as absolutely-positioned overlays into slide HTML.
+    Supports drive-sourced images (drive_source=True) and direct URL uploads (url field)."""
+    if not elements:
         return html
     tags = []
     for el in elements:
-        if el.get("type") != "image" or not el.get("drive_source"):
+        if el.get("type") != "image":
+            continue
+        src = drive_image_src if el.get("drive_source") else el.get("url", "")
+        if not src:
             continue
         x_px    = el["x"]      * _RENDER_W
         y_px    = el["y"]      * _RENDER_H
@@ -90,7 +94,7 @@ def _inject_elements(html: str, elements: list, drive_image_src: str | None) -> 
         rot     = el.get("rotation", 0)
         opacity = el.get("opacity", 1.0)
         tags.append(
-            f'<img src="{drive_image_src}" style="position:absolute;left:{x_px:.1f}px;'
+            f'<img src="{src}" style="position:absolute;left:{x_px:.1f}px;'
             f'top:{y_px:.1f}px;width:{w_px:.1f}px;height:{h_px:.1f}px;'
             f'transform:rotate({rot}deg);opacity:{opacity};object-fit:cover;'
             f'pointer-events:none;" />'

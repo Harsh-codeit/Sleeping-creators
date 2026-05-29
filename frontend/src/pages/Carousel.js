@@ -389,6 +389,8 @@ export default function Carousel() {
   const [showSaved, setShowSaved] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const publishingRef = useRef(false);
+  const elementImageInputRef = useRef(null);
+  const [elementUploading, setElementUploading] = useState(false);
   const [postType, setPostType] = useState("carousel"); // "carousel" | "single_image"
   const [availableTemplates, setAvailableTemplates] = useState([]);
   // Design context returned by generate endpoint (palette_name, visual_style, etc.)
@@ -608,6 +610,36 @@ export default function Carousel() {
     setSlides(prev => prev.map((s, i) =>
       i === slideIdx ? { ...s, elements: [...(s.elements || []), el] } : s
     ));
+  };
+
+  const handleElementImageUpload = async (file, slideIdx) => {
+    if (!file) return;
+    setElementUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await axios.post(`${API}/upload`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const el = {
+        id: `img-${Date.now()}`,
+        type: "image",
+        drive_source: false,
+        url: data.url,
+        x: 0.25, y: 0.25,
+        width: 0.5, height: 0.4,
+        rotation: 0, opacity: 1,
+      };
+      setSlides(prev => prev.map((s, i) =>
+        i === slideIdx ? { ...s, elements: [...(s.elements || []), el] } : s
+      ));
+      toast.success("Image added");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setElementUploading(false);
+      if (elementImageInputRef.current) elementImageInputRef.current.value = "";
+    }
   };
 
   const updateImageElement = useCallback((slideIdx, elementId, updates) => {
@@ -1293,27 +1325,25 @@ export default function Carousel() {
                 </>
               )}
 
-              {/* Drive image element toolbar */}
+              {/* Image element toolbar */}
               <div className="border-t border-zinc-800 pt-3 mt-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Elements</span>
-                  {selectedClient?.drive_images_folder_id
-                    ? <span className="text-[10px] font-mono text-emerald-500">● Drive connected</span>
-                    : <span className="text-[10px] font-mono text-zinc-600">No Drive folder</span>
-                  }
                 </div>
+                <input
+                  ref={elementImageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={e => handleElementImageUpload(e.target.files?.[0], editingSlideIdx)}
+                />
                 <button
-                  onClick={() => {
-                    if (!selectedClient?.drive_images_folder_id) {
-                      toast.error("Set a Drive Images Folder in client settings first");
-                      return;
-                    }
-                    addImageElement(editingSlideIdx);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-500 hover:text-white text-[11px] font-mono transition-colors duration-150"
+                  onClick={() => elementImageInputRef.current?.click()}
+                  disabled={elementUploading}
+                  className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-500 hover:text-white text-[11px] font-mono transition-colors duration-150 disabled:opacity-50"
                 >
                   <Plus size={12} />
-                  + Image (Drive)
+                  {elementUploading ? "Uploading..." : "+ Upload Image"}
                 </button>
               </div>
 
