@@ -391,6 +391,8 @@ export default function Carousel() {
   const publishingRef = useRef(false);
   const elementImageInputRef = useRef(null);
   const [elementUploading, setElementUploading] = useState(false);
+  const authorPhotoInputRef = useRef(null);
+  const [authorPhotoUploading, setAuthorPhotoUploading] = useState(false);
   const [postType, setPostType] = useState("carousel"); // "carousel" | "single_image"
   const [availableTemplates, setAvailableTemplates] = useState([]);
   // Design context returned by generate endpoint (palette_name, visual_style, etc.)
@@ -610,6 +612,25 @@ export default function Carousel() {
     setSlides(prev => prev.map((s, i) =>
       i === slideIdx ? { ...s, elements: [...(s.elements || []), el] } : s
     ));
+  };
+
+  const handleAuthorPhotoUpload = async (file) => {
+    if (!file) return;
+    setAuthorPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await axios.post(`${API}/upload`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setConfig(p => ({ ...p, profilePhotoUrl: data.url }));
+      toast.success("Author photo updated");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setAuthorPhotoUploading(false);
+      if (authorPhotoInputRef.current) authorPhotoInputRef.current.value = "";
+    }
   };
 
   const handleElementImageUpload = async (file, slideIdx) => {
@@ -1327,9 +1348,6 @@ export default function Carousel() {
 
               {/* Image element toolbar */}
               <div className="border-t border-zinc-800 pt-3 mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Elements</span>
-                </div>
                 <input
                   ref={elementImageInputRef}
                   type="file"
@@ -1375,6 +1393,27 @@ export default function Carousel() {
               {/* Author details */}
               <div className="label-xs mt-5">Author</div>
               <div className="space-y-2">
+                {/* Author photo */}
+                <input
+                  ref={authorPhotoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={e => handleAuthorPhotoUpload(e.target.files?.[0])}
+                />
+                <div className="flex items-center gap-2">
+                  {config.profilePhotoUrl
+                    ? <img src={config.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-zinc-700 flex-shrink-0" />
+                    : <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex-shrink-0" />
+                  }
+                  <button
+                    onClick={() => authorPhotoInputRef.current?.click()}
+                    disabled={authorPhotoUploading}
+                    className="flex-1 py-1.5 text-[11px] font-mono border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-500 hover:text-white transition-colors duration-150 disabled:opacity-50"
+                  >
+                    {authorPhotoUploading ? "Uploading..." : config.profilePhotoUrl ? "Change Photo" : "Upload Photo"}
+                  </button>
+                </div>
                 <input value={config.authorName}
                   onChange={e => setConfig(p => ({ ...p, authorName: e.target.value }))}
                   placeholder="Full name" className="field" />
