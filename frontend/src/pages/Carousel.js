@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import JSZip from "jszip";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -690,8 +691,26 @@ export default function Carousel() {
     } catch { toast.error("Download failed"); }
   };
 
-  const downloadAll = () => {
-    exportedImages.forEach((url, i) => downloadImage(url, `slide_${i + 1}.png`));
+  const downloadAll = async () => {
+    if (!exportedImages.length) return;
+    const toastId = toast.loading(`Zipping ${exportedImages.length} slides...`);
+    try {
+      const zip = new JSZip();
+      await Promise.all(exportedImages.map(async (url, i) => {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        zip.file(`slide_${i + 1}.png`, blob);
+      }));
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = "carousel_slides.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success("Downloaded!", { id: toastId });
+    } catch {
+      toast.error("Download failed", { id: toastId });
+    }
   };
 
   const publishCarousel = async () => {
