@@ -784,10 +784,17 @@ function ProfilePhotoEditor({ client, setClient, clientId }) {
 // ─── Carousel Author Block Card ───────────────────────────────────────────────
 
 function CarouselAuthorCard({ client, setClient, clientId }) {
+  const ob = client.onboarding_data || {};
+  const profileName   = client.name || "";
+  const profileHandle = ob.instagram_handle
+    ? (ob.instagram_handle.startsWith("@") ? ob.instagram_handle : `@${ob.instagram_handle}`)
+    : (profileName ? `@${profileName.toLowerCase().replace(/\s+/g, "")}` : "");
+  const profileTitle  = ob.niche || client.industry || "";
+
   const [form, setForm] = useState({
-    carousel_author_name:   client.carousel_author_name   || "",
-    carousel_author_handle: client.carousel_author_handle || "",
-    carousel_author_title:  client.carousel_author_title  || "",
+    carousel_author_name:   client.carousel_author_name   || profileName,
+    carousel_author_handle: client.carousel_author_handle || profileHandle,
+    carousel_author_title:  client.carousel_author_title  || profileTitle,
   });
   const [saving, setSaving] = useState(false);
 
