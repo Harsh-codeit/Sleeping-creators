@@ -826,13 +826,17 @@ export default function Carousel() {
     setSelectedClientId(carousel.client_id || "");
     setTemplate(carousel.template || "dark_card");
     setCarouselTitle(carousel.title || "");
+    // Prefer the client's saved carousel_author_* fields over the carousel's own
+    // stored author data — so changes in the Carousel Author Block always apply.
+    const c = clients.find(x => x.id === carousel.client_id) || {};
     setConfig(prev => ({
       ...prev,
       clientId: carousel.client_id || "",
       driveImageIndex: carousel.drive_image_index ?? null,
-      authorName: carousel.author_name || "",
-      authorHandle: carousel.author_handle || "",
-      authorTitle: carousel.author_title || "",
+      authorName: c.carousel_author_name || carousel.author_name || c.name || "",
+      authorHandle: c.carousel_author_handle || carousel.author_handle || "",
+      authorTitle: c.carousel_author_title || carousel.author_title || "",
+      profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || prev.profilePhotoUrl || "",
       platform: carousel.platform || "instagram"
     }));
     setSlides((carousel.slides || []).map((s, i) => ({ id: Date.now() + i, ...s, elements: s.elements || [] })));
