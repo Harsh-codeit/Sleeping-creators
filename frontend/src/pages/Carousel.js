@@ -507,9 +507,9 @@ export default function Carousel() {
         ...prev,
         clientId: selectedClientId,
         driveImageIndex: null,
-        authorName: c.name,
-        authorHandle: c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`,
-        authorTitle: c.industry || "",
+        authorName: c.carousel_author_name || c.name,
+        authorHandle: c.carousel_author_handle || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
+        authorTitle: c.carousel_author_title || c.industry || "",
         profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
       }));
     }
