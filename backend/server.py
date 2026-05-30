@@ -106,12 +106,16 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("DELETE", r"^/api/clients/[^/]+$"):                  ("clients", "delete"),
     ("GET",    r"^/api/clients/[^/]+/"):                  ("clients", "view"),
     ("POST",   r"^/api/clients/[^/]+/"):                  ("clients", "edit"),
+    ("PUT",    r"^/api/clients/[^/]+/"):                  ("clients", "edit"),
     ("PATCH",  r"^/api/clients/[^/]+/"):                  ("clients", "edit"),
     ("DELETE", r"^/api/clients/[^/]+/"):                  ("clients", "delete"),
     ("POST",   r"^/api/clients/onboard"):                 ("clients", "create"),
+    ("POST",   r"^/api/competitor-posts/[^/]+/recreate"): ("clients", "edit"),
     # Templates
     ("GET",    r"^/api/templates"):                       ("templates", "view"),
     ("POST",   r"^/api/templates$"):                      ("templates", "create"),
+    ("POST",   r"^/api/templates/[^/]+/preview"):         ("templates", "view"),
+    ("POST",   r"^/api/templates/[^/]+/clone"):           ("templates", "create"),
     ("PUT",    r"^/api/templates/[^/]+$"):                ("templates", "edit"),
     ("DELETE", r"^/api/templates/[^/]+$"):                ("templates", "delete"),
     # Calendar + Posts
@@ -126,23 +130,33 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("POST",   r"^/api/posts/[^/]+/approve"):             ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/mark-published"):      ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/retry-render"):        ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/publish"):             ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/winner"):              ("calendar", "edit"),
     ("DELETE", r"^/api/posts/[^/]+$"):                    ("calendar", "delete"),
     # Studio (Carousel)
     ("GET",    r"^/api/carousels"):                       ("studio", "view"),
     ("POST",   r"^/api/carousels$"):                      ("studio", "create"),
     ("POST",   r"^/api/carousel/"):                       ("studio", "create"),
     ("PUT",    r"^/api/carousels/[^/]+"):                 ("studio", "edit"),
+    # Carousel sub-actions use the plural path (export, publish, …); keep them
+    # in step with the PUT/DELETE plural patterns so members with Studio edit
+    # aren't blocked by deny-by-default.
+    ("POST",   r"^/api/carousels/[^/]+"):                 ("studio", "edit"),
     ("DELETE", r"^/api/carousels/[^/]+"):                 ("studio", "delete"),
+    ("GET",    r"^/api/video-schedule/slots"):            ("studio", "view"),
     # Music
     ("GET",    r"^/api/music"):                           ("music", "view"),
     ("POST",   r"^/api/music/upload"):                    ("music", "create"),
     ("POST",   r"^/api/music/drive/import"):              ("music", "create"),
+    ("POST",   r"^/api/music/tags"):                      ("music", "edit"),
     ("PUT",    r"^/api/music/[^/]+"):                     ("music", "edit"),
     ("DELETE", r"^/api/music/[^/]+"):                     ("music", "delete"),
     # Video Templates (actual backend route: /shotstack-templates)
     ("GET",    r"^/api/shotstack-templates"):             ("video_templates", "view"),
     ("POST",   r"^/api/shotstack-templates$"):            ("video_templates", "create"),
     ("POST",   r"^/api/shotstack-templates/upload-audio"):("video_templates", "edit"),
+    ("POST",   r"^/api/shotstack-templates/[^/]+/generate-preview"): ("video_templates", "edit"),
+    ("POST",   r"^/api/shotstack-templates/[^/]+/reinfer-roles"):    ("video_templates", "edit"),
     ("PATCH",  r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "edit"),
     ("DELETE", r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "delete"),
     # Video Studio (create/generate routes)
@@ -174,6 +188,14 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
 }
 
 _MEMBER_EXEMPT = ("/api/me", "/api/auth/")
+
+# Shared utilities any active member may use regardless of section permissions.
+# These don't mutate a protected resource on their own — e.g. /api/upload just
+# stores an image (type+size validated) and returns a URL; the real change is
+# gated when the carousel/client is saved. /api/upload is used across Studio
+# (author block + image elements), the Carousel page, and client onboarding, so
+# scoping it to a single section would break the others.
+_MEMBER_SHARED = ("/api/upload",)
 
 def _get_required_permission(method: str, path: str) -> tuple[str, str] | None:
     for (m, pattern), permission in PERMISSION_MAP.items():
@@ -230,6 +252,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         if not member.get("is_active", False):
             return JSONResponse({"detail": "Account inactive"}, status_code=401)
+
+        # Shared utilities available to any active member (no section permission).
+        if any(path.startswith(p) for p in _MEMBER_SHARED):
+            return await call_next(request)
 
         required = _get_required_permission(request.method, path)
         if required is None:

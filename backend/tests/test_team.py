@@ -242,3 +242,52 @@ def test_team_endpoints_require_owner():
         mock_db.team_members.find_one = AsyncMock(return_value={**ACTIVE_MEMBER, "is_active": True})
         resp = client.get("/api/team", headers=MEMBER_AUTH)
     assert resp.status_code == 403
+
+
+# ─── Permission map coverage (regression for deny-by-default gaps) ─────────────
+from server import _get_required_permission
+
+
+def test_upload_is_shared_utility_not_in_map():
+    """/api/upload is intentionally unmapped — it's a shared member utility."""
+    assert _get_required_permission("POST", "/api/upload") is None
+
+
+@patch("server.db")
+def test_member_can_use_upload_with_minimal_perms(mock_db):
+    """Any active member may call /api/upload regardless of section permissions.
+
+    ACTIVE_MEMBER only has clients.view, yet the middleware must let /api/upload
+    through (shared utility). The handler then rejects the bad content-type with
+    400 — proving the request was NOT blocked at 401/403.
+    """
+    mock_db.team_members.find_one = AsyncMock(return_value=ACTIVE_MEMBER)
+    resp = client.post(
+        "/api/upload",
+        headers=MEMBER_AUTH,
+        files={"file": ("x.txt", b"data", "text/plain")},
+    )
+    assert resp.status_code not in (401, 403)
+    assert resp.status_code == 400  # handler reached, rejected non-image
+
+
+def test_permission_map_closes_member_gaps():
+    """Endpoints a full-access member legitimately needs must resolve to a
+    section permission (not None, which would deny-by-default with 403)."""
+    cases = {
+        ("POST", "/api/carousels/abc123/export"):  ("studio", "edit"),
+        ("POST", "/api/carousels/abc123/publish"): ("studio", "edit"),
+        ("GET",  "/api/video-schedule/slots"):     ("studio", "view"),
+        ("POST", "/api/templates/t1/preview"):     ("templates", "view"),
+        ("POST", "/api/templates/t1/clone"):       ("templates", "create"),
+        ("POST", "/api/posts/p1/publish"):         ("calendar", "edit"),
+        ("POST", "/api/posts/p1/winner"):          ("calendar", "edit"),
+        ("POST", "/api/music/tags"):               ("music", "edit"),
+        ("POST", "/api/competitor-posts/cp1/recreate"): ("clients", "edit"),
+        ("PUT",  "/api/clients/c1/keyword-config"): ("clients", "edit"),
+        ("PUT",  "/api/clients/c1/pipelines/p1"):   ("clients", "edit"),
+        ("POST", "/api/shotstack-templates/t1/generate-preview"): ("video_templates", "edit"),
+        ("POST", "/api/shotstack-templates/t1/reinfer-roles"):    ("video_templates", "edit"),
+    }
+    for (method, path), expected in cases.items():
+        assert _get_required_permission(method, path) == expected, f"{method} {path}"
