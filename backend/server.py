@@ -8755,10 +8755,15 @@ async def affiliate_bundle_portal(
 
     team_id = client.get("bundle_team_id")
     if not team_id:
-        team = await bundle_service.create_team(api_key, client["name"])
+        client_name = (client.get("name") or "").strip() or f"Client {body.sc_client_id[:8]}"
+        try:
+            team = await bundle_service.create_team(api_key, client_name)
+        except Exception as e:
+            logger.exception("affiliate_bundle_portal: create_team failed")
+            raise HTTPException(502, f"Bundle.social create_team failed: {e}")
         team_id = team.get("id") or team.get("_id") or team.get("teamId", "")
         if not team_id:
-            raise HTTPException(500, f"Bundle team creation failed: {team}")
+            raise HTTPException(502, f"Bundle team creation returned no id: {team}")
         await db.clients.update_one(
             {"id": body.sc_client_id},
             {"$set": {
@@ -8769,9 +8774,17 @@ async def affiliate_bundle_portal(
             }},
         )
 
-    portal_url = await bundle_service.create_portal_link(
-        api_key, team_id, body.platforms, body.redirect_url, expires_in=60
-    )
+    try:
+        portal_url = await bundle_service.create_portal_link(
+            api_key, team_id, body.platforms, body.redirect_url, expires_in=60
+        )
+    except Exception as e:
+        logger.exception("affiliate_bundle_portal: create_portal_link failed")
+        raise HTTPException(502, f"Bundle.social create_portal_link failed: {e}")
+
+    if not portal_url:
+        raise HTTPException(502, "Bundle.social returned empty portal URL")
+
     return {"portal_url": portal_url, "team_id": team_id}
 
 
