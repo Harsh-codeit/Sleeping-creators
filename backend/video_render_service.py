@@ -714,6 +714,15 @@ def _platform_overrides_for_video(post: dict, platforms: list[str]) -> dict:
 
 async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: Optional[str]) -> str:
     """Upload mp4 to Bundle and create a Bundle scheduled post. Returns bundle_post_id."""
+    # Guard: refuse to schedule a captionless video (mirrors publisher.publish).
+    # The caption is set only by AI generation, which can silently fail and leave
+    # this empty — without this, the auto-approve / schedule path would post blank.
+    if not (post.get("caption") or "").strip():
+        raise RuntimeError(
+            f"Video post {post.get('id')} has an empty caption — refusing to schedule a "
+            f"captionless post. Add a caption and retry."
+        )
+
     import bundle_service
     from server import get_settings
 

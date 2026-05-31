@@ -1321,11 +1321,27 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
 
 async def publish(post: dict, client: dict, local_fallback: bool = False, publish_now: bool = False) -> dict:
     platform = post.get("platform", "")
+    is_video = post.get("content_type") == "video" or post.get("kind") == "video"
+
+    # Guard: never publish a video with a blank caption. A video's caption is
+    # set only by AI generation at pipeline-run time, which can silently fail
+    # (transient Claude error, unparseable JSON, empty prompt) and leave the
+    # field empty. Posting a captionless Reel is almost never intended — surface
+    # it as a failure so it's visible and the user can add a caption and republish.
+    if is_video:
+        caption_text = (post.get("caption") or post.get("text") or "").strip()
+        if not caption_text:
+            logger.warning("Refusing to publish video post %s — caption is empty", post.get("id", "")[:8])
+            return {
+                "status": "failed",
+                "error": "Caption is empty — caption generation may have failed. Add a caption and republish.",
+                "metrics": {},
+            }
 
     # Video posts: use direct platform API when credentials are present.
     # Instagram video falls back to Bundle when the client's direct OAuth token
     # is missing (e.g. they connect through Bundle's own OAuth rather than ours).
-    if post.get("content_type") == "video" or post.get("kind") == "video":
+    if is_video:
         if platform != "instagram" or (
             client.get("instagram_access_token") and client.get("instagram_user_id")
         ):

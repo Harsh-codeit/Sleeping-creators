@@ -1600,7 +1600,13 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
                 caption = r.get("caption") or ""
                 hashtags = r.get("hashtags") or []
             except Exception as _ge:
-                logger.warning(f"Pipeline {pipeline_id} AI content gen failed: {_ge}")
+                # Don't swallow this silently — an empty caption here means the
+                # video will be blocked from publishing (see publisher.publish /
+                # handoff_to_bundle guards) until a caption is added manually.
+                logger.error(
+                    f"Pipeline {pipeline_id} AI content generation failed — video will have NO "
+                    f"caption and will be blocked from auto-publishing until one is added: {_ge}"
+                )
 
         # Resolve audio override:
         #   1) Pick Tracks (video_audio_ids) — rotate or random from selected tracks
