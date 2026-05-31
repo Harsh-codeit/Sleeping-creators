@@ -18,7 +18,7 @@ const STATUS_DOT = {
 
 function AddClientDialog({ open, onClose, onCreated }) {
   const [form, setForm] = useState({
-    name: "", industry: "", brand_voice: "professional and insightful",
+    name: "", niche: "", brand_voice: "professional and insightful",
     target_audience: "", bio: "", platforms: []
   });
   const [saving, setSaving] = useState(false);
@@ -40,7 +40,7 @@ function AddClientDialog({ open, onClose, onCreated }) {
       toast.success(`Client "${resp.data.name}" added`);
       onCreated(resp.data);
       onClose();
-      setForm({ name: "", industry: "", brand_voice: "professional and insightful", target_audience: "", bio: "", platforms: [] });
+      setForm({ name: "", niche: "", brand_voice: "professional and insightful", target_audience: "", bio: "", platforms: [] });
     } catch (e) {
       toast.error("Failed to create client");
     } finally {
@@ -66,12 +66,12 @@ function AddClientDialog({ open, onClose, onCreated }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-mono text-zinc-400 mb-1.5 uppercase">Industry</label>
+            <label className="block text-xs font-mono text-zinc-400 mb-1.5 uppercase">Niche / Target Market</label>
             <input
-              data-testid="client-industry-input"
-              value={form.industry}
-              onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-              placeholder="SaaS / Technology"
+              data-testid="client-niche-input"
+              value={form.niche}
+              onChange={e => setForm(f => ({ ...f, niche: e.target.value }))}
+              placeholder="e.g. Health-conscious adults 25-40, B2B SaaS CTOs"
               className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
             />
           </div>
@@ -205,7 +205,7 @@ export default function Clients() {
       const q = search.toLowerCase();
       if (
         !c.name.toLowerCase().includes(q) &&
-        !(c.industry || "").toLowerCase().includes(q)
+        !(c.niche || c.industry || "").toLowerCase().includes(q)
       ) return false;
     }
     if (filterStatus && c.status !== filterStatus) return false;
@@ -247,7 +247,7 @@ export default function Clients() {
           <p className="text-xs text-zinc-500 font-mono mt-0.5">{clients.length} clients configured</p>
         </div>
         <div className="flex gap-2">
-          <button
+          <button type="button"
             onClick={auditInstagram}
             disabled={auditing}
             data-testid="audit-instagram-btn"
@@ -257,7 +257,7 @@ export default function Clients() {
             <ShieldCheck size={14} className={auditing ? "animate-pulse" : ""} />
             {auditing ? "Auditing..." : "Audit IG"}
           </button>
-          <button
+          <button type="button"
             onClick={fetchClients}
             data-testid="refresh-clients-btn"
             className="p-2 border border-zinc-800 text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors duration-150"
@@ -265,7 +265,7 @@ export default function Clients() {
             <RefreshCw size={14} />
           </button>
           {cp.create && (
-            <button
+            <button type="button"
               onClick={() => navigate("/onboarding")}
               data-testid="onboard-client-btn"
               className="flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors duration-150"
@@ -275,7 +275,7 @@ export default function Clients() {
             </button>
           )}
           {cp.create && (
-            <button
+            <button type="button"
               onClick={() => setShowAdd(true)}
               data-testid="add-client-btn"
               className="flex items-center gap-2 px-4 py-2 border border-zinc-700 text-zinc-300 text-sm hover:bg-zinc-800 transition-colors duration-150"
@@ -316,7 +316,7 @@ export default function Clients() {
                 Fix: have these clients switch to a Business or Creator account in the Instagram app, then reconnect.
               </div>
             </div>
-            <button
+            <button type="button"
               onClick={() => setAuditResult(null)}
               className="text-zinc-500 hover:text-white"
               aria-label="Dismiss"
@@ -347,11 +347,11 @@ export default function Clients() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name or industry..."
+          placeholder="Search by name or niche..."
           className="w-full bg-zinc-900 border border-zinc-800 pl-8 pr-8 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
         />
         {search && (
-          <button
+          <button type="button"
             onClick={() => setSearch("")}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
           >
@@ -365,7 +365,7 @@ export default function Clients() {
         {/* Status — tab buttons */}
         <div className="flex items-center border border-zinc-800">
           {[["", "All"], ["active", "Active"], ["paused", "Paused"]].map(([val, label]) => (
-            <button
+            <button type="button"
               key={val}
               onClick={() => setFilterStatus(val)}
               className={`px-3 py-1.5 text-xs font-mono transition-colors duration-150 border-r border-zinc-800 last:border-0 ${
@@ -391,7 +391,7 @@ export default function Clients() {
         </select>
 
         {/* Posts today — toggle chip (mutually exclusive with Has Failures) */}
-        <button
+        <button type="button"
           onClick={() => { setFilterToday(v => !v); setFilterFailed(false); }}
           className={`px-3 py-1.5 text-xs font-mono border transition-colors duration-150 ${
             filterToday
@@ -403,7 +403,7 @@ export default function Clients() {
         </button>
 
         {/* Failed posts — toggle chip (mutually exclusive with Posts Today) */}
-        <button
+        <button type="button"
           onClick={() => { setFilterFailed(v => !v); setFilterToday(false); }}
           className={`px-3 py-1.5 text-xs font-mono border transition-colors duration-150 ${
             filterFailed
@@ -419,7 +419,7 @@ export default function Clients() {
           {filteredClients.length} of {clients.length}
         </span>
         {hasActiveFilters && (
-          <button
+          <button type="button"
             onClick={clearAllFilters}
             className="flex items-center gap-1 text-xs font-mono text-zinc-500 hover:text-white transition-colors"
           >
@@ -445,7 +445,7 @@ export default function Clients() {
         ) : clients.length === 0 && !search ? (
           <div className="px-4 py-12 text-center">
             <div className="text-zinc-600 font-mono text-sm mb-3">No clients yet</div>
-            <button onClick={() => setShowAdd(true)} className="text-xs text-white underline">Add your first client</button>
+            <button type="button" onClick={() => setShowAdd(true)} className="text-xs text-white underline">Add your first client</button>
           </div>
         ) : filteredClients.length === 0 ? (
           <div className="px-4 py-8 text-center text-zinc-600 font-mono text-sm">No clients match "{search}"</div>
@@ -480,7 +480,7 @@ export default function Clients() {
                   </div>
                 </div>
               </div>
-              <div className="col-span-2 flex items-center text-xs text-zinc-400 font-mono"><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{client.carousel_author_title || client.industry || "—"}</span></div>
+              <div className="col-span-2 flex items-center text-xs text-zinc-400 font-mono"><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{client.carousel_author_title || client.niche || client.industry || "—"}</span></div>
               <div className="col-span-3 flex items-center flex-wrap gap-1">
                 {(client.platforms || []).slice(0, 4).map(p => (
                   <span key={p} className="text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500">
@@ -494,7 +494,7 @@ export default function Clients() {
               <div className="col-span-1 flex items-center justify-center text-sm font-mono text-white">{client.posts_today ?? 0}</div>
               <div className="col-span-1 flex items-center justify-center text-sm font-mono text-zinc-400">{client.posts_total ?? 0}</div>
               <div className="col-span-2 flex items-center justify-end gap-1">
-                <button
+                <button type="button"
                   data-testid={`client-pause-btn-${client.id}`}
                   onClick={e => togglePause(client, e)}
                   title={client.status === "active" ? "Pause" : "Resume"}
@@ -502,7 +502,7 @@ export default function Clients() {
                 >
                   {client.status === "active" ? <Pause size={13} /> : <Play size={13} />}
                 </button>
-                <button
+                <button type="button"
                   data-testid={`client-view-btn-${client.id}`}
                   onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
                   className="p-1.5 text-zinc-500 hover:text-white border border-transparent hover:border-zinc-700 transition-colors duration-150"
@@ -510,7 +510,7 @@ export default function Clients() {
                   <ExternalLink size={13} />
                 </button>
                 {cp.delete && (
-                  <button
+                  <button type="button"
                     data-testid={`client-delete-btn-${client.id}`}
                     onClick={e => deleteClient(client, e)}
                     className="p-1.5 text-zinc-500 hover:text-red-400 border border-transparent hover:border-red-900 transition-colors duration-150"

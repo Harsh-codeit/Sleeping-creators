@@ -272,6 +272,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 class ClientCreate(BaseModel):
     name: str
+    niche: str = ""
     industry: str = ""
     brand_voice: str = "professional"
     target_audience: str = ""
@@ -2576,10 +2577,13 @@ async def list_clients():
 
 @api_router.post("/clients", status_code=201)
 async def create_client(data: ClientCreate):
+    _niche = data.niche or data.industry or ""
     client = {
         "id": str(uuid.uuid4()),
         "name": data.name,
-        "industry": data.industry,
+        "niche": _niche,
+        "industry": data.industry or _niche,
+        "onboarding_data": {"niche": _niche} if _niche else {},
         "brand_voice": data.brand_voice,
         "target_audience": data.target_audience,
         "platforms": data.platforms,
@@ -5264,7 +5268,7 @@ async def create_carousel(data: CarouselCreate):
         "title": data.title,
         "author_name": data.author_name or client.get("carousel_author_name") or client["name"],
         "author_handle": data.author_handle or client.get("carousel_author_handle") or f"@{client['name'].lower().replace(' ','')}",
-        "author_title": data.author_title or client.get("carousel_author_title") or client.get("industry", ""),
+        "author_title": data.author_title or client.get("carousel_author_title") or client.get("niche") or client.get("industry", ""),
         "profile_photo_url": data.profile_photo_url or client.get("profile_photo_url", "") or client.get("onboarding_data", {}).get("profile_photo_link", ""),
         "slides": [{"id": str(uuid.uuid4()), **s} for s in data.slides],
         "slide_count": len(data.slides),

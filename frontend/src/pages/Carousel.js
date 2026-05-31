@@ -322,7 +322,7 @@ function OptionPill({ label, value, active, options, onChange, searchable }) {
 
   return (
     <div className="relative" ref={ref}>
-      <button
+      <button type="button"
         onClick={() => setOpen(o => !o)}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-mono border transition-colors duration-150
           ${active ? "border-zinc-500 text-white bg-zinc-800" : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"}`}
@@ -347,7 +347,7 @@ function OptionPill({ label, value, active, options, onChange, searchable }) {
             {filtered.length === 0 ? (
               <div className="px-3 py-2 text-[11px] font-mono text-zinc-600">No results</div>
             ) : filtered.map(opt => (
-              <button
+              <button type="button"
                 key={opt.value}
                 onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
                 className={`w-full text-left px-3 py-2 text-xs font-mono transition-colors duration-100
@@ -511,7 +511,7 @@ export default function Carousel() {
           ...prev,
           authorName:      c.carousel_author_name    || c.name,
           authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-          authorTitle:     c.carousel_author_title   || c.industry || "",
+          authorTitle:     c.carousel_author_title   || c.niche || c.industry || "",
           profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
         }));
       }).catch(() => {});
@@ -533,7 +533,7 @@ export default function Carousel() {
         driveImageIndex: null,
         authorName:      c.carousel_author_name    || c.name,
         authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-        authorTitle:     c.carousel_author_title   || c.industry || "",
+        authorTitle:     c.carousel_author_title   || c.niche || c.industry || "",
         profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
       }));
     }).catch(() => {
@@ -545,7 +545,7 @@ export default function Carousel() {
         driveImageIndex: null,
         authorName:      c.carousel_author_name    || c.name,
         authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-        authorTitle:     c.carousel_author_title   || c.industry || "",
+        authorTitle:     c.carousel_author_title   || c.niche || c.industry || "",
         profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
       }));
     });
@@ -935,7 +935,7 @@ export default function Carousel() {
           {/* Tab toggle */}
           <div className="flex items-center border border-zinc-800">
             {[["carousel", "Carousels"], ["video", "Videos"]].map(([val, label]) => (
-              <button
+              <button type="button"
                 key={val}
                 onClick={() => setStudioTab(val)}
                 className={`px-4 py-2 text-xs font-mono uppercase border-r border-zinc-800 last:border-0 transition-colors duration-150 ${studioTab === val ? "bg-white text-black font-semibold" : "text-zinc-500 hover:text-white hover:bg-zinc-800"}`}
@@ -944,7 +944,7 @@ export default function Carousel() {
               </button>
             ))}
           </div>
-          <button
+          <button type="button"
             onClick={() => { setShowSaved(s => !s); loadSavedCarousels(); }}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-mono border transition-colors duration-150
               ${showSaved ? "bg-white text-black border-white" : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"}`}
@@ -954,22 +954,22 @@ export default function Carousel() {
           </button>
           {slides.length > 0 && (
             <>
-              <button onClick={saveCarousel} disabled={saving || !selectedClientId}
+              <button type="button" onClick={saveCarousel} disabled={saving || !selectedClientId}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-40">
                 <Save size={12} /> {saving ? "Saving..." : "Save"}
               </button>
-              <button onClick={() => exportCarousel(savedCarouselId)} disabled={exporting || !savedCarouselId}
+              <button type="button" onClick={() => exportCarousel(savedCarouselId)} disabled={exporting || !savedCarouselId}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono bg-white text-black font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-40">
                 <ImageDown size={12} /> {exporting ? "Exporting..." : "Export PNG"}
               </button>
-              <button onClick={publishCarousel} disabled={publishing || !savedCarouselId}
+              <button type="button" onClick={publishCarousel} disabled={publishing || !savedCarouselId}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors duration-150 disabled:opacity-40">
                 <Send size={12} /> {publishing ? "Publishing..." : "Post Now"}
               </button>
             </>
           )}
           {savedCarouselId && (
-            <button onClick={downloadAll}
+            <button type="button" onClick={downloadAll}
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono border border-emerald-700 text-emerald-400 hover:bg-emerald-900/30 transition-colors duration-150">
               <Download size={12} /> Download All
             </button>
@@ -999,9 +999,9 @@ export default function Carousel() {
                   <div className="text-xs font-semibold text-white mb-1 truncate">{c.title || "Untitled"}</div>
                   <div className="text-[10px] font-mono text-zinc-500 mb-2">{c.client_name} · {c.slide_count} slides</div>
                   <div className="flex gap-2">
-                    <button onClick={() => loadCarousel(c)} className="flex-1 text-[10px] font-mono bg-white text-black px-2 py-1 hover:bg-zinc-200 transition-colors duration-150">Edit</button>
-                    <button onClick={() => exportCarousel(c.id)} className="p-1 text-zinc-500 hover:text-emerald-400 transition-colors duration-150"><ImageDown size={11} /></button>
-                    <button onClick={() => deleteSaved(c.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors duration-150"><Trash2 size={11} /></button>
+                    <button type="button" onClick={() => loadCarousel(c)} className="flex-1 text-[10px] font-mono bg-white text-black px-2 py-1 hover:bg-zinc-200 transition-colors duration-150">Edit</button>
+                    <button type="button" onClick={() => exportCarousel(c.id)} className="p-1 text-zinc-500 hover:text-emerald-400 transition-colors duration-150"><ImageDown size={11} /></button>
+                    <button type="button" onClick={() => deleteSaved(c.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors duration-150"><Trash2 size={11} /></button>
                   </div>
                   {c.status === "exported" && (
                     <div className="mt-1.5 flex items-center gap-1">
@@ -1036,7 +1036,7 @@ export default function Carousel() {
                 </div>
                 <div className="flex flex-wrap gap-2 justify-center max-w-md">
                   {["5 growth tips for startups", "Leadership lessons", "Industry trends 2026", "How to build a brand"].map(s => (
-                    <button key={s} onClick={() => setPromptText(s)}
+                    <button type="button" key={s} onClick={() => setPromptText(s)}
                       className="px-3 py-1.5 text-[11px] font-mono border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300 transition-colors duration-150">
                       {s}
                     </button>
@@ -1058,11 +1058,11 @@ export default function Carousel() {
                     <input type="number" min={100} max={500} value={charLimit}
                       onChange={e => setCharLimit(parseInt(e.target.value) || CHAR_LIMIT_DEFAULT)}
                       className="w-16 bg-zinc-950 border border-zinc-700 px-2 py-1 text-[11px] text-white font-mono focus:outline-none focus:border-zinc-500 text-center" />
-                    <button onClick={addSlide} title="Add blank slide"
+                    <button type="button" onClick={addSlide} title="Add blank slide"
                       className="p-1.5 text-zinc-500 hover:text-white border border-zinc-800 hover:bg-zinc-800 transition-colors duration-150">
                       <Plus size={12} />
                     </button>
-                    <button onClick={() => addTypedSlide("insight")} title="Add typed slide"
+                    <button type="button" onClick={() => addTypedSlide("insight")} title="Add typed slide"
                       className="px-2 py-1 text-[10px] font-mono text-zinc-500 hover:text-white border border-zinc-800 hover:bg-zinc-800 transition-colors duration-150">
                       + Typed
                     </button>
@@ -1077,7 +1077,7 @@ export default function Carousel() {
                     const preview = slidePreviews[idx];
                     return (
                       <div key={slide.id} className="group relative">
-                        <button
+                        <button type="button"
                           onClick={() => setEditingSlideIdx(isActive ? null : idx)}
                           className={`w-full border-2 overflow-hidden transition-all duration-150
                             ${isActive ? "border-white ring-1 ring-white/20" : overLimit ? "border-amber-600" : "border-zinc-800 hover:border-zinc-600"}`}
@@ -1134,7 +1134,7 @@ export default function Carousel() {
                           <span className={`text-[10px] font-mono ${overLimit ? "text-amber-400" : "text-zinc-600"}`}>
                             {getSlideContent(slide).length}/{charLimit}
                           </span>
-                          <button onClick={(e) => { e.stopPropagation(); removeSlide(idx); }}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); removeSlide(idx); }}
                             className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-700 hover:text-red-400 transition-all duration-150">
                             <Trash2 size={10} />
                           </button>
@@ -1144,7 +1144,7 @@ export default function Carousel() {
                   })}
 
                   {/* Add slide card */}
-                  <button onClick={addSlide}
+                  <button type="button" onClick={addSlide}
                     className="border-2 border-dashed border-zinc-800 hover:border-zinc-600 flex flex-col items-center justify-center gap-2 transition-colors duration-150"
                     style={{ aspectRatio: "4/5" }}>
                     <Plus size={20} className="text-zinc-600" />
@@ -1172,7 +1172,7 @@ export default function Carousel() {
                           </a>
                           <div className="flex items-center justify-between mt-1 px-0.5">
                             <span className="text-[9px] font-mono text-zinc-600">{i + 1}</span>
-                            <button onClick={() => downloadImage(url, `slide_${i + 1}.png`)}
+                            <button type="button" onClick={() => downloadImage(url, `slide_${i + 1}.png`)}
                               className="text-[9px] font-mono text-zinc-500 hover:text-white flex items-center gap-1 transition-colors duration-150">
                               <Download size={8} /> Save
                             </button>
@@ -1183,7 +1183,7 @@ export default function Carousel() {
                     <div className="mt-3 flex items-center gap-2 bg-zinc-950 border border-zinc-800 px-3 py-2">
                       <span className="text-[10px] font-mono text-zinc-600 flex-shrink-0">URL</span>
                       <code className="flex-1 text-[9px] text-zinc-400 truncate font-mono">{exportedImages[0]}</code>
-                      <button onClick={() => { navigator.clipboard.writeText(exportedImages[0]); toast.success("Copied!"); }}
+                      <button type="button" onClick={() => { navigator.clipboard.writeText(exportedImages[0]); toast.success("Copied!"); }}
                         className="flex items-center gap-1 text-[10px] font-mono text-zinc-400 hover:text-white border border-zinc-700 px-2 py-1 flex-shrink-0 hover:bg-zinc-800 transition-colors duration-150">
                         <Copy size={9} /> Copy
                       </button>
@@ -1282,7 +1282,7 @@ export default function Carousel() {
               <span className="text-xs font-mono text-zinc-400 uppercase tracking-widest">
                 Edit Slide {editingSlideIdx + 1}
               </span>
-              <button onClick={() => setEditingSlideIdx(null)}
+              <button type="button" onClick={() => setEditingSlideIdx(null)}
                 className="p-1 text-zinc-600 hover:text-white transition-colors duration-150">
                 <X size={14} />
               </button>
@@ -1291,7 +1291,7 @@ export default function Carousel() {
             {/* Slide navigation */}
             <div className="flex items-center gap-1 px-4 py-3 flex-shrink-0">
               {!isSingleImageMode && slides.map((_, idx) => (
-                <button key={idx} onClick={() => setEditingSlideIdx(idx)}
+                <button type="button" key={idx} onClick={() => setEditingSlideIdx(idx)}
                   className={`flex-1 py-1 text-[10px] font-mono text-center transition-colors duration-100
                     ${editingSlideIdx === idx ? "bg-white text-black" : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"}`}>
                   {idx + 1}
@@ -1308,7 +1308,7 @@ export default function Carousel() {
                     <div className="text-[10px] font-mono text-zinc-500 mb-1.5">TYPE</div>
                     <div className="flex flex-wrap gap-1">
                       {["hook","tip","insight","problem","solution","step","result","cta","myth","truth","process","scene","tension","turning_point","loop","offer","psychology"].map(typeName => (
-                        <button
+                        <button type="button"
                           key={typeName}
                           onClick={() => updateSlideField(editingSlideIdx, "type", typeName)}
                           className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-colors duration-100"
@@ -1422,7 +1422,7 @@ export default function Carousel() {
                           {el.url ? `Image ${i + 1}` : "Drive Image"}
                         </span>
                       </div>
-                      <button
+                      <button type="button"
                         onClick={() => deleteImageElement(editingSlideIdx, el.id)}
                         className="text-zinc-600 hover:text-red-400 transition-colors ml-2 flex-shrink-0"
                         title="Remove element"
@@ -1450,7 +1450,7 @@ export default function Carousel() {
                     ? <img src={config.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover border border-zinc-700 flex-shrink-0" />
                     : <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex-shrink-0" />
                   }
-                  <button
+                  <button type="button"
                     onClick={() => authorPhotoInputRef.current?.click()}
                     disabled={authorPhotoUploading}
                     className="flex-1 py-1.5 text-[11px] font-mono border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-500 hover:text-white transition-colors duration-150 disabled:opacity-50"
@@ -1488,7 +1488,7 @@ export default function Carousel() {
                 placeholder="Carousel title" className="field" />
 
               {/* Delete slide */}
-              <button onClick={() => removeSlide(editingSlideIdx)}
+              <button type="button" onClick={() => removeSlide(editingSlideIdx)}
                 className="mt-5 flex items-center justify-center gap-2 py-2 text-xs font-mono text-zinc-600 border border-zinc-800 hover:border-red-900 hover:text-red-400 transition-colors duration-150">
                 <Trash2 size={11} /> Remove Slide {editingSlideIdx + 1}
               </button>

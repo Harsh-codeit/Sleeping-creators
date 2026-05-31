@@ -461,7 +461,7 @@ async def render_post_as_image(post: dict, client: dict, base_url: str) -> str:
     config = {
         "author_name":       author_name,
         "author_handle":     author_handle,
-        "author_title":      client.get("carousel_author_title") or client.get("industry", ""),
+        "author_title":      client.get("carousel_author_title") or client.get("niche") or client.get("industry", ""),
         "profile_photo_url": client.get("profile_photo_url", ""),
         "cta_heading":       carousel_data.get("cta_heading", "Found this helpful?"),
         "cta_sub":           carousel_data.get("cta_sub", "Follow for more insights like this"),
@@ -528,7 +528,7 @@ async def render_carousel_post_images(post: dict, client: dict, base_url: str, c
     config = {
         "author_name":       author_name,
         "author_handle":     author_handle,
-        "author_title":      client.get("carousel_author_title") or client.get("industry", ""),
+        "author_title":      client.get("carousel_author_title") or client.get("niche") or client.get("industry", ""),
         "profile_photo_url": client.get("profile_photo_url", ""),
         "cta_heading":       carousel_data.get("cta_heading", "Found this helpful?"),
         "cta_sub":           carousel_data.get("cta_sub", "Follow for more insights like this"),

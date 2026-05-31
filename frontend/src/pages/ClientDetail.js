@@ -241,12 +241,12 @@ function DriveVideosFolderCard({ client, clientId, setClient }) {
           {clipCount != null ? `${clipCount} clips synced` : "No clips synced"}
         </span>
         <div className="flex gap-2">
-          <button onClick={syncClips} disabled={syncing || !value.trim()}
+          <button type="button" onClick={syncClips} disabled={syncing || !value.trim()}
             className="px-3 py-1 border border-zinc-700 text-zinc-300 text-[10px] font-mono hover:bg-zinc-800 hover:text-white disabled:opacity-50 transition-colors">
             {syncing ? "Syncing..." : "Sync clips"}
           </button>
           {dirty && (
-            <button onClick={save} disabled={saving}
+            <button type="button" onClick={save} disabled={saving}
               className="px-3 py-1 bg-white text-black text-[10px] font-mono hover:bg-zinc-200 disabled:opacity-50 transition-colors">
               {saving ? "Saving..." : "Save"}
             </button>
@@ -295,7 +295,7 @@ function DriveImagesFolderCard({ client, clientId, setClient }) {
           {client.drive_images_index != null ? `${client.drive_images_index} exports cycled` : "No exports yet"}
         </span>
         {dirty && (
-          <button onClick={save} disabled={saving}
+          <button type="button" onClick={save} disabled={saving}
             className="px-3 py-1 bg-white text-black text-[10px] font-mono hover:bg-zinc-200 disabled:opacity-50 transition-colors">
             {saving ? "Saving..." : "Save"}
           </button>
@@ -702,7 +702,7 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
 
       {/* Save */}
       <div className="flex items-center justify-end pb-8">
-        <button onClick={onSave} disabled={saving} data-testid="save-edit-btn"
+        <button type="button" onClick={onSave} disabled={saving} data-testid="save-edit-btn"
           className="flex items-center gap-2 px-6 py-2.5 bg-white text-black text-sm font-semibold hover:bg-zinc-200 disabled:opacity-50 transition-colors duration-150">
           <Save size={14} />
           {saving ? "Saving..." : "Save Changes"}
@@ -759,7 +759,7 @@ function ProfilePhotoEditor({ client, setClient, clientId }) {
         data-testid="profile-photo-file-input"
       />
       <div className="flex gap-2">
-        <button
+        <button type="button"
           data-testid="upload-photo-btn"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
@@ -768,7 +768,7 @@ function ProfilePhotoEditor({ client, setClient, clientId }) {
           {uploading ? "Uploading..." : client.profile_photo_url ? "Change Photo" : "Upload Photo"}
         </button>
         {client.profile_photo_url && (
-          <button
+          <button type="button"
             onClick={removePhoto}
             className="px-3 py-1.5 text-xs border border-zinc-700 text-zinc-500 hover:text-red-400 hover:border-red-900 transition-colors duration-150"
           >
@@ -797,26 +797,28 @@ function CarouselAuthorCard({ client, setClient, clientId }) {
     carousel_author_title:  client.carousel_author_title  || profileTitle,
   });
   const [saving, setSaving] = useState(false);
+  const initRef = useRef(true);
 
-  async function save() {
-    setSaving(true);
-    try {
-      await axios.put(`${API}/clients/${clientId}`, form);
-      setClient(c => ({ ...c, ...form }));
-      toast.success("Author block saved");
-    } catch {
-      toast.error("Failed to save");
-    } finally { setSaving(false); }
-  }
-
-  const dirty =
-    form.carousel_author_name   !== (client.carousel_author_name   || "") ||
-    form.carousel_author_handle !== (client.carousel_author_handle || "") ||
-    form.carousel_author_title  !== (client.carousel_author_title  || "");
+  useEffect(() => {
+    if (initRef.current) { initRef.current = false; return; }
+    const t = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await axios.put(`${API}/clients/${clientId}`, form);
+        setClient(c => ({ ...c, ...form }));
+      } catch {
+        toast.error("Failed to save");
+      } finally { setSaving(false); }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [form]);
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 p-4">
-      <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">Carousel Author Block</div>
+      <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3 flex items-center gap-2">
+        Carousel Author Block
+        {saving && <span className="text-zinc-600">saving…</span>}
+      </div>
       <div className="space-y-2">
         <div>
           <div className="text-[9px] font-mono text-zinc-600 uppercase mb-1">Name</div>
@@ -845,15 +847,6 @@ function CarouselAuthorCard({ client, setClient, clientId }) {
             className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs px-2 py-1.5 font-mono placeholder:text-zinc-700 focus:border-zinc-500 focus:outline-none"
           />
         </div>
-        {dirty && (
-          <button
-            onClick={save}
-            disabled={saving}
-            className="w-full py-1.5 text-xs bg-white text-black font-semibold hover:bg-zinc-200 transition-colors disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -1109,7 +1102,7 @@ function PlatformsTab({ client, setClient, clientId }) {
             </div>
           </div>
           {bundleTeamId && (
-            <button
+            <button type="button"
               onClick={bundleRefresh}
               disabled={bundleRefreshLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50"
@@ -1143,7 +1136,7 @@ function PlatformsTab({ client, setClient, clientId }) {
                 })}
               </div>
             </div>
-            <button
+            <button type="button"
               onClick={bundleConnect}
               disabled={bundleConnectLoading}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-700 to-teal-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
@@ -1157,7 +1150,7 @@ function PlatformsTab({ client, setClient, clientId }) {
             <div className="text-xs font-mono text-zinc-500">
               No social accounts connected yet. Click below to set up publishing for this client.
             </div>
-            <button
+            <button type="button"
               onClick={bundleSetup}
               disabled={bundleSetupLoading}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-700 to-teal-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
@@ -1411,7 +1404,7 @@ function LeadsTab({ clientId, client, posts }) {
 
       {/* Config Toggle */}
       <div className="flex items-center justify-between">
-        <button
+        <button type="button"
           onClick={() => setShowConfig(!showConfig)}
           className="flex items-center gap-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors duration-150"
         >
@@ -1421,7 +1414,7 @@ function LeadsTab({ clientId, client, posts }) {
         </button>
         <div className="flex items-center gap-2">
           {filterStatus && (
-            <button onClick={() => setFilterStatus("")} className="text-[10px] font-mono text-zinc-500 hover:text-white border border-zinc-800 px-2 py-1">
+            <button type="button" onClick={() => setFilterStatus("")} className="text-[10px] font-mono text-zinc-500 hover:text-white border border-zinc-800 px-2 py-1">
               Clear filter <X size={10} className="inline ml-1" />
             </button>
           )}
@@ -1435,7 +1428,7 @@ function LeadsTab({ clientId, client, posts }) {
             <h3 className="text-xs font-mono text-zinc-400 uppercase tracking-widest">Keyword Monitoring Config</h3>
             <label className="flex items-center gap-2 cursor-pointer">
               <span className="text-[10px] font-mono text-zinc-500">{cfgEnabled ? "ENABLED" : "DISABLED"}</span>
-              <button
+              <button type="button"
                 onClick={() => setCfgEnabled(!cfgEnabled)}
                 className={`w-8 h-4 rounded-full transition-colors duration-150 ${cfgEnabled ? "bg-emerald-500" : "bg-zinc-700"}`}
               >
@@ -1483,7 +1476,7 @@ function LeadsTab({ clientId, client, posts }) {
                 onChange={handleCfgFileUpload}
                 className="hidden"
               />
-              <button
+              <button type="button"
                 onClick={() => cfgFileRef.current?.click()}
                 disabled={cfgUploading}
                 className="flex items-center gap-1.5 text-xs font-mono text-zinc-400 hover:text-white border border-zinc-700 px-3 py-2 transition-colors duration-150 disabled:opacity-50"
@@ -1494,7 +1487,7 @@ function LeadsTab({ clientId, client, posts }) {
               {cfgDmFileUrl && (
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="text-xs text-emerald-400 truncate flex-1">{cfgDmFileUrl.split("/").pop()}</span>
-                  <button onClick={() => setCfgDmFileUrl("")} className="text-zinc-600 hover:text-red-400"><X size={12} /></button>
+                  <button type="button" onClick={() => setCfgDmFileUrl("")} className="text-zinc-600 hover:text-red-400"><X size={12} /></button>
                 </div>
               )}
             </div>
@@ -1527,7 +1520,7 @@ function LeadsTab({ clientId, client, posts }) {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button
+            <button type="button"
               onClick={saveConfig}
               disabled={savingConfig}
               className="flex items-center gap-1.5 bg-white text-black px-4 py-2 text-xs font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
@@ -1536,7 +1529,7 @@ function LeadsTab({ clientId, client, posts }) {
               {savingConfig ? "Saving..." : "Save Config"}
             </button>
             {config?.keywords?.length > 0 && (
-              <button
+              <button type="button"
                 onClick={deleteConfig}
                 className="flex items-center gap-1.5 text-xs font-mono text-red-400 hover:text-red-300 border border-red-900 px-3 py-2 transition-colors duration-150"
               >
@@ -1614,14 +1607,14 @@ function LeadsTab({ clientId, client, posts }) {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      <button
+                      <button type="button"
                         onClick={() => { setDmModal(lead); setDmText(""); setDmFileUrl(""); }}
                         title="Send DM"
                         className="p-1.5 text-zinc-500 hover:text-white transition-colors duration-150"
                       >
                         <Send size={13} />
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => { setReplyModal(lead); setReplyText(""); }}
                         title="Reply to comment"
                         className="p-1.5 text-zinc-500 hover:text-white transition-colors duration-150"
@@ -1629,7 +1622,7 @@ function LeadsTab({ clientId, client, posts }) {
                         <MessageCircle size={13} />
                       </button>
                       {lead.status !== "converted" && (
-                        <button
+                        <button type="button"
                           onClick={() => updateLeadStatus(lead.id, "converted")}
                           title="Mark as converted"
                           className="p-1.5 text-zinc-500 hover:text-purple-400 transition-colors duration-150"
@@ -1638,7 +1631,7 @@ function LeadsTab({ clientId, client, posts }) {
                         </button>
                       )}
                       {lead.status !== "ignored" && (
-                        <button
+                        <button type="button"
                           onClick={() => updateLeadStatus(lead.id, "ignored")}
                           title="Ignore"
                           className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors duration-150"
@@ -1646,7 +1639,7 @@ function LeadsTab({ clientId, client, posts }) {
                           <Eye size={13} />
                         </button>
                       )}
-                      <button
+                      <button type="button"
                         onClick={() => deleteLead(lead.id)}
                         title="Delete lead"
                         className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors duration-150"
@@ -1668,7 +1661,7 @@ function LeadsTab({ clientId, client, posts }) {
           <div className="bg-zinc-900 border border-zinc-700 w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-mono text-white">Send DM to @{dmModal.username}</h3>
-              <button onClick={() => setDmModal(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+              <button type="button" onClick={() => setDmModal(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
             </div>
             <p className="text-[10px] text-zinc-500">Note: DMs only work if the user has messaged your account first (Instagram policy)</p>
             <div>
@@ -1679,7 +1672,7 @@ function LeadsTab({ clientId, client, posts }) {
               <ELabel optional>Attach File</ELabel>
               <div className="flex items-center gap-2">
                 <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,video/mp4" onChange={handleDmFileUpload} className="hidden" />
-                <button
+                <button type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingFile}
                   className="flex items-center gap-1.5 text-xs font-mono text-zinc-400 hover:text-white border border-zinc-700 px-3 py-2 transition-colors duration-150 disabled:opacity-50"
@@ -1690,7 +1683,7 @@ function LeadsTab({ clientId, client, posts }) {
                 {dmFileUrl && <span className="text-xs text-emerald-400 truncate flex-1">{dmFileUrl.split("/").pop()}</span>}
               </div>
             </div>
-            <button
+            <button type="button"
               onClick={sendDm}
               disabled={sendingDm || (!dmText && !dmFileUrl)}
               className="w-full bg-white text-black py-2 text-xs font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1708,7 +1701,7 @@ function LeadsTab({ clientId, client, posts }) {
           <div className="bg-zinc-900 border border-zinc-700 w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-mono text-white">Reply to @{replyModal.username}'s comment</h3>
-              <button onClick={() => setReplyModal(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+              <button type="button" onClick={() => setReplyModal(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
             </div>
             <div className="bg-zinc-950 border border-zinc-800 p-3">
               <p className="text-xs text-zinc-400 italic">"{replyModal.comment_text}"</p>
@@ -1717,7 +1710,7 @@ function LeadsTab({ clientId, client, posts }) {
               <ELabel>Your Reply</ELabel>
               <ETextarea value={replyText} onChange={e => setReplyText(e.target.value)} placeholder="Type your reply..." rows={2} />
             </div>
-            <button
+            <button type="button"
               onClick={sendReply}
               disabled={sendingReply || !replyText.trim()}
               className="w-full bg-white text-black py-2 text-xs font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1788,7 +1781,7 @@ export default function ClientDetail() {
       const loveTopics = Array.isArray(ob.love_topics) ? ob.love_topics.filter(Boolean) : [];
       const defaultThemes = [ob.niche, ob.signature_topic, ...loveTopics].filter(Boolean).join(", ");
       const savedHashtags = (s.hashtags || []).join(", ");
-      const defaultHashtags = savedHashtags || (clientResp.data.industry || "")
+      const defaultHashtags = savedHashtags || (clientResp.data.niche || clientResp.data.industry || "")
         .split(/[\s/,]+/)
         .map(w => w.trim())
         .filter(w => w.length > 1)
@@ -2048,7 +2041,7 @@ export default function ClientDetail() {
   if (!client) {
     return <div className="flex flex-col items-center justify-center h-full gap-4">
       <div className="text-zinc-500 font-mono">Client not found</div>
-      <button onClick={() => navigate("/clients")} className="text-xs text-white underline">Back to clients</button>
+      <button type="button" onClick={() => navigate("/clients")} className="text-xs text-white underline">Back to clients</button>
     </div>;
   }
 
@@ -2056,7 +2049,7 @@ export default function ClientDetail() {
     <div className="p-6" data-testid="client-detail-page">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate("/clients")} className="p-1.5 text-zinc-500 hover:text-white border border-zinc-800 hover:bg-zinc-800 transition-colors duration-150">
+        <button type="button" onClick={() => navigate("/clients")} className="p-1.5 text-zinc-500 hover:text-white border border-zinc-800 hover:bg-zinc-800 transition-colors duration-150">
           <ArrowLeft size={14} />
         </button>
         <div className="flex items-center gap-3 flex-1">
@@ -2069,11 +2062,11 @@ export default function ClientDetail() {
               <Circle size={7} className={`fill-current ${STATUS_DOT[client.status] || "text-zinc-500"}`} />
               <span className="text-xs font-mono text-zinc-500 capitalize">{client.status}</span>
             </div>
-            <div className="text-xs text-zinc-500 font-mono">{client.carousel_author_title || client.industry}</div>
+            <div className="text-xs text-zinc-500 font-mono">{client.carousel_author_title || client.niche || client.industry}</div>
           </div>
         </div>
         <div className="flex gap-2">
-          <button
+          <button type="button"
             data-testid="generate-bulk-btn"
             onClick={openGenerateModal}
             disabled={generating}
@@ -2082,7 +2075,7 @@ export default function ClientDetail() {
             <Wand2 size={12} className={generating ? "animate-spin" : ""} />
             {generating ? "Generating..." : "AI Generate"}
           </button>
-          <button
+          <button type="button"
             data-testid="toggle-status-btn"
             onClick={toggleClientStatus}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs border transition-colors duration-150 ${
@@ -2127,7 +2120,7 @@ export default function ClientDetail() {
       {/* Tabs */}
       <div className="flex border-b border-zinc-800 mb-6">
         {TABS.map(tab => (
-          <button
+          <button type="button"
             key={tab}
             data-testid={`tab-${tab.toLowerCase()}`}
             onClick={() => setActiveTab(tab)}
@@ -2174,7 +2167,7 @@ export default function ClientDetail() {
                   <div className="text-xs font-mono text-zinc-300">Auto-publish story</div>
                   <div className="text-[10px] font-mono text-zinc-600 mt-0.5">Post a story with every Instagram publish</div>
                 </div>
-                <button
+                <button type="button"
                   onClick={async () => {
                     const next = !(client.auto_story_enabled ?? true);
                     setClient(c => ({ ...c, auto_story_enabled: next }));
@@ -2208,7 +2201,7 @@ export default function ClientDetail() {
               { key: "week",     label: "Week Plan" },
               { key: "report",   label: "Report" },
             ].map(({ key, label }) => (
-              <button
+              <button type="button"
                 key={key}
                 onClick={() => setStrategyTab(key)}
                 className={`px-4 py-1.5 text-xs font-mono uppercase border-r border-zinc-800 last:border-0 transition-colors ${
@@ -2279,7 +2272,7 @@ export default function ClientDetail() {
                   {strategyForm.topics_include.map((entry, i) => (
                     <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-950 border border-emerald-800 text-emerald-400 text-xs">
                       {entry.text}
-                      <button
+                      <button type="button"
                         onClick={() => setStrategyForm(f => ({
                           ...f,
                           topics_include: f.topics_include.map((e, j) =>
@@ -2295,7 +2288,7 @@ export default function ClientDetail() {
                       >
                         {entry.type === "mention" ? "mention" : "topic"}
                       </button>
-                      <button
+                      <button type="button"
                         onClick={() => setStrategyForm(f => ({ ...f, topics_include: f.topics_include.filter((_, j) => j !== i) }))}
                         className="text-emerald-600 hover:text-emerald-300 transition-colors"
                       >
@@ -2333,7 +2326,7 @@ export default function ClientDetail() {
                   {(client?.onboarding_data?.not_to_do_list || []).filter(Boolean).map((tag, i) => (
                     <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-950 border border-rose-800 text-rose-400 text-xs">
                       {tag}
-                      <button
+                      <button type="button"
                         onClick={async () => {
                           const updated = (client.onboarding_data.not_to_do_list || []).filter((_, j) => j !== i);
                           try {
@@ -2449,7 +2442,7 @@ export default function ClientDetail() {
                       className="w-full bg-zinc-950 border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 resize-none transition-colors duration-200 font-mono leading-relaxed"
                     />
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => setStrategyForm(f => ({
                       ...f,
                       video_hooks: f.video_hooks.filter((_, j) => j !== i)
@@ -2464,7 +2457,7 @@ export default function ClientDetail() {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
+              <button type="button"
                 onClick={() => setStrategyForm(f => ({
                   ...f,
                   video_hooks: [
@@ -2476,7 +2469,7 @@ export default function ClientDetail() {
               >
                 <Plus size={12} /> Add hook
               </button>
-              <button
+              <button type="button"
                 onClick={() => setHookGenOpen(o => !o)}
                 className={`border border-dashed transition-colors duration-200 px-3 py-2.5 text-[11px] font-mono flex items-center justify-center gap-1.5 ${
                   hookGenOpen
@@ -2505,14 +2498,14 @@ export default function ClientDetail() {
                     Uses {client?.name || "client"}'s niche, voice, and topic rules.
                   </p>
                   <div className="flex gap-2 flex-shrink-0">
-                    <button
+                    <button type="button"
                       onClick={() => { setHookGenOpen(false); setHookGenKeyword(""); }}
                       disabled={hookGenLoading}
                       className="border border-zinc-700 text-zinc-400 text-[11px] font-mono hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5 disabled:opacity-40"
                     >
                       Cancel
                     </button>
-                    <button
+                    <button type="button"
                       onClick={generateHook}
                       disabled={hookGenLoading}
                       className="bg-white text-black text-[11px] font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40"
@@ -2554,7 +2547,7 @@ export default function ClientDetail() {
             </div>
           </div>
 
-          <button
+          <button type="button"
             data-testid="save-strategy-btn"
             onClick={saveStrategy}
             disabled={saving}
@@ -2603,7 +2596,7 @@ export default function ClientDetail() {
             {/* Kind filter row */}
             <div className="flex items-center gap-1.5 mb-3 flex-wrap">
               {KINDS.map(k => (
-                <button
+                <button type="button"
                   key={k.value}
                   onClick={() => setPostKindFilter(k.value)}
                   className={`px-2.5 py-1 text-[11px] font-mono border transition-colors duration-150 flex items-center gap-1.5 ${
@@ -2621,7 +2614,7 @@ export default function ClientDetail() {
             {filtered.length === 0 ? (
               <div className="py-8 text-center text-zinc-600 font-mono text-sm">
                 {posts.length === 0 ? (
-                  <>No posts yet. <button onClick={openGenerateModal} className="text-white underline ml-1">Generate with AI</button></>
+                  <>No posts yet. <button type="button" onClick={openGenerateModal} className="text-white underline ml-1">Generate with AI</button></>
                 ) : (
                   <>No {postKindFilter} posts.</>
                 )}
@@ -2686,26 +2679,26 @@ export default function ClientDetail() {
                           </div>
                           <div className="flex items-center gap-0.5">
                             {isVideo && post.r2_video_url && (
-                              <button onClick={() => setViewingVideoPost(post)} title="Preview video" className="p-1 text-zinc-600 hover:text-white transition-colors">
+                              <button type="button" onClick={() => setViewingVideoPost(post)} title="Preview video" className="p-1 text-zinc-600 hover:text-white transition-colors">
                                 <Eye size={11} />
                               </button>
                             )}
                             {actions.retry && (
-                              <button onClick={() => retryRender(post)} disabled={retryingPostId === post.id} title="Retry render" className="p-1 text-zinc-600 hover:text-cyan-400 transition-colors disabled:opacity-40">
+                              <button type="button" onClick={() => retryRender(post)} disabled={retryingPostId === post.id} title="Retry render" className="p-1 text-zinc-600 hover:text-cyan-400 transition-colors disabled:opacity-40">
                                 <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
                               </button>
                             )}
                             {actions.rerender && (
-                              <button onClick={() => retryRender(post)} disabled={retryingPostId === post.id} title="Re-render" className="p-1 text-zinc-600 hover:text-violet-400 transition-colors disabled:opacity-40">
+                              <button type="button" onClick={() => retryRender(post)} disabled={retryingPostId === post.id} title="Re-render" className="p-1 text-zinc-600 hover:text-violet-400 transition-colors disabled:opacity-40">
                                 <RefreshCw size={11} className={retryingPostId === post.id ? "animate-spin" : ""} />
                               </button>
                             )}
                             {actions.publish && (
-                              <button onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors disabled:opacity-40">
+                              <button type="button" onClick={() => publishPost(post)} disabled={!!post._publishing} className="p-1 text-zinc-600 hover:text-blue-400 transition-colors disabled:opacity-40">
                                 <Send size={11} />
                               </button>
                             )}
-                            <button
+                            <button type="button"
                               onClick={() => toggleWinner(post)}
                               disabled={togglingWinner === post.id}
                               title={post.is_winner ? "Remove from Dropbox" : "Add to Dropbox"}
@@ -2713,7 +2706,7 @@ export default function ClientDetail() {
                             >
                               <Star size={11} className={post.is_winner ? "fill-current" : ""} />
                             </button>
-                            <button onClick={() => deletePost(post.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors">
+                            <button type="button" onClick={() => deletePost(post.id)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors">
                               <Trash2 size={11} />
                             </button>
                           </div>
@@ -2742,7 +2735,7 @@ export default function ClientDetail() {
                       </div>
                       <StatusBadge status={viewingVideoPost.status} />
                     </div>
-                    <button onClick={() => setViewingVideoPost(null)} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
+                    <button type="button" onClick={() => setViewingVideoPost(null)} className="text-zinc-500 hover:text-white transition-colors"><X size={14} /></button>
                   </div>
                   <div className="overflow-y-auto">
                     {viewingVideoPost.r2_video_url ? (
@@ -2973,7 +2966,7 @@ function DropboxTab({ clientId }) {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <button
+                    <button type="button"
                       onClick={() => togglePromote(post)}
                       disabled={promoting === post.id}
                       aria-label={post.promoted_global ? "Remove from Global Library" : "Promote to Global Library"}
@@ -3109,7 +3102,7 @@ function TrendsTab({ clientId, client }) {
             <div className="text-[10px] font-mono text-zinc-600 mt-0.5">No trend data yet — auto-refresh runs every 6 hours</div>
           )}
         </div>
-        <button
+        <button type="button"
           onClick={handleRefresh}
           disabled={refreshing}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-50"
@@ -3162,7 +3155,7 @@ function TrendsTab({ clientId, client }) {
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 border border-emerald-800 bg-emerald-950 text-[10px] font-mono text-emerald-400"
                 >
                   {kw}
-                  <button
+                  <button type="button"
                     onClick={() => handleRemoveKeyword(kw)}
                     disabled={savingKeywords}
                     aria-label={`Remove ${kw}`}
@@ -3190,7 +3183,7 @@ function TrendsTab({ clientId, client }) {
               disabled={savingKeywords}
               className="flex-1 bg-zinc-800 border border-zinc-700 px-2 py-1 text-[10px] font-mono text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
             />
-            <button
+            <button type="button"
               onClick={handleAddKeyword}
               disabled={savingKeywords || !newKeyword.trim()}
               className="px-3 py-1 text-[10px] font-mono border border-zinc-600 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-40"
@@ -3404,7 +3397,7 @@ function AppsTab({ clientId, client }) {
           <div className="flex-shrink-0 flex items-center gap-2">
             {sheetInfo?.connected ? (
               <>
-                <button
+                <button type="button"
                   onClick={handleSync}
                   disabled={syncing}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-50"
@@ -3423,7 +3416,7 @@ function AppsTab({ clientId, client }) {
                 </a>
               </>
             ) : (
-              <button
+              <button type="button"
                 onClick={() => setShowModal(true)}
                 className="flex items-center gap-2 px-4 py-2 text-xs border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150"
               >
@@ -3446,7 +3439,7 @@ function AppsTab({ clientId, client }) {
           <div className="bg-zinc-900 border border-zinc-800 p-6 w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-white">Create Google Sheet</div>
-              <button onClick={() => setShowModal(false)} className="text-zinc-500 hover:text-zinc-300">
+              <button type="button" onClick={() => setShowModal(false)} className="text-zinc-500 hover:text-zinc-300">
                 <X size={14} />
               </button>
             </div>
@@ -3466,13 +3459,13 @@ function AppsTab({ clientId, client }) {
               />
             </div>
             <div className="flex gap-2 justify-end pt-1">
-              <button
+              <button type="button"
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-xs font-mono text-zinc-500 border border-zinc-800 hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={handleCreate}
                 disabled={creating || !email}
                 className="px-4 py-2 text-xs font-mono text-white border border-emerald-700 bg-emerald-900 hover:bg-emerald-800 disabled:opacity-50 transition-colors"
@@ -3507,7 +3500,7 @@ function GenerateCarouselModal({ templates, platforms, onGenerate, onClose }) {
       <div className="bg-zinc-900 border border-zinc-700 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <h2 className="text-sm font-semibold text-white">Generate Carousel</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-white"><X size={16} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
