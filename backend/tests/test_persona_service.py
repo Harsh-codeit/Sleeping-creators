@@ -85,3 +85,47 @@ def test_is_persona_fresh():
 def test_signal_returns_empty_on_missing_inputs():
     assert _run(persona_service.fetch_persona_signal(None, MagicMock())) == []
     assert _run(persona_service.fetch_persona_signal("c1", None)) == []
+
+
+import json
+
+
+def _mock_anthropic_returning(persona_dict):
+    msg = MagicMock()
+    msg.content = [MagicMock(text=json.dumps(persona_dict))]
+    msg.model = "claude-haiku-4-5-20251001"
+    msg.usage = MagicMock(input_tokens=10, output_tokens=20)
+    client = MagicMock()
+    client.messages.create.return_value = msg
+    return client
+
+
+def test_build_persona_prompt_includes_signal_text():
+    client = {"name": "Acme", "industry": "Fintech", "onboarding_data": {"niche": "SIP investing"}}
+    signal = [{"text": "Stop checking your portfolio daily"}, {"caption": "The 8% myth"}]
+    prompt = persona_service._build_persona_prompt(client, signal)
+    assert "Acme" in prompt
+    assert "SIP investing" in prompt
+    assert "Stop checking your portfolio daily" in prompt
+    assert "The 8% myth" in prompt
+
+
+def test_parse_persona_strips_fences():
+    raw = '```json\n{"voice": "blunt", "version": 99}\n```'
+    parsed = persona_service._parse_persona(raw)
+    assert parsed["voice"] == "blunt"
+
+
+def test_build_persona_returns_stamped_dict(monkeypatch):
+    client = {"id": "c1", "name": "Acme", "industry": "Fintech", "onboarding_data": {}}
+    ai = _mock_anthropic_returning({
+        "voice": "blunt", "signature_traits": ["short"], "recurring_themes": ["sip"],
+        "winning_patterns": [], "audience_portrait": "investors", "avoid": [],
+    })
+    monkeypatch.setattr(persona_service, "_anthropic_client", lambda: ai)
+    db = _fake_db([{"text": "w"}], [])
+    persona = _run(persona_service.build_persona(client, [{"text": "sample post"}], db))
+    assert persona["voice"] == "blunt"
+    assert persona["version"] == persona_service.PERSONA_VERSION
+    assert persona["source"] in ("onboarding", "weekly_refresh")
+    assert "updated_at" in persona
