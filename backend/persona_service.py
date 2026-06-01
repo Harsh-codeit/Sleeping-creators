@@ -173,3 +173,36 @@ async def build_persona(client: dict, signal_posts: list[dict], db) -> dict | No
     data["source"] = "weekly_refresh" if signal_posts else "onboarding"
     data["based_on_post_ids"] = [p.get("id") for p in signal_posts if p.get("id")]
     return data
+
+
+async def _store_persona(client_id: str, persona: dict, db) -> None:
+    if not client_id or db is None or not persona:
+        return
+    try:
+        await db.clients.update_one({"id": client_id}, {"$set": {"persona": persona}})
+    except Exception as e:
+        logger.warning(f"_store_persona failed for {client_id} ({e})")
+
+
+async def get_or_build_persona(client: dict, db) -> dict | None:
+    """Return the client's persona, building+storing one if missing/stale. Fails open to None."""
+    existing = client.get("persona")
+    if is_persona_fresh(existing):
+        return existing
+    signal = await fetch_persona_signal(client.get("id"), db)
+    persona = await build_persona(client, signal, db)
+    if persona:
+        await _store_persona(client.get("id"), persona, db)
+        return persona
+    # Build failed — keep any existing (even if stale) rather than nothing.
+    return existing
+
+
+async def refresh_persona_for_client(client: dict, db) -> dict | None:
+    """Force a rebuild regardless of freshness (weekly job). Fails open to existing."""
+    signal = await fetch_persona_signal(client.get("id"), db)
+    persona = await build_persona(client, signal, db)
+    if persona:
+        await _store_persona(client.get("id"), persona, db)
+        return persona
+    return client.get("persona")

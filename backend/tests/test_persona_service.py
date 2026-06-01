@@ -130,3 +130,38 @@ def test_build_persona_returns_stamped_dict(monkeypatch):
     assert persona["version"] == persona_service.PERSONA_VERSION
     assert persona["source"] in ("onboarding", "weekly_refresh")
     assert "updated_at" in persona
+
+
+def test_get_or_build_returns_cached_when_fresh(monkeypatch):
+    fresh = {"voice": "cached", "version": persona_service.PERSONA_VERSION,
+             "updated_at": datetime.now(timezone.utc).isoformat()}
+    client = {"id": "c1", "name": "Acme", "persona": fresh}
+    # Should NOT call build_persona
+    monkeypatch.setattr(persona_service, "build_persona",
+                        AsyncMock(side_effect=AssertionError("should not rebuild")))
+    db = _fake_db([], [])
+    out = _run(persona_service.get_or_build_persona(client, db))
+    assert out["voice"] == "cached"
+
+
+def test_get_or_build_builds_and_stores_when_missing(monkeypatch):
+    client = {"id": "c1", "name": "Acme"}
+    built = {"voice": "new", "version": persona_service.PERSONA_VERSION,
+             "updated_at": datetime.now(timezone.utc).isoformat()}
+    monkeypatch.setattr(persona_service, "fetch_persona_signal", AsyncMock(return_value=[{"text": "x"}]))
+    monkeypatch.setattr(persona_service, "build_persona", AsyncMock(return_value=built))
+    db = MagicMock()
+    db.clients.update_one = AsyncMock(return_value=None)
+    out = _run(persona_service.get_or_build_persona(client, db))
+    assert out["voice"] == "new"
+    db.clients.update_one.assert_awaited_once()
+
+
+def test_get_or_build_fails_open_to_none(monkeypatch):
+    client = {"id": "c1", "name": "Acme"}
+    monkeypatch.setattr(persona_service, "fetch_persona_signal", AsyncMock(return_value=[]))
+    monkeypatch.setattr(persona_service, "build_persona", AsyncMock(return_value=None))
+    db = MagicMock()
+    db.clients.update_one = AsyncMock(return_value=None)
+    out = _run(persona_service.get_or_build_persona(client, db))
+    assert out is None
