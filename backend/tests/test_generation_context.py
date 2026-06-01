@@ -31,6 +31,14 @@ def _mock_client(resp):
     return c
 
 
+def _system_text(mock_ai_client):
+    """Return system prompt as a string whether it's a str or list of content blocks."""
+    val = mock_ai_client.messages.create.call_args.kwargs.get("system", "")
+    if isinstance(val, str):
+        return val
+    return " ".join(b.get("text", "") for b in val)
+
+
 def test_single_pass_injects_persona_block():
     mock = _mock_client(_carousel_response())
     _run(ai_service._generate_carousel_single_pass(
@@ -40,7 +48,7 @@ def test_single_pass_injects_persona_block():
         global_instructions=None, trend_context="",
         persona_block="\n\nCLIENT PERSONA (write in this exact voice...):\nVoice: blunt ex-founder",
     ))
-    system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock)
     assert "CLIENT PERSONA" in system_prompt
     assert "blunt ex-founder" in system_prompt
 
@@ -112,7 +120,7 @@ def test_single_pass_injects_recent_text_memory():
         global_instructions=None, trend_context="",
         recent_text_memory="\n\nRECENTLY USED OPENINGS — do NOT reuse:\n- \"old hook\"",
     ))
-    system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock)
     assert "RECENTLY USED OPENINGS" in system_prompt
     assert "old hook" in system_prompt
 
@@ -126,7 +134,7 @@ def test_single_pass_appends_similarity_retry_note():
         global_instructions=None, trend_context="",
         similarity_retry_note="Your opening was too similar. Rewrite completely.",
     ))
-    system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock)
     assert "too similar" in system_prompt.lower()
 
 
@@ -178,5 +186,25 @@ def test_single_pass_passes_tools_to_model():
     assert "tools" in kwargs
     names = [t.get("name") for t in kwargs["tools"]]
     assert "search_trends" in names
-    system_prompt = kwargs.get("system", "")
+    system_prompt = _system_text(mock)
     assert "search_trends" in system_prompt
+
+
+def test_single_pass_uses_cached_system_blocks():
+    mock = _mock_client(_carousel_response())
+    mock.messages.create.return_value.stop_reason = "end_turn"
+    _run(ai_service._generate_carousel_single_pass(
+        mock, {"id": "c1", "name": "Acme", "industry": "Tech"}, {"language": "English"},
+        topic="t", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None, hook_inspiration=None,
+        global_instructions=None, trend_context="", db=_fake_memory_db([]),
+    ))
+    system = mock.messages.create.call_args.kwargs.get("system")
+    assert isinstance(system, list), "system must be a list of content blocks for caching"
+    # First block is the cached static persona/format prefix.
+    assert system[0].get("cache_control", {}).get("type") == "ephemeral"
+    assert "world-class Instagram content strategist" in system[0]["text"]
+    # Client-specific text must NOT be in the cached prefix.
+    assert "Acme" not in system[0]["text"]
+    # Dynamic block carries the client context.
+    assert any("Acme" in b["text"] for b in system[1:])

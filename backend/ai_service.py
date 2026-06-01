@@ -897,7 +897,30 @@ async def _generate_carousel_single_pass(
 
     _topic_rules = _build_topic_rules_block(client)
     _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
-    system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
+
+    # ── Static cacheable prefix (byte-identical across all clients/posts) ─────
+    static_prefix = _CAROUSEL_STRATEGIST_PERSONA
+    if slide_format:
+        static_prefix += "\n\n" + (
+            f"FORMAT — {slide_format} (locked by caller):\n"
+            f"{_SLIDE_FORMAT_GUIDANCE.get(slide_format, _SLIDE_FORMAT_GUIDANCE['tips'])}"
+        )
+    else:
+        _all_formats = "\n\n".join(
+            f"-- {fmt} --\n{guide}" for fmt, guide in _SLIDE_FORMAT_GUIDANCE.items()
+        )
+        static_prefix += "\n\n" + (
+            f"FORMAT — choose one:\n{_FORMAT_PICKER_GUIDE}\n\n"
+            f"Once you pick the format, follow ITS guidance below:\n\n{_all_formats}"
+        )
+    static_prefix += (
+        "\n\nTOOLS:\nYou have a search_trends tool. Before finalizing slide 1 and 2, call it once "
+        "with the angle/keywords you intend to use, to ground the hook in what is trending right now. "
+        "Use it at most twice. If it returns nothing, proceed without trends — never invent fake trends."
+    )
+
+    # ── Dynamic suffix (per-client, per-call) ─────────────────────────────────
+    dynamic_suffix = f"""{_topic_rules_prefix}
 {india_block}
 CLIENT CONTEXT:
 You are writing for {name} ({industry}).
@@ -910,7 +933,6 @@ ASSIGNMENT:
 Write a {slide_count}-slide {platform} carousel.
 {topic_line}
 
-{format_block}
 {hook_anchor_block}
 {hook_block}
 {cta_block}
@@ -950,16 +972,16 @@ Respond ONLY with valid JSON (no markdown, no commentary):
 }}"""
 
     if global_instructions and global_instructions.strip():
-        system_msg += f"\n\nGLOBAL INSTRUCTIONS:\n{global_instructions.strip()}"
+        dynamic_suffix += f"\n\nGLOBAL INSTRUCTIONS:\n{global_instructions.strip()}"
 
     if similarity_retry_note:
-        system_msg += f"\n\nREGENERATION CONSTRAINT:\n{similarity_retry_note}"
+        dynamic_suffix += f"\n\nREGENERATION CONSTRAINT:\n{similarity_retry_note}"
 
-    system_msg += (
-        "\n\nTOOLS:\nYou have a search_trends tool. Before finalizing slide 1 and 2, call it once "
-        "with the angle/keywords you intend to use, to ground the hook in what is trending right now. "
-        "Use it at most twice. If it returns nothing, proceed without trends — never invent fake trends."
-    )
+    # ── Assemble as content blocks for prompt caching ─────────────────────────
+    system_blocks = [
+        {"type": "text", "text": static_prefix, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": dynamic_suffix},
+    ]
 
     trend_user = (trend_context.strip() + "\n\n") if trend_context and trend_context.strip() else ""
 
@@ -972,7 +994,7 @@ Respond ONLY with valid JSON (no markdown, no commentary):
     message = await _run_generation_with_tools(
         ai_client,
         model="claude-sonnet-4-5",
-        system=system_msg,
+        system=system_blocks,
         user=f"{trend_user}Write the {slide_count} slides now. Make it scroll-stopping for {platform}. Satisfy every quality gate before you stop.",
         max_tokens=dynamic_max_tokens,
         tools=[SEARCH_TRENDS_TOOL],
