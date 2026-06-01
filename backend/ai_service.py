@@ -955,20 +955,30 @@ Respond ONLY with valid JSON (no markdown, no commentary):
     if similarity_retry_note:
         system_msg += f"\n\nREGENERATION CONSTRAINT:\n{similarity_retry_note}"
 
+    system_msg += (
+        "\n\nTOOLS:\nYou have a search_trends tool. Before finalizing slide 1 and 2, call it once "
+        "with the angle/keywords you intend to use, to ground the hook in what is trending right now. "
+        "Use it at most twice. If it returns nothing, proceed without trends — never invent fake trends."
+    )
+
     trend_user = (trend_context.strip() + "\n\n") if trend_context and trend_context.strip() else ""
 
     # Dynamic token budget: ~200 tokens per slide for body + ~500 for title/strategy/metadata.
     # Caps at Sonnet 4.5's 8192 ceiling. Saves cost on small carousels, preserves headroom on large ones.
     dynamic_max_tokens = min(8192, 500 + slide_count * 200)
 
-    message = ai_client.messages.create(
+    from trend_tool import SEARCH_TRENDS_TOOL, run_search_trends
+    _max_tool_calls = 2
+    message = await _run_generation_with_tools(
+        ai_client,
         model="claude-sonnet-4-5",
-        max_tokens=dynamic_max_tokens,
         system=system_msg,
-        messages=[{
-            "role": "user",
-            "content": f"{trend_user}Write the {slide_count} slides now. Make it scroll-stopping for {platform}. Satisfy every quality gate before you stop.",
-        }],
+        user=f"{trend_user}Write the {slide_count} slides now. Make it scroll-stopping for {platform}. Satisfy every quality gate before you stop.",
+        max_tokens=dynamic_max_tokens,
+        tools=[SEARCH_TRENDS_TOOL],
+        handlers={"search_trends": run_search_trends},
+        max_tool_calls=_max_tool_calls,
+        db=db, client=client, generation_type="carousel_single_pass",
     )
     data = _parse_json_response(message.content[0].text)
     # Sonnet occasionally overshoots the requested slide_count under the hook quality

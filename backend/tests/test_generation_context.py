@@ -52,6 +52,8 @@ def _fake_memory_db(rows):
     cursor.limit.return_value = cursor
     cursor.to_list = AsyncMock(return_value=rows)
     db.posts.find.return_value = cursor
+    # record_usage path: db.token_usage.insert_one must be awaitable
+    db.token_usage.insert_one = AsyncMock(return_value=None)
     return db
 
 
@@ -160,3 +162,21 @@ def test_generate_carousel_regenerates_once_on_duplicate(monkeypatch):
     ))
     assert calls["n"] == 2, "expected exactly one regeneration on a duplicate hook"
     assert "hiring mistakes" in result["slides"][0]["content"]
+
+
+def test_single_pass_passes_tools_to_model():
+    mock = _mock_client(_carousel_response())
+    # add stop_reason so the loop terminates immediately
+    mock.messages.create.return_value.stop_reason = "end_turn"
+    _run(ai_service._generate_carousel_single_pass(
+        mock, {"id": "c1", "name": "Acme", "industry": "Tech"}, {"language": "English"},
+        topic="t", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None, hook_inspiration=None,
+        global_instructions=None, trend_context="", db=_fake_memory_db([]),
+    ))
+    kwargs = mock.messages.create.call_args.kwargs
+    assert "tools" in kwargs
+    names = [t.get("name") for t in kwargs["tools"]]
+    assert "search_trends" in names
+    system_prompt = kwargs.get("system", "")
+    assert "search_trends" in system_prompt
