@@ -898,7 +898,7 @@ async def _generate_carousel_single_pass(
     _topic_rules = _build_topic_rules_block(client)
     _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
 
-    # ── Static cacheable prefix (byte-identical across all clients/posts) ─────
+    # ── Static cacheable prefix (client-agnostic; varies only by slide_format variant) ─────
     static_prefix = _CAROUSEL_STRATEGIST_PERSONA
     if slide_format:
         static_prefix += "\n\n" + (
