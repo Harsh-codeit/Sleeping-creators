@@ -1897,6 +1897,22 @@ async def refresh_all_trends():
         logger.error(f"refresh_all_trends error: {e}")
         await add_log("error", f"Trend refresh scheduler failed: {e}")
 
+async def refresh_all_personas():
+    """Scheduler job: rebuild each active client's content persona from winners (else recent posts).
+    Per-client try/except so one failure never halts the batch."""
+    import persona_service
+    try:
+        clients = await db.clients.find({"status": "active"}, {"_id": 0}).to_list(1000)
+        for client in clients:
+            try:
+                persona = await persona_service.refresh_persona_for_client(client, db)
+                if persona:
+                    logger.info(f"Persona refreshed for client {client.get('id')}")
+            except Exception as e:
+                logger.error(f"Persona refresh failed for client {client.get('id')}: {e}")
+    except Exception as e:
+        logger.error(f"refresh_all_personas error: {e}")
+
 async def _generate_and_schedule_plan_for_client(client: dict):
     """Generate a content plan and immediately schedule all 7 posts for one client."""
     import anthropic, json as _json, re as _re
@@ -2410,6 +2426,8 @@ async def lifespan(app: FastAPI):
     )
     scheduler.add_job(refresh_all_trends, 'interval', weeks=1, id='trend_refresh',
                       start_date=_now + timedelta(seconds=270))
+    scheduler.add_job(refresh_all_personas, 'cron', day_of_week='mon', hour=5, minute=0,
+                      id='persona_refresh')
     scheduler.add_job(auto_generate_all_content_plans, 'cron',
                       day_of_week='mon', hour=6, minute=0, id='auto_content_plans')
     scheduler.add_job(sync_all_sheets, 'interval', minutes=15, id='sheets_outbound_sync',
