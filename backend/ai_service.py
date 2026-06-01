@@ -677,6 +677,7 @@ async def _generate_carousel_single_pass(
     hook_inspiration: str | None,
     global_instructions: str | None,
     trend_context: str,
+    persona_block: str = "",
     db=None,
 ) -> dict:
     """Generate a full carousel in a single Sonnet call driven by the world-class strategist prompt.
@@ -795,6 +796,7 @@ You are writing for {name} ({industry}).
 Brand voice: {tone} | Language: {language} | Platform: {platform}
 Platform voice: {platform_voice}
 {brand_ctx}
+{persona_block}
 
 ASSIGNMENT:
 Write a {slide_count}-slide {platform} carousel.
@@ -1020,6 +1022,15 @@ async def generate_carousel(
 
     onboarding = client.get("onboarding_data", {})
 
+    # Persona block — evolving per-client voice. Fails open to "" (today's behavior).
+    persona_block = ""
+    try:
+        import persona_service
+        _persona = await persona_service.get_or_build_persona(client, db)
+        persona_block = persona_service.format_persona_block(_persona)
+    except Exception as _pe:
+        logger.warning(f"persona block unavailable ({_pe}); continuing without it")
+
     # Single image posts get a dedicated hook-based generator — the 4-pass carousel
     # pipeline produces awkward results with slide_count=1 (CTA + hook collapse).
     if slide_count == 1:
@@ -1042,6 +1053,7 @@ async def generate_carousel(
             ai_client, client, onboarding, topic, slide_count,
             slide_format, platform, cta_keyword, cta_offer,
             hook_inspiration, global_instructions, trend_context,
+            persona_block=persona_block,
             db=db,
         )
     except (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.APITimeoutError):
