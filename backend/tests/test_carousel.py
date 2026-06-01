@@ -228,6 +228,14 @@ def _mock_client(response_dict):
     return client
 
 
+def _system_text(mock_client):
+    """Return the system prompt as a string whether it's a str or a list of content blocks."""
+    blocks = mock_client.messages.create.call_args.kwargs.get("system", "")
+    if isinstance(blocks, str):
+        return blocks
+    return " ".join(b.get("text", "") for b in blocks)
+
+
 def _run(coro):
     return asyncio.run(coro)
 
@@ -270,7 +278,7 @@ def test_single_pass_prompt_contains_format_keyword(fmt, keyword):
     ))
 
     call_args = mock_client.messages.create.call_args
-    system_prompt = call_args.kwargs.get("system") or call_args.args[0]
+    system_prompt = _system_text(mock_client)
     assert keyword.lower() in system_prompt.lower(), (
         f"Expected '{keyword}' in single-pass prompt for format '{fmt}'"
     )
@@ -286,7 +294,7 @@ def test_single_pass_prompt_contains_strategist_persona():
         cta_keyword=None, cta_offer=None,
         hook_inspiration=None, global_instructions=None, trend_context="",
     ))
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "world-class Instagram content strategist" in system_prompt
     assert "mass-relatable" in system_prompt.lower() or "mass first" in system_prompt.lower()
     assert "unspoken" in system_prompt.lower() or "never say out loud" in system_prompt.lower()
@@ -301,7 +309,7 @@ def test_single_pass_competitor_hook_constraint_injected():
         cta_keyword=None, cta_offer=None,
         hook_inspiration="The 22-year-old founder raised $50M", global_instructions=None, trend_context="",
     ))
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "competitor hook rebuild" in system_prompt.lower()
     assert "80% of the original words" in system_prompt
 
@@ -315,7 +323,7 @@ def test_single_pass_india_framing_conditional_on_language():
         cta_keyword=None, cta_offer=None,
         hook_inspiration=None, global_instructions=None, trend_context="",
     ))
-    indian_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    indian_prompt = _system_text(mock_client)
     assert "Indian audience" in indian_prompt or "Hinglish" in indian_prompt
 
     mock_client = _mock_client(_carousel_response())
@@ -325,7 +333,7 @@ def test_single_pass_india_framing_conditional_on_language():
         cta_keyword=None, cta_offer=None,
         hook_inspiration=None, global_instructions=None, trend_context="",
     ))
-    english_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    english_prompt = _system_text(mock_client)
     assert "Hinglish" not in english_prompt
     assert "INDIAN AUDIENCE FRAMING" not in english_prompt
 
@@ -368,7 +376,7 @@ def test_single_pass_cta_injected_into_prompt():
     """When cta_keyword + cta_offer are set, the CTA REQUIREMENT block appears in prompt."""
     mock_client = _mock_client(_carousel_response())
     _call_single_pass(mock_client, cta_keyword="DEMO", cta_offer="free trial")
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "CTA REQUIREMENT" in system_prompt
     assert "DEMO" in system_prompt
     assert "free trial" in system_prompt
@@ -378,7 +386,7 @@ def test_single_pass_global_instructions_appended():
     """global_instructions argument lands under GLOBAL INSTRUCTIONS: in the system prompt."""
     mock_client = _mock_client(_carousel_response())
     _call_single_pass(mock_client, global_instructions="Always mention our podcast")
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "GLOBAL INSTRUCTIONS:" in system_prompt
     assert "Always mention our podcast" in system_prompt
 
@@ -387,7 +395,7 @@ def test_single_pass_format_auto_pick_branch():
     """slide_format=None should produce the auto-pick prompt with all format guides + picker guide."""
     mock_client = _mock_client(_carousel_response())
     _call_single_pass(mock_client, slide_format=None)
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "FORMAT — choose one" in system_prompt
     # Auto-pick schema is descriptive, not a locked literal
     assert "<one of: tips, story, myth_bust, case_study, step_by_step>" in system_prompt
@@ -397,7 +405,7 @@ def test_single_pass_large_slide_count_word_budget_clamps():
     """slide_count=12 → max(35, 85-12*5) = 35 — the middle-slides budget clamps at 35."""
     mock_client = _mock_client(_carousel_response(slide_count=12))
     _call_single_pass(mock_client, slide_count=12)
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     # Word budgets line: "Middle slides: {min}-{max} words" where max = 35 when slide_count >= 10
     assert "35 words" in system_prompt or "Middle slides: 25-35" in system_prompt
 
@@ -432,7 +440,7 @@ def test_india_framing_via_target_audience():
         client={**_CAROUSEL_CLIENT, "target_audience": "Indian millennials in tier-2 cities"},
         onboarding={"language": "English"},
     )
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "INDIAN AUDIENCE FRAMING" in system_prompt or "Hinglish" in system_prompt
 
 
@@ -440,7 +448,7 @@ def test_single_pass_unknown_format_passes_through():
     """Unknown slide_format should not crash — falls back to tips guidance."""
     mock_client = _mock_client(_carousel_response())
     _call_single_pass(mock_client, slide_format="unknown_format")
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     # Locked-format header still appears with the unknown name
     assert "FORMAT — unknown_format (locked by caller)" in system_prompt
     # And the tips guidance text (WHAT/WHY/HOW) is what got injected as the fallback
@@ -451,7 +459,7 @@ def test_word_budget_no_contradiction_for_slide_one():
     """Regression guard for Phase 1.3 — slide-1 budget must say 20, never 25."""
     mock_client = _mock_client(_carousel_response())
     _call_single_pass(mock_client)
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     # Slide 1 is mentioned with the 20-word budget in the WORD BUDGETS section
     assert "Slide 1 (hook): max 20 words" in system_prompt
     # The persona quality gates also say slide 1 ≤ 20
@@ -522,7 +530,7 @@ def test_single_pass_injects_memory_block_when_db_provided():
         client={**_CAROUSEL_CLIENT, "id": "client-1"},
         db=fake_db,
     )
-    system_prompt = mock_client.messages.create.call_args.kwargs.get("system", "")
+    system_prompt = _system_text(mock_client)
     assert "RECENT CONTENT MEMORY" in system_prompt
     assert "Old topic about budgeting" in system_prompt
     assert "MEMORY RULES" in system_prompt
