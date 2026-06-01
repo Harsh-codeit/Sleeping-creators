@@ -291,6 +291,16 @@ async def generate_video_content(
     brand_voice = client.get("brand_voice", "neutral")
     platforms = ", ".join(client.get("platforms") or ["instagram"])
 
+    # Shared grounding (persona + brand context + real-text memory). Fails open to "".
+    ctx_block = ""
+    try:
+        import ai_service
+        _ctx = await ai_service.build_generation_context(client, client.get("onboarding_data") or {}, db)
+        ctx_block = (_ctx.get("persona_block", "") + _ctx.get("brand_context", "")
+                     + _ctx.get("memory_block", "")).strip()
+    except Exception as _ce:
+        logger.warning("video content context unavailable (%s); continuing", _ce)
+
     fields_json = json.dumps([{
         "field": f["find"],
         "hint": f.get("ai_hint") or "short punchy text",
@@ -310,20 +320,21 @@ async def generate_video_content(
             if (prompt or "").strip() else ""
         )
         full_prompt = (
-            f"{custom_filled}{topic_line}\n\n"
-            f"Apply the writing rules above to fill these video text fields "
-            f"(each field's hint and max_chars define what it represents and its length budget):\n"
-            f"{fields_json}\n\n"
-            f"The \"caption\" field is the social media post caption. Target 1400-1800 chars, "
-            f"hard ceiling 2000. It MUST end on a complete sentence with proper punctuation — "
-            f"never cut off mid-thought, mid-word, or mid-sentence. If you are running out of "
-            f"room, wrap up naturally with a short closing line rather than continuing.\n\n"
-            f"Return ONLY valid JSON — no explanation, no markdown fences:\n"
-            f"{{\n"
-            f'  "merge_values": {{{example_kv}}},\n'
-            f'  "caption": "...",\n'
-            f'  "hashtags": ["tag1", "tag2", "tag3", "tag4"]\n'
-            f"}}"
+            (ctx_block + "\n\n" if ctx_block else "")
+            + f"{custom_filled}{topic_line}\n\n"
+            + f"Apply the writing rules above to fill these video text fields "
+            + f"(each field's hint and max_chars define what it represents and its length budget):\n"
+            + f"{fields_json}\n\n"
+            + f"The \"caption\" field is the social media post caption. Target 1400-1800 chars, "
+            + f"hard ceiling 2000. It MUST end on a complete sentence with proper punctuation — "
+            + f"never cut off mid-thought, mid-word, or mid-sentence. If you are running out of "
+            + f"room, wrap up naturally with a short closing line rather than continuing.\n\n"
+            + f"Return ONLY valid JSON — no explanation, no markdown fences:\n"
+            + f"{{\n"
+            + f'  "merge_values": {{{example_kv}}},\n'
+            + f'  "caption": "...",\n'
+            + f'  "hashtags": ["tag1", "tag2", "tag3", "tag4"]\n'
+            + f"}}"
         )
         source = "client" if ((client.get("strategy") or {}).get("video_prompt") or "").strip() else "global"
         logger.info(
@@ -337,6 +348,8 @@ async def generate_video_content(
             fields=fields_json, merge_values_example=example_kv,
             **_strategy_block(client),
         )
+        if ctx_block:
+            full_prompt = ctx_block + "\n\n" + full_prompt
 
     data, _usage_msg = _generate_content_json(full_prompt)
     if db is not None:
