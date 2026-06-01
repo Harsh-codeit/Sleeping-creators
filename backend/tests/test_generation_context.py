@@ -43,3 +43,46 @@ def test_single_pass_injects_persona_block():
     system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
     assert "CLIENT PERSONA" in system_prompt
     assert "blunt ex-founder" in system_prompt
+
+
+def _fake_memory_db(rows):
+    db = MagicMock()
+    cursor = MagicMock()
+    cursor.sort.return_value = cursor
+    cursor.limit.return_value = cursor
+    cursor.to_list = AsyncMock(return_value=rows)
+    db.posts.find.return_value = cursor
+    return db
+
+
+def test_extract_hook_text_prefers_carousel_first_slide():
+    row = {"carousel_data": {"slides": [{"content": "Hook line here"}], "title": "X"}}
+    assert ai_service._extract_hook_text(row) == "Hook line here"
+
+
+def test_extract_hook_text_falls_back_to_caption_then_text():
+    assert ai_service._extract_hook_text({"caption": "Cap line\nmore"}) == "Cap line"
+    assert ai_service._extract_hook_text({"text": "Text line\nmore"}) == "Text line"
+    assert ai_service._extract_hook_text({}) == ""
+
+
+def test_recent_hook_texts_returns_list():
+    rows = [
+        {"carousel_data": {"slides": [{"content": "First hook"}]}},
+        {"caption": "Second hook\nrest"},
+    ]
+    hooks = _run(ai_service._recent_hook_texts("c1", _fake_memory_db(rows)))
+    assert hooks == ["First hook", "Second hook"]
+
+
+def test_recent_hook_texts_empty_safe():
+    assert _run(ai_service._recent_hook_texts(None, MagicMock())) == []
+    assert _run(ai_service._recent_hook_texts("c1", None)) == []
+
+
+def test_format_recent_text_memory_block():
+    block = ai_service._format_recent_text_memory(["First hook", "Second hook"])
+    assert "RECENTLY USED OPENINGS" in block
+    assert "First hook" in block
+    assert "Second hook" in block
+    assert ai_service._format_recent_text_memory([]) == ""

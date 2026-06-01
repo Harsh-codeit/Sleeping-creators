@@ -414,6 +414,57 @@ async def _build_content_memory_context(client_id: str | None, db, limit: int = 
     )
 
 
+def _extract_hook_text(row: dict) -> str:
+    """Best 'opening line' from a stored post: carousel slide 1 → caption first line → text first line."""
+    cd = row.get("carousel_data") or {}
+    slides = cd.get("slides") or []
+    if slides and (slides[0] or {}).get("content"):
+        first = slides[0]["content"]
+    else:
+        first = row.get("caption") or row.get("text") or cd.get("title") or row.get("title") or ""
+    first = str(first).strip()
+    # First non-empty line only — hooks live on line 1.
+    for line in first.splitlines():
+        line = line.strip()
+        if line:
+            return line
+    return ""
+
+
+async def _recent_hook_texts(client_id: str | None, db, limit: int = 20) -> list:
+    """Actual opening lines of the last `limit` posts for this client. Never raises."""
+    if not client_id or db is None:
+        return []
+    try:
+        cursor = db.posts.find(
+            {"client_id": client_id},
+            {"_id": 0, "carousel_data.slides": 1, "carousel_data.title": 1,
+             "caption": 1, "text": 1, "title": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(limit)
+        rows = await cursor.to_list(limit)
+    except Exception as e:
+        logger.warning(f"_recent_hook_texts failed ({e}); skipping")
+        return []
+    hooks = []
+    for r in rows:
+        h = _extract_hook_text(r)
+        if h:
+            hooks.append(h)
+    return hooks
+
+
+def _format_recent_text_memory(hooks: list) -> str:
+    """Forbidden-openings block built from real hook text. Empty when no hooks."""
+    if not hooks:
+        return ""
+    lines = [f'- "{h[:120]}"' for h in hooks[:20]]
+    return (
+        "\n\nRECENTLY USED OPENINGS — do NOT reuse these hooks, their structure, or their wording:\n"
+        + "\n".join(lines)
+        + "\n\nYour opening must share no structure or phrasing with the lines above. Different first words, different framing."
+    )
+
+
 def _safe_for_prompt(s: str | None, max_len: int = 300) -> str:
     """Sanitize a free-form string for safe interpolation into a system prompt.
 
