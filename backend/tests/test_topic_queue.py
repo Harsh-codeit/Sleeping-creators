@@ -31,3 +31,15 @@ def test_pop_returns_none_when_nothing_available():
     import topic_queue
     topic, updates = topic_queue.pop_topic({"topic_queue": [], "carousel_topics": [], "total_runs": 0})
     assert topic is None
+
+
+def test_refill_topics_parses_and_excludes_history():
+    import topic_queue
+    raw = '```json\n["new topic one", "new topic two", "history dup"]\n```'
+    out = topic_queue.parse_topic_list(raw, exclude=["history dup"])
+    assert out == ["new topic one", "new topic two"]
+
+
+def test_parse_topic_list_handles_garbage():
+    import topic_queue
+    assert topic_queue.parse_topic_list("not json", exclude=[]) == []

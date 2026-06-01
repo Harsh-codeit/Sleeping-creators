@@ -1359,6 +1359,65 @@ async def _build_carousel_post_text(carousel_data: dict) -> tuple[str, dict]:
     return post_text, {"carousel_data": carousel_data}
 
 
+async def _refill_topic_queue(pipeline: dict, client: dict, count: int = 10) -> list:
+    """One Haiku call → list of fresh topics seeded by persona + themes + configured topics,
+    excluding topic_history. Returns [] on any failure (caller falls open)."""
+    import anthropic as _anthropic
+    import topic_queue as _tq
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return []
+    persona = client.get("persona") or {}
+    themes = (client.get("strategy") or {}).get("themes") or []
+    seeds = pipeline.get("carousel_topics") or []
+    history = pipeline.get("topic_history") or []
+    prompt = (
+        f"Brand: {client.get('name', '')} ({client.get('industry', '')}).\n"
+        f"Voice: {persona.get('voice', '')}\n"
+        f"Themes: {', '.join(themes) or 'n/a'}\n"
+        f"Seed topics (expand and diversify around these): {', '.join(str(s) for s in seeds) or 'n/a'}\n"
+        f"ALREADY USED — do not repeat or lightly reword these:\n"
+        f"{chr(10).join('- ' + str(h) for h in history[:40]) or '(none yet)'}\n\n"
+        f"Generate {count} fresh, specific content topics for this brand that are clearly distinct "
+        f"from the used list. Return ONLY a JSON array of strings."
+    )
+    ai = _anthropic.Anthropic(api_key=api_key)
+    msg = ai.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    try:
+        from usage_service import record_usage
+        await record_usage(db, msg, generation_type="topic_refill",
+                           client_id=client.get("id"), client_name=client.get("name"),
+                           pipeline_id=pipeline.get("id"))
+    except Exception:
+        pass
+    return _tq.parse_topic_list(msg.content[0].text, exclude=history)
+
+
+async def _next_standard_topic(pipeline: dict, client: dict) -> str | None:
+    """Topic-queue-backed selection for standard pipelines. Refills via one cheap LLM
+    call when low; falls open to round-robin. Persists queue/history on the pipeline doc."""
+    import topic_queue as _tq
+
+    if _tq.needs_refill(pipeline):
+        try:
+            new_topics = await _refill_topic_queue(pipeline, client)
+            if new_topics:
+                merged = list(pipeline.get("topic_queue") or []) + new_topics
+                pipeline["topic_queue"] = merged
+                await db.pipelines.update_one({"id": pipeline["id"]}, {"$set": {"topic_queue": merged}})
+        except Exception as e:
+            logger.warning(f"Topic refill failed for pipeline {pipeline.get('id')} ({e}); using fallback")
+
+    topic, updates = _tq.pop_topic(pipeline)
+    if updates:
+        await db.pipelines.update_one({"id": pipeline["id"]}, {"$set": updates})
+    return topic
+
+
 async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int = 0, auto_publish: bool = False) -> int:
     import random as _random
 
@@ -1438,10 +1497,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
     pipeline_content_type = content_type
 
     if pipeline_type == "standard":
-        # Bug fix: cycle through topics using total_runs, not always topics[0]
-        topics = pipeline.get("carousel_topics", [])
-        if topics:
-            topic = topics[pipeline.get("total_runs", 0) % len(topics)]
+        topic = await _next_standard_topic(pipeline, client)
 
     elif pipeline_type == "trend":
         sorted_trends = sorted(trends or [], key=lambda t: t.get("volume", 0), reverse=True)
