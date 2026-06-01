@@ -117,6 +117,7 @@ def test_parse_persona_strips_fences():
 
 
 def test_build_persona_returns_stamped_dict(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     client = {"id": "c1", "name": "Acme", "industry": "Fintech", "onboarding_data": {}}
     ai = _mock_anthropic_returning({
         "voice": "blunt", "signature_traits": ["short"], "recurring_themes": ["sip"],
