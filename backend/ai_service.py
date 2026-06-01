@@ -251,6 +251,40 @@ def _parse_json_response(text: str) -> dict:
     return json.loads(cleaned)
 
 
+async def _run_generation_with_tools(ai_client, *, model, system, user, max_tokens,
+                                     tools, handlers, max_tool_calls=2, db=None,
+                                     client=None, generation_type="generation"):
+    """Run a tool-use loop. The model may call tools (handlers[name](input)) up to
+    max_tool_calls times, then must return a final message. Returns the final message.
+    Handler errors fail open (returned as the tool_result content)."""
+    messages = [{"role": "user", "content": user}]
+    message = ai_client.messages.create(model=model, max_tokens=max_tokens,
+                                        system=system, tools=tools, messages=messages)
+    calls = 0
+    while getattr(message, "stop_reason", None) == "tool_use" and calls < max_tool_calls:
+        calls += 1
+        tool_uses = [b for b in message.content if getattr(b, "type", None) == "tool_use"]
+        # Echo the assistant's tool-call turn back, then provide results.
+        messages.append({"role": "assistant", "content": message.content})
+        tool_results = []
+        for tu in tool_uses:
+            handler = handlers.get(tu.name)
+            try:
+                result = await handler(tu.input, client, db) if handler else {"error": "unknown tool"}
+            except Exception as e:
+                logger.warning(f"tool '{getattr(tu, 'name', '?')}' failed ({e}); empty result")
+                result = {"trends": []}
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": tu.id,
+                "content": __import__("json").dumps(result),
+            })
+        messages.append({"role": "user", "content": tool_results})
+        message = ai_client.messages.create(model=model, max_tokens=max_tokens,
+                                            system=system, tools=tools, messages=messages)
+    return message
+
+
 # Phrases and words that scream "written by a bot" — mapped to human replacements
 _AI_TELLS: list[tuple[str, str]] = [
     # Filler openers
