@@ -80,3 +80,8 @@ def test_is_persona_fresh():
     assert persona_service.is_persona_fresh(stale_age) is False
     assert persona_service.is_persona_fresh(stale_ver) is False
     assert persona_service.is_persona_fresh(None) is False
+
+
+def test_signal_returns_empty_on_missing_inputs():
+    assert _run(persona_service.fetch_persona_signal(None, MagicMock())) == []
+    assert _run(persona_service.fetch_persona_signal("c1", None)) == []
