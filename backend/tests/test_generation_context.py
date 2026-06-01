@@ -113,3 +113,50 @@ def test_single_pass_injects_recent_text_memory():
     system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
     assert "RECENTLY USED OPENINGS" in system_prompt
     assert "old hook" in system_prompt
+
+
+def test_single_pass_appends_similarity_retry_note():
+    mock = _mock_client(_carousel_response())
+    _run(ai_service._generate_carousel_single_pass(
+        mock, {"name": "Acme", "industry": "Tech"}, {"language": "English"},
+        topic="t", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None, hook_inspiration=None,
+        global_instructions=None, trend_context="",
+        similarity_retry_note="Your opening was too similar. Rewrite completely.",
+    ))
+    system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
+    assert "too similar" in system_prompt.lower()
+
+
+def test_generate_carousel_regenerates_once_on_duplicate(monkeypatch):
+    import persona_service
+    monkeypatch.setattr(persona_service, "get_or_build_persona", AsyncMock(return_value=None))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+    # Recent memory contains the SAME hook the first generation will produce.
+    dup_hook = "you ate perfectly for six days then ruined it sunday"
+    monkeypatch.setattr(ai_service, "_recent_hook_texts", AsyncMock(return_value=[dup_hook]))
+
+    calls = {"n": 0}
+
+    async def fake_single_pass(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            content = dup_hook                      # duplicate → must trigger regen
+        else:
+            content = "three hiring mistakes that cost me everything"  # distinct
+        return {"title": "T", "strategy": {"format": "tips", "hook_type": "myth_bust"},
+                "author_name": "Acme", "author_handle": "@acme", "author_title": "Tech",
+                "slides": [{"slide_number": 1, "content": content},
+                           {"slide_number": 2, "content": "b"}]}
+
+    monkeypatch.setattr(ai_service, "_generate_carousel_single_pass", fake_single_pass)
+    # Stub anthropic.Anthropic so generate_carousel builds a client without a real key call
+    monkeypatch.setattr(ai_service.anthropic, "Anthropic", lambda api_key=None: MagicMock())
+
+    result = _run(ai_service.generate_carousel(
+        {"id": "c1", "name": "Acme", "industry": "Tech", "onboarding_data": {}},
+        "instagram", "full_white", topic="t", slide_count=5, db=_fake_memory_db([]),
+    ))
+    assert calls["n"] == 2, "expected exactly one regeneration on a duplicate hook"
+    assert "hiring mistakes" in result["slides"][0]["content"]

@@ -751,6 +751,7 @@ async def _generate_carousel_single_pass(
     trend_context: str,
     persona_block: str = "",
     recent_text_memory: str = "",
+    similarity_retry_note: str = "",
     db=None,
 ) -> dict:
     """Generate a full carousel in a single Sonnet call driven by the world-class strategist prompt.
@@ -916,6 +917,9 @@ Respond ONLY with valid JSON (no markdown, no commentary):
 
     if global_instructions and global_instructions.strip():
         system_msg += f"\n\nGLOBAL INSTRUCTIONS:\n{global_instructions.strip()}"
+
+    if similarity_retry_note:
+        system_msg += f"\n\nREGENERATION CONSTRAINT:\n{similarity_retry_note}"
 
     trend_user = (trend_context.strip() + "\n\n") if trend_context and trend_context.strip() else ""
 
@@ -1096,14 +1100,15 @@ async def generate_carousel(
 
     onboarding = client.get("onboarding_data", {})
 
-    # Persona block — evolving per-client voice. Fails open to "" (today's behavior).
-    persona_block = ""
+    # Shared generation context (persona + real-text memory). Fails open.
     try:
-        import persona_service
-        _persona = await persona_service.get_or_build_persona(client, db)
-        persona_block = persona_service.format_persona_block(_persona)
-    except Exception as _pe:
-        logger.warning(f"persona block unavailable ({_pe}); continuing without it")
+        gen_ctx = await build_generation_context(client, onboarding, db)
+    except Exception as _ce:
+        logger.warning(f"generation context failed ({_ce}); using empties")
+        gen_ctx = {"persona_block": "", "brand_context": "", "memory_block": "", "recent_hooks": []}
+    persona_block = gen_ctx["persona_block"]
+    recent_text_memory = gen_ctx["memory_block"]
+    recent_hooks = gen_ctx["recent_hooks"]
 
     # Single image posts get a dedicated hook-based generator — the 4-pass carousel
     # pipeline produces awkward results with slide_count=1 (CTA + hook collapse).
@@ -1122,20 +1127,44 @@ async def generate_carousel(
     # degrade to fallback copy. Only soft errors (parse failures, validation issues, generic
     # APIError) fall back to _fallback_carousel.
     import json as _json
-    try:
-        result_data = await _generate_carousel_single_pass(
+    from text_similarity import is_too_similar
+
+    async def _gen(retry_note=""):
+        return await _generate_carousel_single_pass(
             ai_client, client, onboarding, topic, slide_count,
             slide_format, platform, cta_keyword, cta_offer,
             hook_inspiration, global_instructions, trend_context,
             persona_block=persona_block,
+            recent_text_memory=recent_text_memory,
+            similarity_retry_note=retry_note,
             db=db,
         )
+
+    try:
+        result_data = await _gen()
     except (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.APITimeoutError):
         # Propagate — caller decides whether to retry / surface to user.
         raise
     except (anthropic.APIError, ValueError, KeyError, _json.JSONDecodeError) as e:
         logger.warning(f"Carousel single-pass failed ({e}), using fallback")
         return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
+
+    # Similarity gate — regenerate once if the hook is too close to a recent one.
+    def _hook_of(data):
+        return ((data.get("slides") or [{}])[0] or {}).get("content", "")
+
+    if recent_hooks and is_too_similar(_hook_of(result_data), recent_hooks, threshold=0.6):
+        logger.info(f"Similarity gate fired for client {client.get('id')}; regenerating once")
+        try:
+            retry = await _gen(retry_note=(
+                "Your previous opening was nearly identical to a recent post for this client. "
+                "Write a completely different hook: different first words, different structure, different angle."
+            ))
+            if is_too_similar(_hook_of(retry), recent_hooks, threshold=0.6):
+                logger.warning(f"Similarity drift: hook still close after retry for client {client.get('id')}")
+            result_data = retry
+        except Exception as _re:
+            logger.warning(f"Similarity-gate regeneration failed ({_re}); keeping first result")
 
     resolved_format = (
         slide_format
