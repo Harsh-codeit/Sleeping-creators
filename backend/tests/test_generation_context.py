@@ -86,3 +86,30 @@ def test_format_recent_text_memory_block():
     assert "First hook" in block
     assert "Second hook" in block
     assert ai_service._format_recent_text_memory([]) == ""
+
+
+def test_build_generation_context_shape(monkeypatch):
+    import persona_service
+    monkeypatch.setattr(persona_service, "get_or_build_persona", AsyncMock(return_value={"voice": "blunt"}))
+    rows = [{"carousel_data": {"slides": [{"content": "Recent hook"}]}}]
+    db = _fake_memory_db(rows)
+    client = {"id": "c1", "name": "Acme", "industry": "Tech"}
+    ctx = _run(ai_service.build_generation_context(client, {"niche": "x"}, db))
+    assert "CLIENT PERSONA" in ctx["persona_block"]
+    assert "Recent hook" in ctx["memory_block"]
+    assert ctx["recent_hooks"] == ["Recent hook"]
+    assert isinstance(ctx["brand_context"], str)
+
+
+def test_single_pass_injects_recent_text_memory():
+    mock = _mock_client(_carousel_response())
+    _run(ai_service._generate_carousel_single_pass(
+        mock, {"name": "Acme", "industry": "Tech"}, {"language": "English"},
+        topic="t", slide_count=5, slide_format="tips", platform="instagram",
+        cta_keyword=None, cta_offer=None, hook_inspiration=None,
+        global_instructions=None, trend_context="",
+        recent_text_memory="\n\nRECENTLY USED OPENINGS — do NOT reuse:\n- \"old hook\"",
+    ))
+    system_prompt = mock.messages.create.call_args.kwargs.get("system", "")
+    assert "RECENTLY USED OPENINGS" in system_prompt
+    assert "old hook" in system_prompt

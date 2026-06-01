@@ -589,6 +589,27 @@ def _build_brand_context(client: dict, onboarding: dict) -> str:
     return ("\nBRAND CONTEXT:\n" + "\n".join(lines)) if lines else ""
 
 
+async def build_generation_context(client: dict, onboarding: dict, db=None) -> dict:
+    """Single source of truth for generation grounding: persona + brand context + real-text memory.
+    Every field fails open to a safe empty default."""
+    persona_block = ""
+    try:
+        import persona_service
+        _p = await persona_service.get_or_build_persona(client, db) if db is not None else client.get("persona")
+        persona_block = persona_service.format_persona_block(_p)
+    except Exception as e:
+        logger.warning(f"build_generation_context persona failed ({e})")
+    brand_context = _build_brand_context(client, onboarding)
+    recent_hooks = await _recent_hook_texts(client.get("id"), db) if db is not None else []
+    memory_block = _format_recent_text_memory(recent_hooks)
+    return {
+        "persona_block": persona_block,
+        "brand_context": brand_context,
+        "memory_block": memory_block,
+        "recent_hooks": recent_hooks,
+    }
+
+
 async def _generate_single_image_hook(
     ai_client,
     client: dict,
@@ -729,6 +750,7 @@ async def _generate_carousel_single_pass(
     global_instructions: str | None,
     trend_context: str,
     persona_block: str = "",
+    recent_text_memory: str = "",
     db=None,
 ) -> dict:
     """Generate a full carousel in a single Sonnet call driven by the world-class strategist prompt.
@@ -858,6 +880,7 @@ Write a {slide_count}-slide {platform} carousel.
 {hook_block}
 {cta_block}
 {memory_block}
+{recent_text_memory}
 
 LANGUAGE LOCK: Write ALL slide content (including the title) in {language}. Every word, every slide. Do NOT use English unless {language} is English. This rule overrides everything else.
 
