@@ -2753,6 +2753,19 @@ async def recompute_derived_endpoint(client_id: str):
         await db.clients.update_one({"id": client_id}, {"$set": updates})
     return {"updated_keys": list(updates.keys())}
 
+@api_router.post("/clients/{client_id}/persona/rebuild")
+async def rebuild_persona(client_id: str):
+    """Force-rebuild the content persona for a client from their recent posts / winners."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    import persona_service
+    persona = await persona_service.refresh_persona_for_client(client, db)
+    if not persona:
+        raise HTTPException(500, "Persona build failed — check ANTHROPIC_API_KEY and that the client has published posts")
+    return {"persona": persona}
+
+
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str):
     result = await db.clients.delete_one({"id": client_id})

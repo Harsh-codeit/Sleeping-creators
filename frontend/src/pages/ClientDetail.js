@@ -1725,6 +1725,79 @@ function LeadsTab({ clientId, client, posts }) {
   );
 }
 
+// ─── Persona Tab ─────────────────────────────────────────────────────────────
+
+function PersonaTab({ client, clientId, onRebuilt }) {
+  const [rebuilding, setRebuilding] = useState(false);
+  const persona = client?.persona;
+
+  const rebuild = async () => {
+    setRebuilding(true);
+    try {
+      const resp = await axios.post(`${API}/clients/${clientId}/persona/rebuild`);
+      onRebuilt(resp.data.persona);
+      toast.success("Persona rebuilt");
+    } catch {
+      toast.error("Rebuild failed");
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
+  const Field = ({ label, value }) => {
+    if (!value || (Array.isArray(value) && value.length === 0)) return null;
+    const text = Array.isArray(value) ? value.join(" · ") : value;
+    return (
+      <div>
+        <div className="text-[10px] font-mono text-zinc-500 uppercase mb-1">{label}</div>
+        <div className="text-sm text-zinc-200 leading-relaxed">{text}</div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="max-w-xl space-y-4">
+      <div className="bg-zinc-900 border border-zinc-800 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[10px] font-mono text-zinc-500 uppercase">Content Persona</div>
+          <button
+            onClick={rebuild}
+            disabled={rebuilding}
+            className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-mono uppercase bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={10} className={rebuilding ? "animate-spin" : ""} />
+            {rebuilding ? "Rebuilding..." : "Rebuild"}
+          </button>
+        </div>
+
+        {!persona ? (
+          <div className="text-sm text-zinc-600 italic">
+            No persona yet — will be built automatically on the next carousel generation, or click Rebuild to create it now.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Field label="Voice" value={persona.voice} />
+            <Field label="Signature Traits" value={persona.signature_traits} />
+            <Field label="Recurring Themes" value={persona.recurring_themes} />
+            <Field label="What Works" value={persona.winning_patterns} />
+            <Field label="Audience" value={persona.audience_portrait} />
+            <Field label="Avoid" value={persona.avoid} />
+            <div className="pt-2 border-t border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-zinc-600">
+              {persona.updated_at && (
+                <span>Updated {new Date(persona.updated_at).toLocaleDateString()}</span>
+              )}
+              {persona.source && <span>Source: {persona.source}</span>}
+              {persona.based_on_post_ids?.length > 0 && (
+                <span>Based on {persona.based_on_post_ids.length} posts</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ClientDetail ────────────────────────────────────────────────────────
 
 export default function ClientDetail() {
@@ -2200,6 +2273,7 @@ export default function ClientDetail() {
               { key: "overview", label: "Overview" },
               { key: "week",     label: "Week Plan" },
               { key: "report",   label: "Report" },
+              { key: "persona",  label: "Persona" },
             ].map(({ key, label }) => (
               <button type="button"
                 key={key}
@@ -2568,6 +2642,10 @@ export default function ClientDetail() {
               clientId={id}
               onNavigate={(tab) => setActiveTab(tab)}
             />
+          )}
+
+          {strategyTab === "persona" && (
+            <PersonaTab client={client} clientId={id} onRebuilt={(p) => setClient(c => ({ ...c, persona: p }))} />
           )}
         </div>
       )}
