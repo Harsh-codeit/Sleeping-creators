@@ -777,7 +777,7 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
 
     await db.posts.update_one(
         {"id": post["id"]},
-        {"$set": {"status": "bundle_scheduled", "bundle_post_id": bundle_post_id}},
+        {"$set": {"status": "bundle_scheduled", "bundle_post_id": bundle_post_id, "platform_post_id": bundle_post_id}},
     )
     logger.info("bundle_scheduled post_id=%s bundle_post_id=%s", post["id"], bundle_post_id)
 
