@@ -42,10 +42,10 @@ const TONE_CLASSES = {
 
 export function getStatusConfig(status) {
   return POST_STATUS[status] || {
-    label: (status || "—").toUpperCase(),
+    label: status ? status.toUpperCase() : "UNKNOWN",
     icon: Clock,
     tone: "zinc",
-    desc: "",
+    desc: status ? `Unknown status: ${status}` : "Status not set",
   };
 }
 

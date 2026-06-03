@@ -8133,6 +8133,10 @@ async def create_video_post_route(req: VideoCreateRequest):
             )
             ss_render_id = render_job.get("shotstack_render_id")
             if not ss_render_id:
+                await db.posts.update_one(
+                    {"id": post_id},
+                    {"$set": {"status": "failed_render", "error_message": "Render job created but no render ID returned"}},
+                )
                 return
             import asyncio as _aio
             for _ in range(72):
@@ -8177,6 +8181,16 @@ async def create_video_post_route(req: VideoCreateRequest):
                         {"$set": {"status": "failed_render", "error_message": error}},
                     )
                     return
+            # Polling loop exhausted without a terminal status — mark as failed so it
+            # doesn't stay stuck in "rendering" forever.
+            await db.render_jobs.update_one(
+                {"id": render_job["id"]},
+                {"$set": {"status": "failed", "error": "Render timed out after 6 minutes"}},
+            )
+            await db.posts.update_one(
+                {"id": post_id},
+                {"$set": {"status": "failed_render", "error_message": "Render timed out after 6 minutes"}},
+            )
         except Exception as _e:
             # Full traceback to the log so we can see WHERE the crash happened,
             # not just the bare exception message. Especially important for
