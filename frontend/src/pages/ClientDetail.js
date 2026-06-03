@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2Off, RefreshCw, Plus, X, Check, MessageCircle, Users, Upload, Download, Filter, Eye, EyeOff, Search, Star, Film, Image } from "lucide-react";
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
+import ClientMediaTab from "@/components/ClientMediaTab";
 import WeekPlanTab from "@/components/strategy/WeekPlanTab";
 import ReportTab from "@/components/strategy/ReportTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
@@ -13,7 +14,7 @@ import { ContentStrategyOnboardingEmail } from "../emails/ContentStrategyOnboard
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "youtube", "linkedin", "twitter", "threads"];
-const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Dropbox", "Apps", "Profile", "Emails"];
+const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads", "Competitors", "Trends", "Media", "Dropbox", "Apps", "Profile", "Emails"];
 
 const STATUS_DOT = { active: "text-emerald-400", paused: "text-amber-400", error: "text-red-400" };
 
@@ -2886,6 +2887,10 @@ export default function ClientDetail() {
 
       {activeTab === "Trends" && (
         <TrendsTab clientId={id} client={client} />
+      )}
+
+      {activeTab === "Media" && (
+        <ClientMediaTab clientId={id} />
       )}
 
       {activeTab === "Dropbox" && (

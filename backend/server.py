@@ -7802,6 +7802,25 @@ async def register_clip(client_id: str, body: ClipRegisterRequest):
     return {k: v for k, v in clip.items() if k != "_id"}
 
 
+@api_router.delete("/clients/{client_id}/clips/{clip_id}", status_code=200)
+async def delete_clip(client_id: str, clip_id: str):
+    clip = await db.drive_clips.find_one({"client_id": client_id, "drive_file_id": clip_id}, {"_id": 0})
+    if not clip:
+        raise HTTPException(404, "Clip not found")
+    # Delete R2 object for uploaded clips (drive clips stay in Drive — only remove DB record)
+    if clip.get("source") == "upload" and clip.get("r2_url"):
+        try:
+            import storage as _storage
+            from clip_staging_service import _r2_key_from_url
+            key = _r2_key_from_url(clip["r2_url"])
+            if key:
+                _storage.delete_file(key)
+        except Exception as _e:
+            logger.warning("delete_clip: R2 delete failed for %s: %s", clip_id, _e)
+    await db.drive_clips.delete_one({"client_id": client_id, "drive_file_id": clip_id})
+    return {"deleted": True}
+
+
 class ClearClipCacheRequest(BaseModel):
     dry_run: bool = True
 
