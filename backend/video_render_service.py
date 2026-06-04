@@ -219,7 +219,7 @@ Strategy:
 - Never cover: {topics_exclude}
 - Brand hashtags (include in the final list when relevant): {brand_hashtags}
 
-Prompt: {prompt}
+Prompt: {prompt_line}
 
 Generate all content in one response. Stay on-theme and on-tone. Never reference
 excluded topics. If brand hashtags are listed above, include them in the hashtag array.
@@ -337,14 +337,16 @@ async def generate_video_content(
             + f"}}"
         )
         source = "client" if ((client.get("strategy") or {}).get("video_prompt") or "").strip() else "global"
-        logger.info(
-            "generate_video_content: custom prompt source=%s (%d chars)",
-            source, len(custom_filled),
-        )
     else:
+        source = "builtin"
+        prompt_line = (
+            prompt.strip()
+            if (prompt or "").strip()
+            else "Pick a specific, engaging angle from the strategy themes above. Vary the message — be concrete, not generic."
+        )
         full_prompt = _CONTENT_PROMPT.format(
             client_name=client_name, niche=niche, brand_voice=brand_voice,
-            platforms=platforms, prompt=prompt,
+            platforms=platforms, prompt_line=prompt_line,
             fields=fields_json, merge_values_example=example_kv,
             **_strategy_block(client),
         )
@@ -357,6 +359,10 @@ async def generate_video_content(
                            client_id=client.get("id"), client_name=client.get("name"))
     caption = _smart_truncate_caption(data.get("caption") or "", 2000)
     hashtags = [h for h in (data.get("hashtags") or []) if isinstance(h, str)][:6]
+    logger.info(
+        "generate_video_content: source=%s prompt_provided=%s caption_len=%d",
+        source, bool((prompt or "").strip()), len(caption),
+    )
     return {
         "merge_values": data.get("merge_values") or {},
         "caption": caption,

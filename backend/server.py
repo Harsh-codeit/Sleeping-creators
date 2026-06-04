@@ -1648,7 +1648,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
         generated_merge_values: dict = {}
         caption: str = ""
         hashtags: list = []
-        if pipeline.get("video_use_ai_content") is not False and prompt_text.strip():
+        if pipeline.get("video_use_ai_content") is not False:
             ai_text_fields = [f for f in template_doc.get("merge_fields", []) if f.get("role") == "ai_text"]
             try:
                 from video_render_service import generate_video_content
