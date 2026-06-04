@@ -282,6 +282,7 @@ class ClientCreate(BaseModel):
     strategy: dict = {}
     auto_approve: Optional[bool] = False
     brand_overrides: Optional[dict] = None
+    spice_level: Optional[str] = None   # safe | balanced | bold | unhinged (None -> balanced at gen time)
 
 class ClientUpdate(BaseModel):
     # Root client fields
@@ -371,6 +372,7 @@ class ClientUpdate(BaseModel):
     carousel_author_name: Optional[str] = None
     carousel_author_handle: Optional[str] = None
     carousel_author_title: Optional[str] = None
+    spice_level: Optional[str] = None   # safe | balanced | bold | unhinged (None -> balanced at gen time)
 
 class PostCreate(BaseModel):
     client_id: str
@@ -591,6 +593,7 @@ class PipelineCreate(BaseModel):
     carousel_slide_format: Optional[str] = None   # None = AI picks best format for topic
     carousel_topics: List[str] = []
     global_instructions: Optional[str] = None
+    spice_level: Optional[str] = None   # safe | balanced | bold | unhinged; None -> client default / balanced
     cta_keyword: Optional[str] = None
     cta_offer: Optional[str] = None
     max_posts_per_day: int = 10
@@ -631,6 +634,7 @@ class PipelineUpdate(BaseModel):
     carousel_slide_format: Optional[str] = None
     carousel_topics: Optional[List[str]] = None
     global_instructions: Optional[str] = None
+    spice_level: Optional[str] = None   # safe | balanced | bold | unhinged; None -> client default / balanced
     cta_keyword: Optional[str] = None
     cta_offer: Optional[str] = None
     max_posts_per_day: Optional[int] = None
@@ -1797,6 +1801,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
                     global_instructions=extra_global_instructions or None,
                     slide_format=slide_format,
                     db=db,
+                    spice_level=pipeline.get("spice_level"),
                 )
                 post_text, extra = await _build_carousel_post_text(carousel_data)
             else:
@@ -1804,7 +1809,7 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
                     {"client_id": client["id"], "is_winner": True},
                     {"_id": 0, "text": 1, "content_type": 1, "performance": 1, "engagement_score": 1}
                 ).sort("engagement_score", -1).limit(3).to_list(3)
-                content = await generate_content(client, platform, "text_post", None, settings, trends=trends, winners=winners, db=db)
+                content = await generate_content(client, platform, "text_post", None, settings, trends=trends, winners=winners, db=db, spice_level=pipeline.get("spice_level"))
                 post_text = content["text"]
                 extra = {"hashtags": content.get("hashtags", [])}
 
@@ -5179,6 +5184,7 @@ class CarouselGenerateRequest(BaseModel):
     slide_format: Optional[str] = None    # None = AI picks best format for topic
     cta_keyword: Optional[str] = None
     cta_offer: Optional[str] = None
+    spice_level: Optional[str] = None     # safe | balanced | bold | unhinged; None -> client default / balanced
 
 class CarouselCreate(BaseModel):
     client_id: str
@@ -5351,6 +5357,7 @@ async def generate_carousel_endpoint(data: CarouselGenerateRequest):
         global_instructions=data.global_instructions,
         slide_format=data.slide_format or None,
         db=db,
+        spice_level=data.spice_level,
     )
     # Custom templates don't use design_context — clear it so preview uses the right template
     _built_in = ("dark_card", "full_white", "floating_card", "dark_card_rich", "full_white_rich", "floating_card_rich")

@@ -146,7 +146,7 @@ def _apply_carousel_cta(data: dict, client: dict, topic: str | None = None, cta_
     data["cta_text"] = cta["cta_text"]
     return data
 
-async def generate_content(client: dict, platform: str, content_type: str, topic: str = None, settings: dict = None, trends: list = None, winners: list = None, db=None) -> dict:
+async def generate_content(client: dict, platform: str, content_type: str, topic: str = None, settings: dict = None, trends: list = None, winners: list = None, db=None, spice_level: str | None = None) -> dict:
     api_key = os.environ.get('ANTHROPIC_API_KEY', '')
     if not api_key:
         return _fallback_content(client, platform, topic)
@@ -168,7 +168,9 @@ async def generate_content(client: dict, platform: str, content_type: str, topic
         bio_line = f"\nAbout the client: {client['bio']}" if client.get('bio') else ""
         _topic_rules = _build_topic_rules_block(client)
         _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
-        system_msg = f"""{_topic_rules_prefix}You are a world-class social media content strategist for {client.get('name', 'a brand')}.
+        _spice = _build_spice_block(spice_level if spice_level is not None else client.get("spice_level"))
+        _spice_block = (_spice + "\n\n") if _spice else ""
+        system_msg = f"""{_topic_rules_prefix}{_spice_block}You are a world-class social media content strategist for {client.get('name', 'a brand')}.
 Industry: {client.get('industry', 'General')}
 Brand voice: {tone}
 Target audience: {client.get('target_audience', 'General public')}{bio_line}
@@ -285,7 +287,12 @@ async def _run_generation_with_tools(ai_client, *, model, system, user, max_toke
     return message
 
 
-# Phrases and words that scream "written by a bot" — mapped to human replacements
+# True bot-tells only — phrases/words that consistently read as machine-written. Trimmed in
+# Phase 1.3: removed ~40 swaps that flattened legitimate voice (strategic, dynamic, narrative,
+# pivot, ecosystem, proactive, actionable, impactful, sustainable, foster, cultivate, demonstrate,
+# enhance, optimize, scalable, transformative, innovative, paramount, empower, etc.). What remains
+# is filler openers + the small set of buzzwords/consultant-speak that almost never appear in real
+# punchy copy.
 _AI_TELLS: list[tuple[str, str]] = [
     # Filler openers
     (r"In today's (?:fast-paced |digital |modern |complex )?world[,:]?\s*", ""),
@@ -297,59 +304,23 @@ _AI_TELLS: list[tuple[str, str]] = [
     (r"Let's (?:dive in|dive deep|explore|delve into|unpack)[!.]?\s*", ""),
     (r"At the end of the day[,:]?\s*", ""),
     (r"The bottom line (?:is|:)\s*", ""),
-    (r"Moving forward[,:]?\s*", ""),
     (r"With that (?:said|in mind)[,:]?\s*", ""),
     (r"That being said[,:]?\s*", ""),
     (r"It goes without saying[,:]?\s*", ""),
     (r"Needless to say[,:]?\s*", ""),
-    (r"Last but not least[,:]?\s*", "Finally, "),
-    # Connective filler
-    (r"\bMoreover[,:]?\s*", "Also, "),
-    (r"\bFurthermore[,:]?\s*", "And "),
-    (r"\bIn addition(?:\s+to\s+that)?[,:]?\s*", "Also, "),
-    (r"\bNevertheless[,:]?\s*", "But "),
-    (r"\bNonetheless[,:]?\s*", "Still, "),
-    (r"\bConsequently[,:]?\s*", "So "),
-    (r"\bSubsequently[,:]?\s*", "Then "),
-    # Buzzwords → plain words
+    # Worst buzzwords → plain words
     (r"\bleverag(?:e|ing|ed)\b", "use"),
     (r"\butiliz(?:e|ing|ed)\b", "use"),
-    (r"\boptimiz(?:e|ing|ed)\b", "improve"),
     (r"\bsynergiz?e?\b", "work together"),
     (r"\bsynergy\b", "teamwork"),
     (r"\bparadigm shifts?\b", "big change"),
     (r"\bgame.?changer\b", "big deal"),
     (r"\bdelve (?:into|deeper)\b", "get into"),
-    (r"\bdive deep(?:er)? into\b", "get into"),
-    (r"\bunpack\b", "break down"),
     (r"\bseamless(?:ly)?\b", "smooth"),
     (r"\brobust\b", "strong"),
     (r"\bcomprehensive\b", "complete"),
-    (r"\binnovative\b", "new"),
-    (r"\bcutting.?edge\b", "modern"),
-    (r"\bstate.?of.?the.?art\b", "advanced"),
     (r"\bholistic(?:ally)?\b", "full"),
-    (r"\bscalable\b", "flexible"),
-    (r"\btransformative\b", "powerful"),
-    (r"\bparamount\b", "critical"),
-    (r"\bproactive(?:ly)?\b", "ahead of time"),
-    (r"\bactionable\b", "practical"),
-    (r"\bimpactful\b", "effective"),
-    (r"\bdynamic\b", "active"),
-    (r"\bsustainable\b", "lasting"),
-    (r"\bstrategic(?:ally)?\b", "smart"),
-    (r"\bempow(?:er|ering|ers)\b", "help"),
-    (r"\bfoster(?:ing)?\b", "build"),
-    (r"\bcultivat(?:e|ing)\b", "build"),
-    (r"\bexemplif(?:y|ies|ied)\b", "show"),
-    (r"\bdemonstrat(?:e|ing|ed)\b", "show"),
-    (r"\bfacilitat(?:e|ing|ed)\b", "help"),
-    (r"\benhanc(?:e|ing|ed)\b", "improve"),
-    (r"\bmitigat(?:e|ing|ed)\b", "reduce"),
-    (r"\bpivot(?:ing)?\b", "shift"),
-    (r"\bnarrative\b", "story"),
-    (r"\becosystem\b", "world"),
-    # Additional consultant-speak the new strategist brief explicitly bans
+    # Consultant-speak the strategist brief explicitly bans
     (r"\bcircle back\b", "follow up"),
     (r"\btouch base\b", "check in"),
     (r"\bbest practices\b", "what works"),
@@ -363,8 +334,8 @@ def _humanize_content(text: str) -> str:
     if not text:
         return text
 
-    # Em-dash and en-dash → comma or hyphen
-    text = re.sub(r"\s*—\s*", ", ", text)
+    # Em-dash is intentionally KEPT — it reads human in punchy copy (Phase 1.3). Only the en-dash
+    # (a typographic range/number dash, not a cadence marker) is normalized to a plain hyphen.
     text = re.sub(r"\s*–\s*", "-", text)
 
     # Unicode bullet symbols at line start → simple hyphen
@@ -555,6 +526,49 @@ def _is_indian_audience(onboarding: dict, client: dict) -> bool:
     return False
 
 
+# Per-client spice dial — scales controversy tolerance / hook risk / opinion strength /
+# distance from the safe-niche-cliché. Operator-controlled, per-client. Contract:
+#   field: spice_level (optional str) in {"safe","balanced","bold","unhinged"}
+#   None / missing / unknown  ->  "balanced"
+# "balanced" intentionally returns "" so the default path leaves the prompt (and its cache) byte-
+# identical to pre-spice-dial generations. Non-balanced levels add a short dynamic-suffix block.
+_SPICE_BLOCKS: dict[str, str] = {
+    "safe": (
+        "SPICE LEVEL — SAFE:\n"
+        "- Stay professional and broadly agreeable. No controversy, no calling anyone out.\n"
+        "- Opinions stay mild and well-hedged; nothing a brand-safe client would flinch at.\n"
+        "- Hooks lean reassuring and credible over provocative. Reach ceiling is lower; that's fine."
+    ),
+    # balanced is the current default behavior -> empty block keeps the prompt cache stable.
+    "balanced": "",
+    "bold": (
+        "SPICE LEVEL — BOLD:\n"
+        "- Take strong, specific opinions. Pick a side. Contrarian angles are encouraged.\n"
+        "- Call out what the niche gets wrong by name (the practice, not real people).\n"
+        "- Hooks should sting a little and break the safe-niche-cliché — spicy, but not alienating.\n"
+        "- Sit clearly further from the obvious take than a 'balanced' post would."
+    ),
+    "unhinged": (
+        "SPICE LEVEL — UNHINGED:\n"
+        "- Maximum heat. Lead with the hottest take you can defend. Provocative pattern-interrupts.\n"
+        "- Attack sacred cows of the niche head-on; say the thing everyone thinks but won't post.\n"
+        "- The hook must feel almost too far — highest reach ceiling, built to be argued with and shared.\n"
+        "- Never the safe, obvious, or universally-agreeable angle. If it could be a brand's tagline, scrap it.\n"
+        "- Stay truthful and on-brand-topic; heat comes from stance and phrasing, not from lies or slurs."
+    ),
+}
+
+
+def _build_spice_block(spice_level: str | None) -> str:
+    """Return the prompt block for a client's spice dial.
+
+    None / missing / unknown values resolve to 'balanced'. 'balanced' returns "" so the default
+    generation path stays byte-identical to pre-dial behavior (keeps the prompt cache stable).
+    """
+    key = (spice_level or "balanced").strip().lower()
+    return _SPICE_BLOCKS.get(key, _SPICE_BLOCKS["balanced"])
+
+
 def _build_topic_rules_block(client: dict) -> str:
     """Returns a hard-enforcement topic rules block for the top of the system prompt.
     Returns empty string if no rules are configured."""
@@ -651,6 +665,7 @@ async def _generate_single_image_hook(
     topic: str | None,
     platform: str,
     db=None,
+    spice_level: str | None = None,
 ) -> dict:
     """Single-pass generation for a hook-based single image post."""
     import time
@@ -673,6 +688,7 @@ async def _generate_single_image_hook(
     # the India framing when relevant. Slide structure / format guidance / memory recall do not
     # apply (there's only one card), so we skip those and add a single-card word budget.
     india_block = _CAROUSEL_INDIA_FRAMING if _is_indian_audience(onboarding, client) else ""
+    spice_block = _build_spice_block(spice_level if spice_level is not None else client.get("spice_level"))
 
     # Hook anchor — forces the model to build the hook from THIS client's onboarding details
     # instead of recycling the persona's example phrasings across every client.
@@ -697,6 +713,7 @@ async def _generate_single_image_hook(
     _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
     system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
 {india_block}
+{spice_block}
 CLIENT CONTEXT:
 You are writing for {name} ({industry}).
 Brand voice: {tone} | Language: {language} | Platform: {platform}
@@ -729,7 +746,7 @@ Return ONLY this JSON (no markdown, no explanation):
 
     try:
         resp = await ai_client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-4-5",
             max_tokens=400,
             system=system_msg,
             messages=[{"role": "user", "content": user_msg}],
@@ -787,6 +804,7 @@ async def _generate_carousel_single_pass(
     recent_text_memory: str = "",
     similarity_retry_note: str = "",
     db=None,
+    spice_level: str | None = None,
 ) -> dict:
     """Generate a full carousel in a single Sonnet call driven by the world-class strategist prompt.
 
@@ -889,6 +907,7 @@ async def _generate_carousel_single_pass(
     min_budget = max(25, content_word_budget - 20)
 
     india_block = _CAROUSEL_INDIA_FRAMING if _is_indian_audience(onboarding, client) else ""
+    spice_block = _build_spice_block(spice_level if spice_level is not None else client.get("spice_level"))
 
     _slides_example = ", ".join(
         '{{"slide_number": {n}, "content": "text"}}'.format(n=i + 1)
@@ -922,6 +941,7 @@ async def _generate_carousel_single_pass(
     # ── Dynamic suffix (per-client, per-call) ─────────────────────────────────
     dynamic_suffix = f"""{_topic_rules_prefix}
 {india_block}
+{spice_block}
 CLIENT CONTEXT:
 You are writing for {name} ({industry}).
 Brand voice: {tone} | Language: {language} | Platform: {platform}
@@ -1113,7 +1133,7 @@ Respond ONLY with valid JSON:
 
     try:
         resp = ai_client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-4-5",
             max_tokens=800,
             system=system_msg,
             messages=[{"role": "user", "content": user_msg}],
@@ -1148,10 +1168,15 @@ async def generate_carousel(
     global_instructions: str | None = None,
     slide_format: str | None = None,
     db=None,
+    spice_level: str | None = None,
 ) -> dict:
     api_key = os.environ.get('ANTHROPIC_API_KEY', '')
     if not api_key:
         return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
+
+    # Resolve the spice dial once: explicit per-call param wins, else the client's stored level,
+    # else None (which _build_spice_block treats as 'balanced').
+    resolved_spice = spice_level if spice_level is not None else client.get("spice_level")
 
     import time
     t_total = time.time()
@@ -1182,6 +1207,7 @@ async def generate_carousel(
         return await _generate_single_image_hook(
             anthropic.Anthropic(api_key=api_key),
             client, onboarding, topic, platform, db=db,
+            spice_level=resolved_spice,
         )
     trend_context = _build_trend_context(trends, client.get("industry", "this industry"), client.get("name", "Brand"))
 
@@ -1204,6 +1230,7 @@ async def generate_carousel(
             recent_text_memory=recent_text_memory,
             similarity_retry_note=retry_note,
             db=db,
+            spice_level=resolved_spice,
         )
 
     try:

@@ -18,6 +18,51 @@ const TABS = ["Overview", "Strategy", "Platforms", "Posts", "Pipeline", "Leads",
 
 const STATUS_DOT = { active: "text-emerald-400", paused: "text-amber-400", error: "text-red-400" };
 
+// ─── Spice dial ───────────────────────────────────────────────────────────────
+// Per-client content boldness control. Unset displays as "balanced".
+const SPICE_DEFAULT = "balanced";
+const SPICE_LEVELS = [
+  { value: "safe",      label: "Safe",      helper: "Professional, broadly agreeable, no controversy." },
+  { value: "balanced",  label: "Balanced",  helper: "Sharp but measured (default)." },
+  { value: "bold",      label: "Bold",      helper: "Strong opinions and contrarian angles. Spicy, not alienating." },
+  { value: "unhinged",  label: "Unhinged",  helper: "Maximum heat. Hot takes. Highest reach, higher risk." },
+];
+
+function SpiceDial({ value, onChange }) {
+  const current = SPICE_LEVELS.find(l => l.value === value) || SPICE_LEVELS.find(l => l.value === SPICE_DEFAULT);
+  return (
+    <div data-testid="spice-dial">
+      <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
+        Content spice level
+      </label>
+      <div className="flex border border-zinc-700 w-fit">
+        {SPICE_LEVELS.map((lvl, i) => {
+          const selected = current.value === lvl.value;
+          return (
+            <button
+              type="button"
+              key={lvl.value}
+              data-testid={`spice-level-${lvl.value}`}
+              aria-pressed={selected}
+              onClick={() => onChange(lvl.value)}
+              className={`px-4 py-1.5 text-xs font-mono uppercase transition-colors duration-150 ${i > 0 ? "border-l border-zinc-700" : ""} ${
+                selected
+                  ? "bg-white text-black font-semibold"
+                  : "bg-zinc-950 text-zinc-500 hover:text-white"
+              }`}
+            >
+              {lvl.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] font-mono text-zinc-600 leading-relaxed mt-1.5">
+        {current.helper}
+      </p>
+    </div>
+  );
+}
+
 // ─── Edit Profile helpers ─────────────────────────────────────────────────────
 
 function initEditForm(client) {
@@ -1829,7 +1874,7 @@ export default function ClientDetail() {
   const [editForm, setEditForm] = useState(null);
   // tone and topics_exclude removed — they are canonical at onboarding_data.brand_vibe /
   // onboarding_data.not_to_do_list. Editable only in Profile tab; this tab shows read-only mirrors.
-  const [strategyForm, setStrategyForm] = useState({ themes: "", hashtags: "", topics_include: [], video_hooks: [], video_prompt: "" });
+  const [strategyForm, setStrategyForm] = useState({ themes: "", hashtags: "", topics_include: [], video_hooks: [], video_prompt: "", spice_level: SPICE_DEFAULT });
   const [topicIncludeInput, setTopicIncludeInput] = useState("");
   const [neverCoverInput, setNeverCoverInput] = useState("");
   const [hookGenOpen, setHookGenOpen] = useState(false);
@@ -1872,7 +1917,10 @@ export default function ClientDetail() {
         hashtags: defaultHashtags,
         topics_include: defaultTopics,
         video_hooks: s.video_hooks || [],
-        video_prompt: s.video_prompt || ""
+        video_prompt: s.video_prompt || "",
+        // Per-client spice dial. Unset resolves to "balanced". Accept either a
+        // top-level client field or a value nested in strategy (backend contract).
+        spice_level: clientResp.data.spice_level || s.spice_level || SPICE_DEFAULT,
       });
     } catch { toast.error("Failed to load client"); }
     finally { setLoading(false); }
@@ -1979,14 +2027,16 @@ export default function ClientDetail() {
       // tone and topics_exclude intentionally omitted — canonical at
       // onboarding_data.brand_vibe / onboarding_data.not_to_do_list, derived to
       // strategy.tone / strategy.topics_exclude server-side by _recompute_derived.
+      const spice_level = strategyForm.spice_level || SPICE_DEFAULT;
       const strategy = {
         themes: strategyForm.themes.split(",").map(t => t.trim()).filter(Boolean),
         hashtags: strategyForm.hashtags.split(",").map(h => h.trim().replace(/^#/, "").replace(/^/, "#")).filter(h => h !== "#"),
         topics_include: strategyForm.topics_include,
         video_hooks: strategyForm.video_hooks.filter(h => h.title.trim() || h.prompt.trim()),
-        video_prompt: (strategyForm.video_prompt || "").trim()
+        video_prompt: (strategyForm.video_prompt || "").trim(),
       };
-      const resp = await axios.put(`${API}/clients/${id}`, { strategy });
+      // spice_level is a top-level client field (backend reads client.spice_level).
+      const resp = await axios.put(`${API}/clients/${id}`, { strategy, spice_level });
       setClient(resp.data);
       toast.success("Strategy saved");
     } catch { toast.error("Failed to save strategy"); }
@@ -2330,6 +2380,10 @@ export default function ClientDetail() {
                   />
                 </div>
               </div>
+              <SpiceDial
+                value={strategyForm.spice_level}
+                onChange={v => setStrategyForm(f => ({ ...f, spice_level: v }))}
+              />
             </div>
           </div>
 
