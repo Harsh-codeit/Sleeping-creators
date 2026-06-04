@@ -713,6 +713,7 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const publishingRef = useRef(false);
 
   // Sync form when post changes
@@ -732,7 +733,8 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
     setSaving(true);
     try {
       const update = {
-        text: form.text,
+        // Video posts use the caption field; non-video posts use text
+        ...(isVideo ? { caption: form.text } : { text: form.text }),
         scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : undefined,
       };
       // Trim slides if count changed
@@ -801,6 +803,20 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
       onUpdate();
     } catch { toast.error("Sync failed"); }
     finally { setSyncing(false); }
+  };
+
+  const regenerateCaption = async () => {
+    setRegenerating(true);
+    try {
+      const resp = await axios.post(`${API}/posts/${post.id}/regenerate-caption`);
+      setForm(f => ({ ...f, text: resp.data.caption || "" }));
+      toast.success("Caption regenerated");
+      onUpdate();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Caption regeneration failed");
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   return (
@@ -947,7 +963,18 @@ function PostSidebar({ post, clientColor, onClose, onUpdate }) {
             <div className="text-[10px] font-mono text-zinc-600">Published: {format(parseISO(post.published_at), "MMM d, h:mm a")}</div>
           )}
           {post.error_message && (
-            <div className="text-[10px] font-mono text-red-500 mt-1 p-2 bg-red-950/20 border border-red-900/40">{post.error_message}</div>
+            <div className="text-[10px] font-mono text-red-500 mt-1 p-2 bg-red-950/20 border border-red-900/40">
+              {post.error_message}
+              {isVideo && !form.text.trim() && (
+                <button
+                  onClick={regenerateCaption}
+                  disabled={regenerating}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 text-[10px] border border-violet-800 text-violet-400 hover:bg-violet-950 transition-colors disabled:opacity-50"
+                >
+                  {regenerating ? "Regenerating..." : "✦ Regenerate Caption with AI"}
+                </button>
+              )}
+            </div>
           )}
 
           {/* Bundle post ID */}

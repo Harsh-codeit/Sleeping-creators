@@ -129,6 +129,7 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("POST",   r"^/api/posts/[^/]+/schedule"):            ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/approve"):             ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/mark-published"):      ("calendar", "edit"),
+    ("POST",   r"^/api/posts/[^/]+/regenerate-caption"):  ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/retry-render"):        ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/publish"):             ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/winner"):              ("calendar", "edit"),
@@ -382,6 +383,7 @@ class PostCreate(BaseModel):
 
 class PostUpdate(BaseModel):
     text: Optional[str] = None
+    caption: Optional[str] = None
     image_url: Optional[str] = None
     hashtags: Optional[List[str]] = None
     scheduled_at: Optional[str] = None
@@ -3557,6 +3559,44 @@ async def delete_post(post_id: str):
     if result.deleted_count == 0:
         raise HTTPException(404, "Post not found")
     return {"message": "Post deleted"}
+
+@api_router.post("/posts/{post_id}/regenerate-caption")
+async def regenerate_post_caption(post_id: str):
+    """Re-run AI caption generation for a video post with a blank caption.
+    Updates caption + hashtags in place; does not change status or trigger a publish."""
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("kind") != "video":
+        raise HTTPException(400, "Caption regeneration is only supported for video posts")
+
+    client = await db.clients.find_one({"id": post["client_id"]}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    prompt_text = post.get("prompt") or post.get("topic") or ""
+    if not prompt_text.strip():
+        niche = client.get("niche") or client.get("industry") or "their niche"
+        prompt_text = f"Create engaging content for {client.get('name', 'the brand')} about {niche}"
+
+    from video_render_service import generate_video_content
+    template = await db.shotstack_templates.find_one({"id": post.get("template_id")}, {"_id": 0}) or {}
+    ai_text_fields = [f for f in template.get("merge_fields", []) if f.get("role") == "ai_text"]
+
+    r = await generate_video_content(prompt_text, client, ai_text_fields, db=db)
+    caption = r.get("caption") or ""
+    hashtags = r.get("hashtags") or []
+
+    if not caption:
+        raise HTTPException(500, "Caption generation returned empty result — try again")
+
+    await db.posts.update_one(
+        {"id": post_id},
+        {"$set": {"caption": caption, "hashtags": hashtags, "error_message": None}},
+    )
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    return post
+
 
 @api_router.post("/posts/{post_id}/retry-render")
 async def retry_video_render(post_id: str):
