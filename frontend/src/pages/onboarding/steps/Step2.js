@@ -9,6 +9,7 @@ import {
   CappedMultiInput,
   LongTextarea,
 } from "../primitives";
+import NicheSelect from "@/components/NicheSelect";
 
 /**
  * Step 2 — Story, Brand & Audience
@@ -86,9 +87,20 @@ export default function Step2({ form, set }) {
             testid="ob-niche"
             value={form.niche ?? ""}
             onChange={(e) => set("niche", e.target.value)}
-            placeholder="e.g. I help busy moms lose weight"
+            placeholder="e.g. D2C skincare for oily Indian skin"
           />
-          <p className="text-[10px] font-mono text-zinc-600 mt-1">Keep it to 6 words or less</p>
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">Be specific — this descriptive line drives how your hooks are written.</p>
+        </div>
+
+        <div>
+          <Label>Niche category</Label>
+          <NicheSelect
+            testid="ob-niche-slug"
+            value={form.niche_slug ?? ""}
+            onChange={(v) => set("niche_slug", v)}
+            placeholder="Select your niche category"
+          />
+          <p className="text-[10px] font-mono text-zinc-600 mt-1">Used to match proven viral hooks from your category</p>
         </div>
 
         <div>

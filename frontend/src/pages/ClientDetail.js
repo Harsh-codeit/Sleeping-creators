@@ -6,6 +6,7 @@ import { ArrowLeft, Circle, Pause, Play, Save, Wand2, Send, Trash2, Link, Link2O
 import PipelineManager from "@/components/PipelineManager";
 import CompetitorTab from "@/components/CompetitorTab";
 import ClientMediaTab from "@/components/ClientMediaTab";
+import NicheSelect from "@/components/NicheSelect";
 import WeekPlanTab from "@/components/strategy/WeekPlanTab";
 import ReportTab from "@/components/strategy/ReportTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
@@ -80,6 +81,7 @@ function initEditForm(client) {
     instagram_access_link: ob.instagram_access_link || "",
     instagram_password: ob.instagram_password || "",
     niche: ob.niche || client.industry || "",
+    niche_slug: ob.niche_slug || "",
     problem_solved: ob.problem_solved || "",
     brand_vibe: Array.isArray(ob.brand_vibe) ? ob.brand_vibe : (ob.brand_vibe ? [ob.brand_vibe] : []),
     account_goals: ob.account_goals || "followers",
@@ -493,7 +495,13 @@ function EditProfileTab({ editForm, setEditForm, saving, onSave }) {
         <div className="space-y-4">
           <div>
             <ELabel optional>Niche / Target Market</ELabel>
-            <EInput value={editForm.niche} onChange={e => set("niche", e.target.value)} placeholder="e.g. Health-conscious adults 25-40, B2B SaaS CTOs" data-testid="edit-niche" />
+            <EInput value={editForm.niche} onChange={e => set("niche", e.target.value)} placeholder="e.g. D2C skincare for oily Indian skin" data-testid="edit-niche" />
+            <p className="text-[10px] font-mono text-zinc-600 mt-1">Descriptive line — drives hook specificity.</p>
+          </div>
+          <div>
+            <ELabel optional>Niche category</ELabel>
+            <NicheSelect value={editForm.niche_slug ?? ""} onChange={v => set("niche_slug", v)} placeholder="Select a niche category" testid="edit-niche-slug" />
+            <p className="text-[10px] font-mono text-zinc-600 mt-1">Canonical category used to match proven viral hooks.</p>
           </div>
           <div>
             <ELabel>Brand Vibe / Tone of Voice</ELabel>

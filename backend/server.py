@@ -11,6 +11,7 @@ from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Union
 from client_utils import _recompute_derived, _get_tone, _expand_derived_into_doc
+import taxonomy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -47,7 +48,7 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/", "/api/bundle/authorize/")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/", "/api/bundle/authorize/", "/api/taxonomy/")
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
@@ -306,6 +307,7 @@ class ClientUpdate(BaseModel):
     instagram_access_link: Optional[str] = None
     instagram_password: Optional[str] = None  # WARNING: stored as plaintext per user decision
     niche: Optional[str] = None
+    niche_slug: Optional[str] = None  # canonical taxonomy slug (retrieval/library key)
     problem_solved: Optional[str] = None
     brand_vibe: Optional[Union[str, List[str]]] = None
     account_goals: Optional[str] = None
@@ -373,6 +375,17 @@ class ClientUpdate(BaseModel):
     carousel_author_handle: Optional[str] = None
     carousel_author_title: Optional[str] = None
     spice_level: Optional[str] = None   # safe | balanced | bold | unhinged (None -> balanced at gen time)
+
+    @field_validator("niche_slug", mode="before")
+    @classmethod
+    def validate_niche_slug(cls, v):
+        # Controlled field: only canonical taxonomy slugs are persisted.
+        # None passes through (no-op update); unknown values reject at boundary.
+        if v is None:
+            return v
+        if not taxonomy.is_valid_niche(v):
+            raise ValueError(f"niche_slug must be one of taxonomy.NICHES (got {v!r})")
+        return v
 
 class PostCreate(BaseModel):
     client_id: str
@@ -698,7 +711,8 @@ class OnboardingCreate(BaseModel):
     # — Step 2A: Story & Business —
     personal_story: str = ""
     business_description: str = ""
-    niche: str = ""
+    niche: str = ""              # free-text one-line niche statement (drives hook specificity)
+    niche_slug: str = ""         # canonical niche category (taxonomy.NICHES) for hook-library retrieval
     industry_label: str = ""
     daily_life: str = ""
 
@@ -2628,6 +2642,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ─── Taxonomy Routes ──────────────────────────────────────────────────────────
+
+@api_router.get("/taxonomy/niches")
+async def list_niches():
+    """Canonical niche enum shared by client profile + hook library.
+    Public-ish (auth-exempt): static, non-sensitive vocabulary the onboarding
+    select binds to. Returns {"niches": [{"value": slug, "label": label}, ...]}
+    including the "other" catch-all, in canonical NICHES order."""
+    return {"niches": taxonomy.niche_options()}
+
+
 # ─── Client Routes ────────────────────────────────────────────────────────────
 
 @api_router.get("/clients")
@@ -2692,7 +2717,7 @@ async def get_client(client_id: str):
 _ONBOARDING_KEYS = frozenset({
     # Existing fields
     "username", "whatsapp", "email", "website_url", "pr_links",
-    "instagram_handle", "instagram_access_link", "instagram_password", "niche", "problem_solved",
+    "instagram_handle", "instagram_access_link", "instagram_password", "niche", "niche_slug", "problem_solved",
     "brand_vibe", "account_goals", "cta_link", "language", "branding_assets_link",
     "google_drive_images", "google_drive_videos", "lead_magnets",
     "automation_keywords", "competitor_accounts", "lead_sheet_link", "bio_template",

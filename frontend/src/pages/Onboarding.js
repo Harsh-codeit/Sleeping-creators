@@ -35,7 +35,7 @@ const INITIAL = {
   // — Step 1D: Account Health —
   account_suspended: false, paid_ads_run: false,
   // — Step 2A: Story & Business —
-  personal_story: "", business_description: "", niche: "", daily_life: "",
+  personal_story: "", business_description: "", niche: "", niche_slug: "", daily_life: "",
   // — Step 2B: Audience —
   target_audience_description: "", audience_age_range: "", audience_emotional_state: [],
   // — Step 2C: Deep Audience Intelligence (cap 5) —
