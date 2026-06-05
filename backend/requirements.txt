@@ -38,3 +38,5 @@ redis==5.0.1
 ffmpeg-python==0.2.0
 mutagen>=1.47.0
 fakeredis>=2.20.0
+sqlite-vec>=0.1.9
+ImageHash>=4.3.2

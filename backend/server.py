@@ -254,6 +254,19 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("PUT",    r"^/api/settings$"):                       ("settings", "edit"),
     # Taxonomy (admin-editable niche list). GET is auth-exempt; PUT is gated.
     ("PUT",    r"^/api/taxonomy/niches$"):                ("settings", "edit"),
+    # Viral hook library (admin curation). Reads -> settings:view; all writes
+    # (ingest, approve/reject, edit, delete) -> settings:edit. NOT auth-exempt:
+    # the approve/reject routes deliberately use the gated /api/viral-hooks
+    # prefix so the Telegram public-suffix rule (scoped to /api/posts/) never
+    # exempts them.
+    ("POST",   r"^/api/viral-hooks/ingest$"):             ("settings", "edit"),
+    ("GET",    r"^/api/viral-hooks/ingest/[^/]+$"):       ("settings", "view"),
+    ("GET",    r"^/api/viral-hooks$"):                    ("settings", "view"),
+    ("GET",    r"^/api/viral-hooks/[^/]+$"):              ("settings", "view"),
+    ("POST",   r"^/api/viral-hooks/[^/]+/approve$"):      ("settings", "edit"),
+    ("POST",   r"^/api/viral-hooks/[^/]+/reject$"):       ("settings", "edit"),
+    ("PUT",    r"^/api/viral-hooks/[^/]+$"):              ("settings", "edit"),
+    ("DELETE", r"^/api/viral-hooks/[^/]+$"):              ("settings", "edit"),
 }
 
 _MEMBER_EXEMPT = ("/api/me", "/api/auth/")
@@ -280,7 +293,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.method == "GET" and any(path.startswith(p) for p in _AUTH_EXEMPT_GET):
             return await call_next(request)
-        if any(path.endswith(s) for s in _PUBLIC_SUFFIXES):
+        # Public Telegram approve/reject links are scoped to posts only; other
+        # routes that happen to end in /approve|/reject (e.g. the gated viral
+        # hook library) must NOT be exempted here.
+        if path.startswith("/api/posts/") and any(path.endswith(s) for s in _PUBLIC_SUFFIXES):
             return await call_next(request)
         if not path.startswith("/api/"):
             return await call_next(request)
@@ -2557,6 +2573,13 @@ async def purge_published_media():
 async def lifespan(app: FastAPI):
     await seed_sample_data()
     await _load_niche_cache()
+    # Standalone viral-hook library (SQLite + sqlite-vec + FTS5). Idempotent;
+    # the app reads at retrieval, the hook-ingest worker is the sole writer.
+    try:
+        import viral_library
+        viral_library.init_db()
+    except Exception as _e:
+        logger.warning(f"viral_library.init_db failed at startup: {_e}")
     import storage as _storage
     _storage.ensure_bucket()
     _now = datetime.now(timezone.utc)
@@ -2765,6 +2788,159 @@ async def update_niches(data: NicheListUpdate):
     await db.settings.update_one({"key": "global"}, {"$set": {"niches": cleaned}}, upsert=True)
     _refresh_niche_cache_from_values(cleaned)
     return {"niches": cleaned}
+
+
+# ─── Viral Hook Library Routes ────────────────────────────────────────────────
+# Admin curation surface for the standalone viral_library.db (separate from
+# Mongo). Bulk image upload is async: the API saves each screenshot to a shared
+# temp volume and enqueues one Celery task per file, returning a batch_id
+# immediately; the hook-ingest worker processes them out-of-process. All reads
+# require settings:view, all writes settings:edit (see PERMISSION_MAP). The
+# library is opened read-only here; only the worker writes.
+
+_HOOK_UPLOAD_ALLOWED = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+_HOOK_UPLOAD_MAX_BYTES = 10 * 1024 * 1024  # 10MB per screenshot
+
+
+def _hook_ingest_tmp_dir() -> "Path":
+    raw = os.environ.get("HOOK_INGEST_TMP")
+    d = Path(raw) if raw else (Path(__file__).parent / "data" / "hook_ingest_tmp")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+class HookUpdate(BaseModel):
+    """Editable fields when curating a hook from the review queue."""
+    hook_text: Optional[str] = None
+    niche_slug: Optional[str] = None
+    category: Optional[str] = None
+    hook_type: Optional[str] = None
+    platform: Optional[str] = None
+    language: Optional[str] = None
+    trigger: Optional[str] = None
+    source: Optional[str] = None
+    engagement_signal: Optional[str] = None
+    virality_score: Optional[float] = None
+    status: Optional[str] = None
+
+
+@api_router.post("/viral-hooks/ingest")
+async def ingest_viral_hooks(files: List[UploadFile] = File(...), platform: str = Form(None)):
+    """Bulk screenshot upload. Validates each file (type + size), saves it to the
+    shared temp volume, creates a batch progress doc, and enqueues one
+    process_hook_image task per file. Returns {batch_id, queued} immediately —
+    the worker does the vision/embed/dedup/insert work out-of-process."""
+    if not files:
+        raise HTTPException(400, "No files uploaded")
+
+    tmp_dir = _hook_ingest_tmp_dir()
+    batch_id = uuid.uuid4().hex
+    saved: list[str] = []
+    for f in files:
+        if f.content_type not in _HOOK_UPLOAD_ALLOWED:
+            raise HTTPException(400, f"{f.filename}: only JPEG, PNG, WebP or GIF images are allowed")
+        contents = await f.read()
+        if len(contents) > _HOOK_UPLOAD_MAX_BYTES:
+            raise HTTPException(400, f"{f.filename}: image must be under 10MB")
+        ext = (f.filename.rsplit(".", 1)[-1].lower() if f.filename and "." in f.filename else "png")
+        dest = tmp_dir / f"{batch_id}_{uuid.uuid4().hex}.{ext}"
+        dest.write_bytes(contents)
+        saved.append(str(dest))
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.hook_ingest_batches.insert_one({
+        "id": batch_id,
+        "total": len(saved),
+        "processed": 0,
+        "inserted": 0,
+        "duplicates": 0,
+        "rejected": 0,
+        "review": 0,
+        "errors": 0,
+        "created_at": now,
+    })
+
+    from hook_ingest_worker import process_hook_image
+    queued = 0
+    for path in saved:
+        process_hook_image.apply_async(args=[{
+            "image_path": path,
+            "batch_id": batch_id,
+            "created_by": "admin",
+            "platform": platform,
+        }])
+        queued += 1
+
+    return {"batch_id": batch_id, "queued": queued}
+
+
+@api_router.get("/viral-hooks/ingest/{batch_id}")
+async def get_ingest_batch(batch_id: str):
+    """Progress for a bulk-ingest batch: total + per-outcome counters."""
+    doc = await db.hook_ingest_batches.find_one({"id": batch_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Batch not found")
+    return doc
+
+
+@api_router.get("/viral-hooks")
+async def list_viral_hooks(
+    niche_slug: Optional[str] = None,
+    hook_type: Optional[str] = None,
+    status: Optional[str] = None,
+    text: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """Filtered list of library hooks (sync sqlite call off the event loop)."""
+    from starlette.concurrency import run_in_threadpool
+    import viral_library
+    rows = await run_in_threadpool(
+        viral_library.list_hooks,
+        niche_slug=niche_slug, hook_type=hook_type, status=status,
+        text=text, limit=limit, offset=offset,
+    )
+    return {"hooks": rows}
+
+
+@api_router.post("/viral-hooks/{hook_id}/approve")
+async def approve_viral_hook(hook_id: str):
+    """Promote a review-queue hook to live retrieval (settings:edit)."""
+    from starlette.concurrency import run_in_threadpool
+    import viral_library
+    await run_in_threadpool(viral_library.set_status, hook_id, "live")
+    return {"id": hook_id, "status": "live"}
+
+
+@api_router.post("/viral-hooks/{hook_id}/reject")
+async def reject_viral_hook(hook_id: str):
+    """Reject a hook so it never enters retrieval (settings:edit)."""
+    from starlette.concurrency import run_in_threadpool
+    import viral_library
+    await run_in_threadpool(viral_library.set_status, hook_id, "rejected")
+    return {"id": hook_id, "status": "rejected"}
+
+
+@api_router.put("/viral-hooks/{hook_id}")
+async def update_viral_hook(hook_id: str, data: HookUpdate):
+    """Edit a hook's curated fields (settings:edit)."""
+    from starlette.concurrency import run_in_threadpool
+    import viral_library
+    fields = {k: v for k, v in data.model_dump().items() if v is not None}
+    await run_in_threadpool(viral_library.update_hook, hook_id, fields)
+    updated = await run_in_threadpool(viral_library.get_hook, hook_id)
+    if not updated:
+        raise HTTPException(404, "Hook not found")
+    return updated
+
+
+@api_router.delete("/viral-hooks/{hook_id}")
+async def delete_viral_hook(hook_id: str):
+    """Permanently remove a hook from the library (settings:edit)."""
+    from starlette.concurrency import run_in_threadpool
+    import viral_library
+    await run_in_threadpool(viral_library.delete_hook, hook_id)
+    return {"id": hook_id, "deleted": True}
 
 
 # ─── Client Routes ────────────────────────────────────────────────────────────

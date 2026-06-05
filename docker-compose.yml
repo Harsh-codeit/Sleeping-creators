@@ -30,6 +30,16 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URL=mongodb://mongo:27017
+      # Shared viral-hook library (SQLite) + ingest temp dir. The app reads the
+      # library at retrieval; the hook-worker is the sole writer. Both paths sit
+      # on named volumes mounted by app AND hook-worker so they share the same
+      # SQLite file and the same uploaded-image handoff dir.
+      - VIRAL_LIBRARY_DB=/data/viral_library/viral_library.db
+      - HOOK_INGEST_TMP=/data/hook_ingest_tmp
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - viral_library_data:/data/viral_library
+      - hook_ingest_tmp:/data/hook_ingest_tmp
     depends_on:
       mongo:
         condition: service_healthy
@@ -58,5 +68,31 @@ services:
       redis:
         condition: service_healthy
 
+  hook-worker:
+    build: .
+    restart: unless-stopped
+    # Parallel vision/embed (concurrency 4); SQLite writes are serialized inside
+    # viral_library, so the library stays single-writer-safe across workers.
+    command: >
+      sh -c "cd /app && celery -A hook_ingest_worker worker --loglevel=info --concurrency=4"
+    env_file:
+      - backend/.env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://mongo:27017
+      - VIRAL_LIBRARY_DB=/data/viral_library/viral_library.db
+      - HOOK_INGEST_TMP=/data/hook_ingest_tmp
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - viral_library_data:/data/viral_library
+      - hook_ingest_tmp:/data/hook_ingest_tmp
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   mongo_data:
+  viral_library_data:
+  hook_ingest_tmp:
