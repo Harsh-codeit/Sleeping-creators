@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { Save, Send, Zap, Bot, Settings2, Lock, FileSpreadsheet, CheckCircle2, AlertCircle, Link, Copy } from "lucide-react";
+import { Save, Send, Zap, Bot, Settings2, Lock, FileSpreadsheet, CheckCircle2, AlertCircle, Link, Copy, Tags, Plus, Trash2 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 import Logs from "./Logs";
 import TeamPage from "./TeamPage";
@@ -99,6 +99,7 @@ export default function Settings() {
         <h1 className="text-lg font-bold text-white tracking-tight mr-6">Settings</h1>
         {[
           { key: "general", label: "General" },
+          { key: "niches",  label: "Niches" },
           { key: "logs",    label: "Logs" },
           ...(isOwner ? [{ key: "team", label: "Team & Permissions" }] : []),
         ].map(({ key, label }) => (
@@ -115,6 +116,9 @@ export default function Settings() {
           </button>
         ))}
       </div>
+
+      {/* Niches tab */}
+      {activeTab === "niches" && <NichesSettings />}
 
       {/* Logs tab */}
       {activeTab === "logs" && <Logs />}
@@ -453,6 +457,146 @@ export default function Settings() {
       </div>
       </div>
       ))}
+    </div>
+  );
+}
+
+// Derive a kebab-case slug from a label (lowercase, alnum → hyphens, trimmed).
+function slugify(label) {
+  return (label || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function NichesSettings() {
+  // rows: [{ value, label, locked }] — locked rows (e.g. "other") can't be deleted.
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const resp = await axios.get(`${API}/taxonomy/niches`);
+      const list = Array.isArray(resp.data?.niches) ? resp.data.niches : [];
+      setRows(list.map(n => ({
+        value: n.value,
+        label: n.label,
+        locked: n.value === "other",
+      })));
+    } catch { toast.error("Failed to load niches"); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateLabel = (idx, label) => {
+    setRows(rs => rs.map((r, i) => {
+      if (i !== idx) return r;
+      // Locked rows keep their canonical slug; new/unlocked rows re-derive it.
+      const value = r.locked ? r.value : slugify(label);
+      return { ...r, label, value };
+    }));
+  };
+
+  const addRow = () => {
+    setRows(rs => [...rs, { value: "", label: "", locked: false }]);
+  };
+
+  const deleteRow = (idx) => {
+    setRows(rs => rs.filter((r, i) => i !== idx || r.locked));
+  };
+
+  const save = async () => {
+    // Build payload: drop empty labels, dedupe by value, ensure "other" present.
+    const cleaned = rows
+      .map(r => ({ value: r.locked ? r.value : slugify(r.label), label: (r.label || "").trim() }))
+      .filter(r => r.label && r.value);
+    const seen = new Set();
+    const deduped = [];
+    for (const r of cleaned) {
+      if (seen.has(r.value)) continue;
+      seen.add(r.value);
+      deduped.push(r);
+    }
+    if (!deduped.some(r => r.value === "other")) {
+      deduped.push({ value: "other", label: "Other" });
+    }
+    setSaving(true);
+    try {
+      await axios.put(`${API}/taxonomy/niches`, { niches: deduped });
+      toast.success("Niches saved");
+      await load();
+    } catch { toast.error("Failed to save niches"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="p-6 max-w-2xl overflow-y-auto">
+      <div className="bg-zinc-900 border border-zinc-800 p-5">
+        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
+          <Tags size={14} className="text-zinc-400" />
+          <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Niches</div>
+        </div>
+        <div className="text-[11px] font-mono text-zinc-500 leading-relaxed mb-4">
+          The canonical niche list used across onboarding and client profiles. Editing a label re-derives its
+          slug automatically. The <span className="text-zinc-300">Other</span> entry is required and cannot be removed.
+        </div>
+
+        {loading ? (
+          <div className="text-zinc-500 font-mono text-sm animate-pulse py-4">LOADING NICHES...</div>
+        ) : (
+          <>
+            <div className="space-y-2 mb-4">
+              {rows.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    data-testid={`niche-label-${idx}`}
+                    value={row.label}
+                    onChange={e => updateLabel(idx, e.target.value)}
+                    placeholder="Niche label"
+                    className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                  />
+                  <div className="w-40 flex-shrink-0 bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-500 truncate" title={row.value}>
+                    {row.value || <span className="text-zinc-700">slug…</span>}
+                  </div>
+                  <button
+                    data-testid={`niche-delete-${idx}`}
+                    onClick={() => deleteRow(idx)}
+                    disabled={row.locked}
+                    title={row.locked ? "Required — cannot delete" : "Delete niche"}
+                    className="flex-shrink-0 flex items-center justify-center w-8 h-8 border border-zinc-700 text-zinc-500 hover:text-red-400 hover:border-red-900 transition-colors disabled:opacity-30 disabled:hover:text-zinc-500 disabled:hover:border-zinc-700"
+                  >
+                    {row.locked ? <Lock size={12} /> : <Trash2 size={12} />}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <button
+                data-testid="niche-add-btn"
+                onClick={addRow}
+                className="flex items-center gap-2 px-3 py-2 text-xs border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150"
+              >
+                <Plus size={12} />
+                Add Niche
+              </button>
+              <button
+                data-testid="save-niches-btn"
+                onClick={save}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-black font-semibold text-sm hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
+              >
+                <Save size={14} />
+                {saving ? "Saving..." : "Save Niches"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

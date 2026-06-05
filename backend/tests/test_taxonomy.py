@@ -63,6 +63,19 @@ def test_seed_list_matches_contract():
     assert taxonomy.NICHES == expected
 
 
+def test_slugify():
+    assert taxonomy.slugify("SaaS & Tech") == "saas-tech"
+    assert taxonomy.slugify("Fitness Coaching") == "fitness-coaching"
+    assert taxonomy.slugify("  Pet  Care!  ") == "pet-care"
+    assert taxonomy.slugify("Ecommerce / D2C") == "ecommerce-d2c"
+    assert taxonomy.slugify("already-kebab") == "already-kebab"
+    assert taxonomy.slugify("") == ""
+    assert taxonomy.slugify("   ") == ""
+    assert taxonomy.slugify("!!!") == ""
+    assert taxonomy.slugify(None) == ""
+    assert taxonomy.slugify(123) == ""
+
+
 def test_niche_options_shape():
     opts = taxonomy.niche_options()
     assert isinstance(opts, list)

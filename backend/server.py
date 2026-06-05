@@ -40,6 +40,67 @@ scheduler = AsyncIOScheduler()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ─── Niche taxonomy (DB-managed, seed = taxonomy.NICHES) ──────────────────────
+# The canonical niche list is admin-editable and lives in the global settings
+# doc (db.settings key="global") under field ``niches``. The seed taxonomy is
+# the immutable floor. For sync-safe validation inside the pydantic validator we
+# keep an in-process set = seed NICHES UNION the DB niches. It's loaded lazily at
+# startup and refreshed by the PUT /api/taxonomy/niches handler after a save.
+_KEBAB_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+# Start from the seed so validation works before the DB cache is loaded.
+_VALID_NICHE_CACHE: set[str] = set(taxonomy.NICHES)
+
+
+def _refresh_niche_cache_from_values(values) -> set[str]:
+    """Rebuild the validator cache = seed NICHES UNION the given DB slug values.
+    Pass the list of slug strings (or {"value": ...} dicts). Returns the new set.
+    Synchronous and safe to call from the PUT handler / startup."""
+    global _VALID_NICHE_CACHE
+    db_slugs: set[str] = set()
+    for v in (values or []):
+        slug = v.get("value") if isinstance(v, dict) else v
+        if isinstance(slug, str) and slug:
+            db_slugs.add(slug)
+    _VALID_NICHE_CACHE = set(taxonomy.NICHES) | db_slugs
+    return _VALID_NICHE_CACHE
+
+
+def _is_valid_niche_cached(slug: object) -> bool:
+    """True iff ``slug`` is in the current valid set (seed UNION DB). Reads the
+    in-process cache only — never awaits — so it is safe in pydantic validators."""
+    return isinstance(slug, str) and slug in _VALID_NICHE_CACHE
+
+
+async def _load_niche_cache() -> set[str]:
+    """Load the DB niche list into the validator cache (called at startup)."""
+    try:
+        s = await db.settings.find_one({"key": "global"}, {"_id": 0, "niches": 1})
+        return _refresh_niche_cache_from_values((s or {}).get("niches"))
+    except Exception as e:  # pragma: no cover - defensive; seed still valid
+        logger.warning(f"Niche cache load failed, using seed only: {e}")
+        return _VALID_NICHE_CACHE
+
+
+def _resolve_niche_list(db_niches) -> list[dict]:
+    """Return the effective {"value","label"} list for GET. Uses the DB list if
+    present & non-empty, else the seed taxonomy. "other" is always appended if
+    missing. The list is never empty."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    source = db_niches if (isinstance(db_niches, list) and db_niches) else taxonomy.niche_options()
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("value")
+        if not isinstance(value, str) or not value or value in seen:
+            continue
+        label = item.get("label") or taxonomy.NICHE_LABELS.get(value) or taxonomy._derive_label(value)
+        out.append({"value": value, "label": label})
+        seen.add(value)
+    if "other" not in seen:
+        out.append({"value": "other", "label": taxonomy.NICHE_LABELS["other"]})
+    return out
+
 # ─── Auth helpers ────────────────────────────────────────────────────────────
 
 _JWT_SECRET  = os.environ.get("JWT_SECRET_KEY", secrets.token_hex(32))
@@ -48,7 +109,11 @@ _TOKEN_DAYS  = 30
 _pwd_ctx     = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Routes that don't need a JWT (prefix match)
-_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/", "/api/bundle/authorize/", "/api/taxonomy/")
+_AUTH_EXEMPT = ("/api/auth/", "/api/static/", "/api/instagram/callback", "/api/facebook/callback", "/webhooks/bundle", "/api/mail/webhook/", "/api/webhooks/affiliate/", "/api/bundle/authorize/")
+# Read-only, auth-exempt by method+prefix. GET /api/taxonomy/* is the public
+# onboarding vocabulary; mutations (PUT) are NOT exempt and go through the perm
+# map (settings:edit) below.
+_AUTH_EXEMPT_GET = ("/api/taxonomy/",)
 # Exact path suffixes that are public (Telegram approve/reject links)
 _PUBLIC_SUFFIXES = ("/approve", "/reject")
 
@@ -187,6 +252,8 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     # Settings
     ("GET",    r"^/api/settings$"):                       ("settings", "view"),
     ("PUT",    r"^/api/settings$"):                       ("settings", "edit"),
+    # Taxonomy (admin-editable niche list). GET is auth-exempt; PUT is gated.
+    ("PUT",    r"^/api/taxonomy/niches$"):                ("settings", "edit"),
 }
 
 _MEMBER_EXEMPT = ("/api/me", "/api/auth/")
@@ -210,6 +277,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if any(path.startswith(p) for p in _AUTH_EXEMPT):
+            return await call_next(request)
+        if request.method == "GET" and any(path.startswith(p) for p in _AUTH_EXEMPT_GET):
             return await call_next(request)
         if any(path.endswith(s) for s in _PUBLIC_SUFFIXES):
             return await call_next(request)
@@ -379,12 +448,16 @@ class ClientUpdate(BaseModel):
     @field_validator("niche_slug", mode="before")
     @classmethod
     def validate_niche_slug(cls, v):
-        # Controlled field: only canonical taxonomy slugs are persisted.
-        # None passes through (no-op update); unknown values reject at boundary.
+        # Controlled field: accept any slug in the CURRENT valid set = seed
+        # taxonomy.NICHES UNION the DB-managed niches (admin-editable). The set
+        # is an in-process cache (see _VALID_NICHE_CACHE) refreshed at startup
+        # and after each PUT /api/taxonomy/niches; we read it synchronously here
+        # (never await inside a validator). None passes through (no-op update);
+        # unknown values reject at the boundary.
         if v is None:
             return v
-        if not taxonomy.is_valid_niche(v):
-            raise ValueError(f"niche_slug must be one of taxonomy.NICHES (got {v!r})")
+        if not _is_valid_niche_cached(v):
+            raise ValueError(f"niche_slug must be a known niche slug (got {v!r})")
         return v
 
 class PostCreate(BaseModel):
@@ -2483,6 +2556,7 @@ async def purge_published_media():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await seed_sample_data()
+    await _load_niche_cache()
     import storage as _storage
     _storage.ensure_bucket()
     _now = datetime.now(timezone.utc)
@@ -2631,6 +2705,14 @@ class OnboardingCompleteRequest(BaseModel):
 class BulkReportRequest(BaseModel):
     period: str
 
+class NicheItem(BaseModel):
+    # value may be omitted; the PUT handler derives it from the label via slugify.
+    value: Optional[str] = None
+    label: Optional[str] = None
+
+class NicheListUpdate(BaseModel):
+    niches: List[NicheItem]
+
 api_router = APIRouter(prefix="/api")
 
 app.add_middleware(AuthMiddleware)
@@ -2647,10 +2729,42 @@ app.add_middleware(
 @api_router.get("/taxonomy/niches")
 async def list_niches():
     """Canonical niche enum shared by client profile + hook library.
-    Public-ish (auth-exempt): static, non-sensitive vocabulary the onboarding
-    select binds to. Returns {"niches": [{"value": slug, "label": label}, ...]}
-    including the "other" catch-all, in canonical NICHES order."""
-    return {"niches": taxonomy.niche_options()}
+    Auth-exempt (read-only): the onboarding select binds to this vocabulary.
+    Returns the DB-managed list (db.settings.niches) when present, else the seed
+    taxonomy. Shape: {"niches": [{"value": slug, "label": label}, ...]} with the
+    "other" catch-all always present. Never empty."""
+    s = await db.settings.find_one({"key": "global"}, {"_id": 0, "niches": 1})
+    return {"niches": _resolve_niche_list((s or {}).get("niches"))}
+
+
+@api_router.put("/taxonomy/niches")
+async def update_niches(data: NicheListUpdate):
+    """Replace the admin-editable niche list (requires settings:edit — NOT
+    auth-exempt). Body: {"niches": [{"value","label"}, ...]}. Each value must be
+    a non-empty kebab slug and unique; a missing value is derived from the label
+    via taxonomy.slugify. "other" is auto-included. Persists into settings.niches
+    and refreshes the in-process validator cache so ClientUpdate.niche_slug
+    immediately accepts the new slugs."""
+    cleaned: list[dict] = []
+    seen: set[str] = set()
+    for item in data.niches:
+        value = (item.value or "").strip()
+        label = (item.label or "").strip()
+        if not value and label:
+            value = taxonomy.slugify(label)
+        if not value:
+            raise HTTPException(400, "Each niche needs a non-empty value or a label to derive one from")
+        if not _KEBAB_SLUG_RE.match(value):
+            raise HTTPException(400, f"niche value must be a kebab-case slug (got {value!r})")
+        if value in seen:
+            continue  # dedup
+        seen.add(value)
+        cleaned.append({"value": value, "label": label or taxonomy.NICHE_LABELS.get(value) or taxonomy._derive_label(value)})
+    if "other" not in seen:
+        cleaned.append({"value": "other", "label": taxonomy.NICHE_LABELS["other"]})
+    await db.settings.update_one({"key": "global"}, {"$set": {"niches": cleaned}}, upsert=True)
+    _refresh_niche_cache_from_values(cleaned)
+    return {"niches": cleaned}
 
 
 # ─── Client Routes ────────────────────────────────────────────────────────────

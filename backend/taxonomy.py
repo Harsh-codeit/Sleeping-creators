@@ -8,10 +8,13 @@ Public API:
     NICHE_LABELS  -> dict[str,str]  slug -> human Title Case label
     is_valid_niche(slug) -> bool
     niche_options() -> list[{"value": slug, "label": label}]  (UI/endpoint shape)
+    slugify(label) -> str        human label -> kebab-case slug
 
 "other" is the catch-all and MUST always be present.
 """
 from __future__ import annotations
+
+import re as _re
 
 # Canonical slug list (kebab-case). Single source of truth — do not reorder
 # casually; frontend + library + worker all import from here.
@@ -87,3 +90,16 @@ def niche_options() -> list[dict[str, str]]:
     """List of {"value": slug, "label": label} preserving NICHES order.
     This is the exact shape returned by GET /api/taxonomy/niches."""
     return [{"value": slug, "label": NICHE_LABELS[slug]} for slug in NICHES]
+
+
+def slugify(label: object) -> str:
+    """Derive a kebab-case slug from a human label.
+
+    'SaaS & Tech' -> 'saas-tech'; 'Pet  Care!' -> 'pet-care'. Lowercases,
+    replaces any run of non-alphanumeric chars with a single hyphen, and trims
+    leading/trailing hyphens. Non-strings / empty input -> "" so callers can
+    decide how to handle the absence of a derivable slug."""
+    if not isinstance(label, str):
+        return ""
+    s = _re.sub(r"[^a-z0-9]+", "-", label.strip().lower())
+    return s.strip("-")
