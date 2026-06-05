@@ -262,6 +262,9 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("POST",   r"^/api/viral-hooks/ingest$"):             ("settings", "edit"),
     ("GET",    r"^/api/viral-hooks/ingest/[^/]+$"):       ("settings", "view"),
     ("GET",    r"^/api/viral-hooks$"):                    ("settings", "view"),
+    # Retrieval preview — MUST precede the generic /viral-hooks/{id} GET below
+    # so the literal /retrieve path isn't shadowed by the catch-all.
+    ("GET",    r"^/api/viral-hooks/retrieve$"):           ("settings", "view"),
     ("GET",    r"^/api/viral-hooks/[^/]+$"):              ("settings", "view"),
     ("POST",   r"^/api/viral-hooks/[^/]+/approve$"):      ("settings", "edit"),
     ("POST",   r"^/api/viral-hooks/[^/]+/reject$"):       ("settings", "edit"),
@@ -2901,6 +2904,40 @@ async def list_viral_hooks(
         text=text, limit=limit, offset=offset,
     )
     return {"hooks": rows}
+
+
+@api_router.get("/viral-hooks/retrieve")
+async def retrieve_viral_hooks(
+    topic: str = "",
+    niche_slug: Optional[str] = None,
+    audience_pain: str = "",
+    angle: str = "",
+    language: Optional[str] = None,
+    k: int = 5,
+):
+    """Preview the hybrid retrieval (settings:view). Embeds topic+pain+angle via
+    hook_clients.embed, then runs viral_library.retrieve. Fails soft: if no
+    OPENROUTER_API_KEY or the embed call errors, returns an empty list + note so
+    the curator UI never blocks."""
+    from starlette.concurrency import run_in_threadpool
+    import viral_library
+    query_text = " ".join(p for p in (topic, audience_pain, angle) if p).strip()
+
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        return {"hooks": [], "note": "embeddings unavailable"}
+    try:
+        import hook_clients
+        query_embedding = await run_in_threadpool(hook_clients.embed, query_text)
+    except Exception as exc:
+        logger.warning("retrieve preview embed failed: %s", exc)
+        return {"hooks": [], "note": "embeddings unavailable"}
+
+    hooks = await run_in_threadpool(
+        viral_library.retrieve,
+        query_text, query_embedding,
+        niche_slug=niche_slug, language=language, k=k,
+    )
+    return {"hooks": hooks}
 
 
 @api_router.post("/viral-hooks/{hook_id}/approve")

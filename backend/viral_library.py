@@ -439,3 +439,23 @@ def _cosine(a, b) -> float:
     if na == 0 or nb == 0:
         return 0.0
     return dot / (na * nb)
+
+
+# ---------------------------------------------------------------------------
+# Hybrid retrieval (Phase B) — implemented in viral_retrieval to keep this file
+# small; re-exported here so callers can `from viral_library import retrieve`.
+# The retrieval helpers (_rrf_fuse, _candidate_ids) are bound onto this module
+# so monkeypatching them in tests and fail-open behaviour both resolve here.
+# ---------------------------------------------------------------------------
+
+def _install_retrieval() -> None:
+    import viral_retrieval as _vr
+    g = globals()
+    g["retrieve"] = _vr.retrieve
+    g["_rrf_fuse"] = _vr._rrf_fuse
+    g["_candidate_ids"] = _vr._candidate_ids
+    g["RETRIEVAL_WEIGHTS"] = _vr.RETRIEVAL_WEIGHTS
+    g["MMR_LAMBDA"] = _vr.MMR_LAMBDA
+
+
+_install_retrieval()
