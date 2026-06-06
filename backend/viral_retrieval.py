@@ -1,18 +1,17 @@
-"""Hybrid retrieval for the viral-hook library (Phase B).
+"""Hybrid retrieval for the viral-hook library (Phase B) — Postgres + pgvector.
 
 Pure DB — NO network. The caller passes the query embedding (the endpoint embeds
-the topic/pain/angle via hook_clients.embed). This module fuses a sqlite-vec ANN
-list with an FTS5 lexical list (Reciprocal Rank Fusion), re-ranks by a tunable
-weighted score (semantic + virality + confidence + same-niche boost), then MMR-
-diversifies the top candidates.
+the topic/pain/angle via hook_clients.embed). This module fuses a pgvector ANN
+list with a Postgres full-text (tsvector) lexical list (Reciprocal Rank Fusion),
+re-ranks by a tunable weighted score (semantic + virality + confidence + same-
+niche boost), then MMR-diversifies the top candidates.
 
-FAIL OPEN: any error (no sqlite-vec, empty library, FTS error) -> [] (logged),
-never raises. If sqlite-vec is unavailable, falls back to FTS-only candidates
-ranked by virality.
+FAIL OPEN: any error (no DB, empty library, query error) -> [] (logged),
+never raises.
 
 Public surface (re-exported from viral_library):
     retrieve(query_text, query_embedding, *, niche_slug, language, k, candidate_pool)
-    RETRIEVAL_WEIGHTS, MMR_LAMBDA
+    RETRIEVAL_WEIGHTS, MMR_LAMBDA, MIN_SEMANTIC_SIM
 """
 from __future__ import annotations
 
@@ -67,7 +66,7 @@ def _rrf_fuse(ranked_lists, k0: int = _RRF_K0) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Candidate generation
+# Candidate generation (Postgres)
 # ---------------------------------------------------------------------------
 
 def _lang_clause(language):
@@ -75,41 +74,51 @@ def _lang_clause(language):
     if not language:
         return "", []
     if language == "English":
-        return " AND language = ?", ["English"]
-    return " AND language IN (?, ?)", [language, "English"]
+        return " AND language = %s", ["English"]
+    return " AND language IN (%s, %s)", [language, "English"]
 
 
 def _vec_candidates(conn, query_embedding, language, pool):
-    """sqlite-vec ANN -> ranked list of (hook_id) + {hook_id: cos_sim}."""
-    blob = _lib._serialize_embedding(query_embedding)
-    rows = conn.execute(
-        "SELECT hook_id, embedding FROM hooks_vec "
-        "WHERE embedding MATCH ? AND k = ?",
-        (blob, int(pool)),
-    ).fetchall()
+    """pgvector ANN -> ranked list of hook_id + {hook_id: cos_sim}.
+
+    Hard filters (live/active/language) applied in-query so the relevance guard
+    and re-rank work on already-eligible rows.
+    """
+    vec = [float(x) for x in query_embedding]
+    lang_sql, lang_params = _lang_clause(language)
+    sql = (
+        "SELECT id, 1 - (embedding <=> %s::vector) AS cos_sim FROM hooks "
+        "WHERE status = 'live' AND active = 1 AND embedding IS NOT NULL"
+        + lang_sql
+        + " ORDER BY embedding <=> %s::vector LIMIT %s"
+    )
+    params = [vec] + lang_params + [vec, int(pool)]
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
     ranked = []
     sims: dict = {}
-    for r in rows:
-        hid = r["hook_id"]
-        sim = _lib._cosine(query_embedding, _lib._deserialize_embedding(r["embedding"]))
+    for hid, cos_sim in rows:
         ranked.append(hid)
-        sims[hid] = sim
+        sims[hid] = float(cos_sim)
     return ranked, sims
 
 
 def _fts_candidates(conn, query_text, language, pool):
-    """FTS5 MATCH -> ranked list of hook_id (best lexical match first)."""
+    """Full-text MATCH -> ranked list of hook_id (best lexical match first)."""
     lang_sql, lang_params = _lang_clause(language)
     sql = (
-        "SELECT h.id FROM hooks h "
-        "JOIN hooks_fts f ON f.hook_id = h.id "
-        "WHERE hooks_fts MATCH ? AND h.status = 'live' AND h.active = 1"
+        "SELECT id FROM hooks "
+        "WHERE fts @@ plainto_tsquery('english', %s) "
+        "AND status = 'live' AND active = 1"
         + lang_sql
-        + " ORDER BY rank LIMIT ?"
+        + " ORDER BY ts_rank(fts, plainto_tsquery('english', %s)) DESC LIMIT %s"
     )
-    params = [_lib._fts_query(query_text)] + lang_params + [int(pool)]
-    rows = conn.execute(sql, params).fetchall()
-    return [r["id"] for r in rows]
+    params = [str(query_text)] + lang_params + [str(query_text), int(pool)]
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    return [r[0] for r in rows]
 
 
 def _candidate_ids(conn, query_text, query_embedding, language, pool, vec_ok):
@@ -120,7 +129,7 @@ def _candidate_ids(conn, query_text, query_embedding, language, pool, vec_ok):
         try:
             vec_ranked, sims = _vec_candidates(conn, query_embedding, language, pool)
             ranked_lists.append(vec_ranked)
-        except Exception as exc:  # pragma: no cover - extension/runtime dependent
+        except Exception as exc:  # pragma: no cover - runtime dependent
             logger.warning("vec candidate generation failed: %s", exc)
     try:
         fts_ranked = _fts_candidates(conn, query_text, language, pool)
@@ -137,29 +146,38 @@ def _candidate_ids(conn, query_text, query_embedding, language, pool, vec_ok):
 
 def _fetch_rows(conn, hook_ids, language):
     """Hydrate hook rows for candidate ids, applying the live/active/language
-    hard filters (vec candidates haven't been filtered yet)."""
+    hard filters (FTS candidates are pre-filtered; this is the safety net)."""
     if not hook_ids:
         return {}
     lang_sql, lang_params = _lang_clause(language)
-    placeholders = ", ".join("?" for _ in hook_ids)
+    placeholders = ", ".join("%s" for _ in hook_ids)
     sql = (
-        f"SELECT * FROM hooks WHERE id IN ({placeholders}) "
+        f"SELECT {_lib._READ_COLS} FROM hooks WHERE id IN ({placeholders}) "
         "AND status = 'live' AND active = 1" + lang_sql
     )
-    rows = conn.execute(sql, list(hook_ids) + lang_params).fetchall()
-    return {r["id"]: dict(r) for r in rows}
+    with conn.cursor() as cur:
+        cur.execute(sql, list(hook_ids) + lang_params)
+        rows = cur.fetchall()
+        return {r[0]: _lib._row_to_dict(cur, r) for r in rows}
 
 
 def _fetch_embeddings(conn, hook_ids):
     """Stored embeddings for a set of hook_ids (needed for MMR). {id: vector}."""
     if not hook_ids:
         return {}
-    placeholders = ", ".join("?" for _ in hook_ids)
-    rows = conn.execute(
-        f"SELECT hook_id, embedding FROM hooks_vec WHERE hook_id IN ({placeholders})",
-        list(hook_ids),
-    ).fetchall()
-    return {r["hook_id"]: _lib._deserialize_embedding(r["embedding"]) for r in rows}
+    placeholders = ", ".join("%s" for _ in hook_ids)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"SELECT id, embedding FROM hooks WHERE id IN ({placeholders})",
+            list(hook_ids),
+        )
+        rows = cur.fetchall()
+    out = {}
+    for hid, emb in rows:
+        if emb is None:
+            continue
+        out[hid] = list(emb)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -193,12 +211,21 @@ def _rerank(candidates, sims, rows, niche_slug):
     return scored
 
 
+def _cosine(a, b) -> float:
+    import math
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0 or nb == 0:
+        return 0.0
+    return dot / (na * nb)
+
+
 def _mmr(reranked, embeddings, k, lambda_=MMR_LAMBDA):
     """MMR over (hook_id, relevance) using stored embeddings to penalize
     similarity to already-picked items. Returns selected hook_ids in order.
 
-    When embeddings are missing (vec unavailable), falls back to the relevance
-    order (already virality/semantic-ranked).
+    When embeddings are missing, falls back to the relevance order.
     """
     if not reranked:
         return []
@@ -217,7 +244,7 @@ def _mmr(reranked, embeddings, k, lambda_=MMR_LAMBDA):
         for hid in remaining:
             if selected and embeddings.get(hid) is not None:
                 max_sim = max(
-                    _lib._cosine(embeddings[hid], embeddings[s])
+                    _cosine(embeddings[hid], embeddings[s])
                     for s in selected if embeddings.get(s) is not None
                 ) if any(embeddings.get(s) is not None for s in selected) else 0.0
             else:
@@ -249,10 +276,10 @@ def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
     FAIL OPEN: any error returns [] (logged), never raises.
     """
     try:
-        vec_ok = bool(_lib._vec_available())
         conn = _lib._connect()
         try:
-            fused, sims = _lib._candidate_ids(
+            vec_ok = True
+            fused, sims = _candidate_ids(
                 conn, query_text, query_embedding, language, candidate_pool, vec_ok
             )
             if not fused:
@@ -263,9 +290,8 @@ def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
             if not candidates:
                 return []
             # Relevance guard: drop vector candidates below the semantic floor.
-            # Only applied when real similarity scores exist (vec available); a
-            # candidate with no sim (FTS-only match) is kept on its lexical merit.
-            if vec_ok and sims:
+            # A candidate with no sim (FTS-only match) is kept on lexical merit.
+            if sims:
                 candidates = [
                     hid for hid in candidates
                     if hid not in sims
@@ -277,7 +303,7 @@ def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
             # MMR over the top ~3*k re-ranked candidates.
             pool = reranked[: max(3 * k, k)]
             pool_ids = [hid for hid, _ in pool]
-            embeddings = _fetch_embeddings(conn, pool_ids) if vec_ok else {}
+            embeddings = _fetch_embeddings(conn, pool_ids)
             chosen = _mmr(pool, embeddings, k)
         finally:
             conn.close()

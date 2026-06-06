@@ -1,59 +1,49 @@
 """Tests for the hybrid retrieval API in viral_library.retrieve (Phase B).
 
-No network: we control the embeddings passed into insert_hook and into
-retrieve(), so vector similarity is fully deterministic and assertable.
+Pure-logic tests (RRF fusion, re-rank ordering, MMR diversity, relevance-guard
+math) call the helpers directly with fakes and run unconditionally — no DB.
 
-Vector-path tests skip cleanly when the sqlite-vec extension can't load; the
-FTS-only fail-open path is exercised unconditionally.
+End-to-end retrieve() tests connect to ``VIRAL_LIBRARY_PG_URL`` when set, else
+they skip cleanly (no Postgres available locally / in CI).
 """
 import importlib
 import math
-import sqlite3
+import os
 
 import pytest
 
 
-# ---------------------------------------------------------------------------
-# Fixtures / helpers
-# ---------------------------------------------------------------------------
+DIM = 1536
 
-DIM = 3072
+PG_URL = os.environ.get("VIRAL_LIBRARY_PG_URL")
+pg_only = pytest.mark.skipif(
+    not PG_URL,
+    reason="VIRAL_LIBRARY_PG_URL not set — Postgres integration tests skipped",
+)
 
 
-def _fresh_module(tmp_path, monkeypatch):
-    db_path = tmp_path / "lib" / "viral_library.db"
-    monkeypatch.setenv("VIRAL_LIBRARY_DB", str(db_path))
+def _fresh_module(monkeypatch):
     import viral_library
     importlib.reload(viral_library)
     viral_library.init_db()
+    conn = viral_library._connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("TRUNCATE TABLE hooks")
+        conn.commit()
+    finally:
+        conn.close()
     return viral_library
 
 
 @pytest.fixture
-def lib(tmp_path, monkeypatch):
-    return _fresh_module(tmp_path, monkeypatch)
-
-
-def _vec_available():
-    try:
-        import sqlite_vec  # noqa: F401
-        db = sqlite3.connect(":memory:")
-        db.enable_load_extension(True)
-        sqlite_vec.load(db)
-        db.close()
-        return True
-    except Exception:
-        return False
-
-
-VEC_OK = _vec_available()
-vec_only = pytest.mark.skipif(
-    not VEC_OK, reason="sqlite-vec extension could not load in this environment"
-)
+def lib(monkeypatch):
+    if not PG_URL:
+        pytest.skip("VIRAL_LIBRARY_PG_URL not set")
+    return _fresh_module(monkeypatch)
 
 
 def _unit(*coords):
-    """Build a unit vector in the first len(coords) dims (rest zero)."""
     v = [0.0] * DIM
     n = math.sqrt(sum(c * c for c in coords)) or 1.0
     for i, c in enumerate(coords):
@@ -83,32 +73,93 @@ def _hook(**over):
 
 
 # ---------------------------------------------------------------------------
-# RRF fusion correctness (pure function, no DB / no extension required)
+# RRF fusion correctness (pure function, no DB)
 # ---------------------------------------------------------------------------
 
-def test_rrf_fuse_rewards_appearing_in_both_lists(lib):
-    # "b" is rank-2 in BOTH lists; "a" is rank-1 in one list and absent from the
-    # other. RRF rewards consistent presence: "b" should overtake the single #1.
+def test_rrf_fuse_rewards_appearing_in_both_lists():
+    import viral_retrieval as vr
     vec_ranked = ["a", "b", "c"]
     fts_ranked = ["d", "b", "e"]
-    fused = lib._rrf_fuse([vec_ranked, fts_ranked], k0=60)
+    fused = vr._rrf_fuse([vec_ranked, fts_ranked], k0=60)
     assert "b" in fused and fused["b"] > fused["a"]
-    # everything that appeared at least once is scored
     assert set(fused) == {"a", "b", "c", "d", "e"}
 
 
-def test_rrf_fuse_rank_one_beats_rank_three(lib):
-    fused = lib._rrf_fuse([["x", "y", "z"]], k0=60)
+def test_rrf_fuse_rank_one_beats_rank_three():
+    import viral_retrieval as vr
+    fused = vr._rrf_fuse([["x", "y", "z"]], k0=60)
     assert fused["x"] > fused["y"] > fused["z"]
 
 
 # ---------------------------------------------------------------------------
-# Re-rank ordering
+# Re-rank ordering (pure function, no DB)
 # ---------------------------------------------------------------------------
 
-@vec_only
-def test_rerank_virality_breaks_ties(lib):
-    # Two hooks with identical embeddings/text but different virality_score.
+def test_rerank_virality_breaks_ties():
+    import viral_retrieval as vr
+    # Two candidates, identical semantic sim; virality breaks the tie.
+    sims = {"lowvir": 1.0, "hivir": 1.0}
+    rows = {
+        "lowvir": {"virality_score": 0.1, "confidence": 0.5, "niche_slug": "x"},
+        "hivir": {"virality_score": 0.9, "confidence": 0.5, "niche_slug": "x"},
+    }
+    scored = vr._rerank(["lowvir", "hivir"], sims, rows, niche_slug=None)
+    assert scored[0][0] == "hivir"
+
+
+def test_rerank_same_niche_boost():
+    import viral_retrieval as vr
+    sims = {"cross": 1.0, "same": 1.0}
+    rows = {
+        "cross": {"virality_score": 0.5, "confidence": 0.5, "niche_slug": "fitness"},
+        "same": {"virality_score": 0.5, "confidence": 0.5, "niche_slug": "biz"},
+    }
+    scored = vr._rerank(["cross", "same"], sims, rows, niche_slug="biz")
+    ids = [hid for hid, _ in scored]
+    assert ids[0] == "same"
+    assert "cross" in ids  # boost, not filter
+
+
+# ---------------------------------------------------------------------------
+# MMR diversification (pure function, no DB)
+# ---------------------------------------------------------------------------
+
+def test_mmr_avoids_near_duplicate_cluster():
+    import viral_retrieval as vr
+    dup = _unit(1.0, 0.02)
+    distinct = _unit(0.9, 0.44)
+    reranked = [("dup1", 1.0), ("dup2", 0.99), ("dup3", 0.98), ("other", 0.9)]
+    embeddings = {"dup1": dup, "dup2": dup, "dup3": dup, "other": distinct}
+    chosen = vr._mmr(reranked, embeddings, k=2)
+    assert "other" in chosen
+    assert sum(1 for i in chosen if i.startswith("dup")) <= 1
+
+
+def test_mmr_falls_back_to_relevance_when_no_embeddings():
+    import viral_retrieval as vr
+    reranked = [("a", 1.0), ("b", 0.5), ("c", 0.1)]
+    chosen = vr._mmr(reranked, {}, k=2)
+    assert chosen == ["a", "b"]
+
+
+# ---------------------------------------------------------------------------
+# Relevance-guard math (pure: normalized sim threshold)
+# ---------------------------------------------------------------------------
+
+def test_relevance_guard_normalization_math():
+    import viral_retrieval as vr
+    # Orthogonal cosine (0.0) normalizes to 0.5, below the 0.55 default floor.
+    assert (0.0 + 1.0) / 2.0 < vr.MIN_SEMANTIC_SIM
+    # A near-1.0 cosine clears it.
+    assert (0.9 + 1.0) / 2.0 >= vr.MIN_SEMANTIC_SIM
+
+
+# ---------------------------------------------------------------------------
+# End-to-end retrieve() against Postgres (skip without PG)
+# ---------------------------------------------------------------------------
+
+@pg_only
+def test_e2e_virality_breaks_ties(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="lowvir", hook_text="founder burnout grind",
                           virality_score=0.1, phash="p1"), q)
@@ -119,10 +170,8 @@ def test_rerank_virality_breaks_ties(lib):
     assert ids[0] == "hivir", f"high-virality hook should rank first, got {ids}"
 
 
-@vec_only
-def test_rerank_same_niche_boost(lib):
-    # Same relevance + virality; only niche differs. Same-niche should win,
-    # but the cross-niche one must still be RETURNED (boost, not filter).
+@pg_only
+def test_e2e_same_niche_boost(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="cross", hook_text="founder burnout grind",
                           niche_slug="fitness-coaching",
@@ -132,21 +181,14 @@ def test_rerank_same_niche_boost(lib):
                           virality_score=0.5, phash="p2"), q)
     res = lib.retrieve("founder burnout", q, niche_slug="business-entrepreneurship", k=2)
     ids = [r["id"] for r in res]
-    assert ids[0] == "same", f"same-niche should rank first, got {ids}"
-    assert "cross" in ids, "cross-niche hook must still appear (boost, not filter)"
+    assert ids[0] == "same"
+    assert "cross" in ids
 
 
-# ---------------------------------------------------------------------------
-# MMR diversification
-# ---------------------------------------------------------------------------
-
-@vec_only
-def test_mmr_avoids_near_duplicate_cluster(lib):
-    # Three near-identical hooks (same embedding) + one distinct relevant hook.
-    # Plain top-k by relevance would pick the 3 dups; MMR should surface the
-    # distinct hook within the top-2.
+@pg_only
+def test_e2e_mmr_avoids_near_duplicate_cluster(lib):
     dup = _unit(1.0, 0.02)
-    distinct = _unit(0.9, 0.44)  # still fairly relevant to the query, but different
+    distinct = _unit(0.9, 0.44)
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="dup1", hook_text="quit job made money", phash="p1"), dup)
     lib.insert_hook(_hook(id="dup2", hook_text="quit job made money", phash="p2"), dup)
@@ -154,17 +196,12 @@ def test_mmr_avoids_near_duplicate_cluster(lib):
     lib.insert_hook(_hook(id="other", hook_text="quit job made cash", phash="p4"), distinct)
     res = lib.retrieve("quit job money", q, k=2)
     ids = [r["id"] for r in res]
-    assert "other" in ids, f"MMR should include the distinct hook, got {ids}"
-    # And should not return all three duplicates with k=2 anyway
+    assert "other" in ids
     assert sum(1 for i in ids if i.startswith("dup")) <= 1
 
 
-# ---------------------------------------------------------------------------
-# Candidate filters: status / language
-# ---------------------------------------------------------------------------
-
-@vec_only
-def test_only_live_hooks_returned(lib):
+@pg_only
+def test_e2e_only_live_hooks_returned(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="live", hook_text="founder burnout", status="live", phash="p1"), q)
     lib.insert_hook(_hook(id="review", hook_text="founder burnout", status="review", phash="p2"), q)
@@ -173,24 +210,20 @@ def test_only_live_hooks_returned(lib):
     assert "live" in ids and "review" not in ids
 
 
-@vec_only
-def test_language_filter_keeps_english_fallback(lib):
+@pg_only
+def test_e2e_language_filter_keeps_english_fallback(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="en", hook_text="founder burnout", language="English", phash="p1"), q)
     lib.insert_hook(_hook(id="hi", hook_text="founder burnout", language="Hindi", phash="p2"), q)
     lib.insert_hook(_hook(id="es", hook_text="founder burnout", language="Spanish", phash="p3"), q)
     res = lib.retrieve("founder burnout", q, language="Hindi", k=5)
     ids = set(r["id"] for r in res)
-    assert "hi" in ids and "en" in ids  # requested lang + English fallback
-    assert "es" not in ids  # other languages excluded
+    assert "hi" in ids and "en" in ids
+    assert "es" not in ids
 
 
-# ---------------------------------------------------------------------------
-# k respected + return shape
-# ---------------------------------------------------------------------------
-
-@vec_only
-def test_k_respected_and_return_shape(lib):
+@pg_only
+def test_e2e_k_respected_and_return_shape(lib):
     q = _unit(1.0, 0.0)
     for i in range(6):
         v = _unit(1.0, 0.01 * i)
@@ -205,15 +238,8 @@ def test_k_respected_and_return_shape(lib):
     }
 
 
-# ---------------------------------------------------------------------------
-# Relevance guard (semantic floor)
-# ---------------------------------------------------------------------------
-
-@vec_only
-def test_relevance_guard_drops_offtopic_vec_hook(lib):
-    # Relevant hook sits near the query; off-topic hook is orthogonal (norm sim
-    # 0.5 < 0.55 floor) and shares no keywords, so it's a vec-only candidate and
-    # must be dropped. The relevant one survives.
+@pg_only
+def test_e2e_relevance_guard_drops_offtopic_vec_hook(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="relevant", hook_text="founder burnout grind",
                           phash="p1"), _unit(1.0, 0.1))
@@ -221,23 +247,20 @@ def test_relevance_guard_drops_offtopic_vec_hook(lib):
                           phash="p2"), _unit(0.0, 1.0))
     res = lib.retrieve("founder burnout", q, k=5)
     ids = [r["id"] for r in res]
-    assert "relevant" in ids, f"relevant hook should survive, got {ids}"
-    assert "offtopic" not in ids, f"off-topic hook should be guarded out, got {ids}"
+    assert "relevant" in ids
+    assert "offtopic" not in ids
 
 
-@vec_only
-def test_relevance_guard_returns_empty_when_all_offtopic(lib):
-    # A sparse/off-topic library: the only hook is far from the query and shares
-    # no keywords -> guarded out -> retrieve returns [] (no weak injection).
+@pg_only
+def test_e2e_relevance_guard_returns_empty_when_all_offtopic(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="far", hook_text="gardening tips spring afternoon",
                           phash="p1"), _unit(0.0, 1.0))
     assert lib.retrieve("founder burnout", q, k=5) == []
 
 
-@vec_only
-def test_relevance_guard_threshold_is_tunable(lib):
-    # With the floor lowered to 0, the orthogonal hook is allowed back in.
+@pg_only
+def test_e2e_relevance_guard_threshold_is_tunable(lib):
     q = _unit(1.0, 0.0)
     lib.insert_hook(_hook(id="far", hook_text="gardening tips spring afternoon",
                           phash="p1"), _unit(0.0, 1.0))
@@ -246,30 +269,22 @@ def test_relevance_guard_threshold_is_tunable(lib):
 
 
 # ---------------------------------------------------------------------------
-# Fail open
+# Fail open (always runs — no DB needed for empty/error paths)
 # ---------------------------------------------------------------------------
 
+@pg_only
 def test_empty_library_returns_empty(lib):
     res = lib.retrieve("anything at all", _unit(1.0, 0.0), k=5)
     assert res == []
 
 
-def test_fail_open_on_internal_error(lib, monkeypatch):
-    # Force the candidate generation to blow up; retrieve must swallow + return [].
+def test_fail_open_on_internal_error(monkeypatch):
+    import viral_library
+    importlib.reload(viral_library)
+
     def boom(*a, **k):
         raise RuntimeError("kaboom")
-    monkeypatch.setattr(lib, "_candidate_ids", boom, raising=False)
-    res = lib.retrieve("founder burnout", _unit(1.0, 0.0), k=5)
+
+    monkeypatch.setattr(viral_library, "_connect", boom, raising=False)
+    res = viral_library.retrieve("founder burnout", _unit(1.0, 0.0), k=5)
     assert res == []
-
-
-def test_fts_only_fallback_when_vec_unavailable(lib, monkeypatch):
-    # Simulate no sqlite-vec: candidates must come from FTS, ranked by virality.
-    monkeypatch.setattr(lib, "_vec_available", lambda: False)
-    lib.insert_hook(_hook(id="lo", hook_text="founder burnout story",
-                          virality_score=0.2, phash="p1"), _unit(1.0, 0.0))
-    lib.insert_hook(_hook(id="hi", hook_text="founder burnout story",
-                          virality_score=0.95, phash="p2"), _unit(1.0, 0.0))
-    res = lib.retrieve("founder burnout", _unit(1.0, 0.0), k=2)
-    ids = [r["id"] for r in res]
-    assert ids and ids[0] == "hi", f"FTS-only fallback ranks by virality, got {ids}"

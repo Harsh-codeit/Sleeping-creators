@@ -6,7 +6,7 @@ and never hit the network.
 
 Public API (the fixed contract for the ingest worker):
     extract_and_classify(image_path, *, allowed_niches) -> dict
-    embed(text) -> list[float]            # 3072 floats
+    embed(text) -> list[float]            # 1536 floats (Matryoshka slice)
     phash(image_path) -> str
 
 Constants (one-line swaps):
@@ -29,13 +29,14 @@ logger = logging.getLogger(__name__)
 # --- Model slugs (confirm/adjust here; isolated so a swap is one line) -------
 # Qwen3-VL 32B Instruct on OpenRouter. If the slug ever changes, edit here only.
 VISION_MODEL = "qwen/qwen3-vl-32b-instruct"
-# text-embedding-3-large via OpenRouter (3072 dims).
+# text-embedding-3-large via OpenRouter (Matryoshka — request 1536 dims so the
+# vector is pgvector HNSW-indexable while staying high-quality).
 EMBED_MODEL = "openai/text-embedding-3-large"
 
 OPENROUTER_BASE_URL = os.environ.get(
     "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
 )
-EMBED_DIM = 3072
+EMBED_DIM = 1536
 _HTTP_TIMEOUT = float(os.environ.get("HOOK_CLIENT_TIMEOUT", "120"))
 
 # The 7 canonical hook types (must match the generation taxonomy).
@@ -211,7 +212,13 @@ def _normalize_vision(parsed: dict, allowed_niches: list) -> dict:
 # ---------------------------------------------------------------------------
 
 def embed(text: str) -> list:
-    """Return the 3072-float embedding for ``text`` via OpenRouter.
+    """Return the ``EMBED_DIM`` (1536)-float embedding for ``text`` via OpenRouter.
+
+    Requests ``dimensions: 1536`` (text-embedding-3-large is Matryoshka, so a
+    1536-d slice is a valid, high-quality, pgvector-HNSW-indexable embedding).
+    If the provider ignores the param and returns more dims, we truncate to 1536
+    and L2-normalize (the correct Matryoshka reduction). Always returns exactly
+    1536 floats.
 
     TODO(openrouter-embeddings): if OpenRouter ever rejects the /embeddings
     endpoint for this model, fall back to OpenAI directly with the SAME model
@@ -220,7 +227,7 @@ def embed(text: str) -> list:
         headers["Authorization"] = f"Bearer {os.environ['OPENAI_API_KEY']}"
     Default stays OpenRouter.
     """
-    payload = {"model": EMBED_MODEL, "input": text}
+    payload = {"model": EMBED_MODEL, "input": text, "dimensions": EMBED_DIM}
     data = _post("/embeddings", payload)
     try:
         vec = data["data"][0]["embedding"]
@@ -228,7 +235,23 @@ def embed(text: str) -> list:
         raise HookClientError(f"unexpected embedding response shape: {exc}") from exc
     if not isinstance(vec, list):
         raise HookClientError("embedding was not a list")
+    if len(vec) < EMBED_DIM:
+        raise HookClientError(
+            f"embedding had {len(vec)} dims, fewer than required {EMBED_DIM}"
+        )
+    if len(vec) > EMBED_DIM:
+        vec = _truncate_normalize(vec, EMBED_DIM)
     return vec
+
+
+def _truncate_normalize(vec: list, dim: int) -> list:
+    """Matryoshka reduction: keep the first ``dim`` components, L2-normalize."""
+    import math
+    head = [float(x) for x in vec[:dim]]
+    norm = math.sqrt(sum(x * x for x in head))
+    if norm == 0:
+        return head
+    return [x / norm for x in head]
 
 
 # ---------------------------------------------------------------------------

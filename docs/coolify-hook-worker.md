@@ -5,24 +5,39 @@ needed). Option A is the upgrade to a true separate worker when you want it.
 
 ---
 
-## Option B — in-process (CURRENT, zero migration)
+## The vector store is a separate Postgres (pgvector) resource
+
+The library uses **Postgres + pgvector** (not a file). Create it ONCE in Coolify
+and both options below use it:
+1. Coolify → New Resource → Database → **PostgreSQL**, image
+   **`pgvector/pgvector:pg16`** (ships the `vector` extension). Needs pgvector ≥ 0.5.
+2. Create a database (e.g. `viral_library`). Note its connection URL.
+3. The app/worker connect via env **`VIRAL_LIBRARY_PG_URL`** =
+   `postgresql://user:pass@<pg-host>:5432/viral_library`. `init_db()` runs
+   `CREATE EXTENSION vector` + creates the `hooks` table on first boot.
+
+Back this Postgres up like any DB — it holds the whole library. No app-side
+volume is needed for the library anymore.
+
+## Option B — in-process (CURRENT, no deployment migration)
 
 Your app runs as a single Dockerfile container with no Redis/worker. The
 ingest endpoint detects this (no `REDIS_URL`) and runs ingestion **in-process**
-via FastAPI BackgroundTasks. Nothing extra to deploy.
+via FastAPI BackgroundTasks. You only add the Postgres resource above + the key.
 
 **To turn the library on:**
-1. Coolify → your app → Environment Variables → add `OPENROUTER_API_KEY`.
-2. **Rebuild + redeploy** (not just restart) so the new code + deps
-   (`sqlite-vec`, `ImageHash`) are baked into the image.
-3. Open the **Hook Library** page → Upload tab → drop screenshots. They process
+1. Create the pgvector Postgres resource (above) and make sure your app can
+   reach it (same Coolify network/project).
+2. Coolify → your app → Environment Variables → add `OPENROUTER_API_KEY` and
+   `VIRAL_LIBRARY_PG_URL`.
+3. **Rebuild + redeploy** (not just restart) so the new deps
+   (`psycopg2-binary`, `pgvector`, `ImageHash`) + code are baked into the image.
+4. Open the **Hook Library** page → Upload tab → drop screenshots. They process
    in the app container; watch the batch progress bar.
 
 Notes:
-- The library file lives in the container at `VIRAL_LIBRARY_DB`
-  (default `backend/data/viral_library.db`). **Mount a Coolify volume** at that
-  directory (e.g. `/app/data`) so the library survives redeploys — otherwise it
-  resets on each deploy.
+- No app-side volume needed — the library lives in Postgres. (`HOOK_INGEST_TMP`
+  is just ephemeral scratch for the image being processed, then deleted.)
 - Good for dumping a few hundred screenshots at a time. For very large bulk
   loads, prefer Option A so vision processing doesn't compete with the web app.
 
@@ -49,9 +64,9 @@ Mongo stays the source of truth).
    GOOGLE_*, BUNDLE_*, JWT_SECRET_KEY, etc.), then add:
    - `OPENROUTER_API_KEY` — vision + embeddings.
    - `MONGO_URL` — your EXISTING Mongo (step 2). **Do not** point at a new/empty DB.
+   - `VIRAL_LIBRARY_PG_URL` — your pgvector Postgres resource (see top section).
    - `DB_NAME` — same as today (default `sleeping-creators`).
-   (`REDIS_URL`, `VIRAL_LIBRARY_DB`, `HOOK_INGEST_TMP` are already set in the
-   compose; leave them.)
+   (`REDIS_URL`, `HOOK_INGEST_TMP` are already set in the compose; leave them.)
 5. **Deploy.** Confirm three containers come up: `app`, `redis`, `hook-worker`.
 6. **Verify data BEFORE cutover:** open the new app URL → clients/posts load
    (proves `MONGO_URL` points at the real Mongo). Check `hook-worker` logs show
@@ -61,11 +76,11 @@ Mongo stays the source of truth).
 8. **Cut over** the domain to the new resource; then stop/decommission the old
    single-app resource.
 
-### Volumes
-`viral_library_data` (the SQLite library) and `hook_ingest_tmp` (image handoff)
-are named volumes mounted on both `app` and `hook-worker`. They persist across
-redeploys — **back up `viral_library_data`** if the library becomes valuable;
-deleting the volume erases the library.
+### Storage
+The library lives in the **pgvector Postgres resource** (back that up). The only
+shared volume is `hook_ingest_tmp` (transient image handoff between `app` and
+`hook-worker`) — mounted on both so an upload saved by the API is readable by
+the worker. No library volume.
 
 ### Rollback
 If anything's wrong, point the domain back at the old app resource (still
@@ -75,5 +90,5 @@ read-only-ish (it only writes what the app normally writes).
 ### Notes
 - No code change is needed to switch B→A: the ingest endpoint uses Celery
   automatically once `REDIS_URL` is present (which the compose sets).
-- `sqlite-vec` is NOT a service — it's a library inside the containers, installed
-  via `requirements.txt`. Nothing to provision.
+- The vector store is the pgvector Postgres resource (shared by both options) —
+  the only persistent thing to back up.

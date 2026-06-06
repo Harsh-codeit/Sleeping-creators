@@ -189,7 +189,7 @@ def test_extract_and_classify_defaults_virality_when_missing(hc, tmp_path, monke
 # ---------------------------------------------------------------------------
 
 def test_embed_returns_vector(hc, monkeypatch):
-    vec = [0.01] * 3072
+    vec = [0.01] * 1536
     captured = {}
 
     def fake_post(url, **kwargs):
@@ -199,11 +199,35 @@ def test_embed_returns_vector(hc, monkeypatch):
 
     monkeypatch.setattr(hc.httpx, "post", fake_post)
     out = hc.embed("founder burnout is real")
-    assert out == vec
-    assert len(out) == 3072
+    assert len(out) == 1536
     assert captured["json"]["model"] == hc.EMBED_MODEL
     assert captured["json"]["input"] == "founder burnout is real"
+    # Request the Matryoshka dimension explicitly.
+    assert captured["json"]["dimensions"] == 1536
     assert captured["url"].rstrip("/").endswith("/embeddings")
+
+
+def test_embed_dim_constant_is_1536(hc):
+    assert hc.EMBED_DIM == 1536
+
+
+def test_embed_truncates_and_normalizes_oversized_vector(hc, monkeypatch):
+    # Provider returns the full 3072 dims (e.g. ignores the `dimensions` param):
+    # embed() must truncate to 1536 and L2-normalize.
+    import math
+    raw = [float(i + 1) for i in range(3072)]
+
+    def fake_post(url, **kwargs):
+        return _FakeResponse({"data": [{"embedding": raw}]})
+
+    monkeypatch.setattr(hc.httpx, "post", fake_post)
+    out = hc.embed("text")
+    assert len(out) == 1536
+    norm = math.sqrt(sum(x * x for x in out))
+    assert abs(norm - 1.0) < 1e-6
+    # Direction preserved: first 1536 of raw, normalized.
+    expected_norm = math.sqrt(sum((i + 1) ** 2 for i in range(1536)))
+    assert abs(out[0] - raw[0] / expected_norm) < 1e-9
 
 
 def test_embed_api_error_raises(hc, monkeypatch):

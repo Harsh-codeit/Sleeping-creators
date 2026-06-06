@@ -5,9 +5,12 @@
 # is intentionally NO `mongo` service in this file, so deploying it can NEVER
 # touch or replace your production data. Point MONGO_URL at your existing Mongo.
 #
+# The vector store is a SEPARATE pgvector Postgres resource — create one in
+# Coolify (image: pgvector/pgvector:pg16) and pass its URL as VIRAL_LIBRARY_PG_URL.
+#
 # Set every env var this resource needs in the Coolify UI (Environment
 # Variables) — copy ALL vars from your current single-app resource, then add
-# OPENROUTER_API_KEY and MONGO_URL. The values referenced as ${...} below must
+# OPENROUTER_API_KEY, MONGO_URL, and VIRAL_LIBRARY_PG_URL. The values referenced as ${...} below must
 # exist in that UI; the app also reads many other secrets (ANTHROPIC_API_KEY,
 # SHOTSTACK_*, TELEGRAM_*, GOOGLE_*, BUNDLE_*, JWT_SECRET_KEY, ...) which must be
 # present too. See docs/coolify-hook-worker.md for the step-by-step migration.
@@ -35,11 +38,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URL=${MONGO_URL}                 # your EXISTING Coolify Mongo URL
       - DB_NAME=${DB_NAME:-sleeping-creators}
-      - VIRAL_LIBRARY_DB=/data/viral_library/viral_library.db
+      - VIRAL_LIBRARY_PG_URL=${VIRAL_LIBRARY_PG_URL}   # your pgvector Postgres resource
       - HOOK_INGEST_TMP=/data/hook_ingest_tmp
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     volumes:
-      - viral_library_data:/data/viral_library   # shared SQLite library (app reads)
       - hook_ingest_tmp:/data/hook_ingest_tmp     # shared image handoff dir
     depends_on:
       redis:
@@ -54,8 +56,8 @@ services:
   hook-worker:
     build: .
     restart: unless-stopped
-    # Parallel vision/embed (concurrency 4); viral_library serializes SQLite
-    # writes internally so the shared file stays single-writer-safe.
+    # Parallel vision/embed (concurrency 4); Postgres (pgvector) handles
+    # concurrent writes, so no shared SQLite file / single-writer lock needed.
     command: >
       sh -c "cd /app && celery -A hook_ingest_worker worker --loglevel=info --concurrency=4"
     env_file:
@@ -64,16 +66,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - MONGO_URL=${MONGO_URL}
       - DB_NAME=${DB_NAME:-sleeping-creators}
-      - VIRAL_LIBRARY_DB=/data/viral_library/viral_library.db
+      - VIRAL_LIBRARY_PG_URL=${VIRAL_LIBRARY_PG_URL}   # your pgvector Postgres resource
       - HOOK_INGEST_TMP=/data/hook_ingest_tmp
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     volumes:
-      - viral_library_data:/data/viral_library   # shared SQLite library (worker writes)
       - hook_ingest_tmp:/data/hook_ingest_tmp
     depends_on:
       redis:
         condition: service_healthy
 
 volumes:
-  viral_library_data:
   hook_ingest_tmp:
