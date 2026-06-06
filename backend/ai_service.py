@@ -1,5 +1,6 @@
 import os
 import uuid
+import asyncio
 import logging
 import re
 import anthropic
@@ -7,6 +8,21 @@ from dotenv import load_dotenv
 from pathlib import Path
 from usage_service import record_usage
 from client_utils import _get_tone
+
+# Viral-hook library (Phase C). Imported as modules (not symbols) so tests can
+# monkeypatch hook_clients.embed / viral_library.retrieve cleanly, and so an
+# import failure here never breaks generation (handlers below fail open anyway).
+try:  # pragma: no cover - exercised indirectly; import guard only
+    import hook_clients
+    import viral_library
+except Exception as _hook_import_exc:  # pragma: no cover
+    hook_clients = None
+    viral_library = None
+    logging.getLogger(__name__).warning(
+        "viral-hook library unavailable (import failed): %s", _hook_import_exc
+    )
+
+from text_similarity import is_too_similar
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -186,7 +202,8 @@ Rules:
 
         ai_client = anthropic.Anthropic(api_key=api_key)
         message = ai_client.messages.create(
-            model="claude-sonnet-4-5",
+            model=resolve_model("generate_content", spice_level=spice_level,
+                                client_tier=client.get("model_tier")),
             max_tokens=1024,
             system=system_msg,
             messages=[
@@ -470,6 +487,140 @@ def _format_recent_text_memory(hooks: list) -> str:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Model routing layer (Phase C) — removes hardcoded model IDs so future cost
+# levers (Batch API, cheaper OpenRouter models gated by RAG) are config-only.
+#
+# DEFAULTS REPRODUCE TODAY EXACTLY: every current generation type resolves to
+# "claude-sonnet-4-5", so shipping this changes nothing. Persona generation stays
+# on Haiku inside persona_service and is intentionally out of scope here.
+#
+# Resolution order: per-client tier override (client.get("model_tier")) ->
+# route default (MODEL_ROUTES) -> global default (_DEFAULT_MODEL).
+# ─────────────────────────────────────────────────────────────────────────────
+_DEFAULT_MODEL = "claude-sonnet-4-5"
+
+MODEL_ROUTES: dict[str, str] = {
+    "carousel_single_pass": _DEFAULT_MODEL,
+    "carousel_caption": _DEFAULT_MODEL,
+    "single_image_hook": _DEFAULT_MODEL,
+    "generate_content": _DEFAULT_MODEL,
+}
+
+# Per-tier overrides: {tier_name: {generation_type: model}}. Empty by default,
+# so no client is routed off Sonnet until an operator adds a tier here (or via a
+# future config doc). A tier that omits a generation_type falls through to the
+# route default — never a hard error.
+MODEL_TIERS: dict[str, dict[str, str]] = {}
+
+
+def resolve_model(generation_type: str, *, spice_level: str | None = None,
+                  client_tier: str | None = None) -> str:
+    """Resolve the model id for a generation call.
+
+    Default config reproduces today's behavior exactly (everything -> Sonnet 4.5).
+    ``spice_level`` is accepted for forward-compat (future spicy-route levers) but
+    does not change resolution today.
+    """
+    if client_tier:
+        tier = MODEL_TIERS.get(client_tier)
+        if tier and generation_type in tier:
+            return tier[generation_type]
+    return MODEL_ROUTES.get(generation_type, _DEFAULT_MODEL)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Viral-hook library injection (Phase C) — ground generation in PROVEN PATTERNS.
+# ─────────────────────────────────────────────────────────────────────────────
+def _use_hook_library(client: dict) -> bool:
+    """Whether to inject retrieved viral-hook patterns for this client.
+
+    Reads ``use_hook_library`` — root field takes precedence, then
+    ``onboarding_data.use_hook_library``. Defaults to True so it works as soon as
+    the library has hooks (an empty library => retrieve returns [] => no block, so
+    default-on is safe). An operator can disable it per client.
+    """
+    if client is None:
+        return True
+    val = client.get("use_hook_library")
+    if val is None:
+        val = (client.get("onboarding_data") or {}).get("use_hook_library")
+    return True if val is None else bool(val)
+
+
+async def _build_hook_patterns_block(client: dict, onboarding: dict,
+                                     topic: str | None, db=None) -> str:
+    """Build the "PROVEN VIRAL HOOK PATTERNS" prompt block from retrieved hooks.
+
+    Studies STRUCTURE + psychological trigger; the model must write a FRESH hook
+    for THIS client and NEVER copy the wording. Drops any retrieved hook that is
+    too lexically similar to this client's recent openings (anti-sameness).
+
+    FAIL OPEN: any error (library missing, no key, embed fail, empty lib) returns
+    "" — never blocks generation.
+    """
+    try:
+        if not _use_hook_library(client):
+            return ""
+        if hook_clients is None or viral_library is None:
+            return ""
+        onboarding = onboarding or {}
+
+        themes = (client.get("strategy") or {}).get("themes") or []
+        _lang_raw = onboarding.get("language") or "English"
+        language = (_lang_raw[0] if isinstance(_lang_raw, list) else _lang_raw or "English").strip()
+        niche_slug = onboarding.get("niche_slug")
+
+        query_text = " ".join(filter(None, [
+            topic or ", ".join(themes),
+            onboarding.get("problem_solved"),
+            onboarding.get("brand_vibe") if isinstance(onboarding.get("brand_vibe"), str) else None,
+        ])).strip()
+        if not query_text:
+            return ""
+
+        # Sync clients run off the event loop.
+        embedding = await asyncio.to_thread(hook_clients.embed, query_text)
+        hooks = await asyncio.to_thread(
+            viral_library.retrieve, query_text, embedding,
+            niche_slug=niche_slug, language=language, k=5,
+        )
+        if not hooks:
+            return ""
+
+        # Anti-sameness: drop any hook too similar to this client's recent openings.
+        recent = await _recent_hook_texts(client.get("id"), db)
+        kept = []
+        for h in hooks:
+            text = (h.get("hook_text") or "").strip()
+            if not text:
+                continue
+            if recent and is_too_similar(text, recent):
+                continue
+            kept.append(h)
+            if len(kept) >= 5:
+                break
+        if not kept:
+            return ""
+
+        lines = []
+        for i, h in enumerate(kept, 1):
+            hook_type = (h.get("hook_type") or "hook").strip()
+            text = (h.get("hook_text") or "").strip()
+            lines.append(f"{i}. [{hook_type}] {text}")
+
+        return (
+            "\n\nPROVEN VIRAL HOOK PATTERNS — these are real first-slides that went viral. "
+            "Study their STRUCTURE and the psychological trigger each uses, then write a FRESH "
+            "hook for THIS client. NEVER copy the wording, phrasing, or specific examples — "
+            "extract the pattern, not the sentence:\n"
+            + "\n".join(lines)
+        )
+    except Exception as exc:
+        logger.warning(f"_build_hook_patterns_block failed (fail-open -> ''): {exc}")
+        return ""
+
+
 def _safe_for_prompt(s: str | None, max_len: int = 300) -> str:
     """Sanitize a free-form string for safe interpolation into a system prompt.
 
@@ -711,6 +862,10 @@ async def _generate_single_image_hook(
 
     _topic_rules = _build_topic_rules_block(client)
     _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
+
+    # Proven viral-hook patterns (Phase C) — fail-open, "" when disabled/empty.
+    hook_patterns_block = await _build_hook_patterns_block(client, onboarding, topic, db=db)
+
     system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
 {india_block}
 {spice_block}
@@ -720,6 +875,7 @@ Brand voice: {tone} | Language: {language} | Platform: {platform}
 Platform voice: {platform_voice}
 {brand_ctx}
 {hook_anchor_block}
+{hook_patterns_block}
 ASSIGNMENT:
 Write ONE single-image post — exactly one card, not a carousel. Pick the strongest hook from the 7-hook system above and execute it as the entire post.
 
@@ -746,7 +902,8 @@ Return ONLY this JSON (no markdown, no explanation):
 
     try:
         resp = await ai_client.messages.create(
-            model="claude-sonnet-4-5",
+            model=resolve_model("single_image_hook", spice_level=spice_level,
+                                client_tier=client.get("model_tier")),
             max_tokens=400,
             system=system_msg,
             messages=[{"role": "user", "content": user_msg}],
@@ -917,6 +1074,10 @@ async def _generate_carousel_single_pass(
     _topic_rules = _build_topic_rules_block(client)
     _topic_rules_prefix = _topic_rules + "\n" if _topic_rules else ""
 
+    # Proven viral-hook patterns (Phase C) — per-client, lives in the DYNAMIC suffix
+    # (never the cacheable static prefix). Fail-open: "" when disabled/empty/error.
+    hook_patterns_block = await _build_hook_patterns_block(client, onboarding, topic, db=db)
+
     # ── Static cacheable prefix (client-agnostic; varies only by slide_format variant) ─────
     static_prefix = _CAROUSEL_STRATEGIST_PERSONA
     if slide_format:
@@ -954,6 +1115,7 @@ Write a {slide_count}-slide {platform} carousel.
 {topic_line}
 
 {hook_anchor_block}
+{hook_patterns_block}
 {hook_block}
 {cta_block}
 {memory_block}
@@ -1013,7 +1175,8 @@ Respond ONLY with valid JSON (no markdown, no commentary):
     _max_tool_calls = 2
     message = await _run_generation_with_tools(
         ai_client,
-        model="claude-sonnet-4-5",
+        model=resolve_model("carousel_single_pass", spice_level=spice_level,
+                            client_tier=client.get("model_tier")),
         system=system_blocks,
         user=f"{trend_user}Write the {slide_count} slides now. Make it scroll-stopping for {platform}. Satisfy every quality gate before you stop.",
         max_tokens=dynamic_max_tokens,
@@ -1133,7 +1296,7 @@ Respond ONLY with valid JSON:
 
     try:
         resp = ai_client.messages.create(
-            model="claude-sonnet-4-5",
+            model=resolve_model("carousel_caption", client_tier=client.get("model_tier")),
             max_tokens=800,
             system=system_msg,
             messages=[{"role": "user", "content": user_msg}],

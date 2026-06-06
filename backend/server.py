@@ -463,6 +463,11 @@ class ClientUpdate(BaseModel):
     carousel_author_handle: Optional[str] = None
     carousel_author_title: Optional[str] = None
     spice_level: Optional[str] = None   # safe | balanced | bold | unhinged (None -> balanced at gen time)
+    # Phase C — root client fields (NOT in _ONBOARDING_KEYS, so they stay at root):
+    #   use_hook_library: inject retrieved viral-hook PATTERNS into generation (default on at gen time)
+    #   model_tier: per-client model-routing override key (ai_service.MODEL_TIERS); None -> route default
+    use_hook_library: Optional[bool] = None
+    model_tier: Optional[str] = None
 
     @field_validator("niche_slug", mode="before")
     @classmethod
@@ -805,6 +810,7 @@ class OnboardingCreate(BaseModel):
     business_description: str = ""
     niche: str = ""              # free-text one-line niche statement (drives hook specificity)
     niche_slug: str = ""         # canonical niche category (taxonomy.NICHES) for hook-library retrieval
+    use_hook_library: bool = True  # Phase C: inject retrieved viral-hook PATTERNS into generation
     industry_label: str = ""
     daily_life: str = ""
 
