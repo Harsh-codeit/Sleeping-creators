@@ -287,6 +287,35 @@ def test_task_error_path_reraises_before_exhaustion(worker, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Inline (no-Redis) ingestion path — used by the API via BackgroundTasks when
+# REDIS_URL is unset (single-container deploy).
+# ---------------------------------------------------------------------------
+
+def test_inline_success_delegates_to_process(worker, tmp_path, monkeypatch):
+    img = _make_image(tmp_path)
+    monkeypatch.setattr(worker, "_process",
+                        lambda *a, **k: {"status": "live", "hook_id": "h1"})
+    res = worker.process_image_inline(
+        {"image_path": img, "batch_id": "b1", "created_by": "admin"})
+    assert res == {"status": "live", "hook_id": "h1"}
+
+
+def test_inline_error_is_terminal_bumps_errors_and_deletes(worker, tmp_path, monkeypatch):
+    """Inline mode has no retry: any failure bumps 'errors' and cleans up."""
+    img = _make_image(tmp_path)
+
+    def boom(*a, **k):
+        raise RuntimeError("kaboom")
+    monkeypatch.setattr(worker, "_process", boom)
+
+    res = worker.process_image_inline(
+        {"image_path": img, "batch_id": "b1", "created_by": "admin"})
+    assert res["status"] == "errors"
+    assert _totals(worker) == {"processed": 1, "errors": 1}
+    assert not os.path.exists(img)
+
+
+# ---------------------------------------------------------------------------
 # Batch counter increments accumulate across calls
 # ---------------------------------------------------------------------------
 

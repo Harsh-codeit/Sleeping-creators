@@ -255,6 +255,32 @@ def _process(hook_clients, viral_library, *, image_path, batch_id,
             _safe_unlink(image_path)
 
 
+def process_image_inline(payload: dict) -> dict:
+    """In-process ingestion (NO Celery/Redis) for single-container deploys.
+
+    Used by the API via FastAPI BackgroundTasks when REDIS_URL is unset, so the
+    hook library works without a separate worker. Must be called as a SYNC
+    function (BackgroundTasks runs it in a threadpool, so the asyncio.run inside
+    _bump_batch is safe). No retry: a transient HookClientError is terminal and
+    bumps the 'errors' counter; the image is always cleaned up."""
+    import hook_clients
+    import viral_library
+
+    image_path = payload.get("image_path")
+    batch_id = payload.get("batch_id")
+    try:
+        return _process(
+            hook_clients, viral_library,
+            image_path=image_path, batch_id=batch_id,
+            created_by=payload.get("created_by"), platform=payload.get("platform"),
+        )
+    except Exception as exc:  # noqa: BLE001 - terminal in inline mode (no retry)
+        logger.warning("inline ingest failed for %s: %s", image_path, exc)
+        _bump_batch(batch_id, processed=1, errors=1)
+        _safe_unlink(image_path)
+        return {"status": "errors"}
+
+
 def _safe_unlink(path) -> None:
     """Delete the temp image; never raise (cleanup must not mask the result)."""
     if not path:

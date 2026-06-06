@@ -2834,11 +2834,15 @@ class HookUpdate(BaseModel):
 
 
 @api_router.post("/viral-hooks/ingest")
-async def ingest_viral_hooks(files: List[UploadFile] = File(...), platform: str = Form(None)):
+async def ingest_viral_hooks(background_tasks: BackgroundTasks,
+                             files: List[UploadFile] = File(...), platform: str = Form(None)):
     """Bulk screenshot upload. Validates each file (type + size), saves it to the
-    shared temp volume, creates a batch progress doc, and enqueues one
-    process_hook_image task per file. Returns {batch_id, queued} immediately —
-    the worker does the vision/embed/dedup/insert work out-of-process."""
+    temp dir, creates a batch progress doc, and schedules one ingest job per file.
+
+    Dispatch mode is chosen by REDIS_URL:
+    - REDIS_URL set   -> enqueue to the separate Celery hook-worker (out-of-process).
+    - REDIS_URL unset -> run in-process via FastAPI BackgroundTasks (single-container
+      deploy, no Redis/worker needed). Same processing either way."""
     if not files:
         raise HTTPException(400, "No files uploaded")
 
@@ -2869,18 +2873,26 @@ async def ingest_viral_hooks(files: List[UploadFile] = File(...), platform: str 
         "created_at": now,
     })
 
-    from hook_ingest_worker import process_hook_image
+    use_celery = bool(os.environ.get("REDIS_URL"))
     queued = 0
     for path in saved:
-        process_hook_image.apply_async(args=[{
+        job = {
             "image_path": path,
             "batch_id": batch_id,
             "created_by": "admin",
             "platform": platform,
-        }])
+        }
+        if use_celery:
+            from hook_ingest_worker import process_hook_image
+            process_hook_image.apply_async(args=[job])
+        else:
+            # In-process fallback: BackgroundTasks runs the sync runner in a
+            # threadpool (so its internal asyncio.run for batch counters is safe).
+            from hook_ingest_worker import process_image_inline
+            background_tasks.add_task(process_image_inline, job)
         queued += 1
 
-    return {"batch_id": batch_id, "queued": queued}
+    return {"batch_id": batch_id, "queued": queued, "mode": "celery" if use_celery else "inline"}
 
 
 @api_router.get("/viral-hooks/ingest/{batch_id}")

@@ -1,0 +1,79 @@
+# docker-compose.coolify.yml — Option A: viral hook library with a SEPARATE
+# Celery hook-worker, for a Coolify "Docker Compose" deployment.
+#
+# IMPORTANT: Mongo is EXTERNAL here (your existing separate Coolify Mongo). There
+# is intentionally NO `mongo` service in this file, so deploying it can NEVER
+# touch or replace your production data. Point MONGO_URL at your existing Mongo.
+#
+# Set every env var this resource needs in the Coolify UI (Environment
+# Variables) — copy ALL vars from your current single-app resource, then add
+# OPENROUTER_API_KEY and MONGO_URL. The values referenced as ${...} below must
+# exist in that UI; the app also reads many other secrets (ANTHROPIC_API_KEY,
+# SHOTSTACK_*, TELEGRAM_*, GOOGLE_*, BUNDLE_*, JWT_SECRET_KEY, ...) which must be
+# present too. See docs/coolify-hook-worker.md for the step-by-step migration.
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    # env_file lets Coolify inject every UI-defined variable into the container.
+    # Coolify writes a .env next to the compose from your resource's variables.
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=${MONGO_URL}                 # your EXISTING Coolify Mongo URL
+      - DB_NAME=${DB_NAME:-sleeping-creators}
+      - VIRAL_LIBRARY_DB=/data/viral_library/viral_library.db
+      - HOOK_INGEST_TMP=/data/hook_ingest_tmp
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - viral_library_data:/data/viral_library   # shared SQLite library (app reads)
+      - hook_ingest_tmp:/data/hook_ingest_tmp     # shared image handoff dir
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  hook-worker:
+    build: .
+    restart: unless-stopped
+    # Parallel vision/embed (concurrency 4); viral_library serializes SQLite
+    # writes internally so the shared file stays single-writer-safe.
+    command: >
+      sh -c "cd /app && celery -A hook_ingest_worker worker --loglevel=info --concurrency=4"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=${MONGO_URL}
+      - DB_NAME=${DB_NAME:-sleeping-creators}
+      - VIRAL_LIBRARY_DB=/data/viral_library/viral_library.db
+      - HOOK_INGEST_TMP=/data/hook_ingest_tmp
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    volumes:
+      - viral_library_data:/data/viral_library   # shared SQLite library (worker writes)
+      - hook_ingest_tmp:/data/hook_ingest_tmp
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  viral_library_data:
+  hook_ingest_tmp:
