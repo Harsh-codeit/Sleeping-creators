@@ -206,6 +206,46 @@ def test_k_respected_and_return_shape(lib):
 
 
 # ---------------------------------------------------------------------------
+# Relevance guard (semantic floor)
+# ---------------------------------------------------------------------------
+
+@vec_only
+def test_relevance_guard_drops_offtopic_vec_hook(lib):
+    # Relevant hook sits near the query; off-topic hook is orthogonal (norm sim
+    # 0.5 < 0.55 floor) and shares no keywords, so it's a vec-only candidate and
+    # must be dropped. The relevant one survives.
+    q = _unit(1.0, 0.0)
+    lib.insert_hook(_hook(id="relevant", hook_text="founder burnout grind",
+                          phash="p1"), _unit(1.0, 0.1))
+    lib.insert_hook(_hook(id="offtopic", hook_text="gardening tips spring afternoon",
+                          phash="p2"), _unit(0.0, 1.0))
+    res = lib.retrieve("founder burnout", q, k=5)
+    ids = [r["id"] for r in res]
+    assert "relevant" in ids, f"relevant hook should survive, got {ids}"
+    assert "offtopic" not in ids, f"off-topic hook should be guarded out, got {ids}"
+
+
+@vec_only
+def test_relevance_guard_returns_empty_when_all_offtopic(lib):
+    # A sparse/off-topic library: the only hook is far from the query and shares
+    # no keywords -> guarded out -> retrieve returns [] (no weak injection).
+    q = _unit(1.0, 0.0)
+    lib.insert_hook(_hook(id="far", hook_text="gardening tips spring afternoon",
+                          phash="p1"), _unit(0.0, 1.0))
+    assert lib.retrieve("founder burnout", q, k=5) == []
+
+
+@vec_only
+def test_relevance_guard_threshold_is_tunable(lib):
+    # With the floor lowered to 0, the orthogonal hook is allowed back in.
+    q = _unit(1.0, 0.0)
+    lib.insert_hook(_hook(id="far", hook_text="gardening tips spring afternoon",
+                          phash="p1"), _unit(0.0, 1.0))
+    res = lib.retrieve("founder burnout", q, k=5, min_semantic=0.0)
+    assert [r["id"] for r in res] == ["far"]
+
+
+# ---------------------------------------------------------------------------
 # Fail open
 # ---------------------------------------------------------------------------
 

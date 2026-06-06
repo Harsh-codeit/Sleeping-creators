@@ -32,6 +32,14 @@ RETRIEVAL_WEIGHTS = {
 # MMR trade-off: 1.0 = pure relevance, 0.0 = pure diversity.
 MMR_LAMBDA = 0.5
 
+# Relevance guard: the minimum NORMALIZED semantic similarity (0..1, where 0.5 =
+# orthogonal) a vector-retrieved hook must clear to be eligible. Protects the
+# sparse/cold-start case: ANN always returns its k nearest even when they're far,
+# so a near-empty (or off-topic) library would otherwise inject loosely-related
+# patterns. Hooks that matched on keywords (FTS) but have no vector score are kept
+# (lexical match is its own relevance signal). Tune here; no schema change.
+MIN_SEMANTIC_SIM = 0.55
+
 # RRF constant (standard default).
 _RRF_K0 = 60
 
@@ -228,9 +236,15 @@ def _mmr(reranked, embeddings, k, lambda_=MMR_LAMBDA):
 # ---------------------------------------------------------------------------
 
 def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
-             language=None, k: int = 5, candidate_pool: int = 40) -> list:
+             language=None, k: int = 5, candidate_pool: int = 40,
+             min_semantic: float = MIN_SEMANTIC_SIM) -> list:
     """Hybrid retrieval. Returns up to k dicts:
     {id, hook_text, hook_type, trigger, niche_slug, virality_score, score}.
+
+    A relevance guard (``min_semantic``) drops vector-retrieved hooks whose
+    normalized similarity is below the floor, so a sparse/off-topic library
+    returns fewer (or no) hooks rather than injecting loosely-related patterns.
+    Keyword (FTS) matches with no vector score are kept.
 
     FAIL OPEN: any error returns [] (logged), never raises.
     """
@@ -248,6 +262,17 @@ def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
             candidates = [hid for hid in fused if hid in rows]
             if not candidates:
                 return []
+            # Relevance guard: drop vector candidates below the semantic floor.
+            # Only applied when real similarity scores exist (vec available); a
+            # candidate with no sim (FTS-only match) is kept on its lexical merit.
+            if vec_ok and sims:
+                candidates = [
+                    hid for hid in candidates
+                    if hid not in sims
+                    or ((sims[hid] + 1.0) / 2.0) >= min_semantic
+                ]
+                if not candidates:
+                    return []
             reranked = _rerank(candidates, sims, rows, niche_slug)
             # MMR over the top ~3*k re-ranked candidates.
             pool = reranked[: max(3 * k, k)]
