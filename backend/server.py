@@ -2858,6 +2858,15 @@ async def ingest_viral_hooks(background_tasks: BackgroundTasks,
     if not files:
         raise HTTPException(400, "No files uploaded")
 
+    # Pre-flight: confirm the library DB is reachable AND the table exists, so a
+    # broken DB surfaces as an immediate 503 instead of an ingest task that
+    # "keeps loading". count() connects + queries hooks — fails fast on an
+    # unreachable Postgres (connect_timeout) or a missing table.
+    try:
+        await run_in_threadpool(viral_library.count)
+    except Exception as exc:
+        raise HTTPException(503, f"Hook library is not ready: {exc}")
+
     tmp_dir = _hook_ingest_tmp_dir()
     batch_id = uuid.uuid4().hex
     saved: list[str] = []
@@ -2932,6 +2941,12 @@ async def ingest_viral_hooks_from_drive(data: HookDriveIngest,
         list_images, extract_folder_id, download_clip,
     )
     from starlette.concurrency import run_in_threadpool
+
+    # Pre-flight: library DB reachable + table exists, else fail fast with 503.
+    try:
+        await run_in_threadpool(viral_library.count)
+    except Exception as exc:
+        raise HTTPException(503, f"Hook library is not ready: {exc}")
 
     folder_id = extract_folder_id(data.folder_url) or data.folder_url
     images = await run_in_threadpool(list_images, refresh_token, folder_id)

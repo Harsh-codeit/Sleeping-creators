@@ -71,8 +71,12 @@ def _connect():
         raise ViralLibraryError(
             f"psycopg2-binary / pgvector not installed: {exc}"
         ) from exc
+    # connect_timeout: without it, psycopg2 hangs FOREVER if the Postgres host is
+    # unreachable (e.g. networking not wired between the app and the DB resource),
+    # which surfaces as an ingest task that "keeps loading". Fail fast instead.
+    _connect_timeout = int(os.environ.get("VIRAL_LIBRARY_CONNECT_TIMEOUT", "10"))
     try:
-        conn = psycopg2.connect(_pg_url())
+        conn = psycopg2.connect(_pg_url(), connect_timeout=_connect_timeout)
     except psycopg2.Error as exc:
         raise ViralLibraryError(f"could not connect to library DB: {exc}") from exc
     try:

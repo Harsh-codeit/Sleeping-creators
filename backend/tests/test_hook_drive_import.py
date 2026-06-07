@@ -189,11 +189,13 @@ def _patch_common(monkeypatch, server_mod, *, token="rt", images=None,
     monkeypatch.setattr(gds, "extract_folder_id", _extract_folder_id)
     monkeypatch.setattr(gds, "download_clip", _download_clip)
 
-    # Fake viral_library.source_ref_exists.
+    # Fake viral_library.source_ref_exists + count (count is the endpoint's
+    # DB-readiness pre-flight; 0 = healthy/reachable in tests).
     import viral_library
     monkeypatch.setattr(
         viral_library, "source_ref_exists", lambda ref: ref in existing
     )
+    monkeypatch.setattr(viral_library, "count", lambda *a, **k: 0)
 
     # Stub the inline dispatcher so a scheduled task (if ever run) does nothing.
     # The endpoint schedules via BackgroundTasks.add_task, so we assert on the
