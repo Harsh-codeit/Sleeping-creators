@@ -139,7 +139,7 @@ async def _db_niche_slugs() -> list:
 def process_hook_image(self, payload: dict):
     """Ingest a single uploaded screenshot into the viral hook library.
 
-    payload = {image_path, batch_id, created_by, platform?}
+    payload = {image_path, batch_id, created_by, platform?, source_ref?}
 
     Transient OpenRouter failures (HookClientError) autoretry with backoff via
     the decorator. Only after retries are exhausted do we bump the 'errors'
@@ -162,12 +162,13 @@ def run_task(self, payload: dict, hook_clients, viral_library):
     batch_id = payload.get("batch_id")
     created_by = payload.get("created_by")
     platform = payload.get("platform")
+    source_ref = payload.get("source_ref")
 
     try:
         return _process(
             hook_clients, viral_library,
             image_path=image_path, batch_id=batch_id,
-            created_by=created_by, platform=platform,
+            created_by=created_by, platform=platform, source_ref=source_ref,
         )
     except hook_clients.HookClientError as exc:
         # Retry transient OpenRouter errors. On the final attempt, record the
@@ -192,7 +193,7 @@ def run_task(self, payload: dict, hook_clients, viral_library):
 
 
 def _process(hook_clients, viral_library, *, image_path, batch_id,
-             created_by, platform):
+             created_by, platform, source_ref=None):
     """Core flow, separated from the Celery wrapper for testability.
 
     The image is deleted in a try/finally so cleanup happens on every path
@@ -237,6 +238,7 @@ def _process(hook_clients, viral_library, *, image_path, batch_id,
             "source": data.get("source"),
             "created_by": created_by,
             "platform": platform,
+            "source_ref": source_ref,
         }
         hook_id = viral_library.insert_hook(hook, emb)
 
@@ -273,6 +275,7 @@ def process_image_inline(payload: dict) -> dict:
             hook_clients, viral_library,
             image_path=image_path, batch_id=batch_id,
             created_by=payload.get("created_by"), platform=payload.get("platform"),
+            source_ref=payload.get("source_ref"),
         )
     except Exception as exc:  # noqa: BLE001 - terminal in inline mode (no retry)
         logger.warning("inline ingest failed for %s: %s", image_path, exc)

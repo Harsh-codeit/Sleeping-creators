@@ -17,6 +17,7 @@ Public API (the fixed contract for the ingest worker + endpoints):
     list_hooks(*, niche_slug=None, hook_type=None, status=None, text=None,
                limit=50, offset=0) -> list[dict]
     phash_exists(phash: str) -> bool
+    source_ref_exists(ref: str) -> bool
     find_semantic_duplicate(embedding, *, threshold=0.92, niche_slug=None) -> str | None
     count(status=None) -> int
     retrieve(...)  (bound from viral_retrieval)
@@ -39,7 +40,7 @@ EMBED_DIM = 1536  # text-embedding-3-large Matryoshka slice (pgvector HNSW <=200
 _HOOK_COLUMNS = (
     "hook_text", "niche_slug", "category", "hook_type", "platform", "language",
     "trigger", "source", "engagement_signal", "virality_score", "confidence",
-    "status", "phash", "created_by",
+    "status", "phash", "created_by", "source_ref",
 )
 
 
@@ -110,6 +111,7 @@ CREATE TABLE IF NOT EXISTS hooks (
     status TEXT,
     phash TEXT,
     created_by TEXT,
+    source_ref TEXT,
     created_at TEXT,
     active INTEGER DEFAULT 1,
     embedding vector({EMBED_DIM}),
@@ -122,6 +124,7 @@ _INDEXES = (
     "USING hnsw (embedding vector_cosine_ops)",
     "CREATE INDEX IF NOT EXISTS idx_hooks_fts ON hooks USING gin (fts)",
     "CREATE INDEX IF NOT EXISTS idx_hooks_phash ON hooks (phash)",
+    "CREATE INDEX IF NOT EXISTS idx_hooks_source_ref ON hooks (source_ref)",
     "CREATE INDEX IF NOT EXISTS idx_hooks_niche ON hooks (niche_slug)",
     "CREATE INDEX IF NOT EXISTS idx_hooks_type ON hooks (hook_type)",
     "CREATE INDEX IF NOT EXISTS idx_hooks_status ON hooks (status)",
@@ -148,6 +151,19 @@ def init_db() -> None:
         except Exception as exc:
             conn.rollback()
             raise ViralLibraryError(f"init_db (extension/table) failed: {exc}") from exc
+
+        # 1b. Backfill columns on a pre-existing table (e.g. someone ran the
+        #     DDL manually before this column existed). Best-effort, own txn so a
+        #     failure can't roll back the table.
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "ALTER TABLE hooks ADD COLUMN IF NOT EXISTS source_ref TEXT"
+                )
+            conn.commit()
+        except Exception as exc:  # pragma: no cover - best-effort
+            conn.rollback()
+            logger.warning("init_db: source_ref column backfill skipped: %s", exc)
 
         # The extension now exists for sure — register the vector type.
         try:
@@ -274,7 +290,7 @@ def delete_hook(hook_id: str) -> None:
 _READ_COLS = (
     "id, hook_text, niche_slug, category, hook_type, platform, language, "
     "trigger, source, engagement_signal, virality_score, confidence, status, "
-    "phash, created_by, created_at, active"
+    "phash, created_by, source_ref, created_at, active"
 )
 
 
@@ -339,6 +355,33 @@ def phash_exists(phash: str) -> bool:
             return cur.fetchone() is not None
     except Exception as exc:
         raise ViralLibraryError(f"phash_exists failed: {exc}") from exc
+    finally:
+        conn.close()
+
+
+def source_ref_exists(ref: str) -> bool:
+    """True if a hook with this external source reference already exists.
+
+    Used to dedup re-imports from an external source (e.g. a Google Drive file
+    id, stored as ``gdrive:<id>``) BEFORE downloading/processing it. Fail-safe:
+    on any DB error returns False so a check failure can't block ingestion (the
+    pHash + semantic dedup still catch true duplicates downstream)."""
+    if not ref:
+        return False
+    try:
+        conn = _connect()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("source_ref_exists connect failed: %s", exc)
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM hooks WHERE source_ref = %s LIMIT 1", (ref,)
+            )
+            return cur.fetchone() is not None
+    except Exception as exc:
+        logger.warning("source_ref_exists failed: %s", exc)
+        return False
     finally:
         conn.close()
 

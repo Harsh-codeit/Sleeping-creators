@@ -259,6 +259,9 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     # the approve/reject routes deliberately use the gated /api/viral-hooks
     # prefix so the Telegram public-suffix rule (scoped to /api/posts/) never
     # exempts them.
+    # Google Drive folder import — MUST precede the generic /ingest$ + /{id}
+    # rules so the literal /ingest/drive path isn't shadowed.
+    ("POST",   r"^/api/viral-hooks/ingest/drive$"):       ("settings", "edit"),
     ("POST",   r"^/api/viral-hooks/ingest$"):             ("settings", "edit"),
     ("GET",    r"^/api/viral-hooks/ingest/[^/]+$"):       ("settings", "view"),
     ("GET",    r"^/api/viral-hooks$"):                    ("settings", "view"),
@@ -2818,6 +2821,15 @@ def _hook_ingest_tmp_dir() -> "Path":
     return d
 
 
+_HOOK_DRIVE_IMPORT_MAX = 500  # cap files per import to avoid runaway batches
+
+
+class HookDriveIngest(BaseModel):
+    """Body for importing a Google Drive folder of screenshots into the library."""
+    folder_url: str
+    platform: Optional[str] = None
+
+
 class HookUpdate(BaseModel):
     """Editable fields when curating a hook from the review queue."""
     hook_text: Optional[str] = None
@@ -2893,6 +2905,101 @@ async def ingest_viral_hooks(background_tasks: BackgroundTasks,
         queued += 1
 
     return {"batch_id": batch_id, "queued": queued, "mode": "celery" if use_celery else "inline"}
+
+
+@api_router.post("/viral-hooks/ingest/drive")
+async def ingest_viral_hooks_from_drive(data: HookDriveIngest,
+                                        background_tasks: BackgroundTasks):
+    """Import every image in a Google Drive folder through the SAME ingest
+    pipeline as the bulk upload endpoint.
+
+    File-id dedup: each Drive file is referenced as ``gdrive:<file_id>``. A file
+    whose ref already exists in the library is SKIPPED (not downloaded, not
+    queued) — so re-running this against the same folder never re-downloads or
+    re-processes work that's already been ingested. New files are downloaded to
+    the shared temp dir and dispatched exactly like uploads (Celery when
+    REDIS_URL is set, else in-process BackgroundTasks). The per-file pHash +
+    semantic dedup still apply downstream as a second line of defence.
+
+    Returns {batch_id, queued, skipped, mode}. ``total`` on the batch doc counts
+    only the NEW (non-skipped) files."""
+    refresh_token = await _get_google_refresh_token()
+    if not refresh_token:
+        raise HTTPException(400, "Google account not connected")
+
+    import viral_library
+    from google_drive_service import (
+        list_images, extract_folder_id, download_clip,
+    )
+    from starlette.concurrency import run_in_threadpool
+
+    folder_id = extract_folder_id(data.folder_url) or data.folder_url
+    images = await run_in_threadpool(list_images, refresh_token, folder_id)
+    if len(images) > _HOOK_DRIVE_IMPORT_MAX:
+        images = images[:_HOOK_DRIVE_IMPORT_MAX]
+
+    tmp_dir = _hook_ingest_tmp_dir()
+    batch_id = uuid.uuid4().hex
+    use_celery = bool(os.environ.get("REDIS_URL"))
+
+    jobs: list[dict] = []
+    skipped = 0
+    for img in images:
+        file_id = img.get("drive_file_id")
+        if not file_id:
+            continue
+        ref = f"gdrive:{file_id}"
+        # File-id dedup: skip before any download/processing.
+        if await run_in_threadpool(viral_library.source_ref_exists, ref):
+            skipped += 1
+            continue
+        name = img.get("name") or file_id
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
+        dest = tmp_dir / f"{batch_id}_{uuid.uuid4().hex}.{ext}"
+        try:
+            await run_in_threadpool(
+                download_clip, refresh_token, file_id, str(dest)
+            )
+        except Exception as exc:  # noqa: BLE001 - skip a single bad file
+            logger.warning("Drive import: download failed for %s: %s", file_id, exc)
+            continue
+        jobs.append({
+            "image_path": str(dest),
+            "batch_id": batch_id,
+            "created_by": "admin",
+            "platform": data.platform,
+            "source_ref": ref,
+        })
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.hook_ingest_batches.insert_one({
+        "id": batch_id,
+        "total": len(jobs),
+        "processed": 0,
+        "inserted": 0,
+        "duplicates": 0,
+        "rejected": 0,
+        "review": 0,
+        "errors": 0,
+        "created_at": now,
+    })
+
+    queued = 0
+    for job in jobs:
+        if use_celery:
+            from hook_ingest_worker import process_hook_image
+            process_hook_image.apply_async(args=[job])
+        else:
+            from hook_ingest_worker import process_image_inline
+            background_tasks.add_task(process_image_inline, job)
+        queued += 1
+
+    return {
+        "batch_id": batch_id,
+        "queued": queued,
+        "skipped": skipped,
+        "mode": "celery" if use_celery else "inline",
+    }
 
 
 @api_router.get("/viral-hooks/ingest/{batch_id}")
