@@ -129,18 +129,47 @@ _INDEXES = (
 
 
 def init_db() -> None:
-    """Idempotent schema creation. Safe to call repeatedly."""
+    """Idempotent schema creation. Safe to call repeatedly.
+
+    The extension + table are created and COMMITTED first, so the library is
+    usable even if an optional ANN index can't be built (e.g. an older pgvector
+    without HNSW, or limited privileges). Indexes are then created best-effort —
+    a missing HNSW index degrades retrieval to a sequential scan rather than
+    aborting the whole schema (which would leave the table missing)."""
     conn = _connect()
     try:
-        with conn.cursor() as cur:
-            cur.execute(_CREATE_EXTENSION)
-            cur.execute(_CREATE_HOOKS)
-            for ddl in _INDEXES:
-                cur.execute(ddl)
-        conn.commit()
-    except Exception as exc:
-        conn.rollback()
-        raise ViralLibraryError(f"init_db failed: {exc}") from exc
+        # 1. Extension + table — REQUIRED. Commit immediately so a later index
+        #    failure can't roll the table back.
+        try:
+            with conn.cursor() as cur:
+                cur.execute(_CREATE_EXTENSION)
+                cur.execute(_CREATE_HOOKS)
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            raise ViralLibraryError(f"init_db (extension/table) failed: {exc}") from exc
+
+        # The extension now exists for sure — register the vector type.
+        try:
+            from pgvector.psycopg2 import register_vector
+            register_vector(conn)
+        except Exception:  # pragma: no cover - best-effort
+            pass
+
+        # 2. Indexes — BEST-EFFORT. Each in its own txn so one failure (e.g. no
+        #    HNSW on old pgvector) doesn't block the others or the table.
+        for ddl in _INDEXES:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(ddl)
+                conn.commit()
+            except Exception as exc:
+                conn.rollback()
+                logger.warning(
+                    "init_db: skipping index (%s): %s",
+                    ddl.split(" ON ")[0].replace("CREATE INDEX IF NOT EXISTS ", ""),
+                    exc,
+                )
     finally:
         conn.close()
 
