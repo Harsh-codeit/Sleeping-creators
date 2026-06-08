@@ -88,7 +88,9 @@ running) — it's unaffected because the new resource used the same external Mon
 read-only-ish (it only writes what the app normally writes).
 
 ### Notes
-- No code change is needed to switch B→A: the ingest endpoint uses Celery
-  automatically once `REDIS_URL` is present (which the compose sets).
+- To switch B→A, set **`HOOK_INGEST_USE_CELERY=true`** (the compose does this) so
+  ingestion routes to the hook-worker. Without it, ingestion runs in-process even
+  if `REDIS_URL` is set — deliberate, so a stray `REDIS_URL` (e.g. for the video
+  worker) can't silently enqueue ingest jobs that no hook-worker consumes.
 - The vector store is the pgvector Postgres resource (shared by both options) —
   the only persistent thing to back up.

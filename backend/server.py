@@ -2845,6 +2845,17 @@ class HookUpdate(BaseModel):
     status: Optional[str] = None
 
 
+def _hook_use_celery() -> bool:
+    """Route hook ingestion to the Celery hook-worker ONLY when explicitly opted
+    in via HOOK_INGEST_USE_CELERY. A bare REDIS_URL is NOT enough: it may be set
+    for other reasons (e.g. the video worker) while no hook-worker is running,
+    which would silently enqueue ingest jobs that nothing ever consumes. Default
+    is in-process (daemon thread)."""
+    return os.environ.get("HOOK_INGEST_USE_CELERY", "").strip().lower() in (
+        "1", "true", "yes", "on"
+    )
+
+
 def _dispatch_inline_ingest(jobs: list) -> None:
     """Run inline (no-Redis) ingest jobs in a dedicated DAEMON THREAD — fully
     independent of the event loop, FastAPI BackgroundTasks, and BaseHTTPMiddleware
@@ -2861,6 +2872,7 @@ def _dispatch_inline_ingest(jobs: list) -> None:
             except Exception as exc:  # noqa: BLE001 - never let the thread die loud
                 logger.warning("inline ingest thread error: %s", exc)
 
+    logger.info("hook ingest: dispatching %d job(s) inline (daemon thread)", len(jobs))
     threading.Thread(target=_runner, name="hook-ingest", daemon=True).start()
 
 
@@ -2917,7 +2929,7 @@ async def ingest_viral_hooks(background_tasks: BackgroundTasks,
         "created_at": now,
     })
 
-    use_celery = bool(os.environ.get("REDIS_URL"))
+    use_celery = _hook_use_celery()
     inline_jobs: list = []
     queued = 0
     for path in saved:
@@ -2978,7 +2990,7 @@ async def ingest_viral_hooks_from_drive(data: HookDriveIngest,
 
     tmp_dir = _hook_ingest_tmp_dir()
     batch_id = uuid.uuid4().hex
-    use_celery = bool(os.environ.get("REDIS_URL"))
+    use_celery = _hook_use_celery()
 
     jobs: list[dict] = []
     skipped = 0

@@ -36,6 +36,7 @@ services:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - HOOK_INGEST_USE_CELERY=true   # route ingest to the hook-worker (this compose runs it)
       - MONGO_URL=${MONGO_URL}                 # your EXISTING Coolify Mongo URL
       - DB_NAME=${DB_NAME:-sleeping-creators}
       - VIRAL_LIBRARY_PG_URL=${VIRAL_LIBRARY_PG_URL}   # your pgvector Postgres resource
@@ -64,6 +65,7 @@ services:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - HOOK_INGEST_USE_CELERY=true   # route ingest to the hook-worker (this compose runs it)
       - MONGO_URL=${MONGO_URL}
       - DB_NAME=${DB_NAME:-sleeping-creators}
       - VIRAL_LIBRARY_PG_URL=${VIRAL_LIBRARY_PG_URL}   # your pgvector Postgres resource
