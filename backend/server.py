@@ -2876,6 +2876,71 @@ def _dispatch_inline_ingest(jobs: list) -> None:
     threading.Thread(target=_runner, name="hook-ingest", daemon=True).start()
 
 
+def _run_drive_jobs(refresh_token: str, candidates: list, batch_id: str,
+                    tmp_dir, platform) -> None:
+    """Sync body for the Drive import (download + process each candidate),
+    extracted so it's testable without a thread. For each Drive image:
+    file-id dedup (skip -> count as duplicate), download to the temp dir, then
+    process through the same pipeline (Celery worker if opted in, else inline).
+    Updates the batch counters as it goes so the UI shows live progress exactly
+    like the manual upload."""
+    import uuid as _uuid
+    import viral_library
+    from google_drive_service import download_clip
+    from hook_ingest_worker import (
+        process_image_inline, _bump_batch, _safe_unlink,
+    )
+    use_celery = _hook_use_celery()
+    for img in candidates:
+        file_id = img.get("drive_file_id")
+        if not file_id:
+            _bump_batch(batch_id, processed=1, errors=1)
+            continue
+        ref = f"gdrive:{file_id}"
+        # File-id dedup: already imported -> count as a duplicate (no download).
+        try:
+            if viral_library.source_ref_exists(ref):
+                _bump_batch(batch_id, processed=1, duplicates=1)
+                continue
+        except Exception as exc:  # noqa: BLE001 - check failure shouldn't block
+            logger.warning("drive source_ref check failed for %s: %s", file_id, exc)
+        name = img.get("name") or file_id
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
+        dest = str(tmp_dir / f"{batch_id}_{_uuid.uuid4().hex}.{ext}")
+        try:
+            download_clip(refresh_token, file_id, dest)
+        except Exception as exc:  # noqa: BLE001 - skip a single bad file
+            logger.warning("drive download failed for %s: %s", file_id, exc)
+            _bump_batch(batch_id, processed=1, errors=1)
+            _safe_unlink(dest)
+            continue
+        job = {
+            "image_path": dest, "batch_id": batch_id, "created_by": "admin",
+            "platform": platform, "source_ref": ref,
+        }
+        if use_celery:
+            from hook_ingest_worker import process_hook_image
+            process_hook_image.apply_async(args=[job])
+        else:
+            try:
+                process_image_inline(job)
+            except Exception as exc:  # noqa: BLE001 - never let the thread die loud
+                logger.warning("drive inline ingest failed: %s", exc)
+
+
+def _dispatch_drive_ingest(refresh_token: str, candidates: list, batch_id: str,
+                           tmp_dir, platform) -> None:
+    """Run the Drive import (download + process) in a daemon thread so the
+    endpoint can return the batch_id immediately and the UI shows live progress."""
+    import threading
+    logger.info("hook ingest: dispatching %d drive job(s) (daemon thread)", len(candidates))
+    threading.Thread(
+        target=_run_drive_jobs,
+        args=(refresh_token, candidates, batch_id, tmp_dir, platform),
+        name="hook-drive-ingest", daemon=True,
+    ).start()
+
+
 @api_router.post("/viral-hooks/ingest")
 async def ingest_viral_hooks(background_tasks: BackgroundTasks,
                              files: List[UploadFile] = File(...), platform: str = Form(None)):
@@ -2985,46 +3050,21 @@ async def ingest_viral_hooks_from_drive(data: HookDriveIngest,
 
     folder_id = extract_folder_id(data.folder_url) or data.folder_url
     images = await run_in_threadpool(list_images, refresh_token, folder_id)
-    if len(images) > _HOOK_DRIVE_IMPORT_MAX:
-        images = images[:_HOOK_DRIVE_IMPORT_MAX]
+
+    # Candidates = images that have a Drive file id. The per-file dedup +
+    # DOWNLOAD happen in the background so this endpoint returns immediately and
+    # the UI shows live progress (same as the manual upload). Already-imported
+    # files surface as "duplicates" in the batch counters as they're processed.
+    candidates = [img for img in images if img.get("drive_file_id")]
+    if len(candidates) > _HOOK_DRIVE_IMPORT_MAX:
+        candidates = candidates[:_HOOK_DRIVE_IMPORT_MAX]
 
     tmp_dir = _hook_ingest_tmp_dir()
     batch_id = uuid.uuid4().hex
-    use_celery = _hook_use_celery()
-
-    jobs: list[dict] = []
-    skipped = 0
-    for img in images:
-        file_id = img.get("drive_file_id")
-        if not file_id:
-            continue
-        ref = f"gdrive:{file_id}"
-        # File-id dedup: skip before any download/processing.
-        if await run_in_threadpool(viral_library.source_ref_exists, ref):
-            skipped += 1
-            continue
-        name = img.get("name") or file_id
-        ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
-        dest = tmp_dir / f"{batch_id}_{uuid.uuid4().hex}.{ext}"
-        try:
-            await run_in_threadpool(
-                download_clip, refresh_token, file_id, str(dest)
-            )
-        except Exception as exc:  # noqa: BLE001 - skip a single bad file
-            logger.warning("Drive import: download failed for %s: %s", file_id, exc)
-            continue
-        jobs.append({
-            "image_path": str(dest),
-            "batch_id": batch_id,
-            "created_by": "admin",
-            "platform": data.platform,
-            "source_ref": ref,
-        })
-
     now = datetime.now(timezone.utc).isoformat()
     await db.hook_ingest_batches.insert_one({
         "id": batch_id,
-        "total": len(jobs),
+        "total": len(candidates),
         "processed": 0,
         "inserted": 0,
         "duplicates": 0,
@@ -3034,23 +3074,14 @@ async def ingest_viral_hooks_from_drive(data: HookDriveIngest,
         "created_at": now,
     })
 
-    inline_jobs: list = []
-    queued = 0
-    for job in jobs:
-        if use_celery:
-            from hook_ingest_worker import process_hook_image
-            process_hook_image.apply_async(args=[job])
-        else:
-            inline_jobs.append(job)
-        queued += 1
-    if inline_jobs:
-        _dispatch_inline_ingest(inline_jobs)
+    if candidates:
+        _dispatch_drive_ingest(refresh_token, candidates, batch_id, tmp_dir, data.platform)
 
     return {
         "batch_id": batch_id,
-        "queued": queued,
-        "skipped": skipped,
-        "mode": "celery" if use_celery else "inline",
+        "queued": len(candidates),
+        "skipped": 0,
+        "mode": "celery" if _hook_use_celery() else "inline",
     }
 
 

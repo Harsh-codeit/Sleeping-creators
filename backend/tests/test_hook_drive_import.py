@@ -197,17 +197,32 @@ def _patch_common(monkeypatch, server_mod, *, token="rt", images=None,
     )
     monkeypatch.setattr(viral_library, "count", lambda *a, **k: 0)
 
-    # The endpoint dispatches inline jobs via server._dispatch_inline_ingest
-    # (asyncio.create_task). Capture the jobs it receives instead of executing.
-    dispatched: list = []
+    # The endpoint hands the Drive download+process off to a daemon thread via
+    # server._dispatch_drive_ingest. Capture its candidates instead of running it.
+    drive_dispatched: list = []
     monkeypatch.setattr(
-        server_mod, "_dispatch_inline_ingest", lambda jobs: dispatched.extend(jobs)
+        server_mod, "_dispatch_drive_ingest",
+        lambda rt, candidates, batch_id, tmp, platform: drive_dispatched.append(
+            {"candidates": candidates, "batch_id": batch_id, "platform": platform}
+        ),
     )
+
+    # For the _run_drive_jobs unit test: capture batch bumps + the processed jobs.
+    bumps: list = []
+    processed: list = []
     import hook_ingest_worker
     monkeypatch.setattr(
-        hook_ingest_worker, "process_image_inline", lambda job: None
+        hook_ingest_worker, "_bump_batch",
+        lambda batch_id, **inc: bumps.append((batch_id, inc)),
     )
-    return {"db": fake_db, "downloaded": downloaded, "dispatched": dispatched}
+    monkeypatch.setattr(
+        hook_ingest_worker, "process_image_inline",
+        lambda job: processed.append(job),
+    )
+    return {
+        "db": fake_db, "downloaded": downloaded,
+        "drive_dispatched": drive_dispatched, "bumps": bumps, "processed": processed,
+    }
 
 
 def test_drive_ingest_400_without_token(monkeypatch, server_mod, tmp_path):
@@ -220,53 +235,48 @@ def test_drive_ingest_400_without_token(monkeypatch, server_mod, tmp_path):
     assert "not connected" in str(exc.value.detail).lower()
 
 
-def test_drive_ingest_skips_already_imported(monkeypatch, server_mod, tmp_path):
+def test_drive_ingest_returns_fast_and_dispatches_candidates(monkeypatch, server_mod, tmp_path):
+    """Endpoint returns immediately: batch total = all candidates with a file id,
+    and the download+process is handed to _dispatch_drive_ingest (background)."""
     images = [
         {"drive_file_id": "A", "name": "a.png", "mime_type": "image/png"},
         {"drive_file_id": "B", "name": "b.png", "mime_type": "image/png"},
+        {"name": "no-id.png"},  # no drive_file_id -> not a candidate
     ]
-    ctx = _patch_common(
-        monkeypatch, server_mod, images=images,
-        existing_refs={"gdrive:A"}, tmp_path=tmp_path,
-    )
-    body = server_mod.HookDriveIngest(folder_url="folder")
-    bg = _FakeBackgroundTasks()
-    res = _run(server_mod.ingest_viral_hooks_from_drive(body, bg))
-
-    assert res["skipped"] == 1
-    assert res["queued"] == 1
-    assert res["mode"] == "inline"
-    # Only the NEW file (B) was downloaded + dispatched.
-    assert ctx["downloaded"] == ["B"]
-    assert len(ctx["dispatched"]) == 1
-    job = ctx["dispatched"][0]
-    assert job["source_ref"] == "gdrive:B"
-    # batch total counts NEW files only.
-    assert ctx["db"].hook_ingest_batches.docs[0]["total"] == 1
-
-
-def test_drive_ingest_dispatches_new_files_with_source_ref(
-    monkeypatch, server_mod, tmp_path
-):
-    images = [
-        {"drive_file_id": "X1", "name": "x1.jpg", "mime_type": "image/jpeg"},
-        {"drive_file_id": "X2", "name": "x2.png", "mime_type": "image/png"},
-    ]
-    ctx = _patch_common(
-        monkeypatch, server_mod, images=images, existing_refs=set(),
-        tmp_path=tmp_path,
-    )
+    ctx = _patch_common(monkeypatch, server_mod, images=images, tmp_path=tmp_path)
     body = server_mod.HookDriveIngest(folder_url="folder", platform="tiktok")
     bg = _FakeBackgroundTasks()
     res = _run(server_mod.ingest_viral_hooks_from_drive(body, bg))
 
-    assert res["skipped"] == 0
-    assert res["queued"] == 2
-    assert sorted(ctx["downloaded"]) == ["X1", "X2"]
-    refs = sorted(j["source_ref"] for j in ctx["dispatched"])
-    assert refs == ["gdrive:X1", "gdrive:X2"]
-    assert all(j["platform"] == "tiktok" for j in ctx["dispatched"])
-    assert all(j["created_by"] == "admin" for j in ctx["dispatched"])
+    assert res["queued"] == 2 and res["mode"] == "inline"
+    assert ctx["db"].hook_ingest_batches.docs[0]["total"] == 2
+    # No downloads happened in the request (they're backgrounded).
+    assert ctx["downloaded"] == []
+    assert len(ctx["drive_dispatched"]) == 1
+    disp = ctx["drive_dispatched"][0]
+    assert [c["drive_file_id"] for c in disp["candidates"]] == ["A", "B"]
+    assert disp["platform"] == "tiktok"
+
+
+def test_run_drive_jobs_skips_dups_downloads_new(monkeypatch, server_mod, tmp_path):
+    """The background runner: an already-imported file is counted as a duplicate
+    (no download); a new file is downloaded + processed with its source_ref."""
+    candidates = [
+        {"drive_file_id": "A", "name": "a.png"},   # already imported
+        {"drive_file_id": "B", "name": "b.png"},   # new
+    ]
+    ctx = _patch_common(
+        monkeypatch, server_mod, existing_refs={"gdrive:A"}, tmp_path=tmp_path,
+    )
+    server_mod._run_drive_jobs("rt", candidates, "batch-1", tmp_path, "tiktok")
+
+    # A skipped (duplicate, not downloaded); B downloaded + processed.
+    assert ctx["downloaded"] == ["B"]
+    assert len(ctx["processed"]) == 1
+    job = ctx["processed"][0]
+    assert job["source_ref"] == "gdrive:B" and job["platform"] == "tiktok"
+    # Duplicate counter bumped for A.
+    assert any(inc.get("duplicates") for _bid, inc in ctx["bumps"])
 
 
 # ---------------------------------------------------------------------------
