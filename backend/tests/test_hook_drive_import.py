@@ -197,14 +197,17 @@ def _patch_common(monkeypatch, server_mod, *, token="rt", images=None,
     )
     monkeypatch.setattr(viral_library, "count", lambda *a, **k: 0)
 
-    # Stub the inline dispatcher so a scheduled task (if ever run) does nothing.
-    # The endpoint schedules via BackgroundTasks.add_task, so we assert on the
-    # captured jobs (bg.jobs) rather than on actual execution.
+    # The endpoint dispatches inline jobs via server._dispatch_inline_ingest
+    # (asyncio.create_task). Capture the jobs it receives instead of executing.
+    dispatched: list = []
+    monkeypatch.setattr(
+        server_mod, "_dispatch_inline_ingest", lambda jobs: dispatched.extend(jobs)
+    )
     import hook_ingest_worker
     monkeypatch.setattr(
         hook_ingest_worker, "process_image_inline", lambda job: None
     )
-    return {"db": fake_db, "downloaded": downloaded}
+    return {"db": fake_db, "downloaded": downloaded, "dispatched": dispatched}
 
 
 def test_drive_ingest_400_without_token(monkeypatch, server_mod, tmp_path):
@@ -235,8 +238,8 @@ def test_drive_ingest_skips_already_imported(monkeypatch, server_mod, tmp_path):
     assert res["mode"] == "inline"
     # Only the NEW file (B) was downloaded + dispatched.
     assert ctx["downloaded"] == ["B"]
-    assert len(bg.jobs) == 1
-    job = bg.jobs[0]
+    assert len(ctx["dispatched"]) == 1
+    job = ctx["dispatched"][0]
     assert job["source_ref"] == "gdrive:B"
     # batch total counts NEW files only.
     assert ctx["db"].hook_ingest_batches.docs[0]["total"] == 1
@@ -260,10 +263,10 @@ def test_drive_ingest_dispatches_new_files_with_source_ref(
     assert res["skipped"] == 0
     assert res["queued"] == 2
     assert sorted(ctx["downloaded"]) == ["X1", "X2"]
-    refs = sorted(j["source_ref"] for j in bg.jobs)
+    refs = sorted(j["source_ref"] for j in ctx["dispatched"])
     assert refs == ["gdrive:X1", "gdrive:X2"]
-    assert all(j["platform"] == "tiktok" for j in bg.jobs)
-    assert all(j["created_by"] == "admin" for j in bg.jobs)
+    assert all(j["platform"] == "tiktok" for j in ctx["dispatched"])
+    assert all(j["created_by"] == "admin" for j in ctx["dispatched"])
 
 
 # ---------------------------------------------------------------------------

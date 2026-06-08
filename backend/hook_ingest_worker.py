@@ -270,13 +270,16 @@ def process_image_inline(payload: dict) -> dict:
 
     image_path = payload.get("image_path")
     batch_id = payload.get("batch_id")
+    logger.info("hook ingest START batch=%s image=%s", batch_id, image_path)
     try:
-        return _process(
+        result = _process(
             hook_clients, viral_library,
             image_path=image_path, batch_id=batch_id,
             created_by=payload.get("created_by"), platform=payload.get("platform"),
             source_ref=payload.get("source_ref"),
         )
+        logger.info("hook ingest DONE batch=%s status=%s", batch_id, result.get("status"))
+        return result
     except Exception as exc:  # noqa: BLE001 - terminal in inline mode (no retry)
         logger.warning("inline ingest failed for %s: %s", image_path, exc)
         _bump_batch(batch_id, processed=1, errors=1)

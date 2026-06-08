@@ -2845,6 +2845,32 @@ class HookUpdate(BaseModel):
     status: Optional[str] = None
 
 
+# Hold references to in-flight inline-ingest tasks so the event loop doesn't GC
+# them mid-run (asyncio.create_task only keeps a weak ref).
+_INLINE_INGEST_TASKS: set = set()
+
+
+def _dispatch_inline_ingest(jobs: list) -> None:
+    """Schedule inline (no-Redis) ingest jobs on the running event loop via
+    asyncio.create_task, so they execute reliably — independent of FastAPI
+    BackgroundTasks (which can be swallowed under BaseHTTPMiddleware). Each job's
+    blocking work runs in the threadpool; jobs run sequentially."""
+    import asyncio
+    from starlette.concurrency import run_in_threadpool
+    from hook_ingest_worker import process_image_inline
+
+    async def _runner():
+        for job in jobs:
+            try:
+                await run_in_threadpool(process_image_inline, job)
+            except Exception as exc:  # noqa: BLE001 - never crash the loop
+                logger.warning("inline ingest dispatch error: %s", exc)
+
+    task = asyncio.create_task(_runner())
+    _INLINE_INGEST_TASKS.add(task)
+    task.add_done_callback(_INLINE_INGEST_TASKS.discard)
+
+
 @api_router.post("/viral-hooks/ingest")
 async def ingest_viral_hooks(background_tasks: BackgroundTasks,
                              files: List[UploadFile] = File(...), platform: str = Form(None)):
@@ -2899,6 +2925,7 @@ async def ingest_viral_hooks(background_tasks: BackgroundTasks,
     })
 
     use_celery = bool(os.environ.get("REDIS_URL"))
+    inline_jobs: list = []
     queued = 0
     for path in saved:
         job = {
@@ -2911,11 +2938,10 @@ async def ingest_viral_hooks(background_tasks: BackgroundTasks,
             from hook_ingest_worker import process_hook_image
             process_hook_image.apply_async(args=[job])
         else:
-            # In-process fallback: BackgroundTasks runs the sync runner in a
-            # threadpool (so its internal asyncio.run for batch counters is safe).
-            from hook_ingest_worker import process_image_inline
-            background_tasks.add_task(process_image_inline, job)
+            inline_jobs.append(job)
         queued += 1
+    if inline_jobs:
+        _dispatch_inline_ingest(inline_jobs)
 
     return {"batch_id": batch_id, "queued": queued, "mode": "celery" if use_celery else "inline"}
 
@@ -3003,15 +3029,17 @@ async def ingest_viral_hooks_from_drive(data: HookDriveIngest,
         "created_at": now,
     })
 
+    inline_jobs: list = []
     queued = 0
     for job in jobs:
         if use_celery:
             from hook_ingest_worker import process_hook_image
             process_hook_image.apply_async(args=[job])
         else:
-            from hook_ingest_worker import process_image_inline
-            background_tasks.add_task(process_image_inline, job)
+            inline_jobs.append(job)
         queued += 1
+    if inline_jobs:
+        _dispatch_inline_ingest(inline_jobs)
 
     return {
         "batch_id": batch_id,
