@@ -2845,30 +2845,23 @@ class HookUpdate(BaseModel):
     status: Optional[str] = None
 
 
-# Hold references to in-flight inline-ingest tasks so the event loop doesn't GC
-# them mid-run (asyncio.create_task only keeps a weak ref).
-_INLINE_INGEST_TASKS: set = set()
-
-
 def _dispatch_inline_ingest(jobs: list) -> None:
-    """Schedule inline (no-Redis) ingest jobs on the running event loop via
-    asyncio.create_task, so they execute reliably — independent of FastAPI
-    BackgroundTasks (which can be swallowed under BaseHTTPMiddleware). Each job's
-    blocking work runs in the threadpool; jobs run sequentially."""
-    import asyncio
-    from starlette.concurrency import run_in_threadpool
+    """Run inline (no-Redis) ingest jobs in a dedicated DAEMON THREAD — fully
+    independent of the event loop, FastAPI BackgroundTasks, and BaseHTTPMiddleware
+    (any of which can drop a scheduled task). ``process_image_inline`` is sync and
+    self-contained (its own DB connections; asyncio.run for the Mongo counter is
+    safe in a fresh thread with no running loop). Jobs run sequentially."""
+    import threading
     from hook_ingest_worker import process_image_inline
 
-    async def _runner():
+    def _runner():
         for job in jobs:
             try:
-                await run_in_threadpool(process_image_inline, job)
-            except Exception as exc:  # noqa: BLE001 - never crash the loop
-                logger.warning("inline ingest dispatch error: %s", exc)
+                process_image_inline(job)
+            except Exception as exc:  # noqa: BLE001 - never let the thread die loud
+                logger.warning("inline ingest thread error: %s", exc)
 
-    task = asyncio.create_task(_runner())
-    _INLINE_INGEST_TASKS.add(task)
-    task.add_done_callback(_INLINE_INGEST_TASKS.discard)
+    threading.Thread(target=_runner, name="hook-ingest", daemon=True).start()
 
 
 @api_router.post("/viral-hooks/ingest")
