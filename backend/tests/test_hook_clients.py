@@ -184,6 +184,48 @@ def test_extract_and_classify_defaults_virality_when_missing(hc, tmp_path, monke
     assert out["virality_score"] == 0.5
 
 
+def test_extract_and_classify_captures_source_and_engagement(hc, tmp_path, monkeypatch):
+    vj = _valid_vision_json()
+    vj["source"] = "@founder"
+    vj["engagement_signal"] = "220k likes"
+    monkeypatch.setattr(
+        hc.httpx, "post", lambda url, **kw: _FakeResponse(_chat_payload(json.dumps(vj)))
+    )
+    out = hc.extract_and_classify(_make_png(tmp_path), allowed_niches=["business-entrepreneurship"])
+    assert out["source"] == "@founder"
+    assert out["engagement_signal"] == "220k likes"
+    # virality derived from the 220k count (log-scaled) -> well above the 0.5 default.
+    assert out["virality_score"] > 0.7
+
+
+def test_virality_derived_from_engagement_overrides_model_estimate(hc, tmp_path, monkeypatch):
+    vj = _valid_vision_json()
+    vj["virality_score"] = 0.5          # model's neutral guess
+    vj["engagement_signal"] = "1.2M views"  # real count should win
+    monkeypatch.setattr(
+        hc.httpx, "post", lambda url, **kw: _FakeResponse(_chat_payload(json.dumps(vj)))
+    )
+    out = hc.extract_and_classify(_make_png(tmp_path), allowed_niches=["business-entrepreneurship"])
+    assert out["virality_score"] >= 0.95  # 1.2M -> ~1.0
+
+
+def test_parse_engagement_count():
+    import hook_clients as hc
+    assert hc._parse_engagement_count("220k likes") == 220_000
+    assert hc._parse_engagement_count("1.2M views") == 1_200_000
+    assert hc._parse_engagement_count("3,400 comments") == 3_400
+    assert hc._parse_engagement_count("") is None
+    assert hc._parse_engagement_count("no numbers here") is None
+
+
+def test_virality_from_count_log_scale():
+    import hook_clients as hc
+    assert hc._virality_from_count(100) == 0.0
+    assert abs(hc._virality_from_count(10_000) - 0.5) < 0.01
+    assert hc._virality_from_count(2_000_000) == 1.0
+    assert hc._virality_from_count(0) == 0.5  # no count -> neutral
+
+
 # ---------------------------------------------------------------------------
 # embed
 # ---------------------------------------------------------------------------

@@ -50,6 +50,49 @@ HOOK_TYPES = [
     "family_relationship",
 ]
 
+# Controlled psychological-trigger vocabulary. Constraining the model to this set
+# (rather than free text) stops it defaulting every hook to "curiosity_gap".
+TRIGGERS = [
+    "curiosity_gap",
+    "controversy",
+    "fomo",
+    "social_proof",
+    "fear",
+    "aspiration",
+    "relatability",
+    "shock_value",
+    "authority",
+    "emotional_pain",
+]
+
+
+def _parse_engagement_count(text: str):
+    """Parse the largest numeric count from an engagement string like
+    '220k likes' / '1.2M views' / '3,400 comments'. Returns an int or None."""
+    if not text:
+        return None
+    best = None
+    for m in re.finditer(r"(\d[\d,\.]*)\s*([kKmMbB]?)", str(text)):
+        raw = m.group(1).replace(",", "")
+        try:
+            val = float(raw)
+        except ValueError:
+            continue
+        mult = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(m.group(2).lower(), 1)
+        val *= mult
+        if best is None or val > best:
+            best = val
+    return int(best) if best is not None else None
+
+
+def _virality_from_count(count) -> float:
+    """Log-scale a like/view count to 0..1: ~100->0, 1k->0.25, 10k->0.5,
+    100k->0.75, 1M+->1.0."""
+    import math
+    if not count or count <= 0:
+        return 0.5
+    return max(0.0, min(1.0, (math.log10(count) - 2.0) / 4.0))
+
 
 class HookClientError(Exception):
     """Raised on any client failure; the worker handles retry/backoff."""
@@ -94,11 +137,15 @@ def _build_vision_messages(image_path: str, allowed_niches: list) -> list:
     data_uri = _image_data_uri(image_path)
     niche_list = ", ".join(allowed_niches) if allowed_niches else "other"
     hook_types = " | ".join(HOOK_TYPES)
+    triggers = " | ".join(TRIGGERS)
     instruction = (
-        "You are an expert at reading the FIRST SLIDE of viral Instagram/TikTok "
-        "carousels. Look at the image and do two things:\n"
-        "1. OCR the main HOOK TEXT shown on the slide (verbatim, the headline only).\n"
-        "2. Classify it.\n\n"
+        "You are an expert at reading viral Instagram/TikTok carousel posts. The "
+        "image is a screenshot that usually includes the POST HEADER (account "
+        "handle, like/view count) plus the FIRST SLIDE. Do three things:\n"
+        "1. OCR the main HOOK TEXT on the slide (verbatim, the headline only).\n"
+        "2. Read the post metadata from the header if visible: the @handle and the "
+        "engagement count (likes/views/comments).\n"
+        "3. Classify it.\n\n"
         "Return ONLY strict minified JSON (no markdown, no prose) with EXACTLY "
         "these keys:\n"
         "{\n"
@@ -107,13 +154,17 @@ def _build_vision_messages(image_path: str, allowed_niches: list) -> list:
         '  "category": string,             // short sub-tag, e.g. hook-story\n'
         f'  "hook_type": string,            // ONE of: {hook_types}\n'
         '  "language": string,             // ISO code, e.g. en, hi\n'
-        '  "trigger": string,              // psychological trigger, e.g. curiosity_gap, controversy\n'
-        '  "virality_score": number,       // 0..1 parsed from any visible like/view count; 0.5 if none visible\n'
+        f'  "trigger": string,              // ONE of: {triggers}\n'
+        '  "source": string,               // the @handle/username from the header, else ""\n'
+        '  "engagement_signal": string,    // visible like/view/comment count verbatim, e.g. "220k likes", else ""\n'
+        '  "virality_score": number,       // 0..1 from the like/view count (more = higher); 0.5 if none visible\n'
         '  "quality_ok": boolean,          // false if NOT a real hook / blurry / an ad / a meme\n'
         '  "confidence": number            // 0..1 classification confidence\n'
         "}\n"
         f"niche_slug MUST be one of: {niche_list}, or \"other\" — never invent a value.\n"
-        f"hook_type MUST be one of: {hook_types}."
+        f"hook_type MUST be one of: {hook_types}.\n"
+        f"trigger MUST be one of: {triggers}.\n"
+        'For source/engagement_signal: return "" if not visible in the image — never guess.'
     )
     return [
         {
@@ -186,10 +237,17 @@ def _normalize_vision(parsed: dict, allowed_niches: list) -> dict:
     niche = parsed.get("niche_slug")
     if niche not in allowed and niche != "other":
         niche = "other"
-    try:
-        virality = float(parsed.get("virality_score", 0.5))
-    except (TypeError, ValueError):
-        virality = 0.5
+    engagement_signal = (parsed.get("engagement_signal") or "").strip()
+    # Prefer a virality derived from the real engagement count; fall back to the
+    # model's own estimate, else the neutral 0.5.
+    count = _parse_engagement_count(engagement_signal)
+    if count is not None:
+        virality = _virality_from_count(count)
+    else:
+        try:
+            virality = float(parsed.get("virality_score", 0.5))
+        except (TypeError, ValueError):
+            virality = 0.5
     try:
         confidence = float(parsed.get("confidence", 0.0))
     except (TypeError, ValueError):
@@ -201,6 +259,8 @@ def _normalize_vision(parsed: dict, allowed_niches: list) -> dict:
         "hook_type": parsed.get("hook_type") or "",
         "language": parsed.get("language") or "en",
         "trigger": parsed.get("trigger") or "",
+        "source": (parsed.get("source") or "").strip(),
+        "engagement_signal": engagement_signal,
         "virality_score": max(0.0, min(1.0, virality)),
         "quality_ok": bool(parsed.get("quality_ok", False)),
         "confidence": max(0.0, min(1.0, confidence)),
