@@ -2626,6 +2626,12 @@ async def lifespan(app: FastAPI):
         viral_library.init_db()
     except Exception as _e:
         logger.warning(f"viral_library.init_db failed at startup: {_e}")
+    try:
+        import content_script_library as _csl
+        _csl.init_db()
+        logger.info("Content script library DB initialized")
+    except Exception as _e:
+        logger.warning(f"content_script_library.init_db failed at startup: {_e}")
     import storage as _storage
     _storage.ensure_bucket()
     _now = datetime.now(timezone.utc)
