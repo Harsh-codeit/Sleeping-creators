@@ -279,21 +279,10 @@ def ingest_reel(
         raise IngestError(str(exc)) from exc
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        video_path = os.path.join(tmpdir, f"{shortcode}.mp4")
         audio_path = os.path.join(tmpdir, f"{shortcode}.m4a")
 
-        # Download video
-        try:
-            with httpx.stream("GET", video_url, follow_redirects=True, timeout=120) as resp:
-                resp.raise_for_status()
-                with open(video_path, "wb") as f:
-                    for chunk in resp.iter_bytes(chunk_size=65536):
-                        f.write(chunk)
-        except Exception as exc:
-            raise IngestError(f"Failed to download reel video: {exc}") from exc
-
-        # Extract audio (keeps file well under Groq's 25 MB limit)
-        extract_audio(video_path, audio_path)
+        # Feed video URL directly to ffmpeg — no full-video download needed
+        extract_audio(video_url, audio_path)
 
         audio_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
         if audio_size_mb > 24:
