@@ -875,7 +875,11 @@ async def _generate_single_image_hook(
     # Proven viral-hook patterns (Phase C) — fail-open, "" when disabled/empty.
     hook_patterns_block = await _build_hook_patterns_block(client, onboarding, topic, db=db)
     script_examples_block = await _build_script_examples_block(
-        topic or "", niche=onboarding.get("niche_slug") or onboarding.get("niche"), platform=platform
+        topic or "",
+        niche=onboarding.get("niche_slug") or onboarding.get("niche"),
+        platform=platform,
+        problem_solved=onboarding.get("problem_solved"),
+        brand_vibe=onboarding.get("brand_vibe") if isinstance(onboarding.get("brand_vibe"), str) else None,
     )
 
     system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
@@ -1090,7 +1094,11 @@ async def _generate_carousel_single_pass(
     # (never the cacheable static prefix). Fail-open: "" when disabled/empty/error.
     hook_patterns_block = await _build_hook_patterns_block(client, onboarding, topic, db=db)
     script_examples_block = await _build_script_examples_block(
-        topic or "", niche=onboarding.get("niche_slug") or onboarding.get("niche"), platform=platform
+        topic or "",
+        niche=onboarding.get("niche_slug") or onboarding.get("niche"),
+        platform=platform,
+        problem_solved=onboarding.get("problem_solved"),
+        brand_vibe=onboarding.get("brand_vibe") if isinstance(onboarding.get("brand_vibe"), str) else None,
     )
 
     # ── Static cacheable prefix (client-agnostic; varies only by slide_format variant) ─────

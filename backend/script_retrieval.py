@@ -123,10 +123,16 @@ async def build_script_examples_block(
     topic: str,
     niche: str | None = None,
     platform: str | None = None,
+    problem_solved: str | None = None,
+    brand_vibe: str | None = None,
 ) -> str:
     """Build the 'WINNING SCRIPT EXAMPLES' prompt block. Async, fail-open -> ''."""
     try:
-        examples = retrieve(topic, niche_slug=niche, platform=platform, k=3)
+        # Enrich the query with emotional/pain-point context so retrieval
+        # matches on angle and audience, not just topic keywords.
+        query_parts = [p for p in [topic, problem_solved, brand_vibe] if p and p.strip()]
+        query = ". ".join(query_parts)
+        examples = retrieve(query, niche_slug=niche, platform=platform, k=3)
         if not examples:
             return ""
         lines = [
