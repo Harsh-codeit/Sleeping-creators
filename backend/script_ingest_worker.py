@@ -130,7 +130,16 @@ def fetch_reel_video_url(shortcode: str) -> str:
         },
         timeout=30,
     )
-    resp.raise_for_status()
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status == 404:
+            raise ValueError(
+                "Reel not found via RapidAPI — the reel may be private, deleted, "
+                "or your instagram120 subscription may not cover this endpoint."
+            ) from exc
+        raise ValueError(f"RapidAPI returned {status} for shortcode {shortcode!r}") from exc
     data = resp.json()
     video_url = (data.get("data") or {}).get("video_url")
     if not video_url:
