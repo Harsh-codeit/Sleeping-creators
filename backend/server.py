@@ -1293,118 +1293,143 @@ async def process_scheduled_posts():
         if not settings.get("automation_enabled", True):
             return
         now = datetime.now(timezone.utc)
-        # Per-platform throttling: IG's app-level container creation limit
-        # silently returns {"id": "0"} when too many publishes hit at once.
-        # When N clients all schedule for the same minute (very common), a 30s
-        # gap between publishes per platform keeps us under the burst threshold.
+
+        # Per-platform gap: IG's infra needs 30s between container-creation bursts
+        # (too many at once silently returns id=0). Enforced via a per-platform lock
+        # held only during the gap sleep — the actual publish runs outside the lock
+        # so all posts proceed concurrently after their staggered start.
         _PLATFORM_MIN_GAP_SEC = {"instagram": 30, "facebook": 10}
-        last_publish_at: dict[str, datetime] = {}
+        _platform_locks: dict[str, asyncio.Lock] = {}
+        _platform_last_at: dict[str, datetime] = {}
+        # Cap concurrent heavy operations (carousel renders are CPU/memory intensive).
+        _sem = asyncio.Semaphore(8)
+
+        # Claim all due posts atomically before spawning concurrent tasks.
+        due_posts: list[dict] = []
         cursor = db.posts.find({"status": "scheduled"}, {"_id": 0})
         async for post in cursor:
+            sched = datetime.fromisoformat(post["scheduled_at"].replace("Z", "+00:00"))
+            if sched > now:
+                continue
+            claimed = await db.posts.update_one(
+                {"id": post["id"], "status": "scheduled"},
+                {"$set": {"status": "publishing"}},
+            )
+            if claimed.modified_count == 0:
+                continue
+            due_posts.append(post)
+
+        if not due_posts:
+            return
+
+        async def _publish_one(post: dict) -> None:
+            published_on_platform = False
+            result = None
             try:
-                published_on_platform = False  # set True the moment the platform accepts the post
-                sched = datetime.fromisoformat(post["scheduled_at"].replace("Z", "+00:00"))
-                if sched <= now:
-                    # Atomically claim the post to prevent double-publishing
-                    # (guards against concurrent scheduler runs or a simultaneous manual publish)
-                    claimed = await db.posts.update_one(
-                        {"id": post["id"], "status": "scheduled"},
-                        {"$set": {"status": "publishing"}}
-                    )
-                    if claimed.modified_count == 0:
-                        continue  # Already claimed by another process
+                platform = post.get("platform", "")
+                min_gap = _PLATFORM_MIN_GAP_SEC.get(platform, 0)
 
-                    platform = post.get("platform", "")
-                    min_gap = _PLATFORM_MIN_GAP_SEC.get(platform, 0)
-                    last_at = last_publish_at.get(platform)
-                    if min_gap and last_at:
-                        elapsed = (datetime.now(timezone.utc) - last_at).total_seconds()
-                        if elapsed < min_gap:
-                            wait_sec = min_gap - elapsed
-                            logger.info(f"Throttling {platform} publish for post {post['id'][:8]} — sleeping {wait_sec:.1f}s to respect burst limit")
-                            await asyncio.sleep(wait_sec)
+                # Enforce per-platform start gap. Lock is held only during the sleep
+                # so concurrent tasks queue up here then each starts min_gap apart.
+                # The actual publish runs outside the lock — different clients on the
+                # same platform publish concurrently once they've cleared the gate.
+                if min_gap:
+                    lock = _platform_locks.setdefault(platform, asyncio.Lock())
+                    async with lock:
+                        last_at = _platform_last_at.get(platform)
+                        if last_at:
+                            elapsed = (datetime.now(timezone.utc) - last_at).total_seconds()
+                            if elapsed < min_gap:
+                                wait_sec = min_gap - elapsed
+                                logger.info(
+                                    "Throttling %s publish for post %s — sleeping %.1fs",
+                                    platform, post["id"][:8], wait_sec,
+                                )
+                                await asyncio.sleep(wait_sec)
+                        _platform_last_at[platform] = datetime.now(timezone.utc)
 
+                async with _sem:
                     client = await db.clients.find_one({"id": post["client_id"]}, {"_id": 0}) or {}
                     from publisher import publish
                     result = await publish(post, client)
-                    last_publish_at[platform] = datetime.now(timezone.utc)
-                    if result["status"] == "published":
-                        published_on_platform = True  # platform accepted — must not revert to scheduled
-                        update = {
-                            "status": "published",
-                            "published_at": now_iso(),
-                            "error_message": None,
-                            "retry_count": 0,
-                            "platform_post_id": result.get("platform_post_id"),
-                            "performance": result.get("metrics", {})
-                        }
-                        unset = {}
-                        if result.get("clear_pending_carousel_container_id") or post.get("pending_carousel_container_id"):
-                            unset["pending_carousel_container_id"] = ""
-                        update_op = {"$set": update}
-                        if unset:
-                            update_op["$unset"] = unset
+
+                if result["status"] == "published":
+                    published_on_platform = True
+                    update = {
+                        "status": "published",
+                        "published_at": now_iso(),
+                        "error_message": None,
+                        "retry_count": 0,
+                        "platform_post_id": result.get("platform_post_id"),
+                        "performance": result.get("metrics", {}),
+                    }
+                    unset = {}
+                    if result.get("clear_pending_carousel_container_id") or post.get("pending_carousel_container_id"):
+                        unset["pending_carousel_container_id"] = ""
+                    update_op = {"$set": update}
+                    if unset:
+                        update_op["$unset"] = unset
+                    await db.posts.update_one({"id": post["id"]}, update_op)
+                    await _maybe_auto_flag_winner(post["id"], post["client_id"], result.get("metrics", {}))
+                    await db.clients.update_one({"id": post["client_id"]}, {"$inc": {"posts_today": 1, "posts_total": 1}, "$set": {"last_post_at": now_iso()}})
+                    await add_log("success", f"Published post on {post['platform']} for {post['client_name']}", post["client_id"], post["client_name"], post["id"], post["platform"])
+                    asyncio.create_task(_trigger_sheet_sync(post["client_id"], ["Posts"]))
+                else:
+                    retry_count = post.get("retry_count", 0) + 1
+                    _MAX_RETRIES = 3
+                    is_pending_resume = bool(result.get("pending_carousel_container_id"))
+                    _err_msg = result.get("error", "")
+                    if "temporarily restricted" in (_err_msg or ""):
+                        # IG error 368 — account is platform-restricted, retrying won't help.
+                        # Mark as published so the scheduler never touches this post again.
+                        unset_fields = {}
+                        if post.get("pending_carousel_container_id"):
+                            unset_fields["pending_carousel_container_id"] = ""
+                        update_op = {"$set": {"status": "published", "published_at": now_iso(), "error_message": None, "retry_count": 0}}
+                        if unset_fields:
+                            update_op["$unset"] = unset_fields
                         await db.posts.update_one({"id": post["id"]}, update_op)
-                        await _maybe_auto_flag_winner(post["id"], post["client_id"], result.get("metrics", {}))
-                        await db.clients.update_one({"id": post["client_id"]}, {"$inc": {"posts_today": 1, "posts_total": 1}, "$set": {"last_post_at": now_iso()}})
-                        await add_log("success", f"Published post on {post['platform']} for {post['client_name']}", post["client_id"], post["client_name"], post["id"], post["platform"])
-                        asyncio.create_task(_trigger_sheet_sync(post["client_id"], ["Posts"]))
+                        await add_log("warning", f"Post marked published after IG community restriction (error 368) — no retry: {_err_msg}", post["client_id"], post["client_name"], post["id"], post["platform"])
+                    elif retry_count < _MAX_RETRIES:
+                        retry_at = (now + timedelta(minutes=5 * retry_count)).isoformat()
+                        set_fields = {
+                            "status": "scheduled",
+                            "scheduled_at": retry_at,
+                            "retry_count": retry_count,
+                            "error_message": result.get("error"),
+                        }
+                        unset_fields = {}
+                        if result.get("pending_carousel_container_id"):
+                            set_fields["pending_carousel_container_id"] = result["pending_carousel_container_id"]
+                        elif result.get("clear_pending_carousel_container_id") or post.get("pending_carousel_container_id"):
+                            unset_fields["pending_carousel_container_id"] = ""
+                        update_op = {"$set": set_fields}
+                        if unset_fields:
+                            update_op["$unset"] = unset_fields
+                        await db.posts.update_one({"id": post["id"]}, update_op)
+                        attempt_label = f"resuming carousel, attempt {retry_count}/{_MAX_RETRIES}" if is_pending_resume else f"attempt {retry_count}/{_MAX_RETRIES}"
+                        await add_log("warning", f"Publish deferred ({attempt_label}), retrying in {5 * retry_count}m: {result.get('error', '')}", post["client_id"], post["client_name"], post["id"], post["platform"])
                     else:
-                        retry_count = post.get("retry_count", 0) + 1
-                        _MAX_RETRIES = 3
-                        is_pending_resume = bool(result.get("pending_carousel_container_id"))
-                        _err_msg = result.get("error", "")
-                        if "temporarily restricted" in (_err_msg or ""):
-                            # IG error 368 — account is platform-restricted, retrying won't help.
-                            # Mark as published so the scheduler never touches this post again.
-                            unset_fields = {}
-                            if post.get("pending_carousel_container_id"):
-                                unset_fields["pending_carousel_container_id"] = ""
-                            update_op = {"$set": {"status": "published", "published_at": now_iso(), "error_message": None, "retry_count": 0}}
-                            if unset_fields:
-                                update_op["$unset"] = unset_fields
-                            await db.posts.update_one({"id": post["id"]}, update_op)
-                            await add_log("warning", f"Post marked published after IG community restriction (error 368) — no retry: {_err_msg}", post["client_id"], post["client_name"], post["id"], post["platform"])
-                        elif retry_count < _MAX_RETRIES:
-                            retry_at = (now + timedelta(minutes=5 * retry_count)).isoformat()
-                            set_fields = {
-                                "status": "scheduled",
-                                "scheduled_at": retry_at,
-                                "retry_count": retry_count,
-                                "error_message": result.get("error"),
-                            }
-                            unset_fields = {}
-                            if result.get("pending_carousel_container_id"):
-                                set_fields["pending_carousel_container_id"] = result["pending_carousel_container_id"]
-                            elif result.get("clear_pending_carousel_container_id") or post.get("pending_carousel_container_id"):
-                                unset_fields["pending_carousel_container_id"] = ""
-                            update_op = {"$set": set_fields}
-                            if unset_fields:
-                                update_op["$unset"] = unset_fields
-                            await db.posts.update_one({"id": post["id"]}, update_op)
-                            attempt_label = f"resuming carousel, attempt {retry_count}/{_MAX_RETRIES}" if is_pending_resume else f"attempt {retry_count}/{_MAX_RETRIES}"
-                            await add_log("warning", f"Publish deferred ({attempt_label}), retrying in {5 * retry_count}m: {result.get('error', '')}", post["client_id"], post["client_name"], post["id"], post["platform"])
-                        else:
-                            set_fields = {
-                                "status": "failed",
-                                "error_message": result.get("error"),
-                                "retry_count": retry_count,
-                            }
-                            unset_fields = {}
-                            if post.get("pending_carousel_container_id"):
-                                unset_fields["pending_carousel_container_id"] = ""
-                            update_op = {"$set": set_fields}
-                            if unset_fields:
-                                update_op["$unset"] = unset_fields
-                            await db.posts.update_one({"id": post["id"]}, update_op)
-                            await db.clients.update_one({"id": post["client_id"]}, {"$inc": {"posts_failed": 1}})
-                            await add_log("error", f"Failed to publish on {post['platform']} after {_MAX_RETRIES} attempts: {result.get('error', 'Unknown error')}", post["client_id"], post["client_name"], post["id"], post["platform"])
-                            asyncio.create_task(_trigger_sheet_sync(post["client_id"], ["Posts"]))
-                            from telegram_service import send_alert
-                            bot_token = settings.get("telegram_bot_token", "")
-                            chat_id = settings.get("telegram_chat_id", "")
-                            if bot_token and chat_id:
-                                await send_alert(f"FAIL (final): {post['client_name']} → {post['platform']}: {result.get('error')}", bot_token, chat_id)
+                        set_fields = {
+                            "status": "failed",
+                            "error_message": result.get("error"),
+                            "retry_count": retry_count,
+                        }
+                        unset_fields = {}
+                        if post.get("pending_carousel_container_id"):
+                            unset_fields["pending_carousel_container_id"] = ""
+                        update_op = {"$set": set_fields}
+                        if unset_fields:
+                            update_op["$unset"] = unset_fields
+                        await db.posts.update_one({"id": post["id"]}, update_op)
+                        await db.clients.update_one({"id": post["client_id"]}, {"$inc": {"posts_failed": 1}})
+                        await add_log("error", f"Failed to publish on {post['platform']} after {_MAX_RETRIES} attempts: {result.get('error', 'Unknown error')}", post["client_id"], post["client_name"], post["id"], post["platform"])
+                        asyncio.create_task(_trigger_sheet_sync(post["client_id"], ["Posts"]))
+                        from telegram_service import send_alert
+                        bot_token = settings.get("telegram_bot_token", "")
+                        chat_id = settings.get("telegram_chat_id", "")
+                        if bot_token and chat_id:
+                            await send_alert(f"FAIL (final): {post['client_name']} → {post['platform']}: {result.get('error')}", bot_token, chat_id)
             except Exception as e:
                 logger.error(f"Error processing post {post.get('id')}: {e}")
                 if published_on_platform:
@@ -1413,15 +1438,19 @@ async def process_scheduled_posts():
                     # Force-write published status even though the earlier DB update failed.
                     await db.posts.update_one(
                         {"id": post.get("id")},
-                        {"$set": {"status": "published", "published_at": now_iso()}}
+                        {"$set": {"status": "published", "published_at": now_iso()}},
                     )
                     await add_log("warning", f"Post published but post-publish update failed — marked published to prevent re-publish: {e}", post.get("client_id"), post.get("client_name"), post.get("id"), post.get("platform"))
                 else:
                     # Publish not confirmed — safe to revert so the next run can retry
                     await db.posts.update_one(
                         {"id": post.get("id"), "status": "publishing"},
-                        {"$set": {"status": "scheduled"}}
+                        {"$set": {"status": "scheduled"}},
                     )
+
+        await asyncio.gather(*[_publish_one(p) for p in due_posts])
+        if due_posts:
+            logger.info("process_scheduled_posts: dispatched %d posts concurrently", len(due_posts))
     except Exception as e:
         logger.error(f"Scheduler error: {e}")
 
