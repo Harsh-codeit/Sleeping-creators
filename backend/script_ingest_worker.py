@@ -123,9 +123,13 @@ def fetch_text_from_gdocs(gdocs_url: str) -> str:
 
 def fetch_reel_video_url(reel_url: str) -> str:
     """Call instagram120 /api/instagram/links to get the direct mp4 URL."""
-    key = os.environ.get("RAPIDAPI_INSTAGRAM120_KEY") or os.environ.get("RAPIDAPI_KEY")
+    key = (
+        os.environ.get("RAPIDAPI_INSTAGRAM120_KEY")
+        or os.environ.get("RAPIDAPI_INSTAGRAM_KEY")
+        or os.environ.get("RAPIDAPI_KEY")
+    )
     if not key:
-        raise RuntimeError("RAPIDAPI_INSTAGRAM120_KEY (or RAPIDAPI_KEY) is not set")
+        raise RuntimeError("RAPIDAPI_INSTAGRAM_KEY is not set")
     try:
         resp = httpx.post(
             "https://instagram120.p.rapidapi.com/api/instagram/links",
