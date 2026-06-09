@@ -14,16 +14,23 @@ from __future__ import annotations
 import logging
 import os
 import re
-import subprocess
 import tempfile
 import uuid
 
 import httpx
+import requests
 
 import content_script_library as lib
 import hook_clients
 
 logger = logging.getLogger(__name__)
+
+_DOWNLOAD_HEADERS = {
+    "user-agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/125 Safari/537.36"
+    )
+}
 
 
 class IngestError(Exception):
@@ -113,72 +120,73 @@ def fetch_text_from_gdocs(gdocs_url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# RapidAPI — fetch reel video URL
+# instaloader — fetch reel video URL (no API key required)
 # ---------------------------------------------------------------------------
 
 def fetch_reel_video_url(shortcode: str) -> str:
-    """Call RapidAPI instagram120 to get the direct video download URL."""
-    key = os.environ.get("RAPIDAPI_INSTAGRAM_KEY")
-    if not key:
-        raise RuntimeError("RAPIDAPI_INSTAGRAM_KEY is not set")
-    resp = httpx.get(
-        "https://instagram120.p.rapidapi.com/api/media/info",
-        params={"shortcode": shortcode},
-        headers={
-            "X-RapidAPI-Key": key,
-            "X-RapidAPI-Host": "instagram120.p.rapidapi.com",
-        },
-        timeout=30,
+    """Use instaloader to get the direct video URL for a reel shortcode."""
+    try:
+        import instaloader
+    except ImportError:
+        raise RuntimeError("instaloader is not installed. Add it to requirements.txt.")
+
+    loader = instaloader.Instaloader(
+        download_pictures=False,
+        download_videos=False,
+        download_video_thumbnails=False,
+        download_geotags=False,
+        download_comments=False,
+        save_metadata=False,
+        compress_json=False,
+        quiet=True,
     )
     try:
-        resp.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        status = exc.response.status_code
-        if status == 404:
-            raise ValueError(
-                "Reel not found via RapidAPI — the reel may be private, deleted, "
-                "or your instagram120 subscription may not cover this endpoint."
-            ) from exc
-        raise ValueError(f"RapidAPI returned {status} for shortcode {shortcode!r}") from exc
-    data = resp.json()
-    video_url = (data.get("data") or {}).get("video_url")
+        post = instaloader.Post.from_shortcode(loader.context, shortcode)
+    except instaloader.exceptions.InstaloaderException as exc:
+        raise ValueError(f"Could not fetch reel {shortcode!r}: {exc}") from exc
+
+    if not post.is_video:
+        raise ValueError(f"Instagram post {shortcode!r} is not a video")
+
+    video_url = post.video_url
     if not video_url:
-        raise ValueError(f"RapidAPI response has no video_url for shortcode {shortcode!r}")
+        raise ValueError(f"No video URL found for reel {shortcode!r}")
     return video_url
 
 
 # ---------------------------------------------------------------------------
-# Audio extraction + transcription
+# Transcription — download mp4 and send directly to Groq (no ffmpeg needed)
 # ---------------------------------------------------------------------------
 
-def extract_audio(video_path: str, audio_path: str) -> None:
-    """Extract audio from video using ffmpeg. Raises IngestError on failure."""
-    result = subprocess.run(
-        [
-            "ffmpeg", "-i", video_path,
-            "-vn",              # no video
-            "-acodec", "aac",
-            "-b:a", "64k",      # low bitrate keeps file small (< 25 MB Groq limit)
-            audio_path, "-y",   # overwrite
-        ],
-        capture_output=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        raise IngestError(
-            f"ffmpeg audio extraction failed: {result.stderr.decode()[:300]}"
-        )
+def transcribe_video_url(video_url: str, shortcode: str) -> str:
+    """Download mp4 to a temp file and transcribe via Groq Whisper. Returns transcript."""
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            tmp_path = tmp.name
 
+        resp = requests.get(video_url, stream=True, timeout=120, headers=_DOWNLOAD_HEADERS)
+        resp.raise_for_status()
+        with open(tmp_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
 
-def transcribe_audio(audio_path: str) -> str:
-    """Transcribe audio file using Groq whisper-large-v3. Returns transcript text."""
-    client = _get_groq_client()
-    with open(audio_path, "rb") as f:
-        transcription = client.audio.transcriptions.create(
-            file=(os.path.basename(audio_path), f),
-            model="whisper-large-v3",
-        )
-    return transcription.text
+        size_mb = os.path.getsize(tmp_path) / (1024 * 1024)
+        if size_mb > 24:
+            raise IngestError(f"Video file is {size_mb:.1f} MB — exceeds Groq 25 MB limit")
+
+        client = _get_groq_client()
+        with open(tmp_path, "rb") as f:
+            result = client.audio.transcriptions.create(
+                file=(f"{shortcode}.mp4", f.read()),
+                model="whisper-large-v3",
+                temperature=0,
+                response_format="verbose_json",
+            )
+        return (getattr(result, "text", "") or "").strip()
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -287,19 +295,12 @@ def ingest_reel(
     except (ValueError, RuntimeError) as exc:
         raise IngestError(str(exc)) from exc
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        audio_path = os.path.join(tmpdir, f"{shortcode}.m4a")
-
-        # Feed video URL directly to ffmpeg — no full-video download needed
-        extract_audio(video_url, audio_path)
-
-        audio_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
-        if audio_size_mb > 24:
-            raise IngestError(
-                f"Audio file is {audio_size_mb:.1f} MB — exceeds Groq 25 MB limit"
-            )
-
-        transcript = transcribe_audio(audio_path)
+    try:
+        transcript = transcribe_video_url(video_url, shortcode)
+    except Exception as exc:
+        if isinstance(exc, IngestError):
+            raise
+        raise IngestError(f"Transcription failed: {exc}") from exc
 
     if not transcript.strip():
         raise IngestError("Transcription returned empty text")
