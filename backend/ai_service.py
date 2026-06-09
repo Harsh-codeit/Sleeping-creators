@@ -22,6 +22,15 @@ except Exception as _hook_import_exc:  # pragma: no cover
         "viral-hook library unavailable (import failed): %s", _hook_import_exc
     )
 
+try:  # pragma: no cover
+    from script_retrieval import build_script_examples_block as _build_script_examples_block
+except Exception as _script_import_exc:  # pragma: no cover
+    async def _build_script_examples_block(*a, **kw):  # type: ignore[misc]
+        return ""
+    logging.getLogger(__name__).warning(
+        "script-retrieval library unavailable (import failed): %s", _script_import_exc
+    )
+
 from text_similarity import is_too_similar
 
 ROOT_DIR = Path(__file__).parent
@@ -865,6 +874,9 @@ async def _generate_single_image_hook(
 
     # Proven viral-hook patterns (Phase C) — fail-open, "" when disabled/empty.
     hook_patterns_block = await _build_hook_patterns_block(client, onboarding, topic, db=db)
+    script_examples_block = await _build_script_examples_block(
+        topic or "", niche=onboarding.get("niche_slug") or onboarding.get("niche"), platform=platform
+    )
 
     system_msg = f"""{_topic_rules_prefix}{_CAROUSEL_STRATEGIST_PERSONA}
 {india_block}
@@ -875,7 +887,7 @@ Brand voice: {tone} | Language: {language} | Platform: {platform}
 Platform voice: {platform_voice}
 {brand_ctx}
 {hook_anchor_block}
-{hook_patterns_block}
+{hook_patterns_block}{script_examples_block}
 ASSIGNMENT:
 Write ONE single-image post — exactly one card, not a carousel. Pick the strongest hook from the 7-hook system above and execute it as the entire post.
 
@@ -1077,6 +1089,9 @@ async def _generate_carousel_single_pass(
     # Proven viral-hook patterns (Phase C) — per-client, lives in the DYNAMIC suffix
     # (never the cacheable static prefix). Fail-open: "" when disabled/empty/error.
     hook_patterns_block = await _build_hook_patterns_block(client, onboarding, topic, db=db)
+    script_examples_block = await _build_script_examples_block(
+        topic or "", niche=onboarding.get("niche_slug") or onboarding.get("niche"), platform=platform
+    )
 
     # ── Static cacheable prefix (client-agnostic; varies only by slide_format variant) ─────
     static_prefix = _CAROUSEL_STRATEGIST_PERSONA
@@ -1115,7 +1130,7 @@ Write a {slide_count}-slide {platform} carousel.
 {topic_line}
 
 {hook_anchor_block}
-{hook_patterns_block}
+{hook_patterns_block}{script_examples_block}
 {hook_block}
 {cta_block}
 {memory_block}

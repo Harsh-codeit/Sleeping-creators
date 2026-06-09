@@ -273,6 +273,11 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("POST",   r"^/api/viral-hooks/[^/]+/reject$"):       ("settings", "edit"),
     ("PUT",    r"^/api/viral-hooks/[^/]+$"):              ("settings", "edit"),
     ("DELETE", r"^/api/viral-hooks/[^/]+$"):              ("settings", "edit"),
+    # Content Script Library — scripts/reel transcripts for RAG injection
+    ("POST",   r"^/api/content-scripts/ingest$"):          ("settings", "edit"),
+    ("POST",   r"^/api/content-scripts/transcribe$"):      ("settings", "edit"),
+    ("GET",    r"^/api/content-scripts$"):                 ("settings", "view"),
+    ("DELETE", r"^/api/content-scripts/[^/]+$"):           ("settings", "edit"),
 }
 
 _MEMBER_EXEMPT = ("/api/me", "/api/auth/")
@@ -2621,6 +2626,12 @@ async def lifespan(app: FastAPI):
         viral_library.init_db()
     except Exception as _e:
         logger.warning(f"viral_library.init_db failed at startup: {_e}")
+    try:
+        import content_script_library as _csl
+        _csl.init_db()
+        logger.info("Content script library DB initialized")
+    except Exception as _e:
+        logger.warning(f"content_script_library.init_db failed at startup: {_e}")
     import storage as _storage
     _storage.ensure_bucket()
     _now = datetime.now(timezone.utc)
@@ -2872,6 +2883,20 @@ class HookUpdate(BaseModel):
     engagement_signal: Optional[str] = None
     virality_score: Optional[float] = None
     status: Optional[str] = None
+
+
+class ContentScriptTranscribeRequest(BaseModel):
+    reel_url: str
+    title: str | None = None
+    niche_slug: str | None = None
+    platform: str | None = None
+
+
+class ContentScriptIngestRequest(BaseModel):
+    gdocs_url: str | None = None
+    title: str | None = None
+    niche_slug: str | None = None
+    platform: str | None = None
 
 
 def _hook_use_celery() -> bool:
@@ -3215,6 +3240,103 @@ async def delete_viral_hook(hook_id: str):
     import viral_library
     await run_in_threadpool(viral_library.delete_hook, hook_id)
     return {"id": hook_id, "deleted": True}
+
+
+# ─── Content Script Library Routes ───────────────────────────────────────────
+
+@api_router.post("/content-scripts/ingest")
+async def ingest_content_script(
+    file: UploadFile | None = File(None),
+    gdocs_url: str = Form(None),
+    title: str = Form(None),
+    niche_slug: str = Form(None),
+    platform: str = Form(None),
+):
+    from starlette.concurrency import run_in_threadpool
+    from script_ingest_worker import ingest_script, IngestError
+    import content_script_library as csl
+    await run_in_threadpool(csl.init_db)
+
+    file_bytes = None
+    filename = None
+    if file:
+        contents = await file.read()
+        if len(contents) > 10 * 1024 * 1024:
+            raise HTTPException(400, "File must be under 10 MB")
+        allowed_exts = {"pdf", "docx", "txt"}
+        ext = (file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "txt")
+        if ext not in allowed_exts:
+            raise HTTPException(400, f"Unsupported file type: {ext}. Allowed: {', '.join(sorted(allowed_exts))}")
+        file_bytes = contents
+        filename = file.filename
+
+    if not file_bytes and not gdocs_url:
+        raise HTTPException(400, "Provide either a file upload or a gdocs_url")
+
+    try:
+        result = await run_in_threadpool(
+            ingest_script,
+            file_bytes, filename, gdocs_url, title, niche_slug, platform,
+        )
+    except IngestError as exc:
+        raise HTTPException(400, str(exc))
+
+    return {**result, "status": "ingested"}
+
+
+@api_router.post("/content-scripts/transcribe")
+async def transcribe_reel(body: ContentScriptTranscribeRequest):
+    from starlette.concurrency import run_in_threadpool
+    from script_ingest_worker import ingest_reel, IngestError
+    import content_script_library as csl
+    await run_in_threadpool(csl.init_db)
+
+    try:
+        result = await run_in_threadpool(
+            ingest_reel,
+            body.reel_url, body.title, body.niche_slug, body.platform,
+        )
+    except IngestError as exc:
+        status = 409 if "already been imported" in str(exc) else 400
+        raise HTTPException(status, str(exc))
+
+    return {**result, "status": "ingested"}
+
+
+@api_router.get("/content-scripts")
+async def list_content_scripts(
+    niche: str | None = None,
+    platform: str | None = None,
+    source_type: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+):
+    from starlette.concurrency import run_in_threadpool
+    import content_script_library as csl
+    await run_in_threadpool(csl.init_db)
+    offset = (page - 1) * limit
+    sources = await run_in_threadpool(
+        lambda: csl.list_sources(
+            niche_slug=niche,
+            platform=platform,
+            source_type=source_type,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+    )
+    return {"sources": sources, "page": page, "limit": limit}
+
+
+@api_router.delete("/content-scripts/{source_id}")
+async def delete_content_script(source_id: str):
+    from starlette.concurrency import run_in_threadpool
+    import content_script_library as csl
+    deleted = await run_in_threadpool(csl.delete_source, source_id)
+    if deleted == 0:
+        raise HTTPException(404, f"No script found with source_id: {source_id}")
+    return {"deleted": deleted, "source_id": source_id}
 
 
 # ─── Client Routes ────────────────────────────────────────────────────────────
