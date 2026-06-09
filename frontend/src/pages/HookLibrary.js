@@ -1,14 +1,20 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Upload, Inbox, Library } from "lucide-react";
+import { Upload, Inbox, Library, FileUp, Video, ScrollText } from "lucide-react";
 import HookUpload from "../components/hooks/HookUpload";
 import HookReviewQueue from "../components/hooks/HookReviewQueue";
 import HookLibraryTable from "../components/hooks/HookLibraryTable";
+import ScriptIngest from "../components/scripts/ScriptIngest";
+import ScriptTranscribe from "../components/scripts/ScriptTranscribe";
+import ScriptLibraryTable from "../components/scripts/ScriptLibraryTable";
 
 const TABS = [
-  { value: "upload", label: "Bulk Upload", icon: Upload },
-  { value: "review", label: "Review Queue", icon: Inbox },
-  { value: "library", label: "Library", icon: Library },
+  { value: "upload",           label: "Bulk Upload",      icon: Upload },
+  { value: "review",           label: "Review Queue",     icon: Inbox },
+  { value: "library",          label: "Hook Library",     icon: Library },
+  { value: "script-upload",    label: "Upload Script",    icon: FileUp },
+  { value: "script-transcribe",label: "Transcribe Reel",  icon: Video },
+  { value: "script-library",   label: "Script Library",   icon: ScrollText },
 ];
 
 export default function HookLibrary() {
@@ -16,9 +22,8 @@ export default function HookLibrary() {
   const activeTab = searchParams.get("tab") || "upload";
   const setTab = (t) => setSearchParams({ tab: t });
 
-  // Bump a key on the review/library tabs after an upload batch so they refetch
-  // when next viewed.
   const [refreshKey, setRefreshKey] = useState(0);
+  const [scriptRefreshKey, setScriptRefreshKey] = useState(0);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white" data-testid="hook-library">
@@ -28,12 +33,12 @@ export default function HookLibrary() {
           HOOK LIBRARY
         </h1>
         <p className="text-[11px] font-mono text-zinc-600 mt-0.5">
-          Viral first-slide patterns — upload, curate, and browse the retrieval library
+          Viral hooks and winning scripts — upload, curate, and browse the retrieval library
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-zinc-800 px-6 flex gap-1">
+      <div className="border-b border-zinc-800 px-6 flex gap-1 flex-wrap">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = activeTab === t.value;
@@ -61,6 +66,9 @@ export default function HookLibrary() {
       )}
       {activeTab === "review" && <HookReviewQueue key={`review-${refreshKey}`} />}
       {activeTab === "library" && <HookLibraryTable key={`library-${refreshKey}`} />}
+      {activeTab === "script-upload" && <ScriptIngest onDone={() => setScriptRefreshKey((k) => k + 1)} />}
+      {activeTab === "script-transcribe" && <ScriptTranscribe onDone={() => setScriptRefreshKey((k) => k + 1)} />}
+      {activeTab === "script-library" && <ScriptLibraryTable refreshKey={scriptRefreshKey} />}
     </div>
   );
 }

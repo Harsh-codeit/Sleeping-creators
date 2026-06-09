@@ -26,7 +26,6 @@ import { PermissionGate } from "./components/PermissionGate";
 import TeamPage from "./pages/TeamPage";
 import MailCenter from "./pages/MailCenter";
 import HookLibrary from "./pages/HookLibrary";
-import ScriptLibrary from "./pages/ScriptLibrary";
 
 // Set axios auth header synchronously on load so it's ready before any
 // child component fires an API call (useEffect would run too late).
@@ -97,7 +96,6 @@ function App() {
                 <Route path="analytics" element={<PermissionGate resource="analytics"><Analytics /></PermissionGate>} />
                 <Route path="settings" element={<PermissionGate resource="settings"><Settings /></PermissionGate>} />
                 <Route path="hook-library" element={<PermissionGate resource="settings"><HookLibrary /></PermissionGate>} />
-                <Route path="script-library" element={<PermissionGate resource="settings"><ScriptLibrary /></PermissionGate>} />
                 <Route path="usage" element={<PermissionGate resource="usage"><UsagePage /></PermissionGate>} />
                 <Route path="carousel" element={<PermissionGate resource="studio"><Carousel /></PermissionGate>} />
                 <Route path="music" element={<Navigate to="/templates?tab=music" replace />} />
