@@ -25,12 +25,10 @@ import hook_clients
 
 logger = logging.getLogger(__name__)
 
-_DOWNLOAD_HEADERS = {
-    "user-agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 Chrome/125 Safari/537.36"
-    )
-}
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 Chrome/125 Safari/537.36"
+)
 
 
 class IngestError(Exception):
@@ -120,37 +118,40 @@ def fetch_text_from_gdocs(gdocs_url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# instaloader — fetch reel video URL (no API key required)
+# instagram120 RapidAPI — fetch reel video URL
 # ---------------------------------------------------------------------------
 
-def fetch_reel_video_url(shortcode: str) -> str:
-    """Use instaloader to get the direct video URL for a reel shortcode."""
+def fetch_reel_video_url(reel_url: str) -> str:
+    """Call instagram120 /api/instagram/links to get the direct mp4 URL."""
+    key = os.environ.get("RAPIDAPI_INSTAGRAM120_KEY") or os.environ.get("RAPIDAPI_KEY")
+    if not key:
+        raise RuntimeError("RAPIDAPI_INSTAGRAM120_KEY (or RAPIDAPI_KEY) is not set")
     try:
-        import instaloader
-    except ImportError:
-        raise RuntimeError("instaloader is not installed. Add it to requirements.txt.")
+        resp = httpx.post(
+            "https://instagram120.p.rapidapi.com/api/instagram/links",
+            json={"url": reel_url},
+            headers={
+                "x-rapidapi-key": key,
+                "x-rapidapi-host": "instagram120.p.rapidapi.com",
+                "content-type": "application/json",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise ValueError(
+            f"instagram120 returned {exc.response.status_code} — check your RapidAPI subscription"
+        ) from exc
 
-    loader = instaloader.Instaloader(
-        download_pictures=False,
-        download_videos=False,
-        download_video_thumbnails=False,
-        download_geotags=False,
-        download_comments=False,
-        save_metadata=False,
-        compress_json=False,
-        quiet=True,
+    data = resp.json()
+    item = data[0] if isinstance(data, list) else data
+    urls = item.get("urls") or []
+    video_url = next(
+        (entry["url"] for entry in urls if ".mp4" in (entry.get("url") or "")),
+        urls[0]["url"] if urls else None,
     )
-    try:
-        post = instaloader.Post.from_shortcode(loader.context, shortcode)
-    except instaloader.exceptions.InstaloaderException as exc:
-        raise ValueError(f"Could not fetch reel {shortcode!r}: {exc}") from exc
-
-    if not post.is_video:
-        raise ValueError(f"Instagram post {shortcode!r} is not a video")
-
-    video_url = post.video_url
     if not video_url:
-        raise ValueError(f"No video URL found for reel {shortcode!r}")
+        raise ValueError(f"instagram120 returned no video URL for {reel_url!r}")
     return video_url
 
 
@@ -165,7 +166,7 @@ def transcribe_video_url(video_url: str, shortcode: str) -> str:
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp_path = tmp.name
 
-        resp = requests.get(video_url, stream=True, timeout=120, headers=_DOWNLOAD_HEADERS)
+        resp = requests.get(video_url, stream=True, timeout=120, headers={"user-agent": _BROWSER_UA})
         resp.raise_for_status()
         with open(tmp_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
@@ -291,7 +292,7 @@ def ingest_reel(
         raise IngestError(str(exc)) from exc
 
     try:
-        video_url = fetch_reel_video_url(shortcode)
+        video_url = fetch_reel_video_url(reel_url)
     except (ValueError, RuntimeError) as exc:
         raise IngestError(str(exc)) from exc
 
