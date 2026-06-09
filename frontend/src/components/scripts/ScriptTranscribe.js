@@ -19,7 +19,7 @@ export default function ScriptTranscribe({ onDone }) {
   async function submit(e) {
     e.preventDefault();
     if (!reelUrl.trim()) { toast.error("Enter an Instagram Reel URL"); return; }
-    if (!reelUrl.includes("/reel/")) { toast.error("URL must be an Instagram Reel (instagram.com/reel/…)"); return; }
+    if (!reelUrl.includes("/reel/") && !reelUrl.includes("/reels/")) { toast.error("URL must be an Instagram Reel (instagram.com/reels/…)"); return; }
 
     setLoading(true);
     setResult(null);

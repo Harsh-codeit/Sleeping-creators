@@ -52,7 +52,7 @@ def extract_reel_shortcode(reel_url: str) -> str:
     Accepts: https://www.instagram.com/reel/ABC123/ (with or without trailing slash)
     Raises ValueError if the URL doesn't match the expected pattern.
     """
-    match = re.search(r"/reel/([A-Za-z0-9_-]+)", reel_url)
+    match = re.search(r"/reels?/([A-Za-z0-9_-]+)", reel_url)
     if not match:
         raise ValueError(f"Could not extract reel shortcode from URL: {reel_url!r}")
     return match.group(1)
