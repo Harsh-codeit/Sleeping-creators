@@ -93,3 +93,48 @@ def test_delete_source_returns_deleted_count(monkeypatch):
     result = lib.delete_source("some-source-id")
     assert result == 5
     assert mock_conn.commit.called
+
+
+# ── find_first_chunk_duplicate ────────────────────────────────────────────────
+
+def test_find_first_chunk_duplicate_found(monkeypatch):
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchone.return_value = (1,)
+    monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
+    assert lib.find_first_chunk_duplicate([0.1] * 1536) is True
+
+
+def test_find_first_chunk_duplicate_not_found(monkeypatch):
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchone.return_value = None
+    monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
+    assert lib.find_first_chunk_duplicate([0.1] * 1536) is False
+
+
+# ── list_sources ──────────────────────────────────────────────────────────────
+
+def test_list_sources_returns_results(monkeypatch):
+    mock_conn = MagicMock()
+    mock_cursor = mock_conn.cursor().__enter__()
+    mock_cursor.description = [("source_id",), ("title",), ("source_type",),
+                                ("source_url",), ("niche_slug",), ("platform",),
+                                ("chunks_count",), ("created_at",)]
+    mock_cursor.fetchall.return_value = [
+        ("uuid-1", "My Script", "file", None, "fitness", "instagram", 3, "2026-06-01"),
+    ]
+    monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
+    results = lib.list_sources(niche_slug="fitness")
+    assert len(results) == 1
+    assert results[0]["title"] == "My Script"
+
+
+def test_list_sources_no_filters(monkeypatch):
+    mock_conn = MagicMock()
+    mock_cursor = mock_conn.cursor().__enter__()
+    mock_cursor.description = [("source_id",), ("title",), ("source_type",),
+                                ("source_url",), ("niche_slug",), ("platform",),
+                                ("chunks_count",), ("created_at",)]
+    mock_cursor.fetchall.return_value = []
+    monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
+    results = lib.list_sources()
+    assert results == []

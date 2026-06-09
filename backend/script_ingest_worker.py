@@ -207,7 +207,10 @@ def ingest_script(
     """
     if file_bytes and filename:
         ext = filename.rsplit(".", 1)[-1] if "." in filename else "txt"
-        raw_text = extract_text_from_bytes(file_bytes, ext)
+        try:
+            raw_text = extract_text_from_bytes(file_bytes, ext)
+        except ValueError as exc:
+            raise IngestError(str(exc)) from exc
         source_type = "file"
         source_url = None
         display_title = title or filename
@@ -265,8 +268,15 @@ def ingest_reel(
     if lib.source_url_exists(reel_url):
         raise IngestError(f"This reel has already been imported: {reel_url}")
 
-    shortcode = extract_reel_shortcode(reel_url)
-    video_url = fetch_reel_video_url(shortcode)
+    try:
+        shortcode = extract_reel_shortcode(reel_url)
+    except ValueError as exc:
+        raise IngestError(str(exc)) from exc
+
+    try:
+        video_url = fetch_reel_video_url(shortcode)
+    except (ValueError, RuntimeError) as exc:
+        raise IngestError(str(exc)) from exc
 
     with tempfile.TemporaryDirectory() as tmpdir:
         video_path = os.path.join(tmpdir, f"{shortcode}.mp4")
