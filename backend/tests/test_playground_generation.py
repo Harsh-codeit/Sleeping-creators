@@ -67,3 +67,83 @@ def test_hook_block_skips_hooks_without_text():
     ])
     assert "None" not in block and "real hook" in block
     assert pg._hook_block([{"hook_text": None}]) == ""
+
+
+class _FakeMsg:
+    def __init__(self, text):
+        block = MagicMock()
+        block.text = text
+        self.content = [block]
+
+
+def _patch_model(monkeypatch, responses):
+    """Patch anthropic so messages.create returns each response in turn."""
+    client = MagicMock()
+    client.messages.create.side_effect = [
+        _FakeMsg(r) if isinstance(r, str) else r for r in responses
+    ]
+    monkeypatch.setattr(pg.anthropic, "Anthropic", lambda api_key: client)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    return client
+
+
+def _patch_knowledge(monkeypatch, hooks=None, scripts=None):
+    monkeypatch.setattr(pg, "_retrieve_knowledge",
+                        lambda *a: (hooks or [], scripts or []))
+
+
+_GOOD = ('{"variations": [{"hook": "h", "script": "s", "cta": "c", '
+         '"caption": "cap"}]}')
+
+
+async def test_generate_happy_path(monkeypatch):
+    _patch_knowledge(monkeypatch,
+                     hooks=[{"id": 1, "hook_text": "x", "hook_type": "myth_bust",
+                             "trigger": "fomo", "niche_slug": "fitness",
+                             "virality_score": 0.9, "score": 1.0}],
+                     scripts=[{"chunk_text": "c" * 300, "title": "T",
+                               "source_type": "reel", "score": 0.1}])
+    _patch_model(monkeypatch, [_GOOD])
+    out = await pg.generate(_req(variations=1))
+    assert len(out["variations"]) == 1
+    assert out["variations"][0]["hook"] == "h"
+    ku = out["knowledge_used"]
+    assert ku["hooks"][0]["hook_text"] == "x"
+    assert ku["scripts"][0]["snippet"] == "c" * 200
+
+
+async def test_generate_fenced_json_ok(monkeypatch):
+    _patch_knowledge(monkeypatch)
+    _patch_model(monkeypatch, ["```json\n" + _GOOD + "\n```"])
+    out = await pg.generate(_req(variations=1))
+    assert out["variations"][0]["cta"] == "c"
+
+
+async def test_generate_retries_once_then_502(monkeypatch):
+    _patch_knowledge(monkeypatch)
+    client = _patch_model(monkeypatch, ["not json at all", "still not json"])
+    with pytest.raises(pg.PlaygroundError):
+        await pg.generate(_req())
+    assert client.messages.create.call_count == 2
+
+
+async def test_generate_retry_succeeds(monkeypatch):
+    _patch_knowledge(monkeypatch)
+    _patch_model(monkeypatch, ["garbage", _GOOD])
+    out = await pg.generate(_req(variations=1))
+    assert out["variations"][0]["hook"] == "h"
+
+
+async def test_generate_missing_keys_is_error(monkeypatch):
+    _patch_knowledge(monkeypatch)
+    bad = '{"variations": [{"hook": "h"}]}'
+    _patch_model(monkeypatch, [bad, bad])
+    with pytest.raises(pg.PlaygroundError):
+        await pg.generate(_req())
+
+
+async def test_generate_no_api_key_is_error(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    _patch_knowledge(monkeypatch)
+    with pytest.raises(pg.PlaygroundError):
+        await pg.generate(_req())

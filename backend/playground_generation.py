@@ -129,3 +129,69 @@ def _build_prompts(req: dict, hook_block: str, script_block: str):
             f"with {n} items.\n"
             f"{hook_block}\n{script_block}")
     return system, user
+
+
+def _validate_variations(parsed: dict, content_type: str, n: int) -> list:
+    """Variations list with required keys, or raise ValueError."""
+    variations = parsed.get("variations") if isinstance(parsed, dict) else None
+    if not isinstance(variations, list) or not variations:
+        raise ValueError("no variations array in model output")
+    required = _REQUIRED_KEYS[content_type]
+    for v in variations:
+        if not isinstance(v, dict) or any(k not in v for k in required):
+            raise ValueError(f"variation missing keys {required}")
+    return variations[:n]
+
+
+def _knowledge_used(hooks, scripts) -> dict:
+    return {
+        "hooks": [{"hook_text": h.get("hook_text"), "hook_type": h.get("hook_type"),
+                   "trigger": h.get("trigger"),
+                   "virality_score": h.get("virality_score")} for h in hooks],
+        "scripts": [{"title": s.get("title"), "source_type": s.get("source_type"),
+                     "snippet": (s.get("chunk_text") or "")[:_SNIPPET_CHARS]}
+                    for s in scripts],
+    }
+
+
+async def generate(req: dict) -> dict:
+    """Playground entry point. Raises PlaygroundError on model failure."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise PlaygroundError("ANTHROPIC_API_KEY is not configured")
+
+    query = _rag_query(req["topic"], req.get("pain_point"), req.get("audience"))
+    hooks, scripts = await asyncio.to_thread(
+        _retrieve_knowledge, query, req.get("niche"), req.get("platform"),
+        req.get("hook_type"), req.get("trigger"),
+    )
+    system, user = _build_prompts(req, _hook_block(hooks), _script_block(scripts))
+
+    client = anthropic.Anthropic(api_key=api_key)
+    model = resolve_model("playground_generate")
+    n = req.get("variations") or 1
+    messages = [{"role": "user", "content": user}]
+    last_err = None
+    text = ""
+    for attempt in range(2):
+        try:
+            msg = await asyncio.to_thread(
+                client.messages.create, model=model, max_tokens=MAX_TOKENS,
+                system=system, messages=messages,
+            )
+            text = msg.content[0].text
+            variations = _validate_variations(
+                _parse_json_response(text), req["content_type"], n)
+            return {"variations": variations,
+                    "knowledge_used": _knowledge_used(hooks, scripts)}
+        except (ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
+            last_err = exc
+            # One corrective retry: echo the bad output, demand pure JSON.
+            messages = [{"role": "user", "content": user},
+                        {"role": "assistant", "content": text},
+                        {"role": "user", "content":
+                         "That was not valid JSON matching the schema. Return ONLY "
+                         "the JSON object, no markdown, no commentary."}]
+        except anthropic.APIError as exc:
+            raise PlaygroundError(f"model call failed: {exc}") from exc
+    raise PlaygroundError(f"model returned unusable output: {last_err}")
