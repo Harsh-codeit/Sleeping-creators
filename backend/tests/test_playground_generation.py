@@ -131,10 +131,20 @@ async def test_generate_retries_once_then_502(monkeypatch):
 
 
 async def test_generate_api_error_raises_immediately(monkeypatch):
-    import anthropic
+    # Patch pg.anthropic wholesale: test_gen_hooks may have stubbed the real
+    # anthropic module with a MagicMock (order-dependent), so build a fake
+    # namespace whose APIError is a real exception class either way.
+    class FakeAPIError(Exception):
+        pass
+
+    client = MagicMock()
+    client.messages.create.side_effect = FakeAPIError("boom")
+    fake_anthropic = MagicMock()
+    fake_anthropic.Anthropic = lambda api_key: client
+    fake_anthropic.APIError = FakeAPIError
+    monkeypatch.setattr(pg, "anthropic", fake_anthropic)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     _patch_knowledge(monkeypatch)
-    err = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
-    client = _patch_model(monkeypatch, [err])
     with pytest.raises(pg.PlaygroundError, match="model call failed"):
         await pg.generate(_req())
     assert client.messages.create.call_count == 1  # APIError must NOT retry
@@ -170,8 +180,9 @@ async def test_generate_no_api_key_is_error(monkeypatch):
 def api_client():
     from fastapi.testclient import TestClient
     from server import app
-    with TestClient(app) as c:
-        yield c
+    # No context manager (house style, see test_analytics): skips app lifespan
+    # so the scheduler/startup hooks don't run and leak into later test files.
+    return TestClient(app)
 
 
 AUTH = {"Authorization": "Bearer test-token"}

@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Upload, Inbox, Library, FileUp, Video, ScrollText } from "lucide-react";
+import { Upload, Inbox, Library, FileUp, Video, ScrollText, Wand2 } from "lucide-react";
 import HookUpload from "../components/hooks/HookUpload";
 import HookReviewQueue from "../components/hooks/HookReviewQueue";
 import HookLibraryTable from "../components/hooks/HookLibraryTable";
+import GenerationPlayground from "../components/hooks/GenerationPlayground";
 import ScriptIngest from "../components/scripts/ScriptIngest";
 import ScriptTranscribe from "../components/scripts/ScriptTranscribe";
 import ScriptLibraryTable from "../components/scripts/ScriptLibraryTable";
 
 const TABS = [
+  { value: "generate",         label: "Generation",       icon: Wand2 },
   { value: "upload",           label: "Bulk Upload",      icon: Upload },
   { value: "review",           label: "Review Queue",     icon: Inbox },
   { value: "library",          label: "Hook Library",     icon: Library },
@@ -61,6 +63,7 @@ export default function HookLibrary() {
       </div>
 
       {/* Tab content */}
+      {activeTab === "generate" && <GenerationPlayground />}
       {activeTab === "upload" && (
         <HookUpload onBatchDone={() => setRefreshKey((k) => k + 1)} />
       )}
