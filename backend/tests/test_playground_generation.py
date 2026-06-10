@@ -125,6 +125,19 @@ async def test_generate_retries_once_then_502(monkeypatch):
     with pytest.raises(pg.PlaygroundError):
         await pg.generate(_req())
     assert client.messages.create.call_count == 2
+    # The corrective retry must be a 3-turn repair conversation.
+    second = client.messages.create.call_args_list[1].kwargs["messages"]
+    assert len(second) == 3 and second[1]["role"] == "assistant"
+
+
+async def test_generate_api_error_raises_immediately(monkeypatch):
+    import anthropic
+    _patch_knowledge(monkeypatch)
+    err = anthropic.APIConnectionError.__new__(anthropic.APIConnectionError)
+    client = _patch_model(monkeypatch, [err])
+    with pytest.raises(pg.PlaygroundError, match="model call failed"):
+        await pg.generate(_req())
+    assert client.messages.create.call_count == 1  # APIError must NOT retry
 
 
 async def test_generate_retry_succeeds(monkeypatch):

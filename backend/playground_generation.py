@@ -173,12 +173,14 @@ async def generate(req: dict) -> dict:
     messages = [{"role": "user", "content": user}]
     last_err = None
     text = ""
-    for attempt in range(2):
+    for _ in range(2):
         try:
             msg = await asyncio.to_thread(
                 client.messages.create, model=model, max_tokens=MAX_TOKENS,
                 system=system, messages=messages,
             )
+            if not msg.content:
+                raise PlaygroundError("model returned empty content (max_tokens?)")
             text = msg.content[0].text
             variations = _validate_variations(
                 _parse_json_response(text), req["content_type"], n)
