@@ -78,21 +78,35 @@ def _lang_clause(language):
     return " AND language IN (%s, %s)", [language, "English"]
 
 
-def _vec_candidates(conn, query_embedding, language, pool):
+def _taxonomy_clause(hook_type, trigger):
+    """Optional hard filters on hook taxonomy (playground 'angle' steering)."""
+    sql, params = "", []
+    if hook_type:
+        sql += " AND hook_type = %s"
+        params.append(hook_type)
+    if trigger:
+        sql += " AND trigger = %s"
+        params.append(trigger)
+    return sql, params
+
+
+def _vec_candidates(conn, query_embedding, language, pool,
+                    hook_type=None, trigger=None):
     """pgvector ANN -> ranked list of hook_id + {hook_id: cos_sim}.
 
-    Hard filters (live/active/language) applied in-query so the relevance guard
-    and re-rank work on already-eligible rows.
+    Hard filters (live/active/language/hook_type/trigger) applied in-query so
+    the relevance guard and re-rank work on already-eligible rows.
     """
     vec = [float(x) for x in query_embedding]
     lang_sql, lang_params = _lang_clause(language)
+    tax_sql, tax_params = _taxonomy_clause(hook_type, trigger)
     sql = (
         "SELECT id, 1 - (embedding <=> %s::vector) AS cos_sim FROM hooks "
         "WHERE status = 'live' AND active = 1 AND embedding IS NOT NULL"
-        + lang_sql
+        + lang_sql + tax_sql
         + " ORDER BY embedding <=> %s::vector LIMIT %s"
     )
-    params = [vec] + lang_params + [vec, int(pool)]
+    params = [vec] + lang_params + tax_params + [vec, int(pool)]
     with conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
@@ -104,35 +118,44 @@ def _vec_candidates(conn, query_embedding, language, pool):
     return ranked, sims
 
 
-def _fts_candidates(conn, query_text, language, pool):
+def _fts_candidates(conn, query_text, language, pool,
+                    hook_type=None, trigger=None):
     """Full-text MATCH -> ranked list of hook_id (best lexical match first)."""
     lang_sql, lang_params = _lang_clause(language)
+    tax_sql, tax_params = _taxonomy_clause(hook_type, trigger)
     sql = (
         "SELECT id FROM hooks "
         "WHERE fts @@ plainto_tsquery('english', %s) "
         "AND status = 'live' AND active = 1"
-        + lang_sql
+        + lang_sql + tax_sql
         + " ORDER BY ts_rank(fts, plainto_tsquery('english', %s)) DESC LIMIT %s"
     )
-    params = [str(query_text)] + lang_params + [str(query_text), int(pool)]
+    params = [str(query_text)] + lang_params + tax_params + [str(query_text), int(pool)]
     with conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
     return [r[0] for r in rows]
 
 
-def _candidate_ids(conn, query_text, query_embedding, language, pool, vec_ok):
+def _candidate_ids(conn, query_text, query_embedding, language, pool, vec_ok,
+                   hook_type=None, trigger=None):
     """Return (fused_scores, cos_sims). vec list (if available) fused with FTS."""
     ranked_lists = []
     sims: dict = {}
     if vec_ok:
         try:
-            vec_ranked, sims = _vec_candidates(conn, query_embedding, language, pool)
+            vec_ranked, sims = _vec_candidates(
+                conn, query_embedding, language, pool,
+                hook_type=hook_type, trigger=trigger,
+            )
             ranked_lists.append(vec_ranked)
         except Exception as exc:  # pragma: no cover - runtime dependent
             logger.warning("vec candidate generation failed: %s", exc)
     try:
-        fts_ranked = _fts_candidates(conn, query_text, language, pool)
+        fts_ranked = _fts_candidates(
+            conn, query_text, language, pool,
+            hook_type=hook_type, trigger=trigger,
+        )
         ranked_lists.append(fts_ranked)
     except Exception as exc:
         logger.warning("fts candidate generation failed: %s", exc)
@@ -144,19 +167,21 @@ def _candidate_ids(conn, query_text, query_embedding, language, pool, vec_ok):
 # Hydration + embedding fetch (for MMR)
 # ---------------------------------------------------------------------------
 
-def _fetch_rows(conn, hook_ids, language):
-    """Hydrate hook rows for candidate ids, applying the live/active/language
-    hard filters (FTS candidates are pre-filtered; this is the safety net)."""
+def _fetch_rows(conn, hook_ids, language, hook_type=None, trigger=None):
+    """Hydrate hook rows for candidate ids, applying the live/active/language/
+    taxonomy hard filters (FTS candidates are pre-filtered; this is the safety
+    net)."""
     if not hook_ids:
         return {}
     lang_sql, lang_params = _lang_clause(language)
+    tax_sql, tax_params = _taxonomy_clause(hook_type, trigger)
     placeholders = ", ".join("%s" for _ in hook_ids)
     sql = (
         f"SELECT {_lib._READ_COLS} FROM hooks WHERE id IN ({placeholders}) "
-        "AND status = 'live' AND active = 1" + lang_sql
+        "AND status = 'live' AND active = 1" + lang_sql + tax_sql
     )
     with conn.cursor() as cur:
-        cur.execute(sql, list(hook_ids) + lang_params)
+        cur.execute(sql, list(hook_ids) + lang_params + tax_params)
         rows = cur.fetchall()
         return {r[0]: _lib._row_to_dict(cur, r) for r in rows}
 
@@ -264,7 +289,8 @@ def _mmr(reranked, embeddings, k, lambda_=MMR_LAMBDA):
 
 def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
              language=None, k: int = 5, candidate_pool: int = 40,
-             min_semantic: float = MIN_SEMANTIC_SIM) -> list:
+             min_semantic: float = MIN_SEMANTIC_SIM,
+             hook_type=None, trigger=None) -> list:
     """Hybrid retrieval. Returns up to k dicts:
     {id, hook_text, hook_type, trigger, niche_slug, virality_score, score}.
 
@@ -273,6 +299,9 @@ def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
     returns fewer (or no) hooks rather than injecting loosely-related patterns.
     Keyword (FTS) matches with no vector score are kept.
 
+    Optional ``hook_type`` and ``trigger`` apply hard taxonomy filters (useful
+    for the Generation Playground 'angle' steering UI).
+
     FAIL OPEN: any error returns [] (logged), never raises.
     """
     try:
@@ -280,12 +309,14 @@ def retrieve(query_text: str, query_embedding: list, *, niche_slug=None,
         try:
             vec_ok = True
             fused, sims = _candidate_ids(
-                conn, query_text, query_embedding, language, candidate_pool, vec_ok
+                conn, query_text, query_embedding, language, candidate_pool, vec_ok,
+                hook_type=hook_type, trigger=trigger,
             )
             if not fused:
                 return []
-            # Hydrate + apply hard filters (status/active/language).
-            rows = _fetch_rows(conn, list(fused.keys()), language)
+            # Hydrate + apply hard filters (status/active/language/taxonomy).
+            rows = _fetch_rows(conn, list(fused.keys()), language,
+                               hook_type=hook_type, trigger=trigger)
             candidates = [hid for hid in fused if hid in rows]
             if not candidates:
                 return []

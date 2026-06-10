@@ -288,3 +288,58 @@ def test_fail_open_on_internal_error(monkeypatch):
     monkeypatch.setattr(viral_library, "_connect", boom, raising=False)
     res = viral_library.retrieve("founder burnout", _unit(1.0, 0.0), k=5)
     assert res == []
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy (hook_type / trigger) filters
+# ---------------------------------------------------------------------------
+
+def test_taxonomy_clause_both_none():
+    import viral_retrieval as vr
+    sql, params = vr._taxonomy_clause(None, None)
+    assert sql == "" and params == []
+
+
+def test_taxonomy_clause_hook_type_and_trigger():
+    import viral_retrieval as vr
+    sql, params = vr._taxonomy_clause("myth_bust", "fomo")
+    assert sql == " AND hook_type = %s AND trigger = %s"
+    assert params == ["myth_bust", "fomo"]
+
+
+def _exec_args(mock_conn):
+    return mock_conn.cursor().__enter__().execute.call_args
+
+
+def test_vec_candidates_applies_taxonomy_filters():
+    from unittest.mock import MagicMock
+    import viral_retrieval as vr
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchall.return_value = []
+    vr._vec_candidates(mock_conn, [0.1] * 1536, None, 40,
+                       hook_type="myth_bust", trigger="fomo")
+    sql, params = _exec_args(mock_conn)[0]
+    assert "hook_type = %s" in sql and "trigger = %s" in sql
+    assert "myth_bust" in params and "fomo" in params
+
+
+def test_fts_candidates_applies_taxonomy_filters():
+    from unittest.mock import MagicMock
+    import viral_retrieval as vr
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchall.return_value = []
+    vr._fts_candidates(mock_conn, "cardio myths", None, 40,
+                       hook_type="myth_bust", trigger=None)
+    sql, params = _exec_args(mock_conn)[0]
+    assert "hook_type = %s" in sql and "trigger = %s" not in sql
+    assert "myth_bust" in params
+
+
+def test_vec_candidates_no_filters_sql_unchanged():
+    from unittest.mock import MagicMock
+    import viral_retrieval as vr
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchall.return_value = []
+    vr._vec_candidates(mock_conn, [0.1] * 1536, None, 40)
+    sql, _ = _exec_args(mock_conn)[0]
+    assert "hook_type" not in sql and "trigger" not in sql
