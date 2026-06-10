@@ -3329,6 +3329,16 @@ async def list_content_scripts(
     return {"sources": sources, "page": page, "limit": limit}
 
 
+@api_router.get("/content-scripts/{source_id}")
+async def get_content_script(source_id: str):
+    from starlette.concurrency import run_in_threadpool
+    import content_script_library as csl
+    source = await run_in_threadpool(csl.get_source, source_id)
+    if source is None:
+        raise HTTPException(404, f"No script found with source_id: {source_id}")
+    return source
+
+
 @api_router.delete("/content-scripts/{source_id}")
 async def delete_content_script(source_id: str):
     from starlette.concurrency import run_in_threadpool
