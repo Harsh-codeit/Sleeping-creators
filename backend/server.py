@@ -9,7 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Union, Literal
 from client_utils import _recompute_derived, _get_tone, _expand_derived_into_doc
 import taxonomy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -2899,6 +2899,21 @@ class ContentScriptIngestRequest(BaseModel):
     platform: str | None = None
 
 
+class PlaygroundGenerateRequest(BaseModel):
+    content_type: Literal["carousel", "reel", "script"]
+    topic: str
+    niche: str | None = None
+    platform: str = "instagram"
+    hook_type: str | None = None
+    trigger: str | None = None
+    audience: str | None = None
+    pain_point: str | None = None
+    spice_level: Literal["safe", "balanced", "bold", "unhinged"] | None = None
+    tone: str | None = None
+    length: int | None = None
+    variations: int = 1
+
+
 def _hook_use_celery() -> bool:
     """Route hook ingestion to the Celery hook-worker ONLY when explicitly opted
     in via HOOK_INGEST_USE_CELERY. A bare REDIS_URL is NOT enough: it may be set
@@ -3347,6 +3362,30 @@ async def delete_content_script(source_id: str):
     if deleted == 0:
         raise HTTPException(404, f"No script found with source_id: {source_id}")
     return {"deleted": deleted, "source_id": source_id}
+
+
+@api_router.post("/hook-library/generate")
+async def hook_library_generate(body: PlaygroundGenerateRequest):
+    """Standalone Generation Playground — RAG-grounded, no client context."""
+    import hook_clients
+    import playground_generation
+    from playground_generation import PlaygroundError
+
+    if not body.topic.strip():
+        raise HTTPException(422, "topic is required")
+    if body.hook_type and body.hook_type not in hook_clients.HOOK_TYPES:
+        raise HTTPException(
+            422, f"hook_type must be one of: {', '.join(hook_clients.HOOK_TYPES)}")
+    if body.trigger and body.trigger not in hook_clients.TRIGGERS:
+        raise HTTPException(
+            422, f"trigger must be one of: {', '.join(hook_clients.TRIGGERS)}")
+
+    req = body.model_dump()
+    req["variations"] = max(1, min(3, req.get("variations") or 1))
+    try:
+        return await playground_generation.generate(req)
+    except PlaygroundError as exc:
+        raise HTTPException(502, str(exc))
 
 
 # ─── Client Routes ────────────────────────────────────────────────────────────

@@ -160,3 +160,73 @@ async def test_generate_no_api_key_is_error(monkeypatch):
     _patch_knowledge(monkeypatch)
     with pytest.raises(pg.PlaygroundError):
         await pg.generate(_req())
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: POST /api/hook-library/generate
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def api_client():
+    from fastapi.testclient import TestClient
+    from server import app
+    with TestClient(app) as c:
+        yield c
+
+
+AUTH = {"Authorization": "Bearer test-token"}
+
+
+@pytest.fixture()
+def _auth_ok(monkeypatch):
+    import server
+    monkeypatch.setattr(server, "_check_token", lambda *a, **k: True)
+
+
+def test_endpoint_validates_content_type(api_client, _auth_ok):
+    r = api_client.post("/api/hook-library/generate", headers=AUTH,
+                        json={"content_type": "podcast", "topic": "x"})
+    assert r.status_code == 422
+
+
+def test_endpoint_validates_hook_type(api_client, _auth_ok):
+    r = api_client.post("/api/hook-library/generate", headers=AUTH,
+                        json={"content_type": "reel", "topic": "x",
+                              "hook_type": "not_a_real_type"})
+    assert r.status_code == 422
+
+
+def test_endpoint_rejects_empty_topic(api_client, _auth_ok):
+    r = api_client.post("/api/hook-library/generate", headers=AUTH,
+                        json={"content_type": "reel", "topic": "   "})
+    assert r.status_code == 422
+
+
+def test_endpoint_maps_playground_error_to_502(api_client, _auth_ok, monkeypatch):
+    import playground_generation
+
+    async def boom(req):
+        raise playground_generation.PlaygroundError("model down")
+    monkeypatch.setattr(playground_generation, "generate", boom)
+    r = api_client.post("/api/hook-library/generate", headers=AUTH,
+                        json={"content_type": "reel", "topic": "cardio"})
+    assert r.status_code == 502
+    assert "model down" in r.json()["detail"]
+
+
+def test_endpoint_happy_path_and_variation_clamp(api_client, _auth_ok, monkeypatch):
+    import playground_generation
+    seen = {}
+
+    async def ok(req):
+        seen.update(req)
+        return {"variations": [{"hook": "h", "script": "s", "cta": "c",
+                                "caption": "x"}],
+                "knowledge_used": {"hooks": [], "scripts": []}}
+    monkeypatch.setattr(playground_generation, "generate", ok)
+    r = api_client.post("/api/hook-library/generate", headers=AUTH,
+                        json={"content_type": "reel", "topic": "cardio",
+                              "variations": 99})
+    assert r.status_code == 200
+    assert r.json()["variations"][0]["hook"] == "h"
+    assert seen["variations"] == 3  # clamped to 1..3
