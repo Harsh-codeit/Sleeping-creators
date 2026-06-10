@@ -58,3 +58,12 @@ def test_build_prompts_each_content_type_has_schema():
     for ct, key in [("carousel", "hook_slide"), ("reel", "b-roll"), ("script", "title")]:
         _, user = pg._build_prompts(_req(content_type=ct), "", "")
         assert key in user
+
+
+def test_hook_block_skips_hooks_without_text():
+    block = pg._hook_block([
+        {"hook_text": None, "hook_type": "myth_bust", "trigger": "fomo"},
+        {"hook_text": "real hook", "hook_type": "myth_bust", "trigger": "fomo"},
+    ])
+    assert "None" not in block and "real hook" in block
+    assert pg._hook_block([{"hook_text": None}]) == ""

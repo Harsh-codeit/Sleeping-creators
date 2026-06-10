@@ -70,6 +70,7 @@ def _retrieve_knowledge(query, niche, platform, hook_type, trigger):
 
 
 def _hook_block(hooks) -> str:
+    hooks = [h for h in hooks if h.get("hook_text")]
     if not hooks:
         return ""
     lines = ["\nWINNING HOOK PATTERNS — proven viral hooks. Mirror the energy and "
