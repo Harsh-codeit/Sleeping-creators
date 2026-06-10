@@ -7,6 +7,8 @@ and never hit the network.
 Public API (the fixed contract for the ingest worker):
     extract_and_classify(image_path, *, allowed_niches) -> dict
     embed(text) -> list[float]            # 1536 floats (Matryoshka slice)
+    embed_batch(texts) -> list[list[float]]  # ONE call, input order preserved
+    embed_query_cached(text) -> list[float]  # embed() + small LRU (queries only)
     phash(image_path) -> str
 
 Constants (one-line swaps):
@@ -17,6 +19,7 @@ Constants (one-line swaps):
 from __future__ import annotations
 
 import base64
+import functools
 import json
 import logging
 import os
@@ -293,6 +296,56 @@ def embed(text: str) -> list:
         vec = data["data"][0]["embedding"]
     except (KeyError, IndexError, TypeError) as exc:
         raise HookClientError(f"unexpected embedding response shape: {exc}") from exc
+    return _validate_vector(vec)
+
+
+def embed_batch(texts: list[str]) -> list[list[float]]:
+    """Embed many texts in ONE ``/embeddings`` call (the ingest hot path).
+
+    Returns vectors in the same order as ``texts`` — the response's ``index``
+    field is honored defensively in case the provider reorders the data array.
+    Each vector gets the same validation / Matryoshka truncate-normalize as
+    :func:`embed`. Raises :class:`HookClientError` on any failure.
+    """
+    if not texts:
+        return []
+    payload = {"model": EMBED_MODEL, "input": list(texts), "dimensions": EMBED_DIM}
+    data = _post("/embeddings", payload)
+    items = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(items, list) or len(items) != len(texts):
+        got = len(items) if isinstance(items, list) else "no"
+        raise HookClientError(
+            f"embedding batch returned {got} vectors for {len(texts)} inputs"
+        )
+    try:
+        items = sorted(items, key=lambda d: int(d.get("index", 0)))
+        vecs = [d["embedding"] for d in items]
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise HookClientError(f"unexpected embedding response shape: {exc}") from exc
+    return [_validate_vector(v) for v in vecs]
+
+
+@functools.lru_cache(maxsize=256)
+def _cached_query_vec(text: str) -> tuple:
+    """Internal LRU'd embed — returns a tuple (immutable, safe to share).
+    lru_cache only stores successful results, so failures are retried."""
+    return tuple(embed(text))
+
+
+def embed_query_cached(text: str) -> list:
+    """Cached :func:`embed` for QUERY text only.
+
+    Queries repeat across retrieval requests; ingest texts are unique and must
+    NOT go through this cache (use embed()/embed_batch()). Returns a FRESH list
+    each call so callers can't mutate the cached vector.
+    """
+    return list(_cached_query_vec(text))
+
+
+def _validate_vector(vec) -> list:
+    """Shared per-vector handling for embed()/embed_batch(): type/dim checks
+    plus the Matryoshka truncate-normalize when the provider returns more
+    dims than requested. Always returns exactly ``EMBED_DIM`` floats."""
     if not isinstance(vec, list):
         raise HookClientError("embedding was not a list")
     if len(vec) < EMBED_DIM:

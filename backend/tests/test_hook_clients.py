@@ -282,6 +282,147 @@ def test_embed_api_error_raises(hc, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# embed_batch
+# ---------------------------------------------------------------------------
+
+def test_embed_batch_single_post_preserves_input_order(hc, monkeypatch):
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append(kwargs.get("json"))
+        # Provider returns the data array OUT of order; "index" must win.
+        return _FakeResponse({"data": [
+            {"index": 1, "embedding": [0.2] * 1536},
+            {"index": 0, "embedding": [0.1] * 1536},
+        ]})
+
+    monkeypatch.setattr(hc.httpx, "post", fake_post)
+    out = hc.embed_batch(["first", "second"])
+    assert len(calls) == 1  # exactly ONE /embeddings call for the whole batch
+    assert calls[0]["input"] == ["first", "second"]
+    assert calls[0]["model"] == hc.EMBED_MODEL
+    assert calls[0]["dimensions"] == 1536
+    assert out[0][0] == 0.1
+    assert out[1][0] == 0.2
+
+
+def test_embed_batch_empty_input_skips_http(hc, monkeypatch):
+    def boom(url, **kw):
+        raise AssertionError("no HTTP call expected for an empty batch")
+
+    monkeypatch.setattr(hc.httpx, "post", boom)
+    assert hc.embed_batch([]) == []
+
+
+def test_embed_batch_truncates_and_normalizes_each_vector(hc, monkeypatch):
+    import math
+    raw = [float(i + 1) for i in range(3072)]
+    monkeypatch.setattr(hc.httpx, "post", lambda url, **kw: _FakeResponse(
+        {"data": [{"index": 0, "embedding": raw}]}))
+    out = hc.embed_batch(["text"])
+    assert len(out) == 1 and len(out[0]) == 1536
+    norm = math.sqrt(sum(x * x for x in out[0]))
+    assert abs(norm - 1.0) < 1e-6
+
+
+def test_embed_batch_short_vector_raises(hc, monkeypatch):
+    monkeypatch.setattr(hc.httpx, "post", lambda url, **kw: _FakeResponse(
+        {"data": [{"index": 0, "embedding": [0.1] * 10}]}))
+    with pytest.raises(hc.HookClientError):
+        hc.embed_batch(["text"])
+
+
+def test_embed_batch_non_list_vector_raises(hc, monkeypatch):
+    monkeypatch.setattr(hc.httpx, "post", lambda url, **kw: _FakeResponse(
+        {"data": [{"index": 0, "embedding": "not-a-list"}]}))
+    with pytest.raises(hc.HookClientError):
+        hc.embed_batch(["text"])
+
+
+def test_embed_batch_count_mismatch_raises(hc, monkeypatch):
+    monkeypatch.setattr(hc.httpx, "post", lambda url, **kw: _FakeResponse(
+        {"data": [{"index": 0, "embedding": [0.1] * 1536}]}))
+    with pytest.raises(hc.HookClientError):
+        hc.embed_batch(["a", "b"])
+
+
+def test_embed_batch_bad_response_shape_raises(hc, monkeypatch):
+    monkeypatch.setattr(hc.httpx, "post", lambda url, **kw: _FakeResponse({"nope": []}))
+    with pytest.raises(hc.HookClientError):
+        hc.embed_batch(["a"])
+
+
+def test_embed_batch_api_error_raises(hc, monkeypatch):
+    import httpx
+    monkeypatch.setattr(
+        hc.httpx, "post", lambda url, **kw: (_ for _ in ()).throw(httpx.ConnectError("x"))
+    )
+    with pytest.raises(hc.HookClientError):
+        hc.embed_batch(["a"])
+
+
+# ---------------------------------------------------------------------------
+# embed_query_cached
+# ---------------------------------------------------------------------------
+# NOTE: the `hc` fixture reloads the module each test, so the LRU cache starts
+# empty every time — no cross-test pollution.
+
+def test_embed_query_cached_caches_repeat_queries(hc, monkeypatch):
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append(url)
+        return _FakeResponse({"data": [{"embedding": [0.5] * 1536}]})
+
+    monkeypatch.setattr(hc.httpx, "post", fake_post)
+    a = hc.embed_query_cached("same query")
+    b = hc.embed_query_cached("same query")
+    assert len(calls) == 1  # second call served from the cache
+    assert a == b
+    hc.embed_query_cached("different query")
+    assert len(calls) == 2
+
+
+def test_embed_query_cached_returns_fresh_copy(hc, monkeypatch):
+    monkeypatch.setattr(hc.httpx, "post", lambda url, **kw: _FakeResponse(
+        {"data": [{"embedding": [0.5] * 1536}]}))
+    a = hc.embed_query_cached("q")
+    a[0] = 999.0  # caller mutation must not poison the cache
+    b = hc.embed_query_cached("q")
+    assert b[0] == 0.5
+    assert a is not b
+
+
+def test_embed_query_cached_does_not_cache_failures(hc, monkeypatch):
+    import httpx
+    state = {"fail": True}
+
+    def fake_post(url, **kwargs):
+        if state["fail"]:
+            raise httpx.ConnectError("down")
+        return _FakeResponse({"data": [{"embedding": [0.5] * 1536}]})
+
+    monkeypatch.setattr(hc.httpx, "post", fake_post)
+    with pytest.raises(hc.HookClientError):
+        hc.embed_query_cached("q2")
+    state["fail"] = False  # recovery: the failure must not have been cached
+    assert hc.embed_query_cached("q2")[0] == 0.5
+
+
+def test_embed_single_unchanged_contract(hc, monkeypatch):
+    # embed() keeps its single-text request shape (input is a string, not list).
+    captured = {}
+
+    def fake_post(url, **kwargs):
+        captured["json"] = kwargs.get("json")
+        return _FakeResponse({"data": [{"embedding": [0.01] * 1536}]})
+
+    monkeypatch.setattr(hc.httpx, "post", fake_post)
+    hc.embed("query text")
+    assert captured["json"]["input"] == "query text"
+
+
+# ---------------------------------------------------------------------------
 # phash
 # ---------------------------------------------------------------------------
 

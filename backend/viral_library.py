@@ -2,8 +2,9 @@
 
 A dedicated Postgres database holds hook metadata + 1536-d embeddings + perceptual
 hashes. The app reads it at retrieval; the ingest worker is the writer. Postgres
-handles concurrency (MVCC), so no app-level write lock is needed. Connections are
-short-lived and always closed in a finally block.
+handles concurrency (MVCC), so no app-level write lock is needed. Connections come
+from a shared lazily-initialized pool (see pg_pool); callers still ``close()`` in
+a finally block, which returns the connection to the pool.
 
 Connection: env ``VIRAL_LIBRARY_PG_URL`` (postgresql://user:pass@host:5432/db).
 
@@ -31,6 +32,8 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+
+import pg_pool
 
 logger = logging.getLogger(__name__)
 
@@ -60,35 +63,35 @@ def _pg_url() -> str:
 
 
 def _connect():
-    """Open a short-lived psycopg2 connection with pgvector registered.
+    """Check out a pooled psycopg2 connection with pgvector registered.
 
-    Caller owns the connection and MUST close it (try/finally). Never leaks.
+    The pool is shared with content_script_library (same DB) and created lazily
+    on first use — importing this module never touches the DB. Caller owns the
+    checkout and MUST close it (try/finally): ``close()`` on the returned proxy
+    hands the connection back to the pool (a broken one is discarded so it
+    can't poison later calls). Never leaks.
     """
-    try:
-        import psycopg2
-        from pgvector.psycopg2 import register_vector
-    except ImportError as exc:  # pragma: no cover - dependency missing
-        raise ViralLibraryError(
-            f"psycopg2-binary / pgvector not installed: {exc}"
-        ) from exc
     # connect_timeout: without it, psycopg2 hangs FOREVER if the Postgres host is
     # unreachable (e.g. networking not wired between the app and the DB resource),
     # which surfaces as an ingest task that "keeps loading". Fail fast instead.
     _connect_timeout = int(os.environ.get("VIRAL_LIBRARY_CONNECT_TIMEOUT", "10"))
     try:
-        conn = psycopg2.connect(_pg_url(), connect_timeout=_connect_timeout)
-    except psycopg2.Error as exc:
+        conn = pg_pool.checkout(_pg_url(), _connect_timeout)
+    except ViralLibraryError:
+        raise
+    except ImportError as exc:  # pragma: no cover - dependency missing
+        raise ViralLibraryError(
+            f"psycopg2-binary / pgvector not installed: {exc}"
+        ) from exc
+    except Exception as exc:
         raise ViralLibraryError(f"could not connect to library DB: {exc}") from exc
+    # vector type registration requires the extension to exist; tolerate the
+    # first-ever connect (before init_db) by registering best-effort.
     try:
-        # vector type registration requires the extension to exist; tolerate the
-        # first-ever connect (before init_db) by registering best-effort.
-        try:
-            register_vector(conn)
-        except Exception:  # pragma: no cover - extension not yet created
-            pass
-    except Exception as exc:  # pragma: no cover
-        conn.close()
-        raise ViralLibraryError(f"could not configure library DB: {exc}") from exc
+        from pgvector.psycopg2 import register_vector
+        register_vector(conn)
+    except Exception:  # pragma: no cover - extension not yet created
+        pass
     return conn
 
 

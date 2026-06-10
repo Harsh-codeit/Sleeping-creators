@@ -11,12 +11,15 @@ Public API:
     insert_chunks(source_id, title, source_type, source_url, niche_slug,
                   platform, chunks, embeddings) -> int
     list_sources(*, niche_slug, platform, source_type, q, limit, offset) -> list[dict]
+    get_source(source_id) -> dict | None
     delete_source(source_id) -> int
 """
 from __future__ import annotations
 
 import logging
 import os
+
+import pg_pool
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +42,24 @@ def _pg_url() -> str:
 
 
 def _connect():
-    try:
-        import psycopg2
-        from pgvector.psycopg2 import register_vector
-    except ImportError as exc:
-        raise ContentScriptLibraryError(f"psycopg2/pgvector not installed: {exc}") from exc
+    """Check out a pooled psycopg2 connection (see pg_pool).
+
+    The pool is shared with viral_library (same DB) and created lazily on
+    first use — importing this module never touches the DB. Caller owns the
+    checkout and MUST close it (try/finally): ``close()`` on the returned
+    proxy hands the connection back to the pool, discarding it if broken.
+    """
     _timeout = int(os.environ.get("VIRAL_LIBRARY_CONNECT_TIMEOUT", "10"))
     try:
-        conn = psycopg2.connect(_pg_url(), connect_timeout=_timeout)
-    except psycopg2.Error as exc:
+        conn = pg_pool.checkout(_pg_url(), _timeout)
+    except ContentScriptLibraryError:
+        raise
+    except ImportError as exc:
+        raise ContentScriptLibraryError(f"psycopg2/pgvector not installed: {exc}") from exc
+    except Exception as exc:
         raise ContentScriptLibraryError(f"could not connect: {exc}") from exc
     try:
+        from pgvector.psycopg2 import register_vector
         register_vector(conn)
     except Exception:
         pass
@@ -249,6 +259,61 @@ def list_sources(
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _merge_chunks(chunks: list[str], max_overlap: int = 300) -> str:
+    """Reassemble readable full text from overlapping chunks (display only).
+
+    Consecutive chunks share up to ``overlap_chars`` (default 200) of text, but
+    strip() at chunk edges makes the shared region inexact — so find the longest
+    suffix of the merged text that is a prefix of the next chunk (min 20 chars
+    to avoid false joins) and drop it. No overlap found -> paragraph break.
+    """
+    merged = ""
+    for chunk in chunks:
+        if not merged:
+            merged = chunk
+            continue
+        limit = min(len(merged), len(chunk), max_overlap)
+        overlap = 0
+        for size in range(limit, 19, -1):
+            if merged.endswith(chunk[:size]):
+                overlap = size
+                break
+        merged += chunk[overlap:] if overlap else "\n\n" + chunk
+    return merged
+
+
+def get_source(source_id: str) -> dict | None:
+    """Single source with its full reassembled text. None if not found."""
+    conn = _connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT title, source_type, source_url, niche_slug, platform,
+                          chunk_text, created_at::text
+                   FROM content_scripts
+                   WHERE source_id = %s AND active = 1
+                   ORDER BY chunk_index""",
+                (source_id,),
+            )
+            rows = cur.fetchall()
+        if not rows:
+            return None
+        title, source_type, source_url, niche_slug, platform, _, created_at = rows[0]
+        return {
+            "source_id": source_id,
+            "title": title,
+            "source_type": source_type,
+            "source_url": source_url,
+            "niche_slug": niche_slug,
+            "platform": platform,
+            "created_at": created_at,
+            "chunks_count": len(rows),
+            "full_text": _merge_chunks([r[5] for r in rows]),
+        }
     finally:
         conn.close()
 

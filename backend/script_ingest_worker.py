@@ -198,15 +198,48 @@ def transcribe_video_url(video_url: str, shortcode: str) -> str:
 # Embed helper
 # ---------------------------------------------------------------------------
 
-def _embed_chunks(chunks: list[str]) -> list[list[float]]:
-    """Embed each chunk. Raises IngestError if embedding fails."""
-    embeddings = []
-    for chunk in chunks:
-        try:
-            embeddings.append(hook_clients.embed(chunk))
-        except Exception as exc:
-            raise IngestError(f"Embedding failed: {exc}") from exc
-    return embeddings
+def _contextual_text(
+    chunk: str,
+    title: str | None,
+    niche_slug: str | None,
+    platform: str | None,
+) -> str:
+    """Enriched EMBED-ONLY string:
+    "Script: {title} | Niche: {niche_slug} | Platform: {platform}\\n\\n{chunk}".
+
+    Segments whose value is None/empty are omitted; with no context at all the
+    chunk is embedded as-is.
+    """
+    parts = [
+        f"{label}: {value}"
+        for label, value in (
+            ("Script", title), ("Niche", niche_slug), ("Platform", platform),
+        )
+        if value
+    ]
+    if not parts:
+        return chunk
+    return " | ".join(parts) + "\n\n" + chunk
+
+
+def _embed_chunks(
+    chunks: list[str],
+    *,
+    title: str | None = None,
+    niche_slug: str | None = None,
+    platform: str | None = None,
+) -> list[list[float]]:
+    """Embed all chunks in ONE batched call. Raises IngestError on failure.
+
+    NOTE: embedded text != stored text. The vectors are computed over the
+    contextual (title/niche/platform-prefixed) strings so retrieval matches on
+    document context, while the caller stores the CLEAN chunk text in the DB.
+    """
+    texts = [_contextual_text(chunk, title, niche_slug, platform) for chunk in chunks]
+    try:
+        return hook_clients.embed_batch(texts)
+    except Exception as exc:
+        raise IngestError(f"Embedding failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -255,12 +288,15 @@ def ingest_script(
     if not chunks:
         raise IngestError("Document produced no usable text chunks (too short?)")
 
-    # Semantic dedup on first chunk
-    first_embedding = hook_clients.embed(chunks[0])
-    if lib.find_first_chunk_duplicate(first_embedding, threshold=0.95):
+    embeddings = _embed_chunks(
+        chunks, title=display_title, niche_slug=niche_slug, platform=platform
+    )
+
+    # Semantic dedup on the first chunk — uses the contextual embedding so the
+    # check stays consistent with what gets stored from now on.
+    if lib.find_first_chunk_duplicate(embeddings[0], threshold=0.95):
         raise IngestError("A very similar document is already in the library")
 
-    embeddings = [first_embedding] + _embed_chunks(chunks[1:])
     source_id = str(uuid.uuid4())
     n = lib.insert_chunks(
         source_id=source_id,
@@ -314,9 +350,12 @@ def ingest_reel(
     if not chunks:
         raise IngestError("Transcript too short to produce usable chunks")
 
-    embeddings = _embed_chunks(chunks)
-    source_id = str(uuid.uuid4())
     display_title = title or f"Reel: {shortcode}"
+    embeddings = _embed_chunks(
+        chunks, title=display_title, niche_slug=niche_slug,
+        platform=platform or "instagram",
+    )
+    source_id = str(uuid.uuid4())
     n = lib.insert_chunks(
         source_id=source_id,
         title=display_title,

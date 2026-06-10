@@ -138,3 +138,181 @@ def test_list_sources_no_filters(monkeypatch):
     monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
     results = lib.list_sources()
     assert results == []
+
+
+# ── _merge_chunks / get_source ───────────────────────────────────────────────
+
+def test_merge_chunks_removes_overlap():
+    # Non-repetitive text — unique words make the overlap unambiguous.
+    base = " ".join(f"word{i}" for i in range(120))  # ~800 chars
+    a = base[:300]
+    b = base[200:500]  # shares base[200:300] with a
+    merged = lib._merge_chunks([a, b])
+    assert merged == base[:500]
+
+
+def test_merge_chunks_no_overlap_joins_with_paragraph_break():
+    a = "Completely different opening text that stands alone here."
+    b = "Another unrelated chunk with zero shared characters at all."
+    merged = lib._merge_chunks([a, b])
+    assert merged == a + "\n\n" + b
+
+
+def test_merge_chunks_single_and_empty():
+    assert lib._merge_chunks(["only chunk"]) == "only chunk"
+    assert lib._merge_chunks([]) == ""
+
+
+def _source_rows(chunks):
+    return [
+        ("My Reel", "reel", "https://instagram.com/reels/ABC/", "fitness",
+         "instagram", c, "2026-06-01")
+        for c in chunks
+    ]
+
+
+def test_get_source_returns_merged_text(monkeypatch):
+    mock_conn = MagicMock()
+    mock_cursor = mock_conn.cursor().__enter__()
+    base = " ".join(f"token{i}" for i in range(120))  # non-repetitive
+    mock_cursor.fetchall.return_value = _source_rows([base[:300], base[200:560]])
+    monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
+    src = lib.get_source("some-source-id")
+    assert src["title"] == "My Reel"
+    assert src["source_type"] == "reel"
+    assert src["chunks_count"] == 2
+    assert src["full_text"] == base[:560]
+
+
+def test_get_source_not_found_returns_none(monkeypatch):
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchall.return_value = []
+    monkeypatch.setattr(lib, "_connect", lambda: mock_conn)
+    assert lib.get_source("missing-id") is None
+
+
+# ── connection pooling (pg_pool) ──────────────────────────────────────────────
+
+import pg_pool
+
+
+class _FakePool:
+    """Minimal ThreadedConnectionPool stand-in: getconn pops, putconn re-pools
+    (unless close=True, which discards)."""
+
+    def __init__(self, conns):
+        self._conns = list(conns)
+        self.got = 0
+        self.put = []
+
+    def getconn(self):
+        self.got += 1
+        return self._conns.pop(0)
+
+    def putconn(self, conn, close=False):
+        self.put.append((conn, close))
+        if not close:
+            self._conns.append(conn)
+
+
+def _live_conn():
+    c = MagicMock()
+    c.closed = 0
+    return c
+
+
+def _use_fake_pool(monkeypatch, pool):
+    monkeypatch.setattr(pg_pool, "_pool", pool)
+    monkeypatch.setenv("VIRAL_LIBRARY_PG_URL", "postgresql://test")
+
+
+def test_connect_close_returns_connection_to_pool(monkeypatch):
+    conn = _live_conn()
+    pool = _FakePool([conn])
+    _use_fake_pool(monkeypatch, pool)
+    out = lib._connect()
+    out.close()
+    assert pool.put == [(conn, False)]
+    # Reuse: the next checkout gets the same underlying connection back.
+    out2 = lib._connect()
+    assert out2._conn is conn
+    assert pool.got == 2
+    out2.close()
+
+
+def test_connect_proxies_attributes_to_real_connection(monkeypatch):
+    conn = _live_conn()
+    _use_fake_pool(monkeypatch, _FakePool([conn]))
+    out = lib._connect()
+    out.cursor()
+    out.commit()
+    assert conn.cursor.called
+    assert conn.commit.called
+    out.close()
+
+
+def test_connect_discards_dead_pooled_connection(monkeypatch):
+    dead = MagicMock()
+    dead.closed = 1
+    live = _live_conn()
+    pool = _FakePool([dead, live])
+    _use_fake_pool(monkeypatch, pool)
+    out = lib._connect()
+    assert out._conn is live
+    assert (dead, True) in pool.put  # the stale conn was discarded, not reused
+    out.close()
+
+
+def test_close_discards_connection_broken_while_checked_out(monkeypatch):
+    conn = _live_conn()
+    pool = _FakePool([conn])
+    _use_fake_pool(monkeypatch, pool)
+    out = lib._connect()
+    conn.closed = 1  # breaks mid-use
+    out.close()
+    assert pool.put == [(conn, True)]  # discarded so it can't poison the pool
+
+
+def test_close_is_idempotent(monkeypatch):
+    conn = _live_conn()
+    pool = _FakePool([conn])
+    _use_fake_pool(monkeypatch, pool)
+    out = lib._connect()
+    out.close()
+    out.close()
+    assert len(pool.put) == 1
+
+
+def test_get_pool_creates_pool_once(monkeypatch):
+    created = []
+    monkeypatch.setattr(pg_pool, "_pool", None)
+    monkeypatch.setattr(
+        pg_pool, "_create_pool",
+        lambda dsn, timeout: created.append(dsn) or _FakePool([]),
+    )
+    p1 = pg_pool.get_pool("dsn", 10)
+    p2 = pg_pool.get_pool("dsn", 10)
+    assert p1 is p2
+    assert created == ["dsn"]
+
+
+def test_pool_maxconn_env_default_and_override(monkeypatch):
+    monkeypatch.delenv("PG_POOL_MAX", raising=False)
+    assert pg_pool._maxconn() == 5
+    monkeypatch.setenv("PG_POOL_MAX", "9")
+    assert pg_pool._maxconn() == 9
+    monkeypatch.setenv("PG_POOL_MAX", "not-a-number")
+    assert pg_pool._maxconn() == 5
+
+
+def test_connect_wraps_pool_failure_in_library_error(monkeypatch):
+    class _Boom:
+        def getconn(self):
+            raise RuntimeError("pool exhausted")
+
+        def putconn(self, conn, close=False):
+            pass
+
+    _use_fake_pool(monkeypatch, _Boom())
+    with pytest.raises(lib.ContentScriptLibraryError):
+        lib._connect()

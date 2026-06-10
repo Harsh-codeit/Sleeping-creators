@@ -6,6 +6,7 @@ Public surface:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import content_script_library as _lib
@@ -39,7 +40,7 @@ def _vector_search(
     where_clause = " AND ".join(where)
     with conn.cursor() as cur:
         cur.execute(
-            f"SELECT id::text, chunk_text, title, source_type, "
+            f"SELECT id::text, source_id::text, chunk_text, title, source_type, "
             f"1 - (embedding <=> %s::vector) AS semantic_sim "
             f"FROM content_scripts WHERE {where_clause} "
             f"ORDER BY embedding <=> %s::vector LIMIT %s",
@@ -66,7 +67,8 @@ def _fts_search(
     where_clause = " AND ".join(where)
     with conn.cursor() as cur:
         cur.execute(
-            f"SELECT id::text, chunk_text, title, source_type, NULL AS semantic_sim "
+            f"SELECT id::text, source_id::text, chunk_text, title, source_type, "
+            f"NULL AS semantic_sim "
             f"FROM content_scripts WHERE {where_clause} "
             f"ORDER BY ts_rank(fts, plainto_tsquery('english', %s)) DESC LIMIT %s",
             params + [query_text, limit],
@@ -87,7 +89,7 @@ def retrieve(
     Returns list of { chunk_text, title, source_type, score }.
     """
     try:
-        embedding = hook_clients.embed(query_text)
+        embedding = hook_clients.embed_query_cached(query_text)
         conn = _lib._connect()
         try:
             vec_rows = _vector_search(conn, embedding, niche_slug, platform, limit=20)
@@ -100,19 +102,32 @@ def retrieve(
         fused = _rrf_fuse([vec_ids, fts_ids])
         all_rows = {r["id"]: r for r in (vec_rows + fts_rows)}
 
-        ranked = []
+        ranked: list[dict] = []
+        skipped: list[dict] = []
+        seen_sources: set = set()
         for chunk_id, rrf_score in sorted(fused.items(), key=lambda x: -x[1]):
             row = all_rows[chunk_id]
             sim = row.get("semantic_sim")
             if sim is not None and sim < MIN_SEMANTIC_SIM:
                 continue
-            ranked.append({
+            item = {
                 "chunk_text": row["chunk_text"],
                 "title": row["title"],
                 "source_type": row["source_type"],
                 "score": rrf_score,
-            })
+            }
+            # Source diversity: at most one chunk per source document in the
+            # top-k; skipped runner-up chunks backfill below if needed.
+            source_id = row.get("source_id")
+            if source_id is not None and source_id in seen_sources:
+                skipped.append(item)
+                continue
+            if source_id is not None:
+                seen_sources.add(source_id)
+            ranked.append(item)
 
+        if len(ranked) < k:
+            ranked.extend(skipped[: k - len(ranked)])
         return ranked[:k]
     except Exception as exc:
         logger.warning("script_retrieval.retrieve failed (fail-open): %s", exc)
@@ -132,7 +147,11 @@ async def build_script_examples_block(
         # matches on angle and audience, not just topic keywords.
         query_parts = [p for p in [topic, problem_solved, brand_vibe] if p and p.strip()]
         query = ". ".join(query_parts)
-        examples = retrieve(query, niche_slug=niche, platform=platform, k=3)
+        # retrieve() is synchronous (blocking HTTP embed + DB) — run it in a
+        # worker thread so it never blocks the event loop.
+        examples = await asyncio.to_thread(
+            retrieve, query, niche_slug=niche, platform=platform, k=3
+        )
         if not examples:
             return ""
         lines = [

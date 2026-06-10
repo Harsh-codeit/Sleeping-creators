@@ -99,6 +99,61 @@ def test_viral_library_error_exists():
     assert issubclass(viral_library.ViralLibraryError, Exception)
 
 
+def test_connect_uses_shared_pool_and_close_returns(monkeypatch):
+    """_connect checks out of the shared pg_pool; close() re-pools instead of
+    really closing, and a broken connection is discarded (close=True)."""
+    from unittest.mock import MagicMock
+    import pg_pool
+    import viral_library
+    importlib.reload(viral_library)
+
+    class _FakePool:
+        def __init__(self, conns):
+            self._conns = list(conns)
+            self.put = []
+
+        def getconn(self):
+            return self._conns.pop(0)
+
+        def putconn(self, conn, close=False):
+            self.put.append((conn, close))
+            if not close:
+                self._conns.append(conn)
+
+    healthy = MagicMock()
+    healthy.closed = 0
+    pool = _FakePool([healthy])
+    monkeypatch.setattr(pg_pool, "_pool", pool)
+    monkeypatch.setenv("VIRAL_LIBRARY_PG_URL", "postgresql://test")
+
+    conn = viral_library._connect()
+    conn.close()
+    assert pool.put == [(healthy, False)]
+    # Reuse, then breakage: a conn that died while checked out is discarded.
+    conn2 = viral_library._connect()
+    healthy.closed = 1
+    conn2.close()
+    assert pool.put[-1] == (healthy, True)
+
+
+def test_connect_wraps_pool_errors(monkeypatch):
+    import pg_pool
+    import viral_library
+    importlib.reload(viral_library)
+
+    class _Boom:
+        def getconn(self):
+            raise RuntimeError("pool exhausted")
+
+        def putconn(self, conn, close=False):
+            pass
+
+    monkeypatch.setattr(pg_pool, "_pool", _Boom())
+    monkeypatch.setenv("VIRAL_LIBRARY_PG_URL", "postgresql://test")
+    with pytest.raises(viral_library.ViralLibraryError):
+        viral_library._connect()
+
+
 # ---------------------------------------------------------------------------
 # Schema / init
 # ---------------------------------------------------------------------------

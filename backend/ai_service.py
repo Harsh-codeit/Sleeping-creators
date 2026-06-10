@@ -588,8 +588,9 @@ async def _build_hook_patterns_block(client: dict, onboarding: dict,
         if not query_text:
             return ""
 
-        # Sync clients run off the event loop.
-        embedding = await asyncio.to_thread(hook_clients.embed, query_text)
+        # Sync clients run off the event loop. Query embeddings are LRU-cached
+        # (same topic/pain/vibe text repeats across generations).
+        embedding = await asyncio.to_thread(hook_clients.embed_query_cached, query_text)
         hooks = await asyncio.to_thread(
             viral_library.retrieve, query_text, embedding,
             niche_slug=niche_slug, language=language, k=5,

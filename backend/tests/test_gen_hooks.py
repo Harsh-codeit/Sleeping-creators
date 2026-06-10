@@ -97,6 +97,8 @@ def _hooks():
 def _patch_externals(monkeypatch):
     """Default happy-path patches; individual tests override as needed."""
     monkeypatch.setattr(ai_service.hook_clients, "embed", lambda text: [0.1, 0.2, 0.3], raising=False)
+    monkeypatch.setattr(ai_service.hook_clients, "embed_query_cached",
+                        lambda text: [0.1, 0.2, 0.3], raising=False)
     monkeypatch.setattr(ai_service.viral_library, "retrieve",
                         lambda *a, **k: _hooks(), raising=False)
 
@@ -118,6 +120,7 @@ def test_block_empty_when_embed_raises(monkeypatch):
     def _boom(text):
         raise RuntimeError("no key")
     monkeypatch.setattr(ai_service.hook_clients, "embed", _boom, raising=False)
+    monkeypatch.setattr(ai_service.hook_clients, "embed_query_cached", _boom, raising=False)
     out = _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "topic", db=None))
     assert out == ""
 
