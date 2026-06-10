@@ -514,6 +514,7 @@ MODEL_ROUTES: dict[str, str] = {
     "carousel_caption": _DEFAULT_MODEL,
     "single_image_hook": _DEFAULT_MODEL,
     "generate_content": _DEFAULT_MODEL,
+    "playground_generate": _DEFAULT_MODEL,
 }
 
 # Per-tier overrides: {tier_name: {generation_type: model}}. Empty by default,
