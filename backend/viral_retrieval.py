@@ -10,7 +10,8 @@ FAIL OPEN: any error (no DB, empty library, query error) -> [] (logged),
 never raises.
 
 Public surface (re-exported from viral_library):
-    retrieve(query_text, query_embedding, *, niche_slug, language, k, candidate_pool)
+    retrieve(query_text, query_embedding, *, niche_slug, language, k,
+             candidate_pool, hook_type, trigger)
     RETRIEVAL_WEIGHTS, MMR_LAMBDA, MIN_SEMANTIC_SIM
 """
 from __future__ import annotations

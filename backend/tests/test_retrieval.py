@@ -343,3 +343,21 @@ def test_vec_candidates_no_filters_sql_unchanged():
     vr._vec_candidates(mock_conn, [0.1] * 1536, None, 40)
     sql, _ = _exec_args(mock_conn)[0]
     assert "hook_type" not in sql and "trigger" not in sql
+
+
+def test_taxonomy_clause_trigger_only():
+    import viral_retrieval as vr
+    sql, params = vr._taxonomy_clause(None, "fomo")
+    assert sql == " AND trigger = %s"
+    assert params == ["fomo"]
+
+
+def test_fetch_rows_applies_taxonomy_filters():
+    from unittest.mock import MagicMock
+    import viral_retrieval as vr
+    mock_conn = MagicMock()
+    mock_conn.cursor().__enter__().fetchall.return_value = []
+    vr._fetch_rows(mock_conn, [1, 2], None, hook_type="myth_bust", trigger="fomo")
+    sql, params = _exec_args(mock_conn)[0]
+    assert "hook_type = %s" in sql and "trigger = %s" in sql
+    assert params == [1, 2, "myth_bust", "fomo"]
