@@ -41,7 +41,8 @@ _HTTP_TIMEOUT = 30
 # Providers polled hourly vs. those only detectable through call-site errors
 # (no public balance endpoint). The dashboard shows the full roster.
 CHECKED_PROVIDERS = ["openrouter", "apify", "anthropic"]
-PASSIVE_PROVIDERS = ["groq", "resend", "rapidapi"]
+# Shotstack has no balance/credits endpoint (dashboard only) — error-monitored.
+PASSIVE_PROVIDERS = ["groq", "resend", "rapidapi", "shotstack"]
 ALL_PROVIDERS = CHECKED_PROVIDERS + PASSIVE_PROVIDERS
 
 DEFAULT_THRESHOLDS = {

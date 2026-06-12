@@ -256,6 +256,9 @@ def is_billing_error(provider: str, error: Exception) -> bool:
         return status == 429
     if provider == "groq":
         return status == 402 or "quota" in msg or "billing" in msg or "credit" in msg
+    if provider == "shotstack":
+        return (status == 402 or "quota" in msg or "credit" in msg
+                or "payment" in msg)
     return False
 
 

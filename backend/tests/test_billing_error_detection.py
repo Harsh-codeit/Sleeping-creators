@@ -95,6 +95,25 @@ def test_groq_quota_message_is_billing():
     assert bas.is_billing_error("groq", Exception("insufficient quota for org")) is True
 
 
+def test_shotstack_402_runtime_error_is_billing():
+    # shotstack_service attaches status_code to the RuntimeError it raises
+    e = RuntimeError("Shotstack render rejected (402): payment required")
+    e.status_code = 402
+    assert bas.is_billing_error("shotstack", e) is True
+
+
+def test_shotstack_quota_message_is_billing():
+    e = RuntimeError("Shotstack render rejected (403): monthly quota exceeded")
+    e.status_code = 403
+    assert bas.is_billing_error("shotstack", e) is True
+
+
+def test_shotstack_validation_error_is_not_billing():
+    e = RuntimeError("Shotstack render rejected (400): timeline is invalid")
+    e.status_code = 400
+    assert bas.is_billing_error("shotstack", e) is False
+
+
 # ─── report_billing_error ─────────────────────────────────────────────────────
 
 def _mock_db(prev_doc=None, thresholds_doc=None):

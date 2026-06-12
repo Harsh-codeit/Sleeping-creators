@@ -526,7 +526,11 @@ async def submit_render(
             logger.error(
                 f"Shotstack /render {r.status_code}: {detail} | full response: {err_body}"
             )
-            raise RuntimeError(f"Shotstack render rejected ({r.status_code}): {detail}")
+            exc = RuntimeError(f"Shotstack render rejected ({r.status_code}): {detail}")
+            exc.status_code = r.status_code  # duck-typed for billing classification
+            import balance_alert_service as _bas
+            _bas.report_billing_error_nowait("shotstack", exc)
+            raise exc
         data = r.json()
         render_id = data.get("response", {}).get("id")
         if not render_id:

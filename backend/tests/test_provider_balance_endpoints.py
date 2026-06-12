@@ -48,9 +48,9 @@ def test_get_provider_balances_returns_full_roster(mock_db, _):
     assert resp.status_code == 200
     body = resp.json()
     providers = {p["provider"]: p for p in body["providers"]}
-    # all six known providers always present
+    # all known providers always present
     assert set(providers) == {"openrouter", "apify", "anthropic",
-                              "groq", "resend", "rapidapi"}
+                              "groq", "resend", "rapidapi", "shotstack"}
     # stored docs pass through
     assert providers["openrouter"]["status"] == "ok"
     assert providers["anthropic"]["status"] == "warning"
@@ -59,7 +59,7 @@ def test_get_provider_balances_returns_full_roster(mock_db, _):
     assert providers["apify"]["detail"] == "awaiting first check"
     assert providers["apify"]["passive"] is False
     # error-monitored providers with no incident → ok + passive flag
-    for name in ("groq", "resend", "rapidapi"):
+    for name in ("groq", "resend", "rapidapi", "shotstack"):
         assert providers[name]["status"] == "ok"
         assert providers[name]["passive"] is True
     for p in body["providers"]:
@@ -73,11 +73,11 @@ def test_get_provider_balances_empty_db_still_returns_roster(mock_db, _):
     resp = client.get("/api/dashboard/provider-balances", headers=AUTH)
     assert resp.status_code == 200
     body = resp.json()
-    assert len(body["providers"]) == 6
+    assert len(body["providers"]) == 7
     statuses = {p["provider"]: p["status"] for p in body["providers"]}
     assert statuses == {"openrouter": "unknown", "apify": "unknown",
                         "anthropic": "unknown", "groq": "ok",
-                        "resend": "ok", "rapidapi": "ok"}
+                        "resend": "ok", "rapidapi": "ok", "shotstack": "ok"}
 
 
 @patch("server._check_token", return_value=True)
