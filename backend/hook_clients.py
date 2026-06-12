@@ -129,6 +129,8 @@ def _post(path: str, payload: dict) -> dict:
         resp.raise_for_status()
         return resp.json()
     except httpx.HTTPError as exc:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("openrouter", exc)
         raise HookClientError(f"OpenRouter request to {path} failed: {exc}") from exc
 
 

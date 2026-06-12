@@ -21,6 +21,8 @@ def send_email(to: str | list, subject: str, html: str, cc: list | None = None, 
         resp = resend.Emails.send(params)
         return resp["id"]
     except Exception as e:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("resend", e)
         logger.error("Resend send_email failed to=%s subject=%s: %s", to, subject, e)
         raise
 

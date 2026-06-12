@@ -143,6 +143,8 @@ def fetch_reel_video_url(reel_url: str) -> str:
         )
         resp.raise_for_status()
     except httpx.HTTPStatusError as exc:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("rapidapi", exc)
         raise ValueError(
             f"instagram120 returned {exc.response.status_code} — check your RapidAPI subscription"
         ) from exc
@@ -181,13 +183,18 @@ def transcribe_video_url(video_url: str, shortcode: str) -> str:
             raise IngestError(f"Video file is {size_mb:.1f} MB — exceeds Groq 25 MB limit")
 
         client = _get_groq_client()
-        with open(tmp_path, "rb") as f:
-            result = client.audio.transcriptions.create(
-                file=(f"{shortcode}.mp4", f.read()),
-                model="whisper-large-v3",
-                temperature=0,
-                response_format="verbose_json",
-            )
+        try:
+            with open(tmp_path, "rb") as f:
+                result = client.audio.transcriptions.create(
+                    file=(f"{shortcode}.mp4", f.read()),
+                    model="whisper-large-v3",
+                    temperature=0,
+                    response_format="verbose_json",
+                )
+        except Exception as exc:
+            import balance_alert_service as _bas
+            _bas.report_billing_error_nowait("groq", exc)
+            raise
         return (getattr(result, "text", "") or "").strip()
     finally:
         if tmp_path and os.path.exists(tmp_path):

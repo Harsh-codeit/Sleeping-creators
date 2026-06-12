@@ -19,6 +19,7 @@ Cooldown state lives on the ``provider_balances`` doc fields
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -187,3 +188,121 @@ async def evaluate_and_alert(db) -> list[dict]:
         except Exception as exc:
             logger.error("Balance alerts: evaluation failed for %s: %s", provider, exc)
     return results
+
+
+# ─── Reactive billing-error detection (Phase 4) ──────────────────────────────
+#
+# Call sites (ai_service, competitor_service, hook_clients, mail_service,
+# script_ingest_worker) call ``report_billing_error_nowait(provider, exc)``
+# from inside their existing except blocks. Detection only — the original
+# exception flow is never altered, and this path never raises.
+#
+# Sync modules without a db handle work because server startup calls
+# ``init_reactive_reporting(db)`` (captures the running loop). In standalone
+# worker processes where that never ran, reports are silently skipped.
+
+_reactive_db = None
+_reactive_loop: asyncio.AbstractEventLoop | None = None
+
+
+def init_reactive_reporting(db) -> None:
+    """Call once from server startup (inside the event loop)."""
+    global _reactive_db, _reactive_loop
+    _reactive_db = db
+    try:
+        _reactive_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _reactive_loop = None
+
+
+def _status_code(error: Exception):
+    """Duck-typed status extraction: anthropic/groq APIStatusError carry
+    ``.status_code``; httpx.HTTPStatusError carries ``.response.status_code``."""
+    code = getattr(error, "status_code", None)
+    if code is None:
+        code = getattr(getattr(error, "response", None), "status_code", None)
+    return code
+
+
+def is_billing_error(provider: str, error: Exception) -> bool:
+    """Classify whether an exception is a billing/credit/quota failure.
+
+    Anthropic detection uses ``e.status_code`` + ``e.body['error']['type']``
+    (the pinned anthropic==0.25.0 SDK has no ``.type`` property) plus the
+    documented "credit balance is too low" message on 400s.
+    """
+    msg = str(error).lower()
+    status = _status_code(error)
+    if provider == "anthropic":
+        body = getattr(error, "body", None)
+        err = body.get("error") if isinstance(body, dict) else None
+        err_type = err.get("type") if isinstance(err, dict) else None
+        if status in (402, 403) and err_type == "billing_error":
+            return True
+        return "credit balance" in msg
+    if provider == "openrouter":
+        return status == 402
+    if provider == "resend":
+        return status == 429 or "quota" in msg
+    if provider == "rapidapi":
+        return status == 429
+    if provider == "groq":
+        return status == 402 or "quota" in msg or "billing" in msg or "credit" in msg
+    return False
+
+
+async def report_billing_error(db, provider: str, error: Exception) -> None:
+    """Mark the provider critical and dispatch (cooldown applies). Never raises."""
+    try:
+        detail = (f"billing/quota error at call site: "
+                  f"{type(error).__name__}: {str(error)[:200]}")
+        metrics = {"source": "reactive"}
+        headers = getattr(getattr(error, "response", None), "headers", None)
+        if headers:  # RapidAPI publishes remaining quota on every response
+            for h in ("x-ratelimit-requests-remaining", "x-ratelimit-requests-limit"):
+                if headers.get(h) is not None:
+                    metrics[h.replace("-", "_")] = headers.get(h)
+
+        await db.provider_balances.update_one(
+            {"provider": provider},
+            {"$set": {
+                "provider": provider,
+                "status": "critical",
+                "detail": detail,
+                "metrics": metrics,
+                "checked_at": datetime.now(timezone.utc),
+            }},
+            upsert=True,
+        )
+        thresholds = await provider_balance_service.get_thresholds(db)
+        if not thresholds.get("enabled", True):
+            return
+        prev_doc = await db.provider_balances.find_one({"provider": provider})
+        action = should_alert(prev_doc, "critical",
+                              float(thresholds.get("cooldown_hours", 24)))
+        if action:
+            await dispatch_alert(db, provider, "critical", detail, kind=action)
+    except Exception as exc:
+        logger.error("Reactive billing report failed for %s: %s", provider, exc)
+
+
+def report_billing_error_nowait(provider: str, error: Exception) -> None:
+    """Fire-and-forget entry point for call sites (sync or async). Never raises.
+
+    No-op when the error is not billing-class or reporting was never
+    initialised (e.g. standalone worker process).
+    """
+    try:
+        if _reactive_db is None or not is_billing_error(provider, error):
+            return
+        coro = report_billing_error(_reactive_db, provider, error)
+        try:
+            asyncio.get_running_loop().create_task(coro)
+        except RuntimeError:
+            # Sync context outside the loop thread — hand off to the server loop.
+            if _reactive_loop is not None and not _reactive_loop.is_closed():
+                asyncio.run_coroutine_threadsafe(coro, _reactive_loop)
+            else:
+                coro.close()
+    except Exception as exc:
+        logger.error("report_billing_error_nowait failed for %s: %s", provider, exc)

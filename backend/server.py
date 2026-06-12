@@ -2668,6 +2668,7 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(balance_alert_service.evaluate_and_alert, 'interval', hours=1,
                       id='provider_balance_check', args=[db],
                       start_date=_now + timedelta(seconds=510))
+    balance_alert_service.init_reactive_reporting(db)
     scheduler.start()
     # Verify competitor weekly scan job is registered and log next fire time
     _competitor_job = scheduler.get_job('competitor_weekly_scan')

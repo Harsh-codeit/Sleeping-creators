@@ -1578,6 +1578,8 @@ async def generate_carousel(
         # Propagate — caller decides whether to retry / surface to user.
         raise
     except (anthropic.APIError, ValueError, KeyError, _json.JSONDecodeError) as e:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("anthropic", e)
         logger.warning(f"Carousel single-pass failed ({e}), using fallback")
         return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
 

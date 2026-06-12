@@ -511,6 +511,8 @@ async def generate_competitor_strategy(client_id: str, db) -> Optional[dict]:
                            client_id=client_id, client_name=client.get("name") if client else None)
         raw_text = message.content[0].text
     except Exception as e:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("anthropic", e)
         logger.error(f"generate_competitor_strategy: Claude API error: {e}")
         return None
 
