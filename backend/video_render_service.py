@@ -34,6 +34,108 @@ def _strategy_block(client: dict) -> dict:
     }
 
 
+def _video_model(generation_type: str, client: dict | None = None) -> str:
+    """Route video generation through ai_service.resolve_model. Defaults
+    reproduce today's Haiku exactly; per-client model_tier can lift to Sonnet.
+    Fail-open to the historical hardcoded model."""
+    try:
+        from ai_service import resolve_model
+        return resolve_model(generation_type, client_tier=(client or {}).get("model_tier"))
+    except Exception:
+        return "claude-haiku-4-5-20251001"
+
+
+def _variant_gate_texts(variant: dict, ai_text_fields: list[dict] | None) -> list[str]:
+    """Texts to gate for one video variant: caption first line + the first
+    hook/headline/title merge field, when present."""
+    texts = []
+    cap_line = next((l.strip() for l in (variant.get("caption") or "").splitlines()
+                     if l.strip()), "")
+    if cap_line:
+        texts.append(cap_line)
+    mv = variant.get("merge_values") or {}
+    for f in ai_text_fields or []:
+        name = f.get("find") or ""
+        if re.search(r"hook|headline|title", name, re.I) and mv.get(name):
+            texts.append(str(mv[name]).strip())
+            break
+    return texts
+
+
+async def _select_video_variant(db, client: dict, variants: list[dict],
+                                ai_text_fields: list[dict] | None) -> dict:
+    """Gate each variant vs the 30-day cross-format DNA and ship the most
+    embedding-distant passing one. None pass -> least-similar + incident log.
+    Fail-open: any unexpected error ships variants[0]."""
+    import semantic_gate
+    import content_dna
+    client_id = (client or {}).get("id")
+    dna = await content_dna.ensure_dna(db, client_id)
+    if not dna:
+        return variants[0]
+    scored = []  # (variant, passed, max_sim, method, nearest_text, worst_text)
+    for v in variants:
+        texts = _variant_gate_texts(v, ai_text_fields)
+        if not texts:
+            scored.append((v, True, 0.0, "skipped", None, ""))
+            continue
+        worst_text, worst = None, None
+        passed = True
+        for t in texts:
+            r = await semantic_gate.gate_check(db, client_id, t, dna=dna)
+            passed = passed and r.passed
+            if worst is None or r.max_sim > worst.max_sim:
+                worst_text, worst = t, r
+        scored.append((v, passed, worst.max_sim, worst.method,
+                       worst.nearest_text, worst_text))
+    passing = [s for s in scored if s[1]]
+    if passing:
+        best = min(passing, key=lambda s: s[2])
+        return best[0]
+    best = min(scored, key=lambda s: s[2])
+    await semantic_gate.log_repetition_incident(
+        db, client_id, format_kind="video", candidate_text=best[5],
+        max_sim=best[2], method=best[3], nearest_text=best[4],
+        snapshot={"caption_head": (best[0].get("caption") or "")[:120]},
+    )
+    logger.warning("video variant gate: no candidate passed; shipping least-similar")
+    return best[0]
+
+
+async def _build_variety_block(db, client: dict) -> str:
+    """Variety contract (anti-repetition) for the video paths. Fail-open -> ''."""
+    try:
+        import variety_planner
+        if db is None:
+            return ""
+        spec = await variety_planner.plan_next(db, client, format_kind="video")
+        return spec.prompt_block() if spec else ""
+    except Exception as exc:
+        logger.warning("video variety planner unavailable (%s)", exc)
+        return ""
+
+
+def _existing_hooks_block(client: dict) -> str:
+    """Forbidden-list of the client's existing reusable video hooks so a new
+    hook brief takes a genuinely different angle. '' when none configured."""
+    hooks = ((client or {}).get("strategy") or {}).get("video_hooks") or []
+    lines = []
+    for h in hooks[:20]:
+        if not isinstance(h, dict):
+            continue
+        title = (h.get("title") or "").strip()
+        hook_prompt = (h.get("prompt") or "").strip()[:100]
+        if title or hook_prompt:
+            lines.append(f"- {title} :: {hook_prompt}")
+    if not lines:
+        return ""
+    return (
+        "\n\nEXISTING VIDEO HOOKS for this client — your new hook MUST take a "
+        "different angle and a different title. Do not echo any of these:\n"
+        + "\n".join(lines)
+    )
+
+
 _HOOK_PROMPT = """You are designing a reusable "video hook" — a short content brief that a social-media manager will reuse to generate many different videos for the same client.
 
 Client:
@@ -66,6 +168,7 @@ async def generate_video_hook(client: dict, keyword: str = "", db=None) -> dict:
     Falls back to the built-in _HOOK_PROMPT when no custom prompt is set.
     """
     seed = (keyword or "").strip() or "—"
+    forbidden_block = _existing_hooks_block(client)
     custom_template = await _resolve_custom_video_prompt(client)
     if custom_template:
         custom_filled = _substitute_client_placeholders(custom_template, client)
@@ -93,8 +196,10 @@ async def generate_video_hook(client: dict, keyword: str = "", db=None) -> dict:
             keyword=seed,
             **_strategy_block(client),
         )
+    if forbidden_block:
+        prompt = prompt + forbidden_block
     msg = _anthropic_client().messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=_video_model("video_hook", client),
         max_tokens=400,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -157,6 +262,8 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str,
     fields_json = json.dumps(fields_for_prompt, indent=2)
     example_kv = ", ".join(f'"{f["key"]}": "..."' for f in fields_for_prompt)
 
+    variety_block = await _build_variety_block(db, client)
+
     custom_template = await _resolve_custom_video_prompt(client)
     if custom_template:
         custom_filled = _substitute_client_placeholders(custom_template, client)
@@ -187,8 +294,11 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str,
             **_strategy_block(client),
         )
 
+    if variety_block:
+        prompt = variety_block.strip() + "\n\n" + prompt
+
     msg = _anthropic_client().messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=_video_model("video_ai_text", client),
         max_tokens=1000,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -292,14 +402,42 @@ async def generate_video_content(
     platforms = ", ".join(client.get("platforms") or ["instagram"])
 
     # Shared grounding (persona + brand context + real-text memory). Fails open to "".
-    ctx_block = ""
+    persona_part = brand_part = memory_part = ""
     try:
         import ai_service
         _ctx = await ai_service.build_generation_context(client, client.get("onboarding_data") or {}, db)
-        ctx_block = (_ctx.get("persona_block", "") + _ctx.get("brand_context", "")
-                     + _ctx.get("memory_block", "")).strip()
+        persona_part = _ctx.get("persona_block", "")
+        brand_part = _ctx.get("brand_context", "")
+        memory_part = _ctx.get("memory_block", "")
     except Exception as _ce:
         logger.warning("video content context unavailable (%s); continuing", _ce)
+
+    # Variety contract (anti-repetition) — supersedes the legacy memory block
+    # when present. Fail-open to "".
+    variety_block = await _build_variety_block(db, client)
+
+    # Reels grounding (anti-repetition Phase 4): proven hook patterns (with
+    # exemplar rotation) + winning script examples. Both fail-open to "".
+    hook_block = script_block = ""
+    try:
+        import ai_service
+        onboarding = client.get("onboarding_data") or {}
+        hook_block = await ai_service._build_hook_patterns_block(
+            client, onboarding, (prompt or "").strip() or None, db=db)
+        from script_retrieval import build_script_examples_block
+        script_block = await build_script_examples_block(
+            (prompt or "") or ", ".join((client.get("strategy") or {}).get("themes") or []),
+            niche=onboarding.get("niche_slug") or onboarding.get("niche"),
+            platform=(client.get("platforms") or ["instagram"])[0],
+            problem_solved=onboarding.get("problem_solved"),
+            brand_vibe=onboarding.get("brand_vibe") if isinstance(onboarding.get("brand_vibe"), str) else None,
+        )
+    except Exception as _ge:
+        logger.warning("video grounding unavailable (%s); continuing", _ge)
+
+    ctx_block = (persona_part + brand_part
+                 + (memory_part if not variety_block else "") + variety_block
+                 + hook_block + script_block).strip()
 
     fields_json = json.dumps([{
         "field": f["find"],
@@ -353,10 +491,45 @@ async def generate_video_content(
         if ctx_block:
             full_prompt = ctx_block + "\n\n" + full_prompt
 
-    data, _usage_msg = _generate_content_json(full_prompt)
+    # Variant mode (anti-repetition): ask for 3 complete alternatives in ONE
+    # call, gate each vs the 30-day DNA, ship the most distant passing one.
+    use_variants = False
+    if db is not None and (client or {}).get("id"):
+        try:
+            import semantic_gate  # noqa: F401 — availability probe
+            use_variants = True
+        except Exception as _sge:
+            logger.warning("semantic gate unavailable (%s); single-variant mode", _sge)
+    if use_variants:
+        full_prompt += (
+            "\n\nFINAL OUTPUT OVERRIDE: return ONLY this JSON — an array of exactly 3 complete alternatives:\n"
+            '{"variants": [{"merge_values": {<same keys as above>}, "caption": "...", "hashtags": [...]},  ...x3]}\n'
+            "Each variant must keep the exact field keys and length budgets described above but use a "
+            "COMPLETELY different opening line and hook angle. No two variants may share their first sentence."
+        )
+
+    data, _usage_msg = _generate_content_json(
+        full_prompt,
+        model=_video_model("video_content", client),
+        token_tiers=(8000, 12000) if use_variants else (4096, 8000),
+    )
     if db is not None:
         await record_usage(db, _usage_msg, generation_type="video_content",
                            client_id=client.get("id"), client_name=client.get("name"))
+
+    if use_variants:
+        try:
+            variants = (data.get("variants")
+                        if isinstance(data.get("variants"), list) and data["variants"]
+                        else [data])
+            variants = [v for v in variants
+                        if isinstance(v, dict) and "caption" in v] or [data]
+            data = await _select_video_variant(db, client, variants, ai_text_fields)
+        except Exception as _vge:
+            logger.warning("video variant selection failed (fail-open -> first): %s", _vge)
+            _vs = data.get("variants") if isinstance(data.get("variants"), list) else None
+            data = (_vs[0] if _vs and isinstance(_vs[0], dict) else data)
+
     caption = _smart_truncate_caption(data.get("caption") or "", 2000)
     hashtags = [h for h in (data.get("hashtags") or []) if isinstance(h, str)][:6]
     logger.info(
@@ -418,17 +591,19 @@ def _parse_content_json(raw: str) -> Optional[dict]:
     return None
 
 
-def _generate_content_json(full_prompt: str) -> dict:
+def _generate_content_json(full_prompt: str, *,
+                           model: str = "claude-haiku-4-5-20251001",
+                           token_tiers: tuple = (4096, 8000)) -> dict:
     """Call Claude and parse the JSON response. Retries once with more tokens
     if the first attempt returns malformed/truncated JSON."""
     import anthropic as _anthropic
     from fastapi import HTTPException
     client = _anthropic_client()
     last_raw = ""
-    for attempt, max_tokens in enumerate((4096, 8000), start=1):
+    for attempt, max_tokens in enumerate(token_tiers, start=1):
         try:
             msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=model,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": full_prompt}],
             )
@@ -505,7 +680,7 @@ async def build_merge_values(
     still_unfilled = [f for f in unfilled_ai if f["find"] not in generated]
     if still_unfilled:
         try:
-            generated.update(await generate_ai_text(still_unfilled, client, ""))
+            generated.update(await generate_ai_text(still_unfilled, client, "", db=db))
         except Exception as e:
             logger.warning("AI text generation failed: %s", e)
 

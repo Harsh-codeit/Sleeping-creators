@@ -139,13 +139,24 @@ def test_single_pass_appends_similarity_retry_note():
 
 
 def test_generate_carousel_regenerates_once_on_duplicate(monkeypatch):
+    """Semantic gate (Jaccard fallback, no embeddings): a duplicate hook in the
+    30-day DNA window triggers exactly one regeneration; the distinct retry ships."""
     import persona_service
     monkeypatch.setattr(persona_service, "get_or_build_persona", AsyncMock(return_value=None))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
-    # Recent memory contains the SAME hook the first generation will produce.
+    # The 30-day DNA window contains the SAME hook the first generation produces.
     dup_hook = "you ate perfectly for six days then ruined it sunday"
-    monkeypatch.setattr(ai_service, "_recent_hook_texts", AsyncMock(return_value=[dup_hook]))
+    dna = [{"hook_text": dup_hook, "hook_embedding": None, "hook_type": "myth_bust",
+            "format": "tips", "topic": "t", "angle": "a", "emotion": "hope",
+            "opening_structure": "statement", "format_kind": "carousel",
+            "embedded_at": None, "embed_model": None,
+            "post_id": "p0", "created_at": "2026-06-01T00:00:00+00:00"}]
+    monkeypatch.setattr(ai_service.content_dna, "ensure_dna",
+                        AsyncMock(return_value=dna))
+    # Isolate the gate: planner off -> legacy memory blocks path.
+    monkeypatch.setattr(ai_service.variety_planner, "plan_next",
+                        AsyncMock(return_value=None))
 
     calls = {"n": 0}
 

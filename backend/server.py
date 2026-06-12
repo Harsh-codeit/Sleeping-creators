@@ -3923,7 +3923,7 @@ async def get_client_dropbox(client_id: str):
         raise HTTPException(404, "Client not found")
     posts = await db.posts.find(
         {"client_id": client_id, "is_winner": True},
-        {"_id": 0}
+        {"_id": 0, "content_dna": 0}
     ).sort("engagement_score", -1).to_list(100)
     return posts
 
@@ -3939,7 +3939,7 @@ async def get_global_dropbox(
         query["platform"] = platform
     if content_type:
         query["content_type"] = content_type
-    posts = await db.posts.find(query, {"_id": 0}).sort("engagement_score", -1).to_list(200)
+    posts = await db.posts.find(query, {"_id": 0, "content_dna": 0}).sort("engagement_score", -1).to_list(200)
     return posts
 
 
@@ -4213,7 +4213,7 @@ async def calendar_posts(start: str, end: str, client_id: Optional[str] = None, 
         query["client_id"] = client_id
     if platform:
         query["platform"] = platform
-    posts = await db.posts.find(query, {"_id": 0}).sort("scheduled_at", 1).to_list(5000)
+    posts = await db.posts.find(query, {"_id": 0, "content_dna": 0}).sort("scheduled_at", 1).to_list(5000)
     return {"posts": posts}
 
 @api_router.get("/posts")
@@ -4227,7 +4227,7 @@ async def list_posts(status: Optional[str] = None, client_id: Optional[str] = No
         query["platform"] = platform
     if kind:
         query["kind"] = kind
-    posts = await db.posts.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    posts = await db.posts.find(query, {"_id": 0, "content_dna": 0}).sort("created_at", -1).to_list(limit)
     return posts
 
 @api_router.post("/posts", status_code=201)
@@ -4257,7 +4257,7 @@ async def create_post(data: PostCreate):
 
 @api_router.get("/posts/{post_id}")
 async def get_post(post_id: str):
-    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0, "content_dna": 0})
     if not post:
         raise HTTPException(404, "Post not found")
     return post

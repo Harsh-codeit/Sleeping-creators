@@ -169,10 +169,37 @@ def test_block_passes_niche_and_language_to_retrieve(monkeypatch):
     _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "founder burnout", db=None))
     assert captured["niche_slug"] == "saas-tech"
     assert captured["language"] == "English"
-    assert captured["k"] == 5
+    # Phase 4 exemplar entropy: retrieve a POOL, then sample EXEMPLAR_K from it.
+    assert captured["k"] == ai_service.content_dna.EXEMPLAR_POOL
     # query_text blends topic + problem_solved + brand_vibe.
     assert "founder burnout" in captured["query_text"]
     assert "founders burn out" in captured["query_text"]
+
+
+def test_block_samples_pool_and_logs_usage(monkeypatch):
+    """>EXEMPLAR_K retrieved -> only EXEMPLAR_K rendered; injected ids logged."""
+    hooks = [{"id": f"h{i}", "hook_text": f"unique viral line number {i}",
+              "hook_type": "myth_bust", "trigger": "fomo", "niche_slug": "saas-tech",
+              "virality_score": 0.5, "score": 1.0 - i * 0.01} for i in range(12)]
+    monkeypatch.setattr(ai_service.viral_library, "retrieve",
+                        lambda *a, **k: hooks, raising=False)
+    monkeypatch.setattr(ai_service.variety_planner, "recent_exemplar_ids",
+                        AsyncMock(return_value=set()))
+    logged = {}
+
+    async def fake_log(db, client_id, ids):
+        logged["client_id"] = client_id
+        logged["ids"] = ids
+
+    monkeypatch.setattr(ai_service.variety_planner, "log_exemplar_usage", fake_log)
+
+    out = _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "topic", db=MagicMock()))
+
+    rendered = [l for l in out.splitlines() if l.strip() and l.strip()[0].isdigit()]
+    assert len(rendered) == ai_service.content_dna.EXEMPLAR_K
+    assert logged["client_id"] == "c1"
+    assert len(logged["ids"]) == ai_service.content_dna.EXEMPLAR_K
+    assert all(i.startswith("h") for i in logged["ids"])
 
 
 # ─── _build_hook_patterns_block: anti-sameness ────────────────────────────────
@@ -294,3 +321,19 @@ def test_resolve_model_per_client_tier_override():
 def test_resolve_model_unknown_tier_falls_back_to_default():
     assert ai_service.resolve_model(
         "carousel_single_pass", client_tier="does-not-exist") == "claude-sonnet-4-5"
+
+
+def test_resolve_model_video_routes_reproduce_todays_haiku_exactly():
+    for gen_type in ("video_content", "video_hook", "video_ai_text"):
+        assert ai_service.resolve_model(gen_type) == "claude-haiku-4-5-20251001"
+
+
+def test_resolve_model_video_tier_override_lifts_to_sonnet():
+    ai_service.MODEL_TIERS["premium"] = {"video_content": "claude-sonnet-4-5"}
+    try:
+        assert ai_service.resolve_model(
+            "video_content", client_tier="premium") == "claude-sonnet-4-5"
+        assert ai_service.resolve_model(
+            "video_hook", client_tier="premium") == "claude-haiku-4-5-20251001"
+    finally:
+        ai_service.MODEL_TIERS.pop("premium", None)

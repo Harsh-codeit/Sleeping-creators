@@ -33,6 +33,19 @@ except Exception as _script_import_exc:  # pragma: no cover
 
 from text_similarity import is_too_similar
 
+# Anti-repetition system (content DNA + variety planner + semantic gate).
+# Guarded import — a failure here must never break generation; all call sites
+# below check for None and fall back to the legacy memory-block behavior.
+try:  # pragma: no cover - import guard only
+    import content_dna
+    import variety_planner
+    import semantic_gate
+except Exception as _ar_exc:  # pragma: no cover
+    content_dna = variety_planner = semantic_gate = None
+    logging.getLogger(__name__).warning(
+        "anti-repetition modules unavailable: %s", _ar_exc
+    )
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -515,6 +528,11 @@ MODEL_ROUTES: dict[str, str] = {
     "single_image_hook": _DEFAULT_MODEL,
     "generate_content": _DEFAULT_MODEL,
     "playground_generate": _DEFAULT_MODEL,
+    # Video routes (anti-repetition Phase 4) — defaults reproduce the previously
+    # hardcoded Haiku EXACTLY; per-client model_tier can lift reels to Sonnet.
+    "video_content": "claude-haiku-4-5-20251001",
+    "video_hook": "claude-haiku-4-5-20251001",
+    "video_ai_text": "claude-haiku-4-5-20251001",
 }
 
 # Per-tier overrides: {tier_name: {generation_type: model}}. Empty by default,
@@ -591,10 +609,13 @@ async def _build_hook_patterns_block(client: dict, onboarding: dict,
 
         # Sync clients run off the event loop. Query embeddings are LRU-cached
         # (same topic/pain/vibe text repeats across generations).
+        # Retrieve a POOL (not the final k) so exemplar sampling can rotate which
+        # exemplars each generation sees instead of injecting the same 5 forever.
+        pool_k = content_dna.EXEMPLAR_POOL if content_dna is not None else 20
         embedding = await asyncio.to_thread(hook_clients.embed_query_cached, query_text)
         hooks = await asyncio.to_thread(
             viral_library.retrieve, query_text, embedding,
-            niche_slug=niche_slug, language=language, k=5,
+            niche_slug=niche_slug, language=language, k=pool_k,
         )
         if not hooks:
             return ""
@@ -609,10 +630,21 @@ async def _build_hook_patterns_block(client: dict, onboarding: dict,
             if recent and is_too_similar(text, recent):
                 continue
             kept.append(h)
-            if len(kept) >= 5:
-                break
         if not kept:
             return ""
+
+        # Exemplar entropy: weighted-random sample of EXEMPLAR_K from the pool,
+        # demoting exemplars already used for this client within the window.
+        sample_k = content_dna.EXEMPLAR_K if content_dna is not None else 5
+        if variety_planner is not None:
+            used = (await variety_planner.recent_exemplar_ids(db, client.get("id"))
+                    if (db is not None and client.get("id")) else set())
+            kept = variety_planner.sample_exemplars(kept, sample_k, recently_used_ids=used)
+            if db is not None and client.get("id"):
+                await variety_planner.log_exemplar_usage(
+                    db, client.get("id"), [h.get("id") for h in kept if h.get("id")])
+        else:
+            kept = kept[:sample_k]
 
         lines = []
         for i, h in enumerate(kept, 1):
@@ -978,6 +1010,7 @@ async def _generate_carousel_single_pass(
     persona_block: str = "",
     recent_text_memory: str = "",
     similarity_retry_note: str = "",
+    variety_block: str = "",
     db=None,
     spice_level: str | None = None,
 ) -> dict:
@@ -1065,8 +1098,9 @@ async def _generate_carousel_single_pass(
             f"Do NOT use slides 1 or 2 for introductions, context, or brand mentions."
         )
 
-    # Content memory — last 12 posts for this client become a forbidden list the model must vary from.
-    memory_block = await _build_content_memory_context(client.get("id"), db, limit=12)
+    # Content memory — last 12 posts for this client become a forbidden list the
+    # model must vary from. Superseded by the variety contract when one exists.
+    memory_block = "" if variety_block else await _build_content_memory_context(client.get("id"), db, limit=12)
 
     # CTA requirement
     cta_block = ""
@@ -1143,6 +1177,7 @@ Write a {slide_count}-slide {platform} carousel.
 {hook_patterns_block}{script_examples_block}
 {hook_block}
 {cta_block}
+{variety_block}
 {memory_block}
 {recent_text_memory}
 
@@ -1152,6 +1187,7 @@ WORD BUDGETS:
 - Slide 1 (hook): max 20 words. One pattern interrupt or visceral claim.
 - Last slide (CTA): max 25 words. One action. One benefit tied to something specific in the earlier slides.
 - Middle slides: {min_budget}-{content_word_budget} words each. One idea per slide stated sharply, then done.
+- hook_variants: two genuine alternatives to slide 1. Each must open differently from slide 1 and from each other.
 
 FORMATTING:
 - Use \\n for paragraph breaks within a slide. White space is intentional.
@@ -1175,6 +1211,7 @@ Respond ONLY with valid JSON (no markdown, no commentary):
   "author_name": "{name}",
   "author_handle": "@{name.lower().replace(' ', '')}",
   "author_title": "{industry}",
+  "hook_variants": ["ALTERNATE slide-1 hook A — same topic, a DIFFERENT opening structure than slide 1, max 20 words, {language}", "ALTERNATE slide-1 hook B — a THIRD opening structure, max 20 words, {language}"],
   "slides": [{_slides_example}]
 }}"""
 
@@ -1192,9 +1229,10 @@ Respond ONLY with valid JSON (no markdown, no commentary):
 
     trend_user = (trend_context.strip() + "\n\n") if trend_context and trend_context.strip() else ""
 
-    # Dynamic token budget: ~200 tokens per slide for body + ~500 for title/strategy/metadata.
-    # Caps at Sonnet 4.5's 8192 ceiling. Saves cost on small carousels, preserves headroom on large ones.
-    dynamic_max_tokens = min(8192, 500 + slide_count * 200)
+    # Dynamic token budget: ~200 tokens per slide for body + ~600 for title/strategy/
+    # metadata/hook_variants. Caps at Sonnet 4.5's 8192 ceiling. Saves cost on small
+    # carousels, preserves headroom on large ones.
+    dynamic_max_tokens = min(8192, 600 + slide_count * 200)
 
     from trend_tool import SEARCH_TRENDS_TOOL, run_search_trends
     _max_tool_calls = 2
@@ -1342,6 +1380,109 @@ Respond ONLY with valid JSON:
         return title, [t.lstrip("#") for t in brand_hashtags]
 
 
+async def _run_carousel_gate(db, client, result_data, gen_fn, variety_spec) -> dict:
+    """Semantic-gate flow for a generated carousel: gate the primary hook, swap in
+    the best passing hook_variant on failure, regenerate ONCE with a forced
+    hook-type rotation, and on exhaustion ship the least-similar candidate while
+    logging a repetition_incident. Entirely fail-open — never raises, never blocks."""
+    def _pop_variants(d):
+        return [v.strip() for v in (d.pop("hook_variants", None) or [])
+                if isinstance(v, str) and v.strip()][:3]
+
+    def _hook_of(d):
+        return ((d.get("slides") or [{}])[0] or {}).get("content", "")
+
+    client_id = (client or {}).get("id")
+    if semantic_gate is None or content_dna is None or db is None or not client_id:
+        result_data.pop("hook_variants", None)
+        return result_data
+    try:
+        dna = await content_dna.ensure_dna(db, client_id)
+        if not dna:
+            result_data.pop("hook_variants", None)
+            return result_data
+
+        gated = []  # (text, GateResult, attempt_data, is_primary)
+
+        async def _gate_attempt(data):
+            """Gate one attempt's primary + variants; ship-ready dict or None."""
+            primary = _hook_of(data)
+            variants = _pop_variants(data)
+            r = await semantic_gate.gate_check(db, client_id, primary, dna=dna)
+            gated.append((primary, r, data, True))
+            if r.passed:
+                return data
+            passing = []
+            for v in variants:
+                vr = await semantic_gate.gate_check(db, client_id, v, dna=dna)
+                gated.append((v, vr, data, False))
+                if vr.passed:
+                    passing.append((v, vr))
+            if passing:
+                best_v, best_r = min(passing, key=lambda t: t[1].max_sim)
+                if data.get("slides"):
+                    data["slides"][0]["content"] = best_v
+                logger.info(
+                    f"Carousel gate: primary too similar (sim {r.max_sim:.2f}); "
+                    f"swapped in variant (sim {best_r.max_sim:.2f}) for client {client_id}"
+                )
+                return data
+            return None
+
+        shipped = await _gate_attempt(result_data)
+        if shipped is not None:
+            return shipped
+
+        # One regeneration — force the next LRU hook type via the planner.
+        first_fail = gated[0][1]
+        failed_primary = gated[0][0]
+        forced = None
+        retry_block_override = None
+        if variety_planner is not None and variety_spec is not None:
+            try:
+                new_spec = variety_planner.respec_for_retry(
+                    variety_spec,
+                    failed_hook_type=(result_data.get("strategy") or {}).get("hook_type"),
+                    failed_opening=failed_primary,
+                )
+                forced = new_spec.hook_type
+                retry_block_override = new_spec.prompt_block()
+            except Exception as _rse:
+                logger.warning(f"respec_for_retry failed ({_rse}); retry without forced hook type")
+        retry_note = (
+            f"Your previous attempt was too similar to a recent post "
+            f"(sim {first_fail.max_sim:.2f}) — nearest recent opening: "
+            f"\"{first_fail.nearest_text or ''}\". "
+            + (f"Use hook_type \"{forced}\" and a completely different opening structure."
+               if forced else "Use a completely different opening structure and hook angle.")
+        )
+        try:
+            retry_data = await gen_fn(retry_note=retry_note,
+                                      variety_block_override=retry_block_override)
+            shipped = await _gate_attempt(retry_data)
+            if shipped is not None:
+                return shipped
+        except Exception as _re:
+            logger.warning(f"gate regeneration failed ({_re}); selecting least-similar attempt")
+
+        # Exhaustion — ship the least-similar candidate and log the incident.
+        idx, text, res = semantic_gate.best_candidate([(t, r) for t, r, _, _ in gated])
+        _, _, data, is_primary = gated[idx]
+        if not is_primary and data.get("slides"):
+            data["slides"][0]["content"] = text
+        await semantic_gate.log_repetition_incident(
+            db, client_id, format_kind="carousel", candidate_text=text,
+            max_sim=res.max_sim, method=res.method, nearest_text=res.nearest_text,
+            snapshot={"title": data.get("title"),
+                      "hook_type": (data.get("strategy") or {}).get("hook_type")},
+        )
+        return data
+    except Exception as exc:
+        logger.warning(f"carousel gate failed (fail-open, shipping ungated): {exc}")
+        result_data.pop("hook_variants", None)
+        return result_data
+
+
 async def generate_carousel(
     client: dict,
     platform: str,
@@ -1407,16 +1548,26 @@ async def generate_carousel(
     # degrade to fallback copy. Only soft errors (parse failures, validation issues, generic
     # APIError) fall back to _fallback_carousel.
     import json as _json
-    from text_similarity import is_too_similar
 
-    async def _gen(retry_note=""):
+    # Variety planner (anti-repetition) — prescriptive contract computed from the
+    # 30-day cross-format DNA window. Fail-open: spec None -> legacy memory blocks.
+    variety_spec = None
+    if variety_planner is not None and db is not None:
+        try:
+            variety_spec = await variety_planner.plan_next(db, client, format_kind="carousel")
+        except Exception as _vpe:
+            logger.warning(f"variety planner failed ({_vpe}); using legacy memory blocks")
+    variety_block = variety_spec.prompt_block() if variety_spec else ""
+
+    async def _gen(retry_note="", variety_block_override=None):
         return await _generate_carousel_single_pass(
             ai_client, client, onboarding, topic, slide_count,
             slide_format, platform, cta_keyword, cta_offer,
             hook_inspiration, global_instructions, trend_context,
             persona_block=persona_block,
-            recent_text_memory=recent_text_memory,
+            recent_text_memory="" if variety_block else recent_text_memory,
             similarity_retry_note=retry_note,
+            variety_block=variety_block if variety_block_override is None else variety_block_override,
             db=db,
             spice_level=resolved_spice,
         )
@@ -1430,22 +1581,9 @@ async def generate_carousel(
         logger.warning(f"Carousel single-pass failed ({e}), using fallback")
         return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
 
-    # Similarity gate — regenerate once if the hook is too close to a recent one.
-    def _hook_of(data):
-        return ((data.get("slides") or [{}])[0] or {}).get("content", "")
-
-    if recent_hooks and is_too_similar(_hook_of(result_data), recent_hooks, threshold=0.6):
-        logger.info(f"Similarity gate fired for client {client.get('id')}; regenerating once")
-        try:
-            retry = await _gen(retry_note=(
-                "Your previous opening was nearly identical to a recent post for this client. "
-                "Write a completely different hook: different first words, different structure, different angle."
-            ))
-            if is_too_similar(_hook_of(retry), recent_hooks, threshold=0.6):
-                logger.warning(f"Similarity drift: hook still close after retry for client {client.get('id')}")
-            result_data = retry
-        except Exception as _re:
-            logger.warning(f"Similarity-gate regeneration failed ({_re}); keeping first result")
+    # Semantic gate — hard wall vs the 30-day cross-format DNA window. Replaces
+    # the old Jaccard-0.6 retry-once-ship-anyway gate. Fail-open by construction.
+    result_data = await _run_carousel_gate(db, client, result_data, _gen, variety_spec)
 
     resolved_format = (
         slide_format

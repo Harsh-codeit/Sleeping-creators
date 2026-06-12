@@ -15,7 +15,9 @@ def test_video_prompt_includes_persona_and_memory(monkeypatch):
     # Stub the model call to capture the prompt and return valid JSON.
     captured = {}
 
-    def fake_generate_content_json(full_prompt):
+    def fake_generate_content_json(full_prompt, **kwargs):
+        # _generate_content_json now takes model= / token_tiers= keywords
+        # (anti-repetition Phase 3/4); this stub only needs the prompt.
         captured["prompt"] = full_prompt
         msg = MagicMock(model="claude-haiku-4-5-20251001", usage=MagicMock(input_tokens=1, output_tokens=1))
         return {"merge_values": {}, "caption": "hi", "hashtags": ["a"]}, msg
