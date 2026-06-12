@@ -42,27 +42,59 @@ _DOCS = [
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
-def test_get_provider_balances_returns_docs(mock_db, _):
+def test_get_provider_balances_returns_full_roster(mock_db, _):
     mock_db.provider_balances.find.return_value = _cursor(_DOCS)
     resp = client.get("/api/dashboard/provider-balances", headers=AUTH)
     assert resp.status_code == 200
     body = resp.json()
-    assert "providers" in body
-    assert len(body["providers"]) == 2
     providers = {p["provider"]: p for p in body["providers"]}
+    # all six known providers always present
+    assert set(providers) == {"openrouter", "apify", "anthropic",
+                              "groq", "resend", "rapidapi"}
+    # stored docs pass through
     assert providers["openrouter"]["status"] == "ok"
     assert providers["anthropic"]["status"] == "warning"
+    # checked provider with no doc yet → unknown / awaiting first check
+    assert providers["apify"]["status"] == "unknown"
+    assert providers["apify"]["detail"] == "awaiting first check"
+    assert providers["apify"]["passive"] is False
+    # error-monitored providers with no incident → ok + passive flag
+    for name in ("groq", "resend", "rapidapi"):
+        assert providers[name]["status"] == "ok"
+        assert providers[name]["passive"] is True
     for p in body["providers"]:
         assert "detail" in p and "metrics" in p and "checked_at" in p
 
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
-def test_get_provider_balances_empty(mock_db, _):
+def test_get_provider_balances_empty_db_still_returns_roster(mock_db, _):
     mock_db.provider_balances.find.return_value = _cursor([])
     resp = client.get("/api/dashboard/provider-balances", headers=AUTH)
     assert resp.status_code == 200
-    assert resp.json() == {"providers": []}
+    body = resp.json()
+    assert len(body["providers"]) == 6
+    statuses = {p["provider"]: p["status"] for p in body["providers"]}
+    assert statuses == {"openrouter": "unknown", "apify": "unknown",
+                        "anthropic": "unknown", "groq": "ok",
+                        "resend": "ok", "rapidapi": "ok"}
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_get_provider_balances_passive_incident_passes_through(mock_db, _):
+    incident = {
+        "provider": "groq",
+        "status": "critical",
+        "detail": "billing/quota error at call site: insufficient quota",
+        "metrics": {"source": "reactive"},
+        "checked_at": "2026-06-12T10:00:00+00:00",
+    }
+    mock_db.provider_balances.find.return_value = _cursor([incident])
+    resp = client.get("/api/dashboard/provider-balances", headers=AUTH)
+    providers = {p["provider"]: p for p in resp.json()["providers"]}
+    assert providers["groq"]["status"] == "critical"
+    assert providers["groq"]["passive"] is True
 
 
 @patch("server._check_token", return_value=True)

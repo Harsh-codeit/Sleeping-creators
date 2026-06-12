@@ -21,6 +21,7 @@ import httpx
 import bundle_service
 import mail_service
 import balance_alert_service
+import provider_balance_service
 import storage
 from urllib.parse import urlencode, quote
 from datetime import datetime, timezone, timedelta
@@ -4855,8 +4856,26 @@ async def dashboard_spend(days: int = Query(default=7, ge=1, le=90)):
 
 @api_router.get("/dashboard/provider-balances")
 async def dashboard_provider_balances():
+    """Full roster: checked providers awaiting their first poll show as
+    "unknown"; error-monitored providers with no recorded incident show "ok"."""
     docs = await db.provider_balances.find({}, {"_id": 0}).to_list(None)
-    return {"providers": docs}
+    by_provider = {d.get("provider"): d for d in docs}
+    providers = []
+    for name in provider_balance_service.ALL_PROVIDERS:
+        doc = by_provider.pop(name, None)
+        passive = name in provider_balance_service.PASSIVE_PROVIDERS
+        if doc is None:
+            doc = {
+                "provider": name,
+                "status": "ok" if passive else "unknown",
+                "detail": ("no issues detected (error-monitored)" if passive
+                           else "awaiting first check"),
+                "metrics": {},
+                "checked_at": None,
+            }
+        providers.append({**doc, "passive": passive})
+    providers.extend(by_provider.values())  # any unexpected extras
+    return {"providers": providers}
 
 
 @api_router.post("/admin/provider-balance-check")

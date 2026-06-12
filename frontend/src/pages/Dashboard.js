@@ -122,7 +122,49 @@ function getFixRoute(clientId, issues) {
 
 // ─── Panel components ─────────────────────────────────────────────────────────
 
-function DailySpend({ series, todayTotal, yesterdayTotal }) {
+const PROVIDER_STATUS_STYLES = {
+  ok:       { dot: "bg-emerald-400", text: "text-emerald-400", label: "OK" },
+  warning:  { dot: "bg-amber-400",   text: "text-amber-400",   label: "LOW" },
+  critical: { dot: "bg-red-400",     text: "text-red-400",     label: "CRITICAL" },
+  unknown:  { dot: "bg-zinc-500",    text: "text-zinc-400",    label: "UNREACHABLE" },
+};
+
+function ApiStatusList({ providers }) {
+  if (!providers.length) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-zinc-800" data-testid="api-status-list">
+      <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
+        API Status
+      </div>
+      <div className="space-y-1.5">
+        {providers.map((p) => {
+          const s = PROVIDER_STATUS_STYLES[p.status] || PROVIDER_STATUS_STYLES.unknown;
+          return (
+            <div
+              key={p.provider}
+              data-testid={`api-status-${p.provider}`}
+              className="flex items-center gap-2"
+              title={p.detail}
+            >
+              <span className={`w-1.5 h-1.5 shrink-0 ${s.dot} ${p.status === "critical" ? "animate-pulse" : ""}`} />
+              <span className="text-[11px] font-mono uppercase text-zinc-300 w-20 shrink-0">
+                {p.provider}
+              </span>
+              <span className={`text-[10px] font-mono font-semibold ${s.text} shrink-0`}>
+                {s.label}
+              </span>
+              <span className="text-[10px] font-mono text-zinc-600 truncate">
+                {p.detail}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DailySpend({ series, todayTotal, yesterdayTotal, providers }) {
   const trend = yesterdayTotal > 0
     ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
     : null;
@@ -156,6 +198,7 @@ function DailySpend({ series, todayTotal, yesterdayTotal }) {
             </span>
           )}
         </div>
+        <ApiStatusList providers={providers || []} />
       </div>
     </Card>
   );
@@ -534,7 +577,7 @@ export default function Dashboard() {
   const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
   const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
-  const [providerAlerts, setProviderAlerts] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
 
@@ -564,13 +607,7 @@ export default function Dashboard() {
       if (sp.status === "fulfilled") setSpend(sp.value.data);
       if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
-      if (pb.status === "fulfilled") {
-        setProviderAlerts(
-          (pb.value.data.providers || []).filter(
-            (p) => p.status === "warning" || p.status === "critical"
-          )
-        );
-      }
+      if (pb.status === "fulfilled") setProviders(pb.value.data.providers || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -623,7 +660,9 @@ export default function Dashboard() {
       </div>
 
       {/* API balance alerts */}
-      <ProviderBalanceBanner alerts={providerAlerts} />
+      <ProviderBalanceBanner
+        alerts={providers.filter((p) => p.status === "warning" || p.status === "critical")}
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -664,6 +703,7 @@ export default function Dashboard() {
           series={spend.series}
           todayTotal={spend.today_total}
           yesterdayTotal={spend.yesterday_total}
+          providers={providers}
         />
       </div>
 

@@ -38,6 +38,12 @@ OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key"
 APIFY_LIMITS_URL = "https://api.apify.com/v2/users/me/limits"
 _HTTP_TIMEOUT = 30
 
+# Providers polled hourly vs. those only detectable through call-site errors
+# (no public balance endpoint). The dashboard shows the full roster.
+CHECKED_PROVIDERS = ["openrouter", "apify", "anthropic"]
+PASSIVE_PROVIDERS = ["groq", "resend", "rapidapi"]
+ALL_PROVIDERS = CHECKED_PROVIDERS + PASSIVE_PROVIDERS
+
 DEFAULT_THRESHOLDS = {
     "enabled": True,
     "anthropic_monthly_budget_usd": 100.0,
