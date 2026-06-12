@@ -35,6 +35,10 @@ SETTINGS = {
     "telegram_bot_token": "bot-token",
     "telegram_chat_id": "chat-id",
     "alert_email": "ops@example.com",
+    # The same mock doc answers both the "global" and "balance_alerts" settings
+    # queries; telegram_enabled opts the dispatch tests into the Telegram path
+    # (it is OFF by default — see test_telegram_skipped_by_default).
+    "telegram_enabled": True,
 }
 
 
@@ -153,7 +157,8 @@ async def test_email_failure_does_not_block_telegram_or_raise(mock_tg, mock_emai
 @patch("balance_alert_service.telegram_service.send_alert", new_callable=AsyncMock, return_value=True)
 async def test_email_skipped_silently_when_no_recipient(mock_tg, mock_email, monkeypatch):
     monkeypatch.delenv("ALERT_EMAIL", raising=False)
-    db = _mock_db(settings_doc={"key": "global", "telegram_bot_token": "t", "telegram_chat_id": "c"})
+    db = _mock_db(settings_doc={"key": "global", "telegram_bot_token": "t",
+                                "telegram_chat_id": "c", "telegram_enabled": True})
     await bas.dispatch_alert(db, "anthropic", "warning", "85% of budget")
     mock_email.assert_not_called()
 
@@ -162,7 +167,8 @@ async def test_email_skipped_silently_when_no_recipient(mock_tg, mock_email, mon
 @patch("balance_alert_service.telegram_service.send_alert", new_callable=AsyncMock, return_value=True)
 async def test_email_falls_back_to_env_var(mock_tg, mock_email, monkeypatch):
     monkeypatch.setenv("ALERT_EMAIL", "env@example.com")
-    db = _mock_db(settings_doc={"key": "global", "telegram_bot_token": "t", "telegram_chat_id": "c"})
+    db = _mock_db(settings_doc={"key": "global", "telegram_bot_token": "t",
+                                "telegram_chat_id": "c", "telegram_enabled": True})
     await bas.dispatch_alert(db, "anthropic", "warning", "85% of budget")
     assert mock_email.call_args.args[0] == "env@example.com"
 
@@ -192,6 +198,18 @@ async def test_recovery_dispatch_marks_status_ok(mock_tg, mock_email):
     assert "recovered" in msg.lower()
     update = db.provider_balances.update_one.await_args.args[1]["$set"]
     assert update["last_alert_status"] == "ok"
+
+
+@patch("balance_alert_service.mail_service.send_email", return_value="email-id")
+@patch("balance_alert_service.telegram_service.send_alert", new_callable=AsyncMock, return_value=True)
+async def test_telegram_skipped_by_default(mock_tg, mock_email):
+    """Without telegram_enabled in settings, Telegram is never called (opt-in)."""
+    settings = {"key": "global", "telegram_bot_token": "bot-token",
+                "telegram_chat_id": "chat-id", "alert_email": "ops@example.com"}
+    db = _mock_db(settings_doc=settings)
+    await bas.dispatch_alert(db, "openrouter", "critical", "credits exhausted")
+    mock_tg.assert_not_awaited()
+    mock_email.assert_called_once()  # email + dashboard state still happen
 
 
 # ─── evaluate_and_alert ───────────────────────────────────────────────────────

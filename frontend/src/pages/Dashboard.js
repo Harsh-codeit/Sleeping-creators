@@ -490,6 +490,40 @@ function ErrorsReportCard({ errors, navigate }) {
   );
 }
 
+// ─── Provider balance banner ──────────────────────────────────────────────────
+
+function ProviderBalanceBanner({ alerts }) {
+  if (!alerts.length) return null;
+  return (
+    <div className="space-y-2" data-testid="provider-balance-banner">
+      {alerts.map((p) => {
+        const critical = p.status === "critical";
+        return (
+          <div
+            key={p.provider}
+            data-testid={`provider-alert-${p.provider}`}
+            className={`flex items-center gap-3 border px-4 py-2.5 ${
+              critical
+                ? "border-red-500/40 bg-red-500/10"
+                : "border-amber-500/40 bg-amber-500/10"
+            }`}
+          >
+            <AlertTriangle size={15} className={critical ? "text-red-400" : "text-amber-400"} />
+            <span
+              className={`text-xs font-mono font-semibold uppercase whitespace-nowrap ${
+                critical ? "text-red-400" : "text-amber-400"
+              }`}
+            >
+              {p.provider} · {p.status}
+            </span>
+            <span className="text-xs text-zinc-400 truncate">{p.detail}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -500,6 +534,7 @@ export default function Dashboard() {
   const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
   const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
+  const [providerAlerts, setProviderAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
 
@@ -520,14 +555,22 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      const [sp, uq, er] = await Promise.allSettled([
+      const [sp, uq, er, pb] = await Promise.allSettled([
         axios.get(`${API}/dashboard/spend?days=7`),
         axios.get(`${API}/dashboard/top-performers`),
         axios.get(`${API}/dashboard/errors`),
+        axios.get(`${API}/dashboard/provider-balances`),
       ]);
       if (sp.status === "fulfilled") setSpend(sp.value.data);
       if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
+      if (pb.status === "fulfilled") {
+        setProviderAlerts(
+          (pb.value.data.providers || []).filter(
+            (p) => p.status === "warning" || p.status === "critical"
+          )
+        );
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -578,6 +621,9 @@ export default function Dashboard() {
           {triggering ? "Running..." : "Run Automation"}
         </button>
       </div>
+
+      {/* API balance alerts */}
+      <ProviderBalanceBanner alerts={providerAlerts} />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

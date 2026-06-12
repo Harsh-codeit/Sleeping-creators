@@ -5,11 +5,12 @@ notifications:
 
   - ``should_alert``      pure function — decides "alert" / "recovery" / None
                           from the previous provider_balances doc + new status.
-  - ``dispatch_alert``    Telegram first (primary channel), email second.
-                          Email is SKIPPED entirely for provider "resend"
-                          (never alert about Resend via Resend). Each channel
-                          is wrapped separately so one failing never blocks
-                          the other.
+  - ``dispatch_alert``    Email + dashboard state by default; Telegram only
+                          when ``telegram_enabled`` is set in the
+                          ``balance_alerts`` settings doc (opt-in). Email is
+                          SKIPPED entirely for provider "resend" (never alert
+                          about Resend via Resend). Each channel is wrapped
+                          separately so one failing never blocks the other.
   - ``evaluate_and_alert``single entry point for the scheduler / manual
                           endpoint: run all checks, then decide + dispatch
                           per provider.
@@ -114,13 +115,20 @@ async def dispatch_alert(db, provider: str, status: str, detail: str,
     except Exception as exc:
         logger.error("Balance alert: could not read settings: %s", exc)
 
-    telegram_sent = False
+    thresholds = dict(provider_balance_service.DEFAULT_THRESHOLDS)
     try:
-        bot_token = (settings.get("telegram_bot_token") or "").strip()
-        chat_id = (settings.get("telegram_chat_id") or "").strip()
-        telegram_sent = await telegram_service.send_alert(message, bot_token, chat_id)
+        thresholds = await provider_balance_service.get_thresholds(db)
     except Exception as exc:
-        logger.error("Balance alert: Telegram dispatch failed for %s: %s", provider, exc)
+        logger.error("Balance alert: could not read thresholds: %s", exc)
+
+    telegram_sent = False
+    if thresholds.get("telegram_enabled", False):  # opt-in via balance_alerts settings
+        try:
+            bot_token = (settings.get("telegram_bot_token") or "").strip()
+            chat_id = (settings.get("telegram_chat_id") or "").strip()
+            telegram_sent = await telegram_service.send_alert(message, bot_token, chat_id)
+        except Exception as exc:
+            logger.error("Balance alert: Telegram dispatch failed for %s: %s", provider, exc)
 
     email_sent = False
     if provider != "resend":  # never alert about Resend via Resend

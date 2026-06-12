@@ -45,6 +45,8 @@ DEFAULT_THRESHOLDS = {
     "apify_warn_pct": 0.80,
     "apify_critical_pct": 0.95,
     "cooldown_hours": 24,
+    # Telegram is opt-in: the dashboard banner + email are the default surfaces.
+    "telegram_enabled": False,
 }
 
 
