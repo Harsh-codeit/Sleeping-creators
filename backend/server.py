@@ -20,6 +20,7 @@ import sheets_service
 import httpx
 import bundle_service
 import mail_service
+import balance_alert_service
 import storage
 from urllib.parse import urlencode, quote
 from datetime import datetime, timezone, timedelta
@@ -2664,6 +2665,9 @@ async def lifespan(app: FastAPI):
                       start_date=_now + timedelta(seconds=450))
     scheduler.add_job(fire_scheduled_emails, 'interval', seconds=60, id='fire_scheduled_emails')
     scheduler.add_job(refresh_all_analytics, 'cron', hour=2, minute=0, id='daily_analytics_sync')
+    scheduler.add_job(balance_alert_service.evaluate_and_alert, 'interval', hours=1,
+                      id='provider_balance_check', args=[db],
+                      start_date=_now + timedelta(seconds=510))
     scheduler.start()
     # Verify competitor weekly scan job is registered and log next fire time
     _competitor_job = scheduler.get_job('competitor_weekly_scan')
@@ -2700,6 +2704,7 @@ async def lifespan(app: FastAPI):
     await db.token_usage.create_index([("created_at", -1)])
     await db.apify_usage.create_index([("client_id", 1), ("created_at", -1)])
     await db.apify_usage.create_index([("created_at", -1)])
+    await db.provider_balances.create_index("provider", unique=True)
     # Analytics & logs query indexes
     await db.logs.create_index([("created_at", -1)])
     await db.logs.create_index([("client_id", 1), ("created_at", -1)])
@@ -4845,6 +4850,18 @@ async def dashboard_spend(days: int = Query(default=7, ge=1, le=90)):
         "today_total": today_total,
         "yesterday_total": yesterday_total,
     }
+
+
+@api_router.get("/dashboard/provider-balances")
+async def dashboard_provider_balances():
+    docs = await db.provider_balances.find({}, {"_id": 0}).to_list(None)
+    return {"providers": docs}
+
+
+@api_router.post("/admin/provider-balance-check")
+async def admin_provider_balance_check():
+    results = await balance_alert_service.evaluate_and_alert(db)
+    return {"providers": results}
 
 
 @api_router.get("/analytics/clients/{client_id}")
