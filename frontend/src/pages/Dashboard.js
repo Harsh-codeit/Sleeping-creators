@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { Users, Send, Clock, CheckCircle2, TrendingUp, Circle, Zap, Activity, Trophy, AlertTriangle, ChevronDown } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { Users, Send, Clock, CheckCircle2, Circle, Zap, Activity, Trophy, AlertTriangle, ChevronDown } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -130,13 +130,16 @@ const PROVIDER_STATUS_STYLES = {
 };
 
 function ApiStatusList({ providers }) {
-  if (!providers.length) return null;
-  return (
-    <div className="mt-3 pt-3 border-t border-zinc-800" data-testid="api-status-list">
-      <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
-        API Status
+  if (!providers.length) {
+    return (
+      <div className="text-[11px] font-mono text-zinc-600" data-testid="api-status-list">
+        Awaiting first status check…
       </div>
-      <div className="space-y-1.5">
+    );
+  }
+  return (
+    <div data-testid="api-status-list">
+      <div className="space-y-2">
         {providers.map((p) => {
           const s = PROVIDER_STATUS_STYLES[p.status] || PROVIDER_STATUS_STYLES.unknown;
           return (
@@ -164,40 +167,11 @@ function ApiStatusList({ providers }) {
   );
 }
 
-function DailySpend({ series, todayTotal, yesterdayTotal, providers }) {
-  const trend = yesterdayTotal > 0
-    ? Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100)
-    : null;
-
+function ApiStatusCard({ providers }) {
   return (
-    <Card testId="daily-spend-chart">
-      <CardHeader label="AI Spend — Last 7 Days" icon={TrendingUp} />
+    <Card testId="api-status-card">
+      <CardHeader label="API Status" icon={Circle} />
       <div className="p-4">
-        <ResponsiveContainer width="100%" height={130}>
-          <BarChart data={series} barSize={14}>
-            <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} width={38} tickFormatter={(v) => `$${v.toFixed(3)}`} />
-            <Tooltip
-              contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 0, fontFamily: "IBM Plex Mono", fontSize: 11 }}
-              labelStyle={{ color: "#a1a1aa" }}
-              itemStyle={{ color: "#fff" }}
-              formatter={(v) => [`$${Number(v).toFixed(6)}`, "cost"]}
-            />
-            <Bar dataKey="cost" fill="#ffffff" radius={0} />
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-3">
-          <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">Today</span>
-          <span className="text-sm font-mono text-white">${Number(todayTotal).toFixed(4)}</span>
-          {trend !== null && (
-            <span
-              data-testid="spend-trend-chip"
-              className={`text-[10px] font-mono px-1.5 py-0.5 border ${trend >= 0 ? "text-amber-400 border-amber-500/30" : "text-emerald-400 border-emerald-500/30"}`}
-            >
-              {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}%
-            </span>
-          )}
-        </div>
         <ApiStatusList providers={providers || []} />
       </div>
     </Card>
@@ -574,7 +548,6 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [clients, setClients] = useState([]);
   const [timeSeries, setTimeSeries] = useState([]);
-  const [spend, setSpend] = useState({ series: [], today_total: 0, yesterday_total: 0 });
   const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -598,13 +571,11 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      const [sp, uq, er, pb] = await Promise.allSettled([
-        axios.get(`${API}/dashboard/spend?days=7`),
+      const [uq, er, pb] = await Promise.allSettled([
         axios.get(`${API}/dashboard/top-performers`),
         axios.get(`${API}/dashboard/errors`),
         axios.get(`${API}/dashboard/provider-balances`),
       ]);
-      if (sp.status === "fulfilled") setSpend(sp.value.data);
       if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
       if (pb.status === "fulfilled") setProviders(pb.value.data.providers || []);
@@ -699,12 +670,7 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <PostsChart timeSeries={timeSeries} />
-        <DailySpend
-          series={spend.series}
-          todayTotal={spend.today_total}
-          yesterdayTotal={spend.yesterday_total}
-          providers={providers}
-        />
+        <ApiStatusCard providers={providers} />
       </div>
 
       {/* Client Issues + Upcoming + Pipelines */}
