@@ -66,6 +66,19 @@ function SpiceDial({ value, onChange }) {
 
 // ─── Edit Profile helpers ─────────────────────────────────────────────────────
 
+// Coerce any stored value into the array shape EMultiInput requires. Legacy
+// clients (pre-array schema) sometimes hold these list fields as plain strings;
+// feeding a string to EMultiInput's `values.map(...)` throws and — with no error
+// boundary above — blanks the whole page. Normalise here at the boundary.
+function toListField(v) {
+  if (Array.isArray(v)) return v.length ? v : [""];
+  if (typeof v === "string" && v.trim()) {
+    const parts = v.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    return parts.length ? parts : [""];
+  }
+  return [""];
+}
+
 function initEditForm(client) {
   const ob = client.onboarding_data || {};
   return {
@@ -91,8 +104,8 @@ function initEditForm(client) {
     high_quality_photos_link: ob.high_quality_photos_link || ob.google_drive_images || "",
     video_clips_link: ob.video_clips_link || ob.google_drive_videos || "",
     drive_images_folder_id: ob.drive_images_folder_id || "",
-    competitor_accounts: ob.competitor_accounts?.length ? ob.competitor_accounts : [""],
-    not_to_do_list: ob.not_to_do_list?.length ? ob.not_to_do_list : [""],
+    competitor_accounts: toListField(ob.competitor_accounts),
+    not_to_do_list: toListField(ob.not_to_do_list),
     preferred_carousel_template: ob.preferred_carousel_template || "full_white",
     preferred_video_template: ob.preferred_video_template || "",
     // Step 1A additions
@@ -121,14 +134,14 @@ function initEditForm(client) {
       .map(s => { const p = s.replace(/^[^a-zA-Z]+/, '').trim(); return EDIT_EMOTIONAL_STATES.includes(p) ? p : (EDIT_EMOTIONAL_STATES.includes(s) ? s : null); })
       .filter(Boolean),
     // Step 2C additions (8 capped-5 lists)
-    solutions_provided: ob.solutions_provided?.length ? ob.solutions_provided : [""],
-    audience_problems: ob.audience_problems?.length ? ob.audience_problems : [""],
-    audience_desires: ob.audience_desires?.length ? ob.audience_desires : [""],
-    audience_myths: ob.audience_myths?.length ? ob.audience_myths : [""],
-    audience_failed_attempts: ob.audience_failed_attempts?.length ? ob.audience_failed_attempts : [""],
-    unique_selling_points: ob.unique_selling_points?.length ? ob.unique_selling_points : [""],
-    frequent_questions: ob.frequent_questions?.length ? ob.frequent_questions : [""],
-    love_topics: ob.love_topics?.length ? ob.love_topics : [""],
+    solutions_provided: toListField(ob.solutions_provided),
+    audience_problems: toListField(ob.audience_problems),
+    audience_desires: toListField(ob.audience_desires),
+    audience_myths: toListField(ob.audience_myths),
+    audience_failed_attempts: toListField(ob.audience_failed_attempts),
+    unique_selling_points: toListField(ob.unique_selling_points),
+    frequent_questions: toListField(ob.frequent_questions),
+    love_topics: toListField(ob.love_topics),
     // Step 2D additions
     has_case_studies: ob.has_case_studies ?? false,
     case_study_1: ob.case_study_1 || "",
@@ -163,18 +176,21 @@ function ETextarea({ rows = 3, ...props }) {
   return <textarea rows={rows} {...props} className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150 resize-none" />;
 }
 function EMultiInput({ label, values, onChange, placeholder, optional }) {
-  const add = () => onChange([...values, ""]);
-  const remove = (i) => onChange(values.filter((_, idx) => idx !== i));
-  const update = (i, v) => onChange(values.map((x, idx) => idx === i ? v : x));
+  // Never trust `values` to be an array — a stray string here would throw on
+  // `.map` and blank the page (no error boundary). Normalise defensively.
+  const safe = toListField(values);
+  const add = () => onChange([...safe, ""]);
+  const remove = (i) => onChange(safe.filter((_, idx) => idx !== i));
+  const update = (i, v) => onChange(safe.map((x, idx) => idx === i ? v : x));
   return (
     <div>
       <ELabel optional={optional}>{label}</ELabel>
       <div className="space-y-2">
-        {values.map((val, i) => (
+        {safe.map((val, i) => (
           <div key={i} className="flex gap-2">
             <input value={val} onChange={e => update(i, e.target.value)} placeholder={placeholder}
               className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors duration-150" />
-            {values.length > 1 && (
+            {safe.length > 1 && (
               <button type="button" onClick={() => remove(i)}
                 className="px-2 text-zinc-600 hover:text-red-400 border border-zinc-700 hover:border-red-900 transition-colors duration-150">
                 <X size={13} />
@@ -1965,8 +1981,8 @@ export default function ClientDetail() {
     try {
       const payload = {
         ...editForm,
-        competitor_accounts: editForm.competitor_accounts.filter(Boolean),
-        not_to_do_list: editForm.not_to_do_list.filter(Boolean),
+        competitor_accounts: toListField(editForm.competitor_accounts).filter(Boolean),
+        not_to_do_list: toListField(editForm.not_to_do_list).filter(Boolean),
         drive_images_folder_id: editForm.high_quality_photos_link,
         drive_folder_id: editForm.video_clips_link,
       };
@@ -2929,15 +2945,19 @@ export default function ClientDetail() {
         <LeadsTab clientId={id} client={client} posts={posts} />
       )}
 
-      {activeTab === "Competitors" && (
+      {activeTab === "Competitors" && (() => {
+        // onboarding competitor_accounts may be a legacy string — normalise so a
+        // bad shape can never throw on `.filter`/`.map` and blank the page.
+        const obComps = toListField(client.onboarding_data?.competitor_accounts).filter(Boolean);
+        return (
         <>
-          {(client.onboarding_data?.competitor_accounts?.filter(Boolean).length > 0) && (
+          {obComps.length > 0 && (
             <div className="mb-4 bg-zinc-900 border border-zinc-800 p-4">
               <div className="text-[10px] font-mono text-zinc-500 uppercase mb-3">From Onboarding</div>
               <div className="flex flex-wrap gap-2">
-                {client.onboarding_data.competitor_accounts.filter(Boolean).map((acc, i) => (
+                {obComps.map((acc, i) => (
                   <span key={i} className="px-2 py-1 bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300">
-                    @{acc.replace(/^@/, "")}
+                    @{String(acc).replace(/^@/, "")}
                   </span>
                 ))}
               </div>
@@ -2945,7 +2965,8 @@ export default function ClientDetail() {
           )}
           <CompetitorTab clientId={id} />
         </>
-      )}
+        );
+      })()}
 
       {activeTab === "Trends" && (
         <TrendsTab clientId={id} client={client} />

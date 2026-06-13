@@ -7,6 +7,7 @@ import {
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useUser } from "../context/UserContext";
+import ErrorBoundary from "./ErrorBoundary";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -138,7 +139,9 @@ export default function Layout({ onLogout }) {
             </a>
           </div>
         )}
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );
