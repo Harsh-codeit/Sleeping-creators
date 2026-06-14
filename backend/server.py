@@ -565,6 +565,9 @@ class SettingsUpdate(BaseModel):
     onboard_pipeline_posting_time: Optional[str] = None
     # Default slide count for the auto-created pipeline. None = 5 (AI default).
     onboard_pipeline_slide_count: Optional[int] = None
+    # Default content spice level inherited by newly-created clients (one of
+    # safe | balanced | bold | unhinged). Each client can override on Strategy.
+    default_spice_level: Optional[str] = None
 
 class BundleSettingsUpdate(BaseModel):
     bundle_api_key: Optional[str] = None
@@ -1092,10 +1095,20 @@ async def get_settings():
             "posts_per_day_per_client": 3,
             "automation_enabled": True,
             "competitor_scrape_limit": 10,
+            "default_spice_level": "balanced",
             "created_at": now_iso()
         }
         await db.settings.insert_one({**s})
     return s
+
+# Canonical content spice levels. Unknown values resolve to "balanced" downstream.
+VALID_SPICE_LEVELS = {"safe", "balanced", "bold", "unhinged"}
+
+async def _default_spice_level() -> str:
+    """Global default spice level new clients inherit (admin-configurable in Settings)."""
+    s = await get_settings()
+    lvl = (s.get("default_spice_level") or "balanced").strip().lower()
+    return lvl if lvl in VALID_SPICE_LEVELS else "balanced"
 
 # ─── Seed Data ────────────────────────────────────────────────────────────────
 
@@ -3439,6 +3452,7 @@ async def create_client(data: ClientCreate):
         "status": "active",
         "strategy": data.strategy or {"themes": [], "tone": data.brand_voice, "hashtags": []},
         "platform_configs": {p: {"enabled": True, "posts_per_day": 2, "posting_times": ["09:00", "17:00"]} for p in data.platforms},
+        "spice_level": await _default_spice_level(),
         "posts_today": 0,
         "posts_total": 0,
         "posts_failed": 0,
@@ -4095,6 +4109,7 @@ async def onboard_client(data: OnboardingCreate):
         "platform_configs": {p: {"enabled": True, "posts_per_day": 2, "posting_times": ["09:00", "17:00"]} for p in data.platforms},
         "onboarding_data": onboarding_data,
         "onboarding_complete": True,
+        "spice_level": await _default_spice_level(),
         "posts_today": 0,
         "posts_total": 0,
         "posts_failed": 0,

@@ -9,6 +9,16 @@ import TeamPage from "./TeamPage";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Mirrors the per-client SpiceDial in ClientDetail. This sets the global default
+// that newly-created clients inherit; each client can still override on Strategy.
+const SPICE_DEFAULT = "balanced";
+const SPICE_LEVELS = [
+  { value: "safe",     label: "Safe",     helper: "Professional, broadly agreeable, no controversy." },
+  { value: "balanced", label: "Balanced", helper: "Sharp but measured (default)." },
+  { value: "bold",     label: "Bold",     helper: "Strong opinions and contrarian angles. Spicy, not alienating." },
+  { value: "unhinged", label: "Unhinged", helper: "Maximum heat. Hot takes. Highest reach, higher risk." },
+];
+
 function localToUTC(hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
   const d = new Date();
@@ -265,6 +275,45 @@ export default function Settings() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Default Content Spice Level */}
+        <div className="bg-zinc-900 border border-zinc-800 p-5">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
+            <Zap size={14} className="text-zinc-400" />
+            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Default Content Spice Level</div>
+          </div>
+          {(() => {
+            const value = form.default_spice_level || SPICE_DEFAULT;
+            const current = SPICE_LEVELS.find(l => l.value === value) || SPICE_LEVELS.find(l => l.value === SPICE_DEFAULT);
+            return (
+              <div className="space-y-2">
+                <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
+                  Applied to every newly-created client. Each client can override it on their Strategy page.
+                </div>
+                <div className="flex border border-zinc-700 w-fit" data-testid="default-spice-dial">
+                  {SPICE_LEVELS.map((lvl, i) => {
+                    const selected = current.value === lvl.value;
+                    return (
+                      <button
+                        type="button"
+                        key={lvl.value}
+                        data-testid={`default-spice-level-${lvl.value}`}
+                        aria-pressed={selected}
+                        onClick={() => updateForm("default_spice_level", lvl.value)}
+                        className={`px-4 py-1.5 text-xs font-mono uppercase transition-colors duration-150 ${i > 0 ? "border-l border-zinc-700" : ""} ${
+                          selected ? "bg-white text-black font-semibold" : "bg-zinc-950 text-zinc-500 hover:text-white"
+                        }`}
+                      >
+                        {lvl.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">{current.helper}</p>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Google Sheets */}
