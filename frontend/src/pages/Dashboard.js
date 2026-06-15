@@ -551,6 +551,7 @@ export default function Dashboard() {
   const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
   const [providers, setProviders] = useState([]);
+  const [driveConnected, setDriveConnected] = useState(null); // null = not yet checked
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
 
@@ -560,6 +561,19 @@ export default function Dashboard() {
       .filter((c) => c._issues.length > 0),
     [clients, overview?.bundle_configured]
   );
+
+  // Google Drive shown as a monitored entry in the API Status card. Kept out of
+  // the balance-alert banner (Layout already warns when Drive is disconnected).
+  const apiStatusProviders = useMemo(() => {
+    const drive = {
+      provider: "drive",
+      status: driveConnected == null ? "unknown" : (driveConnected ? "ok" : "critical"),
+      detail: driveConnected == null
+        ? "checking…"
+        : (driveConnected ? "connected" : "disconnected — clips & images can't download"),
+    };
+    return [...providers, drive];
+  }, [providers, driveConnected]);
 
   const fetchData = async () => {
     try {
@@ -571,14 +585,16 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      const [uq, er, pb] = await Promise.allSettled([
+      const [uq, er, pb, gd] = await Promise.allSettled([
         axios.get(`${API}/dashboard/top-performers`),
         axios.get(`${API}/dashboard/errors`),
         axios.get(`${API}/dashboard/provider-balances`),
+        axios.get(`${API}/auth/google/status`),
       ]);
       if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
       if (pb.status === "fulfilled") setProviders(pb.value.data.providers || []);
+      if (gd.status === "fulfilled") setDriveConnected(!!gd.value.data?.connected);
     } catch (e) {
       console.error(e);
     } finally {
@@ -670,7 +686,7 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <PostsChart timeSeries={timeSeries} />
-        <ApiStatusCard providers={providers} />
+        <ApiStatusCard providers={apiStatusProviders} />
       </div>
 
       {/* Client Issues + Upcoming + Pipelines */}
