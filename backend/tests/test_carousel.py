@@ -209,11 +209,13 @@ if "anthropic" not in sys.modules:
 
 from ai_service import (
     _build_content_memory_context,
+    _carousel_via_openrouter,
     _generate_carousel_single_pass,
     _generate_carousel_caption,
     _is_indian_audience,
     _safe_for_prompt,
 )
+import ai_service
 
 
 def _make_slides(slide_count=5):
@@ -578,3 +580,93 @@ def test_safe_for_prompt_strips_quotes_and_newlines():
     # truncation
     long = "x" * 500
     assert len(_safe_for_prompt(long, max_len=100)) <= 100
+
+
+# ─── OpenRouter GPT-5 fallback ────────────────────────────────────────────────
+
+_OR_CLIENT = {
+    "name": "Shaniya Sevangiya",
+    "instagram_username": "traderswithshaniya",
+    "industry": "trading",
+}
+
+
+def _patch_openrouter(monkeypatch, response_dict):
+    captured = {}
+
+    def fake_chat(system, user, *, model, max_tokens):
+        captured["model"] = model
+        captured["system"] = system
+        captured["user"] = user
+        return json.dumps(response_dict)
+
+    monkeypatch.setattr(ai_service, "_openrouter_chat_completion", fake_chat)
+    return captured
+
+
+def test_openrouter_fallback_builds_full_carousel(monkeypatch):
+    """The OpenRouter fallback returns a fully-shaped carousel: slides, CTA on the
+    last slide, caption, hashtags, and a design_context key."""
+    captured = _patch_openrouter(monkeypatch, {
+        "title": "3 pricing truths",
+        "slides": [
+            {"slide_number": 1, "content": "3 pricing truths that win clients."},
+            {"slide_number": 2, "content": "Truth 1: charge for outcomes."},
+            {"slide_number": 3, "content": "Truth 2: anchor high."},
+            {"slide_number": 4, "content": "placeholder cta"},
+        ],
+        "caption": "Pricing is positioning.",
+        "hashtags": ["#pricing", "#freelance"],
+        "strategy": {"format": "tips", "hook_type": "listicle"},
+    })
+
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "pricing for freelancers", 4, "tips", "instagram", None, None
+    ))
+
+    assert res is not None
+    assert captured["model"] == "openai/gpt-5"        # default slug
+    assert res["title"] == "3 pricing truths"
+    assert len(res["slides"]) == 4
+    assert res["caption"] == "Pricing is positioning."
+    assert res["hashtags"] == ["pricing", "freelance"]  # '#' stripped
+    assert "design_context" in res
+    # Last slide is overwritten with the standard CTA using the REAL handle.
+    assert "@traderswithshaniya" in res["slides"][-1]["content"]
+    assert "placeholder cta" not in res["slides"][-1]["content"]
+
+
+def test_openrouter_fallback_clamps_to_requested_slide_count(monkeypatch):
+    """If the model overshoots, the fallback truncates to the requested count."""
+    _patch_openrouter(monkeypatch, {
+        "title": "T",
+        "slides": [{"slide_number": i + 1, "content": f"s{i}"} for i in range(8)],
+        "caption": "c",
+        "hashtags": [],
+    })
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "topic", 3, "tips", "instagram", None, None
+    ))
+    assert res is not None
+    assert len(res["slides"]) == 3
+
+
+def test_openrouter_fallback_returns_none_on_failure(monkeypatch):
+    """A raised OpenRouter error yields None so the caller drops to the static template."""
+    def boom(*a, **k):
+        raise RuntimeError("OpenRouter down")
+    monkeypatch.setattr(ai_service, "_openrouter_chat_completion", boom)
+
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "topic", 4, "tips", "instagram", None, None
+    ))
+    assert res is None
+
+
+def test_openrouter_fallback_returns_none_on_empty_slides(monkeypatch):
+    """No slides in the response is treated as a failure (None), not an empty post."""
+    _patch_openrouter(monkeypatch, {"title": "T", "slides": [], "caption": "c"})
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "topic", 4, "tips", "instagram", None, None
+    ))
+    assert res is None

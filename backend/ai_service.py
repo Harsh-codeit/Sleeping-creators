@@ -555,6 +555,13 @@ MODEL_ROUTES: dict[str, str] = {
 # route default — never a hard error.
 MODEL_TIERS: dict[str, dict[str, str]] = {}
 
+# Second-tier carousel fallback. When the primary (Anthropic) generation can't
+# produce — no ANTHROPIC_API_KEY, or a soft failure (bad JSON / APIError) — we
+# generate via OpenRouter GPT-5 instead of dropping straight to the canned static
+# template. The static template stays as the final floor if OpenRouter also fails.
+# Slug is env-overridable so operators can swap models without a deploy.
+OPENROUTER_CAROUSEL_MODEL = os.environ.get("OPENROUTER_CAROUSEL_MODEL", "openai/gpt-5")
+
 
 def resolve_model(generation_type: str, *, spice_level: str | None = None,
                   client_tier: str | None = None) -> str:
@@ -1526,6 +1533,13 @@ async def generate_carousel(
 ) -> dict:
     api_key = os.environ.get('ANTHROPIC_API_KEY', '')
     if not api_key:
+        # No primary provider — try OpenRouter GPT-5 before the static template.
+        _or = await _carousel_via_openrouter(
+            client, client.get("onboarding_data", {}), topic, slide_count,
+            slide_format, platform, cta_keyword, cta_offer,
+        )
+        if _or is not None:
+            return _or
         return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
 
     # Resolve the spice dial once: explicit per-call param wins, else the client's stored level,
@@ -1605,7 +1619,14 @@ async def generate_carousel(
     except (anthropic.APIError, ValueError, KeyError, _json.JSONDecodeError) as e:
         import balance_alert_service as _bas
         _bas.report_billing_error_nowait("anthropic", e)
-        logger.warning(f"Carousel single-pass failed ({e}), using fallback")
+        logger.warning(f"Carousel single-pass failed ({e}), trying OpenRouter GPT-5 fallback")
+        _or = await _carousel_via_openrouter(
+            client, onboarding, topic, slide_count,
+            slide_format, platform, cta_keyword, cta_offer,
+        )
+        if _or is not None:
+            return _or
+        logger.warning("OpenRouter fallback unavailable, using static template")
         return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
 
     # Semantic gate — hard wall vs the 30-day cross-format DNA window. Replaces
@@ -1644,13 +1665,7 @@ async def generate_carousel(
             logger.debug(f"Hook-type variety check failed ({e}), skipping")
 
     # Post-process: strip AI-telltale symbols and phrasing from every slide
-    for slide in result_data.get("slides", []):
-        if slide.get("content"):
-            slide["content"] = _humanize_content(slide["content"])
-        if slide.get("heading"):
-            slide["heading"] = _humanize_content(slide["heading"])
-        if slide.get("body"):
-            slide["body"] = _humanize_content(slide["body"])
+    _humanize_slides(result_data)
 
     result = _apply_carousel_cta(result_data, client, topic, cta_keyword, cta_offer)
 
@@ -1668,6 +1683,21 @@ async def generate_carousel(
         result.setdefault("hashtags", client.get("strategy", {}).get("hashtags", []))
 
     # Build design context
+    _attach_design_context(result, client, onboarding)
+
+    return result
+
+
+def _humanize_slides(result_data: dict) -> None:
+    """Strip AI-telltale symbols/phrasing from every slide field, in place."""
+    for slide in result_data.get("slides", []):
+        for field in ("content", "heading", "body"):
+            if slide.get(field):
+                slide[field] = _humanize_content(slide[field])
+
+
+def _attach_design_context(result: dict, client: dict, onboarding: dict) -> dict:
+    """Build and attach the carousel design context. Fails open to None."""
     try:
         from carousel_design_engine import build_design_context, apply_slide_visual_overrides
         slides_out = result.get("slides", [])
@@ -1677,7 +1707,153 @@ async def generate_carousel(
     except Exception as de:
         logger.warning(f"Design context build failed: {de}")
         result["design_context"] = None
+    return result
 
+
+def _openrouter_chat_completion(system: str, user: str, *, model: str, max_tokens: int) -> str:
+    """Run one OpenRouter chat completion and return the assistant text.
+
+    Reuses hook_clients' auth/header/billing-error plumbing (it already reports
+    OpenRouter billing errors and requires OPENROUTER_API_KEY). Raises on any
+    failure so the caller can fall through to the static template.
+    """
+    if hook_clients is None:
+        raise RuntimeError("OpenRouter client unavailable (hook_clients import failed)")
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "response_format": {"type": "json_object"},
+    }
+    data = hook_clients._post("chat/completions", payload)
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError(f"OpenRouter returned no choices: {str(data)[:200]}")
+    return (choices[0].get("message") or {}).get("content") or ""
+
+
+async def _generate_carousel_openrouter(
+    client: dict,
+    onboarding: dict,
+    topic: str | None,
+    slide_count: int,
+    slide_format: str | None,
+    platform: str,
+    cta_keyword: str | None,
+    cta_offer: str | None,
+) -> dict | None:
+    """Generate a carousel via OpenRouter GPT-5 — the second-tier fallback.
+
+    Self-contained: never touches the Anthropic client, so it works when the
+    primary provider is down or unkeyed. Returns a data dict shaped like
+    ``_generate_carousel_single_pass`` (plus caption/hashtags), or None if the
+    call/parse fails (caller then drops to the static template).
+    """
+    name = client.get("name", "Brand")
+    industry = client.get("industry", "business")
+    tone = _get_tone(client)
+    _lang_raw = (onboarding or {}).get("language") or "English"
+    language = (_lang_raw[0] if isinstance(_lang_raw, list) else _lang_raw or "English").strip()
+    topic_line = (topic or "").strip() or f"key lessons in {industry}"
+    fmt = slide_format or "tips"
+
+    cta_instruction = ""
+    if _clean_cta_value(cta_keyword):
+        offer = _clean_cta_value(cta_offer) or "the resource"
+        cta_instruction = (
+            f'\n- The final slide is the CTA: drive the reader to comment '
+            f'"{_clean_cta_value(cta_keyword)}" to get {offer}.'
+        )
+
+    system = (
+        f"You are a world-class Instagram carousel strategist and copywriter for {name} ({industry}).\n"
+        f"Brand voice: {tone}. Write every word in {language}.\n\n"
+        "Write a scroll-stopping carousel that teaches ONE clear idea on the given topic.\n"
+        "Rules:\n"
+        f"- Exactly {slide_count} slides. Slide 1 is the hook; the last slide is the CTA.\n"
+        "- One idea per slide. Short, punchy, concrete. No fluff.\n"
+        "- No em-dashes, no AI buzzwords (leverage, seamless, robust, comprehensive, holistic).\n"
+        "- If the hook promises a number of items/lessons/tips, that number MUST equal the "
+        "count of value slides you actually write between the hook and the CTA. Never inflate it."
+        f"{cta_instruction}\n\n"
+        "Respond with ONLY valid minified JSON (no markdown fences):\n"
+        '{"title": string, "slides": [{"slide_number": int, "content": string}], '
+        '"caption": string, "hashtags": [string], '
+        '"strategy": {"format": string, "hook_type": string}}'
+    )
+    user = (
+        f'Topic: "{topic_line}"\n'
+        f"Format: {fmt}\n"
+        f"Platform: {platform}\n\n"
+        f"Write the {slide_count} slides, a standalone {platform} caption, and 5-8 topic hashtags now."
+    )
+
+    max_tokens = min(8192, 600 + slide_count * 220)
+    try:
+        raw = await asyncio.to_thread(
+            _openrouter_chat_completion, system, user,
+            model=OPENROUTER_CAROUSEL_MODEL, max_tokens=max_tokens,
+        )
+        data = _parse_json_response(raw)
+    except Exception as e:
+        logger.warning(f"OpenRouter carousel fallback failed ({e})")
+        return None
+
+    raw_slides = data.get("slides") or []
+    if not raw_slides:
+        logger.warning("OpenRouter carousel fallback returned no slides")
+        return None
+
+    target = min(slide_count, MAX_CAROUSEL_SLIDES) if isinstance(slide_count, int) and slide_count > 0 else MAX_CAROUSEL_SLIDES
+    norm_slides = []
+    for i, s in enumerate(raw_slides[:target]):
+        content = s.get("content") if isinstance(s, dict) else str(s)
+        norm_slides.append({"slide_number": i + 1, "content": content or ""})
+    data["slides"] = norm_slides
+    data.setdefault("author_name", name)
+    data.setdefault(
+        "author_handle",
+        _resolve_instagram_handle(client) or f"@{name.lower().replace(' ', '')}",
+    )
+    data.setdefault("author_title", client.get("carousel_author_title") or industry)
+    logger.info(
+        f"OpenRouter GPT-5 carousel fallback produced {len(norm_slides)} slides "
+        f"for '{data.get('title', '')}'"
+    )
+    return data
+
+
+async def _carousel_via_openrouter(
+    client: dict,
+    onboarding: dict,
+    topic: str | None,
+    slide_count: int,
+    slide_format: str | None,
+    platform: str,
+    cta_keyword: str | None,
+    cta_offer: str | None,
+) -> dict | None:
+    """Full OpenRouter carousel result (slides + CTA + caption + design context),
+    or None if generation failed. Mirrors the primary path's finalization so the
+    fallback output is shaped identically for downstream rendering/publishing."""
+    data = await _generate_carousel_openrouter(
+        client, onboarding, topic, slide_count, slide_format, platform, cta_keyword, cta_offer
+    )
+    if data is None:
+        return None
+
+    _humanize_slides(data)
+    caption = _humanize_content(data.get("caption", "")) or data.get("title", "")
+    hashtags = [t.lstrip("#") for t in (data.get("hashtags") or [])] \
+        or client.get("strategy", {}).get("hashtags", [])
+
+    result = _apply_carousel_cta(data, client, topic, cta_keyword, cta_offer)
+    result["caption"] = caption
+    result["hashtags"] = hashtags
+    _attach_design_context(result, client, onboarding)
     return result
 
 
