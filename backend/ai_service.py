@@ -1690,19 +1690,50 @@ def _fallback_carousel(
 ) -> dict:
     name = client.get("name", "Brand")
     industry = client.get("industry", "business")
-    handle = f"@{name.lower().replace(' ', '')}"
-    default_slides = [
-        {"slide_number": 1, "content": f"5 lessons that transformed {name}.\n\nMost brands get this wrong.\n\nSwipe to see what changed everything."},
-        {"slide_number": 2, "content": f"Lesson 1: Focus beats effort.\n\nDoing the right thing beats doing everything hard."},
-        {"slide_number": 3, "content": f"Lesson 2: Your audience's pain is your opportunity.\n\nSolve what keeps them up at night."},
-        {"slide_number": 4, "content": f"Lesson 3: Consistency compounds.\n\nShow up every day — results follow later."},
-        {"slide_number": 5, "content": f"Follow {handle} for more {industry} insights.\n\nSave this to come back when you need it."},
+    handle = _resolve_instagram_handle(client)
+
+    lesson_pool = [
+        "Lesson {n}: Focus beats effort.\n\nDoing the right thing beats doing everything hard.",
+        "Lesson {n}: Your audience's pain is your opportunity.\n\nSolve what keeps them up at night.",
+        "Lesson {n}: Consistency compounds.\n\nShow up every day and the results follow later.",
+        "Lesson {n}: Simple scales.\n\nClarity always beats clever.",
+        "Lesson {n}: Listen more than you talk.\n\nYour next big idea is hiding in their words.",
     ]
+
+    # Final layout = 1 hook slide + N lesson slides + 1 CTA slide. The CTA slide
+    # is injected by _apply_carousel_cta (it overwrites the LAST slide), so the
+    # number of lessons the reader actually sees is slide_count - 2. The hook and
+    # title MUST advertise that real number — never a hardcoded one — or the post
+    # promises "5 lessons" while only showing 1.
+    total = max(3, slide_count)
+    lesson_count = max(1, min(total - 2, len(lesson_pool)))
+    noun = "lesson" if lesson_count == 1 else "lessons"
+
+    slides = [{
+        "slide_number": 1,
+        "content": (
+            f"{lesson_count} {noun} that transformed {name}.\n\n"
+            "Most brands get this wrong.\n\n"
+            "Swipe to see what changed everything."
+        ),
+    }]
+    for i in range(lesson_count):
+        slides.append({"slide_number": i + 2, "content": lesson_pool[i].format(n=i + 1)})
+
+    follow_line = (
+        f"Follow {handle} for more {industry} insights." if handle
+        else f"Follow for more {industry} insights."
+    )
+    slides.append({
+        "slide_number": len(slides) + 1,
+        "content": f"{follow_line}\n\nSave this to come back when you need it.",
+    })
+
     data = {
-        "title": f"5 Lessons from {name}",
+        "title": f"{lesson_count} {noun.capitalize()} from {name}",
         "author_name": name,
-        "author_handle": handle,
+        "author_handle": handle or f"@{name.lower().replace(' ', '')}",
         "author_title": client.get("carousel_author_title") or industry,
-        "slides": default_slides[:slide_count]
+        "slides": slides,
     }
     return _apply_carousel_cta(data, client, topic, cta_keyword, cta_offer)
