@@ -140,12 +140,25 @@ def _build_cta_intro_line(topic: str | None = None) -> str:
     return f"This is the exact roadmap for {clean_topic}."
 
 
+def _resolve_instagram_handle(client: dict) -> str:
+    """Return the client's real Instagram handle as @handle, or "" if none.
+
+    Never falls back to the client's display name — a name is not a handle.
+    """
+    raw = (
+        client.get("carousel_author_handle")
+        or client.get("onboarding_data", {}).get("instagram_handle")
+        or client.get("instagram_username")
+        or ""
+    )
+    handle = _clean_cta_value(raw).lstrip("@").strip()
+    return f"@{handle}" if handle else ""
+
+
 def _build_carousel_cta(client: dict, topic: str | None = None, cta_keyword: str | None = None, cta_offer: str | None = None) -> dict:
     keyword = _clean_cta_value(cta_keyword)
     offer = _clean_cta_value(cta_offer)
-    handle = client.get("instagram_username") or client.get("name", "brand").lower().replace(" ", "")
-    if handle and not handle.startswith("@"):
-        handle = f"@{handle}"
+    handle = _resolve_instagram_handle(client)
 
     if keyword:
         offer_text = _trim_sentence(offer) or "the exact roadmap"
@@ -161,11 +174,12 @@ def _build_carousel_cta(client: dict, topic: str | None = None, cta_keyword: str
             ),
         }
 
+    follow_line = f"Follow {handle} for more." if handle else "Follow for more."
     return {
         "cta_heading": "Found this helpful?",
         "cta_sub": "Follow for more",
         "cta_text": "Follow",
-        "slide_content": f"Follow {handle} for more.\n\nSave this post.",
+        "slide_content": f"{follow_line}\n\nSave this post.",
     }
 
 
@@ -1290,15 +1304,25 @@ async def _generate_carousel_caption(
     brand_hashtags = client.get("strategy", {}).get("hashtags", [])
 
     title      = carousel_data.get("title", "")
-    hook_slide = (carousel_data.get("slides") or [{}])[0].get("content", "")
+    slides     = carousel_data.get("slides") or []
+    slide_count = len(slides)
+    hook_slide = (slides[0] if slides else {}).get("content", "")
     cta_sub    = carousel_data.get("cta_sub", "")
+
+    # The swipe CTA must reference the REAL slide count. Without this the model
+    # parrots the example number and prints e.g. "Swipe to see all 7" on a
+    # 3-slide post (it copies the count from the title or the example).
+    swipe_example = (
+        f"'Save this.' or 'Swipe through all {slide_count}.'"
+        if slide_count >= 2 else "'Save this.'"
+    )
 
     _PLATFORM_CAPTION_RULES = {
         "instagram": (
             "Instagram caption rules:\n"
             "- Line 1: Hook — make them stop scrolling (max 125 chars, no hashtags here)\n"
             "- Lines 2-5: 2-3 short punchy value teaser lines — what they'll learn inside\n"
-            "- Final line: CTA to swipe (e.g. 'Save this.' or 'Swipe to see all 7.')\n"
+            f"- Final line: CTA to swipe (e.g. {swipe_example})\n"
             "- Total: 80-200 words. Short paragraphs, line breaks between them."
         ),
         "linkedin": (
@@ -1345,6 +1369,7 @@ HUMAN WRITING RULES (mandatory):
 - No filler openers: "In today's world", "It's important to note", "Moving forward", "That being said"
 - Write in {language}. Every word, no exceptions.
 - Plain words. Short sentences. Real person tone.
+- This carousel has exactly {slide_count} slides. If a swipe CTA mentions a number, it MUST be {slide_count}. Never copy a count from the title or invent one (do not write "Swipe to see all 7" on a {slide_count}-slide post).
 
 Also generate 5-8 topic-specific hashtags (different from the brand's standing hashtags — focused on this specific post's topic).
 

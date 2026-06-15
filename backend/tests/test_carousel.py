@@ -210,6 +210,7 @@ if "anthropic" not in sys.modules:
 from ai_service import (
     _build_content_memory_context,
     _generate_carousel_single_pass,
+    _generate_carousel_caption,
     _is_indian_audience,
     _safe_for_prompt,
 )
@@ -283,6 +284,37 @@ def test_single_pass_prompt_contains_format_keyword(fmt, keyword):
         f"Expected '{keyword}' in single-pass prompt for format '{fmt}'"
     )
     assert "slides" in result
+
+
+def test_caption_swipe_cta_uses_real_slide_count():
+    """Caption prompt must reference the ACTUAL slide count, not a hardcoded '7'.
+
+    Regression: a 3-slide carousel whose title mentions '7' produced the caption
+    'Swipe to see all 7.' because the prompt seeded that exact example.
+    """
+    mock_client = _mock_client({"caption": "Pricing truths.\nSwipe through all 3.", "topic_hashtags": ["#a"]})
+    carousel = {"title": "7 pricing mistakes that cost you clients", "slides": _make_slides(3)}
+    caption, _tags = _run(_generate_carousel_caption(
+        mock_client, _CAROUSEL_CLIENT, _CAROUSEL_ONBOARDING, carousel,
+        platform="instagram", cta_keyword=None, cta_offer=None, db=None,
+    ))
+    system_prompt = _system_text(mock_client)
+    assert "exactly 3 slides" in system_prompt
+    assert "Swipe through all 3" in system_prompt
+    assert caption  # non-empty caption returned
+
+
+def test_caption_single_slide_has_no_numeric_swipe_cta():
+    """A 1-slide carousel must not emit an awkward 'Swipe through all 1' example."""
+    mock_client = _mock_client({"caption": "One big idea.", "topic_hashtags": []})
+    carousel = {"title": "One idea", "slides": _make_slides(1)}
+    _run(_generate_carousel_caption(
+        mock_client, _CAROUSEL_CLIENT, _CAROUSEL_ONBOARDING, carousel,
+        platform="instagram", cta_keyword=None, cta_offer=None, db=None,
+    ))
+    system_prompt = _system_text(mock_client)
+    assert "Swipe through all 1" not in system_prompt
+    assert "exactly 1 slides" in system_prompt
 
 
 def test_single_pass_prompt_contains_strategist_persona():
