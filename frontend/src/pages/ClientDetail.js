@@ -10,6 +10,7 @@ import NicheSelect from "@/components/NicheSelect";
 import WeekPlanTab from "@/components/strategy/WeekPlanTab";
 import ReportTab from "@/components/strategy/ReportTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
+import { errText } from "@/lib/errText";
 import { render } from "@react-email/render";
 import { ContentStrategyOnboardingEmail } from "../emails/ContentStrategyOnboardingEmail";
 
@@ -1986,12 +1987,18 @@ export default function ClientDetail() {
         drive_images_folder_id: editForm.high_quality_photos_link,
         drive_folder_id: editForm.video_clips_link,
       };
+      // niche_slug is a controlled taxonomy field; the backend 422s on an
+      // empty/unknown slug. Most clients have no category set, so never send a
+      // blank one — that 422 is what was blanking the whole page on save.
+      if (!payload.niche_slug) delete payload.niche_slug;
       const resp = await axios.put(`${API}/clients/${id}`, payload);
       setClient(resp.data);
       setEditForm(initEditForm(resp.data));
       toast.success("Profile saved");
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed to save profile");
+      // errText() guarantees a string — passing a 422's array `detail` straight
+      // to toast would crash sonner (mounted above the ErrorBoundary) → blank page.
+      toast.error(errText(err, "Failed to save profile"));
     } finally {
       setSavingEdit(false);
     }

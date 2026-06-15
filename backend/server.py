@@ -486,10 +486,11 @@ class ClientUpdate(BaseModel):
         # taxonomy.NICHES UNION the DB-managed niches (admin-editable). The set
         # is an in-process cache (see _VALID_NICHE_CACHE) refreshed at startup
         # and after each PUT /api/taxonomy/niches; we read it synchronously here
-        # (never await inside a validator). None passes through (no-op update);
-        # unknown values reject at the boundary.
-        if v is None:
-            return v
+        # (never await inside a validator). None / "" pass through as a no-op
+        # update (an unset category must not 422 — that was blanking the client
+        # Profile tab on save); unknown non-empty values reject at the boundary.
+        if v is None or v == "":
+            return None
         if not _is_valid_niche_cached(v):
             raise ValueError(f"niche_slug must be a known niche slug (got {v!r})")
         return v
