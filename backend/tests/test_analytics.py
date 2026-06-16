@@ -332,6 +332,60 @@ def test_dashboard_time_series_returns_n_days(mock_db, _):
 
 
 @patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_dashboard_posting_times_distribution(mock_db, _):
+    """24 hour buckets; pct is share of total, peak_hour is the busiest hour."""
+    def _cursor(rows):
+        cur = MagicMock()
+        cur.to_list = AsyncMock(return_value=rows)
+        return cur
+
+    mock_db.posts.aggregate.return_value = _cursor([
+        {"_id": 9, "posts": 3},
+        {"_id": 16, "posts": 1},
+    ])
+
+    resp = client.get("/api/dashboard/posting-times", headers=AUTH)
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["total"] == 4
+    assert body["peak_hour"] == 9
+    assert len(body["hours"]) == 24
+
+    by_hour = {h["hour"]: h for h in body["hours"]}
+    assert by_hour[9]["posts"] == 3
+    assert by_hour[9]["pct"] == 75.0
+    assert by_hour[9]["label"] == "09:00"
+    assert by_hour[16]["posts"] == 1
+    assert by_hour[16]["pct"] == 25.0
+    # untouched hours are present and zeroed
+    assert by_hour[0]["posts"] == 0
+    assert by_hour[0]["pct"] == 0.0
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_dashboard_posting_times_empty(mock_db, _):
+    """No published posts → total 0, peak_hour None, every pct 0.0 (no divide-by-zero)."""
+    def _cursor(rows):
+        cur = MagicMock()
+        cur.to_list = AsyncMock(return_value=rows)
+        return cur
+
+    mock_db.posts.aggregate.return_value = _cursor([])
+
+    resp = client.get("/api/dashboard/posting-times", headers=AUTH)
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["total"] == 0
+    assert body["peak_hour"] is None
+    assert len(body["hours"]) == 24
+    assert all(h["pct"] == 0.0 and h["posts"] == 0 for h in body["hours"])
+
+
+@patch("server._check_token", return_value=True)
 @patch("server.bundle_service.get_social_account_analytics", new_callable=AsyncMock)
 @patch("server.db")
 def test_refresh_all_platforms_fail_returns_502(mock_db, mock_analytics, _):

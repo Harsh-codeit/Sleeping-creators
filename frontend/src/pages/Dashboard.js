@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { Users, Send, Clock, CheckCircle2, Circle, Zap, Activity, Trophy, AlertTriangle, ChevronDown } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -201,6 +201,70 @@ function PostsChart({ timeSeries }) {
             <Area type="monotone" dataKey="posts" stroke="#fff" strokeWidth={1.5} fill="url(#postGrad)" dot={false} />
           </AreaChart>
         </ResponsiveContainer>
+      </div>
+    </Card>
+  );
+}
+
+function PreferredTimeTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-zinc-900 border border-zinc-700 px-2.5 py-1.5 font-mono text-[11px]">
+      <div className="text-zinc-400">{d.label}</div>
+      <div className="text-white">{d.pct}% · {d.posts} post{d.posts !== 1 ? "s" : ""}</div>
+    </div>
+  );
+}
+
+function PreferredTimeCard({ data }) {
+  const hours = data?.hours || [];
+  const total = data?.total ?? 0;
+  const peak = data?.peak_hour;
+  const peakRow = peak != null ? hours.find((h) => h.hour === peak) : null;
+
+  return (
+    <Card className="lg:col-span-3">
+      <CardHeader
+        label="Client's Preferred Time"
+        icon={Clock}
+        action={
+          peakRow ? (
+            <span className="text-[10px] font-mono text-zinc-500">
+              peak <span className="text-white">{peakRow.label}</span> · {peakRow.pct}% of posts
+            </span>
+          ) : null
+        }
+      />
+      <div className="p-4">
+        {total === 0 ? (
+          <div className="py-10 text-center text-[11px] font-mono text-zinc-600">No published posts yet</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={hours} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <XAxis
+                dataKey="label"
+                interval={2}
+                tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                width={32}
+                tick={{ fill: "#52525b", fontSize: 10, fontFamily: "IBM Plex Mono" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${v}%`}
+              />
+              <Tooltip cursor={{ fill: "#ffffff0a" }} content={<PreferredTimeTooltip />} />
+              <Bar dataKey="pct" radius={[1, 1, 0, 0]}>
+                {hours.map((h) => (
+                  <Cell key={h.hour} fill={h.hour === peak ? "#fff" : "#3f3f46"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </Card>
   );
@@ -548,6 +612,7 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [clients, setClients] = useState([]);
   const [timeSeries, setTimeSeries] = useState([]);
+  const [postingTimes, setPostingTimes] = useState(null);
   const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -585,16 +650,18 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      const [uq, er, pb, gd] = await Promise.allSettled([
+      const [uq, er, pb, gd, pt] = await Promise.allSettled([
         axios.get(`${API}/dashboard/top-performers`),
         axios.get(`${API}/dashboard/errors`),
         axios.get(`${API}/dashboard/provider-balances`),
         axios.get(`${API}/auth/google/status`),
+        axios.get(`${API}/dashboard/posting-times`),
       ]);
       if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
       if (pb.status === "fulfilled") setProviders(pb.value.data.providers || []);
       if (gd.status === "fulfilled") setDriveConnected(!!gd.value.data?.connected);
+      if (pt.status === "fulfilled") setPostingTimes(pt.value.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -687,6 +754,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <PostsChart timeSeries={timeSeries} />
         <ApiStatusCard providers={apiStatusProviders} />
+      </div>
+
+      {/* Preferred posting time */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <PreferredTimeCard data={postingTimes} />
       </div>
 
       {/* Client Issues + Upcoming + Pipelines */}

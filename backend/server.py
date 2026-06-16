@@ -4828,6 +4828,39 @@ async def dashboard_time_series(days: int = 14):
     return result
 
 
+@api_router.get("/dashboard/posting-times")
+async def dashboard_posting_times():
+    """Hour-of-day (UTC) distribution of every published post.
+    Powers the 'Client's Preferred Time' card on the Command Center.
+
+    published_at is stored as a UTC ISO string (now_iso), so the hour sits at
+    chars 11-12 ("YYYY-MM-DDTHH:..."). The scheduler interprets configured
+    posting_times as UTC too, so this histogram lines up 1:1 with the times
+    clients chose.
+    """
+    pipeline = [
+        {"$match": {"status": "published", "published_at": {"$nin": [None, ""]}}},
+        {"$group": {
+            "_id": {"$toInt": {"$substr": ["$published_at", 11, 2]}},  # "HH"
+            "posts": {"$sum": 1},
+        }},
+    ]
+    rows = await db.posts.aggregate(pipeline).to_list(None)
+    by_hour = {int(r["_id"]): r["posts"] for r in rows if r["_id"] is not None}
+    total = sum(by_hour.values())
+    peak = max(by_hour, key=by_hour.get) if by_hour else None
+    hours = [
+        {
+            "hour": h,
+            "label": f"{h:02d}:00",
+            "posts": by_hour.get(h, 0),
+            "pct": round(by_hour.get(h, 0) / total * 100, 1) if total else 0.0,
+        }
+        for h in range(24)
+    ]
+    return {"total": total, "peak_hour": peak, "hours": hours}
+
+
 @api_router.get("/dashboard/spend")
 async def dashboard_spend(days: int = Query(default=7, ge=1, le=90)):
     now = datetime.now(timezone.utc)
