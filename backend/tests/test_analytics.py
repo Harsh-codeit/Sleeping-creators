@@ -366,6 +366,46 @@ def test_dashboard_posting_times_distribution(mock_db, _):
 
 @patch("server._check_token", return_value=True)
 @patch("server.db")
+def test_dashboard_posting_times_today_applies_date_bound(mock_db, _):
+    """days=1 (default 'today') restricts published_at with a $gte lower bound."""
+    def _cursor(rows):
+        cur = MagicMock()
+        cur.to_list = AsyncMock(return_value=rows)
+        return cur
+
+    mock_db.posts.aggregate.return_value = _cursor([{"_id": 13, "posts": 2}])
+
+    resp = client.get("/api/dashboard/posting-times", headers=AUTH)  # no param -> days=1
+    assert resp.status_code == 200
+    assert resp.json()["days"] == 1
+
+    pipeline = mock_db.posts.aggregate.call_args[0][0]
+    match = pipeline[0]["$match"]
+    assert "$gte" in match["published_at"]
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
+def test_dashboard_posting_times_all_time_has_no_date_bound(mock_db, _):
+    """days=0 ('All') aggregates over every published post — no date lower bound."""
+    def _cursor(rows):
+        cur = MagicMock()
+        cur.to_list = AsyncMock(return_value=rows)
+        return cur
+
+    mock_db.posts.aggregate.return_value = _cursor([])
+
+    resp = client.get("/api/dashboard/posting-times?days=0", headers=AUTH)
+    assert resp.status_code == 200
+    assert resp.json()["days"] == 0
+
+    pipeline = mock_db.posts.aggregate.call_args[0][0]
+    match = pipeline[0]["$match"]
+    assert match["published_at"] == {"$nin": [None, ""]}  # no $gte bound
+
+
+@patch("server._check_token", return_value=True)
+@patch("server.db")
 def test_dashboard_posting_times_empty(mock_db, _):
     """No published posts → total 0, peak_hour None, every pct 0.0 (no divide-by-zero)."""
     def _cursor(rows):

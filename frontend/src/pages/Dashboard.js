@@ -217,28 +217,72 @@ function PreferredTimeTooltip({ active, payload }) {
   );
 }
 
-function PreferredTimeCard({ data }) {
+const PREFERRED_TIME_RANGES = [
+  { label: "Today", days: 1 },
+  { label: "7D", days: 7 },
+  { label: "30D", days: 30 },
+  { label: "All", days: 0 },
+];
+
+function PreferredTimeCard() {
+  const [days, setDays] = useState(1); // default: today
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      axios
+        .get(`${API}/dashboard/posting-times?days=${days}`)
+        .then((r) => { if (!cancelled) setData(r.data); })
+        .catch(() => { if (!cancelled) setData({ total: 0, peak_hour: null, hours: [] }); });
+    setData(null);          // show loading on range change
+    load();
+    const id = setInterval(load, 60000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [days]);
+
   const hours = data?.hours || [];
   const total = data?.total ?? 0;
   const peak = data?.peak_hour;
   const peakRow = peak != null ? hours.find((h) => h.hour === peak) : null;
+  const loading = data === null;
+
+  const rangeToggle = (
+    <div className="flex items-center gap-0.5">
+      {PREFERRED_TIME_RANGES.map((r) => (
+        <button
+          key={r.days}
+          onClick={() => setDays(r.days)}
+          className={`text-[10px] font-mono px-1.5 py-0.5 border transition-colors duration-150 cursor-pointer focus:outline-none ${
+            days === r.days
+              ? "border-zinc-500 text-white bg-zinc-800"
+              : "border-zinc-800 text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <Card className="lg:col-span-3">
-      <CardHeader
-        label="Client's Preferred Time"
-        icon={Clock}
-        action={
-          peakRow ? (
-            <span className="text-[10px] font-mono text-zinc-500">
-              peak <span className="text-white">{peakRow.label}</span> · {peakRow.pct}% of posts
-            </span>
-          ) : null
-        }
-      />
-      <div className="p-4">
-        {total === 0 ? (
-          <div className="py-10 text-center text-[11px] font-mono text-zinc-600">No published posts yet</div>
+      <CardHeader label="Client's Preferred Time" icon={Clock} action={rangeToggle} />
+      <div className="px-4 pt-3 flex items-center justify-between">
+        <span className="text-[10px] font-mono text-zinc-500">
+          {peakRow ? (
+            <>peak <span className="text-white">{peakRow.label}</span> · {peakRow.pct}% of posts</>
+          ) : ""}
+        </span>
+        <span className="text-[10px] font-mono text-zinc-600">
+          {total} post{total !== 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="px-4 pb-4 pt-2">
+        {loading ? (
+          <div className="py-10 text-center text-[11px] font-mono text-zinc-600 animate-pulse">Loading…</div>
+        ) : total === 0 ? (
+          <div className="py-10 text-center text-[11px] font-mono text-zinc-600">No posts in this window</div>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={hours} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -612,7 +656,6 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [clients, setClients] = useState([]);
   const [timeSeries, setTimeSeries] = useState([]);
-  const [postingTimes, setPostingTimes] = useState(null);
   const [performers, setPerformers] = useState([]);
   const [errors, setErrors] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -650,18 +693,16 @@ export default function Dashboard() {
       setOverview(ov.data);
       setClients(cl.data);
       setTimeSeries(ts.data);
-      const [uq, er, pb, gd, pt] = await Promise.allSettled([
+      const [uq, er, pb, gd] = await Promise.allSettled([
         axios.get(`${API}/dashboard/top-performers`),
         axios.get(`${API}/dashboard/errors`),
         axios.get(`${API}/dashboard/provider-balances`),
         axios.get(`${API}/auth/google/status`),
-        axios.get(`${API}/dashboard/posting-times`),
       ]);
       if (uq.status === "fulfilled") setPerformers(uq.value.data);
       if (er.status === "fulfilled") setErrors(er.value.data);
       if (pb.status === "fulfilled") setProviders(pb.value.data.providers || []);
       if (gd.status === "fulfilled") setDriveConnected(!!gd.value.data?.connected);
-      if (pt.status === "fulfilled") setPostingTimes(pt.value.data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -758,7 +799,7 @@ export default function Dashboard() {
 
       {/* Preferred posting time */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <PreferredTimeCard data={postingTimes} />
+        <PreferredTimeCard />
       </div>
 
       {/* Client Issues + Upcoming + Pipelines */}

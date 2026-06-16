@@ -4829,17 +4829,26 @@ async def dashboard_time_series(days: int = 14):
 
 
 @api_router.get("/dashboard/posting-times")
-async def dashboard_posting_times():
-    """Hour-of-day (UTC) distribution of every published post.
+async def dashboard_posting_times(days: int = Query(default=1, ge=0, le=3650)):
+    """Hour-of-day (UTC) distribution of published posts.
     Powers the 'Client's Preferred Time' card on the Command Center.
 
-    published_at is stored as a UTC ISO string (now_iso), so the hour sits at
-    chars 11-12 ("YYYY-MM-DDTHH:..."). The scheduler interprets configured
-    posting_times as UTC too, so this histogram lines up 1:1 with the times
-    clients chose.
+    `days` is the window: 1 = today (since 00:00 UTC), 7 = last 7 days,
+    30 = last 30 days, 0 = all time. published_at is stored as a UTC ISO
+    string (now_iso), so the hour sits at chars 11-12 ("YYYY-MM-DDTHH:...").
+    The scheduler interprets configured posting_times as UTC too, so this
+    histogram lines up 1:1 with the times clients chose.
     """
+    match = {"status": "published", "published_at": {"$nin": [None, ""]}}
+    if days >= 1:
+        # days=1 -> midnight today; days=N -> start of the day N-1 days ago.
+        # The $gte string bound inherently excludes null/empty published_at.
+        start = (datetime.now(timezone.utc) - timedelta(days=days - 1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).isoformat()
+        match["published_at"] = {"$gte": start}
     pipeline = [
-        {"$match": {"status": "published", "published_at": {"$nin": [None, ""]}}},
+        {"$match": match},
         {"$group": {
             "_id": {"$toInt": {"$substr": ["$published_at", 11, 2]}},  # "HH"
             "posts": {"$sum": 1},
@@ -4858,7 +4867,7 @@ async def dashboard_posting_times():
         }
         for h in range(24)
     ]
-    return {"total": total, "peak_hour": peak, "hours": hours}
+    return {"days": days, "total": total, "peak_hour": peak, "hours": hours}
 
 
 @api_router.get("/dashboard/spend")
