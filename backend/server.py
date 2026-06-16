@@ -160,15 +160,27 @@ def _make_member_token(member_id: str) -> str:
 
 import re as _re
 
-PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
+# Each value is either a single (resource, action) tuple, or a tuple of such
+# tuples meaning "any one of these grants access". The any-of form lets a flow
+# that legitimately spans sections (e.g. the Studio video creator reads clients,
+# templates, posts, music) be satisfied by EITHER the owning section OR Studio.
+PERMISSION_MAP: dict[tuple[str, str], tuple] = {
     # Team management — owner only (will also be blocked by _require_owner, belt-and-suspenders)
     ("GET",    r"^/api/team$"):  ("_owner_only", "view"),
     ("POST",   r"^/api/team$"):  ("_owner_only", "create"),
     ("PUT",    r"^/api/team/"):  ("_owner_only", "edit"),
     ("DELETE", r"^/api/team/"):  ("_owner_only", "delete"),
     # Clients
-    ("GET",    r"^/api/clients$"):                        ("clients", "view"),
+    # Studio's video creator picks a client first, so listing clients is also a
+    # Studio-view action (not only a Clients action).
+    ("GET",    r"^/api/clients$"):                        (("clients", "view"), ("studio", "view")),
     ("POST",   r"^/api/clients$"):                        ("clients", "create"),
+    # Studio video creator is client-scoped: a member with Studio must be able to
+    # list/upload clips for the chosen client without holding full Clients perms.
+    # These MUST precede the /clients/{id}/ catch-alls below to win first-match.
+    ("GET",    r"^/api/clients/[^/]+/drive-clips"):       (("clients", "view"), ("studio", "view")),
+    ("GET",    r"^/api/clients/[^/]+/clips/presign"):     (("clients", "view"), ("studio", "create")),
+    ("POST",   r"^/api/clients/[^/]+/clips/register"):    (("clients", "edit"), ("studio", "create")),
     ("GET",    r"^/api/clients/[^/]+$"):                  ("clients", "view"),
     ("PUT",    r"^/api/clients/[^/]+$"):                  ("clients", "edit"),
     ("DELETE", r"^/api/clients/[^/]+$"):                  ("clients", "delete"),
@@ -189,12 +201,16 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     # Calendar + Posts
     ("GET",    r"^/api/calendar"):                        ("calendar", "view"),
     ("GET",    r"^/api/posts$"):                          ("calendar", "view"),
-    ("GET",    r"^/api/posts/[^/]+$"):                    ("calendar", "view"),
+    # Studio polls the post it just rendered for status, so reading a single
+    # post by id is also a Studio-view action.
+    ("GET",    r"^/api/posts/[^/]+$"):                    (("calendar", "view"), ("studio", "view")),
     ("POST",   r"^/api/posts$"):                          ("calendar", "create"),
     ("POST",   r"^/api/posts/generate"):                  ("calendar", "create"),
     ("POST",   r"^/api/posts/bulk-generate"):             ("calendar", "create"),
     ("PUT",    r"^/api/posts/[^/]+$"):                    ("calendar", "edit"),
-    ("POST",   r"^/api/posts/[^/]+/schedule"):            ("calendar", "edit"),
+    # Final wizard step posts/schedules the rendered video — a Studio creator
+    # must be able to push their own video without full Calendar edit rights.
+    ("POST",   r"^/api/posts/[^/]+/schedule"):            (("calendar", "edit"), ("studio", "create")),
     ("POST",   r"^/api/posts/[^/]+/approve"):             ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/mark-published"):      ("calendar", "edit"),
     ("POST",   r"^/api/posts/[^/]+/regenerate-caption"):  ("calendar", "edit"),
@@ -214,16 +230,20 @@ PERMISSION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("DELETE", r"^/api/carousels/[^/]+"):                 ("studio", "delete"),
     ("GET",    r"^/api/video-schedule/slots"):            ("studio", "view"),
     # Music
-    ("GET",    r"^/api/music"):                           ("music", "view"),
+    # Studio's music picker browses the library, so it's also a Studio-view read.
+    ("GET",    r"^/api/music"):                           (("music", "view"), ("studio", "view")),
     ("POST",   r"^/api/music/upload"):                    ("music", "create"),
     ("POST",   r"^/api/music/drive/import"):              ("music", "create"),
     ("POST",   r"^/api/music/tags"):                      ("music", "edit"),
     ("PUT",    r"^/api/music/[^/]+"):                     ("music", "edit"),
     ("DELETE", r"^/api/music/[^/]+"):                     ("music", "delete"),
     # Video Templates (actual backend route: /shotstack-templates)
-    ("GET",    r"^/api/shotstack-templates"):             ("video_templates", "view"),
+    # Studio's video creator browses video templates to pick one, so listing
+    # them is also a Studio-view read.
+    ("GET",    r"^/api/shotstack-templates"):             (("video_templates", "view"), ("studio", "view")),
     ("POST",   r"^/api/shotstack-templates$"):            ("video_templates", "create"),
-    ("POST",   r"^/api/shotstack-templates/upload-audio"):("video_templates", "edit"),
+    # Uploading custom audio for the video being built is part of Studio create.
+    ("POST",   r"^/api/shotstack-templates/upload-audio"):(("video_templates", "edit"), ("studio", "create")),
     ("POST",   r"^/api/shotstack-templates/[^/]+/generate-preview"): ("video_templates", "edit"),
     ("POST",   r"^/api/shotstack-templates/[^/]+/reinfer-roles"):    ("video_templates", "edit"),
     ("PATCH",  r"^/api/shotstack-templates/[^/]+"):       ("video_templates", "edit"),
@@ -361,9 +381,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if required is None:
             return JSONResponse({"detail": "Insufficient permissions"}, status_code=403)
 
-        resource, action = required
         perms = member.get("permissions", {})
-        if not perms.get(resource, {}).get(action, False):
+        # `required` is either a single (resource, action) pair or a tuple of
+        # such pairs (any one grants access — see PERMISSION_MAP).
+        alternatives = required if isinstance(required[0], tuple) else (required,)
+        if not any(perms.get(resource, {}).get(action, False) for resource, action in alternatives):
             return JSONResponse({"detail": "Insufficient permissions"}, status_code=403)
 
         return await call_next(request)

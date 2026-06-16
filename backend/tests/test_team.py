@@ -291,3 +291,90 @@ def test_permission_map_closes_member_gaps():
     }
     for (method, path), expected in cases.items():
         assert _get_required_permission(method, path) == expected, f"{method} {path}"
+
+
+# ─── Studio video-creator cross-section access (regression) ────────────────────
+# The Studio "create a video" wizard (VideoCreator) reaches endpoints owned by
+# other sections — clients list, video templates, post-status polling, drive
+# clips, music. A member granted Studio must be able to complete the whole flow,
+# so every route the wizard calls accepts the equivalent Studio permission as an
+# alternative. Previously a Studio-only member was blocked at step 1 (the client
+# picker 403'd), making the Studio grant useless for its one purpose.
+
+def _alternatives(required):
+    """Normalize a PERMISSION_MAP value to a list of (resource, action) pairs."""
+    if required is None:
+        return []
+    return list(required) if isinstance(required[0], tuple) else [required]
+
+
+# (method, path, studio permission that must be accepted)
+STUDIO_WIZARD_ROUTES = [
+    ("GET",  "/api/clients",                          ("studio", "view")),
+    ("GET",  "/api/shotstack-templates",              ("studio", "view")),
+    ("GET",  "/api/posts/abc123",                     ("studio", "view")),
+    ("GET",  "/api/music",                            ("studio", "view")),
+    ("GET",  "/api/clients/c1/drive-clips",           ("studio", "view")),
+    ("GET",  "/api/clients/c1/clips/presign",         ("studio", "create")),
+    ("POST", "/api/clients/c1/clips/register",        ("studio", "create")),
+    ("POST", "/api/posts/abc123/schedule",            ("studio", "create")),
+    ("POST", "/api/shotstack-templates/upload-audio", ("studio", "create")),
+    ("POST", "/api/videos/generate-content",          ("studio", "create")),
+    ("POST", "/api/videos/create",                    ("studio", "create")),
+]
+
+
+def test_studio_member_can_run_video_creator():
+    """Every endpoint the Studio video wizard calls must be satisfiable by the
+    equivalent Studio permission."""
+    for method, path, studio_perm in STUDIO_WIZARD_ROUTES:
+        required = _get_required_permission(method, path)
+        assert required is not None, f"{method} {path} unmapped (deny-by-default 403)"
+        assert studio_perm in _alternatives(required), (
+            f"{method} {path} -> {required} does not accept {studio_perm}"
+        )
+
+
+def test_studio_sharing_keeps_original_section_grant():
+    """Broadening must add Studio as an alternative without removing the owning
+    section's permission (clients/calendar/video_templates/music members keep
+    their access)."""
+    assert ("clients", "view") in _alternatives(_get_required_permission("GET", "/api/clients"))
+    assert ("calendar", "view") in _alternatives(_get_required_permission("GET", "/api/posts/abc123"))
+    assert ("calendar", "edit") in _alternatives(_get_required_permission("POST", "/api/posts/abc123/schedule"))
+    assert ("video_templates", "view") in _alternatives(_get_required_permission("GET", "/api/shotstack-templates"))
+    assert ("music", "view") in _alternatives(_get_required_permission("GET", "/api/music"))
+
+
+STUDIO_MEMBER = {
+    "_id": ObjectId(MEMBER_ID),
+    "name": "Stu", "email": "stu@test.com",
+    "password_hash": "x", "is_active": True,
+    "permissions": {"studio": {"view": True, "create": True, "edit": True, "delete": True}},
+}
+
+
+@patch("server.db")
+def test_studio_member_not_blocked_listing_clients(mock_db):
+    """End-to-end through the middleware: a Studio-only member hitting the
+    client picker (GET /api/clients) must clear the permission gate. We assert
+    the response is NOT 401/403 — the middleware returns those directly before
+    the handler runs, so any other status proves the gate let the request
+    through. (raise_server_exceptions=False isolates the middleware decision
+    from the handler's own behavior under the test mocks.)"""
+    mock_db.team_members.find_one = AsyncMock(return_value=STUDIO_MEMBER)
+    mock_cursor = MagicMock()
+    mock_cursor.to_list = AsyncMock(return_value=[])
+    mock_db.clients.find.return_value = mock_cursor
+    passthrough = TestClient(app, raise_server_exceptions=False)
+    resp = passthrough.get("/api/clients", headers=MEMBER_AUTH)
+    assert resp.status_code not in (401, 403)
+
+
+@patch("server.db")
+def test_non_studio_member_still_blocked_from_studio_routes(mock_db):
+    """A member with only clients:view must NOT gain video-creation access via
+    the new alternatives (no privilege creep)."""
+    mock_db.team_members.find_one = AsyncMock(return_value=ACTIVE_MEMBER)
+    resp = client.post("/api/videos/create", json={}, headers=MEMBER_AUTH)
+    assert resp.status_code == 403
