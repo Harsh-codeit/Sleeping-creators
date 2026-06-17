@@ -192,3 +192,14 @@ def download_clip(refresh_token: str, file_id: str, dest_path: str) -> str:
         except FileNotFoundError:
             pass
         raise
+
+
+def get_file_metadata(refresh_token: str, file_id: str) -> dict:
+    """Return {drive_file_id, name, mime_type} for a single Drive file."""
+    service = _build_service(refresh_token)
+    f = service.files().get(fileId=file_id, fields="id,name,mimeType").execute()
+    return {
+        "drive_file_id": f["id"],
+        "name": f.get("name", ""),
+        "mime_type": f.get("mimeType", ""),
+    }

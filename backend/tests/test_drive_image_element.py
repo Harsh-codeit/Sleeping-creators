@@ -106,3 +106,14 @@ def test_inject_elements_skips_non_image_type():
     elements = [{"type": "text", "x": 0, "y": 0, "width": 0.5, "height": 0.5}]
     result = _inject_elements(html, elements, "data:image/jpeg;base64,abc")
     assert "<img" not in result
+
+
+def test_get_file_metadata_returns_name_and_mime():
+    mock_service = MagicMock()
+    mock_service.files().get().execute.return_value = {
+        "id": "img1", "name": "hero.png", "mimeType": "image/png",
+    }
+    with patch("google_drive_service._build_service", return_value=mock_service):
+        from google_drive_service import get_file_metadata
+        meta = get_file_metadata("tok", "img1")
+    assert meta == {"drive_file_id": "img1", "name": "hero.png", "mime_type": "image/png"}
