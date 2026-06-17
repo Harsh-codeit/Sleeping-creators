@@ -116,6 +116,67 @@ def test_carousel_regen_with_forced_hook_type(monkeypatch):
     assert "hook_variants" not in out
 
 
+def test_carousel_regen_readapts_same_hook_when_locked(monkeypatch):
+    dup = "you ate perfectly for six days then ruined it sunday"
+    monkeypatch.setattr(ai_service.content_dna, "ensure_dna",
+                        AsyncMock(return_value=[_dna("you ate perfectly for six days then ruined it on a sunday")]))
+    data = _attempt(dup, variants=[
+        "you ate perfectly for six days then ruined it on sunday",
+        "you ate perfectly six days then ruined sunday",
+    ])
+    spec = variety_planner.VarietySpec(
+        format_kind="carousel", hook_type="credibility_borrow",
+        banned_hook_types=["myth_bust"])
+    captured = {}
+
+    async def gen_fn(retry_note="", variety_block_override=None):
+        captured["retry_note"] = retry_note
+        captured["override"] = variety_block_override
+        return _attempt("three hiring mistakes that cost me a company",
+                        hook_type="emotional_state", title="Retry Title")
+
+    top_hook = {"hook_text": "the exact viral hook line", "hook_type": "shocking_number",
+                "trigger": "shock_value"}
+    out = _run(ai_service._run_carousel_gate(
+        _incident_db(), {"id": "c1"}, data, gen_fn, spec, top_hook=top_hook))
+
+    assert out["slides"][0]["content"] == "three hiring mistakes that cost me a company"
+    # Hook-locked retry: keep the same hook, no forced hook-type rotation, no override.
+    assert "same proven hook" in captured["retry_note"].lower()
+    assert "the exact viral hook line" in captured["retry_note"]
+    assert 'hook_type "' not in captured["retry_note"]
+    assert captured["override"] is None
+
+
+def test_carousel_regen_empty_locked_hook_falls_back_to_forced_rotation(monkeypatch):
+    dup = "you ate perfectly for six days then ruined it sunday"
+    monkeypatch.setattr(ai_service.content_dna, "ensure_dna",
+                        AsyncMock(return_value=[_dna("you ate perfectly for six days then ruined it on a sunday")]))
+    data = _attempt(dup, variants=[
+        "you ate perfectly for six days then ruined it on sunday",
+        "you ate perfectly six days then ruined sunday",
+    ])
+    spec = variety_planner.VarietySpec(
+        format_kind="carousel", hook_type="credibility_borrow",
+        banned_hook_types=["myth_bust"])
+    captured = {}
+
+    async def gen_fn(retry_note="", variety_block_override=None):
+        captured["retry_note"] = retry_note
+        captured["override"] = variety_block_override
+        return _attempt("three hiring mistakes that cost me a company",
+                        hook_type="emotional_state", title="Retry Title")
+
+    # Whitespace-only hook_text must be treated as "not locked".
+    out = _run(ai_service._run_carousel_gate(
+        _incident_db(), {"id": "c1"}, data, gen_fn, spec, top_hook={"hook_text": "   "}))
+
+    assert out["slides"][0]["content"] == "three hiring mistakes that cost me a company"
+    # Forced-rotation path: a forced hook_type is present, variety override passed.
+    assert 'hook_type "' in captured["retry_note"]
+    assert captured["override"] is not None
+
+
 def test_carousel_exhaustion_ships_least_similar_and_logs_incident(monkeypatch):
     monkeypatch.setattr(ai_service.content_dna, "ensure_dna",
                         AsyncMock(return_value=[_dna("alpha beta gamma delta epsilon")]))

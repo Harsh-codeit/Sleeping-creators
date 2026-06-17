@@ -1404,7 +1404,8 @@ Respond ONLY with valid JSON:
         return title, [t.lstrip("#") for t in brand_hashtags]
 
 
-async def _run_carousel_gate(db, client, result_data, gen_fn, variety_spec) -> dict:
+async def _run_carousel_gate(db, client, result_data, gen_fn, variety_spec,
+                             top_hook=None) -> dict:
     """Semantic-gate flow for a generated carousel: gate the primary hook, swap in
     the best passing hook_variant on failure, regenerate ONCE with a forced
     hook-type rotation, and on exhaustion ship the least-similar candidate while
@@ -1457,29 +1458,43 @@ async def _run_carousel_gate(db, client, result_data, gen_fn, variety_spec) -> d
         if shipped is not None:
             return shipped
 
-        # One regeneration — force the next LRU hook type via the planner.
+        # One regeneration. When a library hook anchors generation (adapt-exact
+        # mode), keep the SAME hook and re-adapt it with a different angle.
+        # Otherwise force the next LRU hook type (legacy / no-library behavior).
         first_fail = gated[0][1]
         failed_primary = gated[0][0]
         forced = None
         retry_block_override = None
-        if variety_planner is not None and variety_spec is not None:
-            try:
-                new_spec = variety_planner.respec_for_retry(
-                    variety_spec,
-                    failed_hook_type=(result_data.get("strategy") or {}).get("hook_type"),
-                    failed_opening=failed_primary,
-                )
-                forced = new_spec.hook_type
-                retry_block_override = new_spec.prompt_block()
-            except Exception as _rse:
-                logger.warning(f"respec_for_retry failed ({_rse}); retry without forced hook type")
-        retry_note = (
-            f"Your previous attempt was too similar to a recent post "
-            f"(sim {first_fail.max_sim:.2f}) — nearest recent opening: "
-            f"\"{first_fail.nearest_text or ''}\". "
-            + (f"Use hook_type \"{forced}\" and a completely different opening structure."
-               if forced else "Use a completely different opening structure and hook angle.")
-        )
+        locked_text = (top_hook or {}).get("hook_text")
+        if locked_text and str(locked_text).strip():
+            _ht = str(locked_text).strip()
+            retry_note = (
+                f'Your previous attempt was too similar to a recent post '
+                f'(sim {first_fail.max_sim:.2f}) — nearest recent opening: '
+                f'"{first_fail.nearest_text or ""}". '
+                f'Keep the SAME proven hook ("{_ht[:120]}") as slide 1, but re-adapt it '
+                f'with a different angle and different specifics so it no longer resembles '
+                f'that opening. Do NOT switch to a different hook or hook type.'
+            )
+        else:
+            if variety_planner is not None and variety_spec is not None:
+                try:
+                    new_spec = variety_planner.respec_for_retry(
+                        variety_spec,
+                        failed_hook_type=(result_data.get("strategy") or {}).get("hook_type"),
+                        failed_opening=failed_primary,
+                    )
+                    forced = new_spec.hook_type
+                    retry_block_override = new_spec.prompt_block()
+                except Exception as _rse:
+                    logger.warning(f"respec_for_retry failed ({_rse}); retry without forced hook type")
+            retry_note = (
+                f"Your previous attempt was too similar to a recent post "
+                f"(sim {first_fail.max_sim:.2f}) — nearest recent opening: "
+                f"\"{first_fail.nearest_text or ''}\". "
+                + (f"Use hook_type \"{forced}\" and a completely different opening structure."
+                   if forced else "Use a completely different opening structure and hook angle.")
+            )
         try:
             retry_data = await gen_fn(retry_note=retry_note,
                                       variety_block_override=retry_block_override)
