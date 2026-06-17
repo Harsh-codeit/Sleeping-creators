@@ -18,7 +18,11 @@ function MediaCard({ clip, onDelete }) {
 
   async function handleDelete(e) {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${clip.name}"?`)) return;
+    const isDriveImage = clip.source === "drive" && (clip.mime_type || "").startsWith("image/");
+    const msg = isDriveImage
+      ? `Remove "${clip.name}" from media? This also stops the carousel from using it.`
+      : `Delete "${clip.name}"?`;
+    if (!window.confirm(msg)) return;
     setDeleting(true);
     try {
       await axios.delete(`${API}/clients/${clip.client_id}/clips/${clip.drive_file_id}`);
@@ -227,6 +231,31 @@ export default function ClientMediaTab({ clientId }) {
   const [typeFilter, setTypeFilter] = useState("all");   // all | video | image
   const [srcFilter, setSrcFilter] = useState("all");    // all | drive | upload
   const [showUpload, setShowUpload] = useState(false);
+  const [excluded, setExcluded] = useState([]);
+  const [excludedLoading, setExcludedLoading] = useState(false);
+
+  const fetchExcluded = useCallback(async () => {
+    if (!clientId) return;
+    setExcludedLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/clients/${clientId}/excluded-images`);
+      setExcluded(data || []);
+    } catch {
+      toast.error("Failed to load excluded images");
+    } finally {
+      setExcludedLoading(false);
+    }
+  }, [clientId]);
+
+  async function handleRestore(driveFileId) {
+    try {
+      await axios.post(`${API}/clients/${clientId}/excluded-images/${driveFileId}/restore`);
+      setExcluded(prev => prev.filter(i => i.drive_file_id !== driveFileId));
+      toast.success("Restored — Sync Drive to bring it back");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Restore failed");
+    }
+  }
 
   const fetchClips = useCallback(async () => {
     if (!clientId) return;
@@ -328,10 +357,10 @@ export default function ClientMediaTab({ clientId }) {
           ))}
         </div>
         <div className="flex items-center gap-1">
-          {[["all", "All Sources"], ["drive", "Drive"], ["upload", "Upload"]].map(([val, label]) => (
+          {[["all", "All Sources"], ["drive", "Drive"], ["upload", "Upload"], ["excluded", "Excluded"]].map(([val, label]) => (
             <button
               key={val}
-              onClick={() => setSrcFilter(val)}
+              onClick={() => { setSrcFilter(val); if (val === "excluded") fetchExcluded(); }}
               className={`px-2.5 py-1 text-[10px] font-mono border transition-colors ${
                 srcFilter === val
                   ? "border-white text-white bg-zinc-800"
@@ -354,7 +383,33 @@ export default function ClientMediaTab({ clientId }) {
       )}
 
       {/* Grid */}
-      {loading ? (
+      {srcFilter === "excluded" ? (
+        excludedLoading ? (
+          <p className="text-[11px] font-mono text-zinc-600 py-8 text-center">Loading…</p>
+        ) : excluded.length === 0 ? (
+          <div className="border border-dashed border-zinc-800 py-14 flex flex-col items-center gap-3">
+            <p className="text-sm font-mono text-zinc-600">No excluded images.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {excluded.map(img => (
+              <div key={img.drive_file_id} className="border border-zinc-800 overflow-hidden">
+                <div className="bg-zinc-900 aspect-video flex items-center justify-center overflow-hidden">
+                  <img src={img.thumbnail_url} alt={img.name || img.drive_file_id}
+                    className="w-full h-full object-cover opacity-50"
+                    onError={e => { e.target.style.display = "none"; }} />
+                </div>
+                <div className="px-2 py-1.5 bg-zinc-950">
+                  <button onClick={() => handleRestore(img.drive_file_id)}
+                    className="w-full py-1 text-[10px] font-mono border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors">
+                    Restore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : loading ? (
         <p className="text-[11px] font-mono text-zinc-600 py-8 text-center">Loading…</p>
       ) : filtered.length === 0 ? (
         <div className="border border-dashed border-zinc-800 py-14 flex flex-col items-center gap-3">
