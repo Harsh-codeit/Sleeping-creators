@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import ImageElementOverlay from "../components/ImageElementOverlay";
 import { VideoCreator } from "../components/VideoCreator";
+import DriveImageGrid from "../components/DriveImageGrid";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const PLATFORMS = ["instagram", "facebook", "linkedin", "twitter", "threads"];
@@ -439,6 +440,7 @@ export default function Carousel() {
         design_context: currentDesignCtx || null,
         client_id: currentConfig.clientId || null,
         drive_image_index: currentConfig.driveImageIndex ?? null,
+        drive_image_file_id: currentConfig.driveImageFileId ?? null,
       }, { signal: abortController.signal });
       const previews = resp.data.previews || [];
       setSlidePreviews(prev => {
@@ -472,7 +474,7 @@ export default function Carousel() {
       setSlidePreviews({});
     }
     return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
-  }, [slides, template, config.authorName, config.authorHandle, config.authorTitle, config.profilePhotoUrl, config.clientId, config.driveImageIndex, designContext, requestPreviews]);
+  }, [slides, template, config.authorName, config.authorHandle, config.authorTitle, config.profilePhotoUrl, config.clientId, config.driveImageIndex, config.driveImageFileId, designContext, requestPreviews]);
 
   useEffect(() => {
     axios.get(`${API}/clients`).then(r => setClients(r.data)).catch(() => {});
@@ -740,6 +742,7 @@ export default function Carousel() {
         })),
         design_context: designContext || null,
         drive_image_index: config.driveImageIndex ?? null,
+        drive_image_file_id: config.driveImageFileId ?? null,
         slide_previews: Object.entries(slidePreviews).map(([idx, p]) => ({
           index: parseInt(idx), url: p.url, content_hash: p.content_hash
         }))
@@ -894,6 +897,7 @@ export default function Carousel() {
       ...prev,
       clientId: carousel.client_id || "",
       driveImageIndex: carousel.drive_image_index ?? null,
+      driveImageFileId: carousel.drive_image_file_id ?? null,
       authorName: c.carousel_author_name || carousel.author_name || c.name || "",
       authorHandle: c.carousel_author_handle || carousel.author_handle || "",
       authorTitle: c.carousel_author_title || carousel.author_title || "",
@@ -1468,6 +1472,27 @@ export default function Carousel() {
                   onChange={e => setConfig(p => ({ ...p, authorTitle: e.target.value }))}
                   placeholder="Role / Company" className="field" />
               </div>
+
+              {/* Drive Image */}
+              {selectedClient?.drive_images_folder_id && (
+                <>
+                  <div className="label-xs mt-5 flex items-center justify-between">
+                    <span>Drive Image</span>
+                    {config.driveImageFileId && (
+                      <button type="button"
+                        onClick={() => setConfig(p => ({ ...p, driveImageFileId: null }))}
+                        className="text-[10px] font-mono text-zinc-500 hover:text-white transition-colors">
+                        Use rotation
+                      </button>
+                    )}
+                  </div>
+                  <DriveImageGrid
+                    clientId={selectedClientId}
+                    selectedFileId={config.driveImageFileId || null}
+                    onSelect={(img) => setConfig(p => ({ ...p, driveImageFileId: img.drive_file_id }))}
+                  />
+                </>
+              )}
 
               {/* Design Profile badge */}
               {designContext && (
