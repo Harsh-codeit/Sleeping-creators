@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Wand2, Plus, Trash2, Save, Check, LayoutGrid,
   ImageDown, Download, ExternalLink, ChevronDown,
-  Sparkles, X, PenLine, Copy, Send
+  Sparkles, X, PenLine, Copy, Send, Image as ImageIcon
 } from "lucide-react";
 import ImageElementOverlay from "../components/ImageElementOverlay";
 import { VideoCreator } from "../components/VideoCreator";
@@ -358,6 +358,53 @@ function OptionPill({ label, value, active, options, onChange, searchable }) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Drive Image picker pill (toolbar) ───────────────────────────────────────
+function DriveImagePill({ clientId, selectedFileId, onSelect, onClear }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const active = !!selectedFileId;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-mono border transition-colors duration-150
+          ${active ? "border-zinc-500 text-white bg-zinc-800" : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"}`}
+      >
+        <ImageIcon size={11} />
+        <span>{active ? "Image set" : "Drive Image"}</span>
+        <ChevronDown size={9} className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 bg-zinc-900 border border-zinc-700 shadow-lg z-50 w-72 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Carousel image</span>
+            {active && (
+              <button type="button"
+                onClick={onClear}
+                className="text-[10px] font-mono text-zinc-500 hover:text-white transition-colors">
+                Use rotation
+              </button>
+            )}
+          </div>
+          <DriveImageGrid
+            clientId={clientId}
+            selectedFileId={selectedFileId}
+            onSelect={(img) => onSelect(img.drive_file_id)}
+          />
         </div>
       )}
     </div>
@@ -1214,6 +1261,14 @@ export default function Carousel() {
               <OptionPill label="Post Type" value={postType === "single_image" ? "Single Image" : "Carousel"} active={true}
                 options={[{ value: "carousel", label: "Carousel" }, { value: "single_image", label: "Single Image" }]}
                 onChange={setPostType} />
+              {selectedClient?.drive_images_folder_id && (
+                <DriveImagePill
+                  clientId={selectedClientId}
+                  selectedFileId={config.driveImageFileId || null}
+                  onSelect={(fid) => setConfig(f => ({ ...f, driveImageFileId: fid }))}
+                  onClear={() => setConfig(f => ({ ...f, driveImageFileId: null }))}
+                />
+              )}
               {postType !== "single_image" && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-zinc-800 text-[11px] font-mono text-zinc-500">
                   <span>Slides</span>
