@@ -179,6 +179,7 @@ PERMISSION_MAP: dict[tuple[str, str], tuple] = {
     # list/upload clips for the chosen client without holding full Clients perms.
     # These MUST precede the /clients/{id}/ catch-alls below to win first-match.
     ("GET",    r"^/api/clients/[^/]+/drive-clips"):       (("clients", "view"), ("studio", "view")),
+    ("GET",    r"^/api/clients/[^/]+/drive-images"):      (("clients", "view"), ("studio", "view")),
     ("GET",    r"^/api/clients/[^/]+/clips/presign"):     (("clients", "view"), ("studio", "create")),
     ("POST",   r"^/api/clients/[^/]+/clips/register"):    (("clients", "edit"), ("studio", "create")),
     ("GET",    r"^/api/clients/[^/]+$"):                  ("clients", "view"),
@@ -6333,6 +6334,14 @@ def _pick_drive_image(images: list[dict], index: int) -> dict:
     return images[index % len(images)]
 
 
+def _with_drive_thumbnails(images: list[dict]) -> list[dict]:
+    """Attach a Drive thumbnail URL to each image dict (same pattern as clips)."""
+    return [
+        {**img, "thumbnail_url": f"https://drive.google.com/thumbnail?id={img['drive_file_id']}&sz=w320"}
+        for img in images
+    ]
+
+
 async def _resolve_drive_image_for_export(client_id: str, folder_id_override: Optional[str] = None) -> Optional[str]:
     """
     Download the next Drive image for this client and return the local temp file path.
@@ -8582,6 +8591,28 @@ async def list_drive_clips(client_id: str):
         {"client_id": client_id}, {"_id": 0}
     ).sort("sequence_number", 1).to_list(500)
     return clips
+
+
+@api_router.get("/clients/{client_id}/drive-images")
+async def list_drive_images(client_id: str):
+    """List the client's Drive images folder with thumbnails (live, no DB sync)."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    folder_id = client.get("drive_images_folder_id")
+    if not folder_id:
+        return []
+    refresh_token = await _get_google_refresh_token()
+    if not refresh_token:
+        raise HTTPException(400, "Google account not connected — visit /api/auth/google/start first.")
+    from google_drive_service import list_images, extract_folder_id, GoogleTokenExpiredError
+    resolved = extract_folder_id(folder_id) or folder_id
+    loop = asyncio.get_running_loop()
+    try:
+        images = await loop.run_in_executor(None, list_images, refresh_token, resolved)
+    except GoogleTokenExpiredError:
+        raise HTTPException(400, "Google token expired/revoked — re-authorize at /api/auth/google/start")
+    return _with_drive_thumbnails(images)
 
 
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB

@@ -117,3 +117,12 @@ def test_get_file_metadata_returns_name_and_mime():
         from google_drive_service import get_file_metadata
         meta = get_file_metadata("tok", "img1")
     assert meta == {"drive_file_id": "img1", "name": "hero.png", "mime_type": "image/png"}
+
+
+def test_with_drive_thumbnails_adds_thumbnail_url():
+    from server import _with_drive_thumbnails
+    out = _with_drive_thumbnails([
+        {"drive_file_id": "abc", "name": "a.jpg", "mime_type": "image/jpeg"},
+    ])
+    assert out[0]["drive_file_id"] == "abc"
+    assert out[0]["thumbnail_url"] == "https://drive.google.com/thumbnail?id=abc&sz=w320"
