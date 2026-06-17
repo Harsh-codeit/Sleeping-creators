@@ -276,7 +276,12 @@ export default function ClientMediaTab({ clientId }) {
     setSyncing(true);
     try {
       const { data } = await axios.post(`${API}/clients/${clientId}/drive-clips/sync`);
-      toast.success(`Synced ${data.synced ?? 0} clips from Drive`);
+      if (data.videos !== undefined && data.images !== undefined) {
+        toast.success(`Synced ${data.videos} video${data.videos === 1 ? "" : "s"}, ${data.images} image${data.images === 1 ? "" : "s"} from Drive`);
+      } else {
+        // Old backend (no breakdown) — restart uvicorn to load the image-sync code
+        toast.success(`Synced ${data.synced ?? 0} files (restart backend to sync images)`);
+      }
       await fetchClips();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Sync failed");

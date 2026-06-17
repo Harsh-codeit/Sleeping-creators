@@ -8997,6 +8997,7 @@ async def sync_drive_clips(client_id: str, body: DriveSyncRequest = DriveSyncReq
     # ── Images (drive_images_folder_id) ───────────────────────────────────────
     image_count = 0
     raw_img_folder = client.get("drive_images_folder_id")
+    logging.info(f"[drive-images] client={client_id} drive_images_folder_id={raw_img_folder!r}")
     if raw_img_folder:
         img_folder_id = extract_folder_id(raw_img_folder) or raw_img_folder
         try:
@@ -9006,6 +9007,7 @@ async def sync_drive_clips(client_id: str, body: DriveSyncRequest = DriveSyncReq
             raise HTTPException(status_code=502, detail=f"Drive API error: {exc}")
         excluded = set(client.get("excluded_image_ids", []))
         rows = _drive_images_to_media_rows(imgs, client_id, now, excluded)
+        logging.info(f"[drive-images] folder={img_folder_id} list_images->{len(imgs)} kept={len(rows)} excluded={len(excluded)}")
         image_ids = [r["drive_file_id"] for r in rows]
         # delete only image drive-rows no longer present (or now excluded)
         await db.drive_clips.delete_many({
