@@ -6445,6 +6445,35 @@ async def _download_drive_image_at_index(client_id: str, index: int, folder_id_o
         return None
 
 
+async def _download_drive_image_by_file_id(file_id: str) -> Optional[str]:
+    """Download a specific Drive image by file ID. Returns local temp path, or None on failure."""
+    if not file_id:
+        return None
+    refresh_token = await _get_google_refresh_token()
+    if not refresh_token:
+        return None
+    from google_drive_service import download_clip, get_file_metadata
+    loop = asyncio.get_running_loop()
+    suffix = ".jpg"
+    try:
+        meta = await loop.run_in_executor(None, get_file_metadata, refresh_token, file_id)
+        suffix = Path(meta.get("name", "")).suffix or ".jpg"
+    except Exception as e:
+        logger.warning(f"Drive image metadata lookup failed ({file_id}): {e}")
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = tmp.name
+        await loop.run_in_executor(None, download_clip, refresh_token, file_id, tmp_path)
+        logger.info(f"Drive image downloaded by file_id: {file_id}")
+        return tmp_path
+    except Exception as e:
+        logger.warning(f"Drive image download by file_id failed ({file_id}): {e}")
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        return None
+
+
 async def _peek_drive_image_for_preview(client_id: str, assigned_index: Optional[int] = None) -> Optional[str]:
     """Download Drive image for preview. Uses assigned_index if the carousel has been saved,
     else falls back to current client index (no counter increment either way)."""

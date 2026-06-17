@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -139,3 +140,35 @@ def test_carousel_preview_request_accepts_drive_image_file_id():
     from server import CarouselPreviewRequest
     data = CarouselPreviewRequest(client_id="c1", drive_image_file_id="FILE123")
     assert data.drive_image_file_id == "FILE123"
+
+
+@pytest.mark.asyncio
+async def test_download_by_file_id_returns_path():
+    import server, google_drive_service, os
+    with patch.object(server, "_get_google_refresh_token", AsyncMock(return_value="tok")), \
+         patch.object(google_drive_service, "get_file_metadata",
+                      return_value={"drive_file_id": "F", "name": "x.png", "mime_type": "image/png"}), \
+         patch.object(google_drive_service, "download_clip", return_value="ignored") as dl:
+        path = await server._download_drive_image_by_file_id("F")
+    assert path is not None and path.endswith(".png")
+    assert dl.call_args.args[1] == "F"   # download called with the file id
+    if path and os.path.exists(path):
+        os.unlink(path)
+
+
+@pytest.mark.asyncio
+async def test_download_by_file_id_returns_none_on_failure():
+    import server, google_drive_service
+    with patch.object(server, "_get_google_refresh_token", AsyncMock(return_value="tok")), \
+         patch.object(google_drive_service, "get_file_metadata",
+                      return_value={"drive_file_id": "F", "name": "x.png", "mime_type": "image/png"}), \
+         patch.object(google_drive_service, "download_clip", side_effect=RuntimeError("boom")):
+        path = await server._download_drive_image_by_file_id("F")
+    assert path is None
+
+
+@pytest.mark.asyncio
+async def test_download_by_file_id_returns_none_without_token():
+    import server
+    with patch.object(server, "_get_google_refresh_token", AsyncMock(return_value=None)):
+        assert await server._download_drive_image_by_file_id("F") is None
