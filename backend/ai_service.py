@@ -557,8 +557,9 @@ MODEL_TIERS: dict[str, dict[str, str]] = {}
 
 # Second-tier carousel fallback. When the primary (Anthropic) generation can't
 # produce — no ANTHROPIC_API_KEY, or a soft failure (bad JSON / APIError) — we
-# generate via OpenRouter GPT-5 instead of dropping straight to the canned static
-# template. The static template stays as the final floor if OpenRouter also fails.
+# generate via OpenRouter GPT-5 instead. There is NO canned static template: if
+# OpenRouter also fails, carousel generation raises and the post fails with an
+# error rather than shipping placeholder copy.
 # Slug is env-overridable so operators can swap models without a deploy.
 OPENROUTER_CAROUSEL_MODEL = os.environ.get("OPENROUTER_CAROUSEL_MODEL", "openai/gpt-5")
 
@@ -1533,14 +1534,19 @@ async def generate_carousel(
 ) -> dict:
     api_key = os.environ.get('ANTHROPIC_API_KEY', '')
     if not api_key:
-        # No primary provider — try OpenRouter GPT-5 before the static template.
+        # No primary provider — try OpenRouter GPT-5. We never ship canned static
+        # slides: if no AI provider can generate, fail the post with a clear error
+        # so it surfaces to the user instead of silently publishing placeholder copy.
         _or = await _carousel_via_openrouter(
             client, client.get("onboarding_data", {}), topic, slide_count,
             slide_format, platform, cta_keyword, cta_offer,
         )
         if _or is not None:
             return _or
-        return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
+        raise RuntimeError(
+            "Carousel generation failed: no AI provider available "
+            "(ANTHROPIC_API_KEY unset and OpenRouter fallback unavailable)."
+        )
 
     # Resolve the spice dial once: explicit per-call param wins, else the client's stored level,
     # else None (which _build_spice_block treats as 'balanced').
@@ -1584,8 +1590,8 @@ async def generate_carousel(
     # ── Single-pass generation (world-class strategist prompt) ────────────────
     # NOTE: RateLimitError / APIConnectionError / APITimeoutError intentionally propagate —
     # they are transient infra failures the caller (or a retry layer) should see, not silently
-    # degrade to fallback copy. Only soft errors (parse failures, validation issues, generic
-    # APIError) fall back to _fallback_carousel.
+    # degrade to fallback copy. Soft errors (parse failures, validation issues, generic APIError)
+    # try the OpenRouter fallback; if that also fails we raise — we never ship canned static copy.
     import json as _json
 
     # Variety planner (anti-repetition) — prescriptive contract computed from the
@@ -1626,8 +1632,13 @@ async def generate_carousel(
         )
         if _or is not None:
             return _or
-        logger.warning("OpenRouter fallback unavailable, using static template")
-        return _fallback_carousel(client, slide_count, topic, cta_keyword, cta_offer)
+        # No canned static fallback — fail the post with a clear error rather than
+        # shipping placeholder slides.
+        logger.warning("OpenRouter fallback unavailable, failing carousel generation")
+        raise RuntimeError(
+            f"Carousel generation failed: primary provider error ({e}) and "
+            "OpenRouter fallback unavailable."
+        ) from e
 
     # Semantic gate — hard wall vs the 30-day cross-format DNA window. Replaces
     # the old Jaccard-0.6 retry-once-ship-anyway gate. Fail-open by construction.
@@ -1715,7 +1726,7 @@ def _openrouter_chat_completion(system: str, user: str, *, model: str, max_token
 
     Reuses hook_clients' auth/header/billing-error plumbing (it already reports
     OpenRouter billing errors and requires OPENROUTER_API_KEY). Raises on any
-    failure so the caller can fall through to the static template.
+    failure so the caller can decide to fail the post.
     """
     if hook_clients is None:
         raise RuntimeError("OpenRouter client unavailable (hook_clients import failed)")
@@ -1750,7 +1761,7 @@ async def _generate_carousel_openrouter(
     Self-contained: never touches the Anthropic client, so it works when the
     primary provider is down or unkeyed. Returns a data dict shaped like
     ``_generate_carousel_single_pass`` (plus caption/hashtags), or None if the
-    call/parse fails (caller then drops to the static template).
+    call/parse fails (caller then fails the post with an error).
     """
     name = client.get("name", "Brand")
     industry = client.get("industry", "business")
@@ -1855,61 +1866,3 @@ async def _carousel_via_openrouter(
     result["hashtags"] = hashtags
     _attach_design_context(result, client, onboarding)
     return result
-
-
-def _fallback_carousel(
-    client: dict,
-    slide_count: int = 5,
-    topic: str | None = None,
-    cta_keyword: str | None = None,
-    cta_offer: str | None = None,
-) -> dict:
-    name = client.get("name", "Brand")
-    industry = client.get("industry", "business")
-    handle = _resolve_instagram_handle(client)
-
-    lesson_pool = [
-        "Lesson {n}: Focus beats effort.\n\nDoing the right thing beats doing everything hard.",
-        "Lesson {n}: Your audience's pain is your opportunity.\n\nSolve what keeps them up at night.",
-        "Lesson {n}: Consistency compounds.\n\nShow up every day and the results follow later.",
-        "Lesson {n}: Simple scales.\n\nClarity always beats clever.",
-        "Lesson {n}: Listen more than you talk.\n\nYour next big idea is hiding in their words.",
-    ]
-
-    # Final layout = 1 hook slide + N lesson slides + 1 CTA slide. The CTA slide
-    # is injected by _apply_carousel_cta (it overwrites the LAST slide), so the
-    # number of lessons the reader actually sees is slide_count - 2. The hook and
-    # title MUST advertise that real number — never a hardcoded one — or the post
-    # promises "5 lessons" while only showing 1.
-    total = max(3, slide_count)
-    lesson_count = max(1, min(total - 2, len(lesson_pool)))
-    noun = "lesson" if lesson_count == 1 else "lessons"
-
-    slides = [{
-        "slide_number": 1,
-        "content": (
-            f"{lesson_count} {noun} that transformed {name}.\n\n"
-            "Most brands get this wrong.\n\n"
-            "Swipe to see what changed everything."
-        ),
-    }]
-    for i in range(lesson_count):
-        slides.append({"slide_number": i + 2, "content": lesson_pool[i].format(n=i + 1)})
-
-    follow_line = (
-        f"Follow {handle} for more {industry} insights." if handle
-        else f"Follow for more {industry} insights."
-    )
-    slides.append({
-        "slide_number": len(slides) + 1,
-        "content": f"{follow_line}\n\nSave this to come back when you need it.",
-    })
-
-    data = {
-        "title": f"{lesson_count} {noun.capitalize()} from {name}",
-        "author_name": name,
-        "author_handle": handle or f"@{name.lower().replace(' ', '')}",
-        "author_title": client.get("carousel_author_title") or industry,
-        "slides": slides,
-    }
-    return _apply_carousel_cta(data, client, topic, cta_keyword, cta_offer)

@@ -652,7 +652,7 @@ def test_openrouter_fallback_clamps_to_requested_slide_count(monkeypatch):
 
 
 def test_openrouter_fallback_returns_none_on_failure(monkeypatch):
-    """A raised OpenRouter error yields None so the caller drops to the static template."""
+    """A raised OpenRouter error yields None so the caller fails the post (no static fallback)."""
     def boom(*a, **k):
         raise RuntimeError("OpenRouter down")
     monkeypatch.setattr(ai_service, "_openrouter_chat_completion", boom)

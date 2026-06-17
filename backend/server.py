@@ -6222,20 +6222,26 @@ async def generate_carousel_endpoint(data: CarouselGenerateRequest):
         raise HTTPException(404, "Client not found")
     settings = await get_settings()
     from ai_service import generate_carousel
-    result = await generate_carousel(
-        client,
-        data.platform,
-        data.template,
-        data.topic,
-        data.slide_count,
-        settings,
-        cta_keyword=data.cta_keyword,
-        cta_offer=data.cta_offer,
-        global_instructions=data.global_instructions,
-        slide_format=data.slide_format or None,
-        db=db,
-        spice_level=data.spice_level,
-    )
+    try:
+        result = await generate_carousel(
+            client,
+            data.platform,
+            data.template,
+            data.topic,
+            data.slide_count,
+            settings,
+            cta_keyword=data.cta_keyword,
+            cta_offer=data.cta_offer,
+            global_instructions=data.global_instructions,
+            slide_format=data.slide_format or None,
+            db=db,
+            spice_level=data.spice_level,
+        )
+    except Exception as e:
+        # No canned static fallback: surface the failure so the user sees an error
+        # instead of placeholder slides.
+        logger.error(f"Carousel generation failed for client {data.client_id}: {e}")
+        raise HTTPException(502, f"Carousel generation failed: {str(e)[:200]}")
     # Custom templates don't use design_context — clear it so preview uses the right template
     _built_in = ("dark_card", "full_white", "floating_card", "dark_card_rich", "full_white_rich", "floating_card_rich")
     if data.template not in _built_in:
