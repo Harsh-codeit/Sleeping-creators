@@ -6077,6 +6077,7 @@ class CarouselCreate(BaseModel):
     design_context: Optional[dict] = None
     slide_previews: Optional[List[dict]] = None  # [{index, url, content_hash}]
     drive_image_index: Optional[int] = None      # pre-assigned at generate time
+    drive_image_file_id: Optional[str] = None    # explicit Drive image pick (overrides index)
     post_type: Optional[str] = None              # "carousel" | "single_image"; auto-derived if None
 
 # ── Music library ──────────────────────────────────────────────
@@ -6110,6 +6111,7 @@ class CarouselPreviewRequest(BaseModel):
     design_context: Optional[dict] = None   # serialized DesignContext from generate endpoint
     client_id: Optional[str] = None         # used to load Drive images in preview (no counter increment)
     drive_image_index: Optional[int] = None # assigned index from saved carousel; None = use current client index
+    drive_image_file_id: Optional[str] = None  # explicit Drive image pick (overrides index)
 
 def _fresh_zones(tpl: dict) -> dict:
     """Regenerate jinja2_html from stored elements at render time so that any
@@ -6298,6 +6300,8 @@ async def create_carousel(data: CarouselCreate):
     }
     if drive_image_index is not None:
         carousel["drive_image_index"] = drive_image_index
+    if data.drive_image_file_id:
+        carousel["drive_image_file_id"] = data.drive_image_file_id
 
     await db.carousels.insert_one({**carousel})
     await add_log("success", f"Carousel '{data.title}' created for {client['name']} ({len(data.slides)} slides)", data.client_id, client["name"])

@@ -126,3 +126,16 @@ def test_with_drive_thumbnails_adds_thumbnail_url():
     ])
     assert out[0]["drive_file_id"] == "abc"
     assert out[0]["thumbnail_url"] == "https://drive.google.com/thumbnail?id=abc&sz=w320"
+
+
+def test_carousel_create_accepts_drive_image_file_id():
+    from server import CarouselCreate
+    data = CarouselCreate(client_id="c1", drive_image_file_id="FILE123")
+    dumped = data.model_dump()
+    assert dumped["drive_image_file_id"] == "FILE123"
+
+
+def test_carousel_preview_request_accepts_drive_image_file_id():
+    from server import CarouselPreviewRequest
+    data = CarouselPreviewRequest(client_id="c1", drive_image_file_id="FILE123")
+    assert data.drive_image_file_id == "FILE123"
