@@ -31,8 +31,6 @@ except Exception as _script_import_exc:  # pragma: no cover
         "script-retrieval library unavailable (import failed): %s", _script_import_exc
     )
 
-from text_similarity import is_too_similar
-
 # Anti-repetition system (content DNA + variety planner + semantic gate).
 # Guarded import — a failure here must never break generation; all call sites
 # below check for None and fall back to the legacy memory-block behavior.
@@ -598,88 +596,81 @@ def _use_hook_library(client: dict) -> bool:
     return True if val is None else bool(val)
 
 
-async def _build_hook_patterns_block(client: dict, onboarding: dict,
-                                     topic: str | None, db=None) -> str:
-    """Build the "PROVEN VIRAL HOOK PATTERNS" prompt block from retrieved hooks.
+async def _retrieve_top_hook(client: dict, onboarding: dict,
+                             topic: str | None) -> dict | None:
+    """Return the single best-matching viral hook for this client, or None.
 
-    Studies STRUCTURE + psychological trigger; the model must write a FRESH hook
-    for THIS client and NEVER copy the wording. Drops any retrieved hook that is
-    too lexically similar to this client's recent openings (anti-sameness).
-
-    FAIL OPEN: any error (library missing, no key, embed fail, empty lib) returns
-    "" — never blocks generation.
-    """
+    Deterministic (k=1): the top hook by the library's re-rank score that also
+    passes the library's relevance floor. FAIL OPEN: disabled / missing deps / no key /
+    embed failure / empty / below-floor library -> None (never raises)."""
     try:
         if not _use_hook_library(client):
-            return ""
+            return None
         if hook_clients is None or viral_library is None:
-            return ""
+            return None
         onboarding = onboarding or {}
-
         themes = (client.get("strategy") or {}).get("themes") or []
         _lang_raw = onboarding.get("language") or "English"
         language = (_lang_raw[0] if isinstance(_lang_raw, list) else _lang_raw or "English").strip()
         niche_slug = onboarding.get("niche_slug")
-
         query_text = " ".join(filter(None, [
             topic or ", ".join(themes),
             onboarding.get("problem_solved"),
             onboarding.get("brand_vibe") if isinstance(onboarding.get("brand_vibe"), str) else None,
         ])).strip()
         if not query_text:
-            return ""
-
-        # Sync clients run off the event loop. Query embeddings are LRU-cached
-        # (same topic/pain/vibe text repeats across generations).
-        # Retrieve a POOL (not the final k) so exemplar sampling can rotate which
-        # exemplars each generation sees instead of injecting the same 5 forever.
-        pool_k = content_dna.EXEMPLAR_POOL if content_dna is not None else 20
+            return None
         embedding = await asyncio.to_thread(hook_clients.embed_query_cached, query_text)
         hooks = await asyncio.to_thread(
             viral_library.retrieve, query_text, embedding,
-            niche_slug=niche_slug, language=language, k=pool_k,
+            niche_slug=niche_slug, language=language, k=1,
         )
         if not hooks:
+            return None
+        top = hooks[0]
+        return top if (top.get("hook_text") or "").strip() else None
+    except Exception as exc:
+        logger.warning(f"_retrieve_top_hook failed (fail-open -> None): {exc}")
+        return None
+
+
+async def _build_hook_patterns_block(client: dict, onboarding: dict,
+                                     topic: str | None, db=None) -> str:
+    """Build the single-hook "ADAPT THIS PROVEN HOOK" prompt block.
+
+    Uses the #1 retrieved hook (deterministic, top re-rank score) and tells the
+    model to keep its exact wording/structure while swapping in the client's real
+    specifics — never fabricating claims. Logs that this hook was used for the
+    client (exemplar usage). FAIL OPEN: returns "" whenever no accurate match
+    exists (disabled / empty / below relevance floor / any error) so generation
+    falls back to the model's own 7-hook system."""
+    try:
+        top = await _retrieve_top_hook(client, onboarding, topic)
+        if not top:
             return ""
-
-        # Anti-sameness: drop any hook too similar to this client's recent openings.
-        recent = await _recent_hook_texts(client.get("id"), db)
-        kept = []
-        for h in hooks:
-            text = (h.get("hook_text") or "").strip()
-            if not text:
-                continue
-            if recent and is_too_similar(text, recent):
-                continue
-            kept.append(h)
-        if not kept:
+        hook_text = (top.get("hook_text") or "").strip()
+        if not hook_text:
             return ""
+        hook_type = (top.get("hook_type") or "hook").strip()
+        trigger = (top.get("trigger") or "").strip()
 
-        # Exemplar entropy: weighted-random sample of EXEMPLAR_K from the pool,
-        # demoting exemplars already used for this client within the window.
-        sample_k = content_dna.EXEMPLAR_K if content_dna is not None else 5
-        if variety_planner is not None:
-            used = (await variety_planner.recent_exemplar_ids(db, client.get("id"))
-                    if (db is not None and client.get("id")) else set())
-            kept = variety_planner.sample_exemplars(kept, sample_k, recently_used_ids=used)
-            if db is not None and client.get("id"):
-                await variety_planner.log_exemplar_usage(
-                    db, client.get("id"), [h.get("id") for h in kept if h.get("id")])
-        else:
-            kept = kept[:sample_k]
+        # Record usage (fail-open) so analytics / future de-dup can see it.
+        if db is not None and client.get("id") and top.get("id") and variety_planner is not None:
+            try:
+                await variety_planner.log_exemplar_usage(db, client.get("id"), [top.get("id")])
+            except Exception as _le:
+                logger.warning(f"log_exemplar_usage failed (fail-open): {_le}")
 
-        lines = []
-        for i, h in enumerate(kept, 1):
-            hook_type = (h.get("hook_type") or "hook").strip()
-            text = (h.get("hook_text") or "").strip()
-            lines.append(f"{i}. [{hook_type}] {text}")
-
+        label = f"{hook_type} · {trigger}".strip(" ·")
         return (
-            "\n\nPROVEN VIRAL HOOK PATTERNS — these are real first-slides that went viral. "
-            "Study their STRUCTURE and the psychological trigger each uses, then write a FRESH "
-            "hook for THIS client. NEVER copy the wording, phrasing, or specific examples — "
-            "extract the pattern, not the sentence:\n"
-            + "\n".join(lines)
+            "\n\nADAPT THIS PROVEN HOOK as slide 1. It is a real first-slide that went "
+            "viral in this niche. Keep its exact wording, rhythm, and psychological "
+            "structure — change ONLY the specifics so it is TRUE for this client: their "
+            "topic, their real numbers, their niche. Do NOT fabricate claims, numbers, or "
+            "outcomes the client has not stated; if you have no true specific to "
+            "substitute, keep the structure and make the claim generically true. Keep "
+            "slide 1 within its word budget.\n"
+            f'HOOK: "{hook_text}"  ({label})'
         )
     except Exception as exc:
         logger.warning(f"_build_hook_patterns_block failed (fail-open -> ''): {exc}")

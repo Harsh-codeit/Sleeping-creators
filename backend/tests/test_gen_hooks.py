@@ -141,18 +141,16 @@ def test_block_empty_when_retrieve_raises(monkeypatch):
 
 # ─── _build_hook_patterns_block: formatting ───────────────────────────────────
 
-def test_block_formats_retrieved_hooks():
+def test_block_uses_top_hook_verbatim_with_adapt_instruction():
     out = _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "founder burnout", db=None))
     assert out  # non-empty
-    # Header drives "study the structure / fresh hook / never copy wording".
     low = out.lower()
-    assert "structure" in low
-    assert "fresh" in low or "never copy" in low or "do not copy" in low
-    # Both hook texts + their hook_type labels are present.
+    assert "adapt this proven hook" in low
+    assert "do not fabricate" in low
+    # Only the TOP hook (h1, highest score) is injected — the second is not.
     assert "You are not lazy. You are exhausted." in out
-    assert "Stop scaling. Start surviving." in out
-    assert "emotional_state" in out
-    assert "direct_confront" in out
+    assert "Stop scaling. Start surviving." not in out
+    assert "emotional_state" in out  # h1 hook_type label
 
 
 def test_block_passes_niche_and_language_to_retrieve(monkeypatch):
@@ -169,22 +167,19 @@ def test_block_passes_niche_and_language_to_retrieve(monkeypatch):
     _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "founder burnout", db=None))
     assert captured["niche_slug"] == "saas-tech"
     assert captured["language"] == "English"
-    # Phase 4 exemplar entropy: retrieve a POOL, then sample EXEMPLAR_K from it.
-    assert captured["k"] == ai_service.content_dna.EXEMPLAR_POOL
+    assert captured["k"] == 1
     # query_text blends topic + problem_solved + brand_vibe.
     assert "founder burnout" in captured["query_text"]
     assert "founders burn out" in captured["query_text"]
 
 
-def test_block_samples_pool_and_logs_usage(monkeypatch):
-    """>EXEMPLAR_K retrieved -> only EXEMPLAR_K rendered; injected ids logged."""
+def test_block_logs_single_top_hook_usage(monkeypatch):
+    """Only the top-scored hook is rendered + its single id logged."""
     hooks = [{"id": f"h{i}", "hook_text": f"unique viral line number {i}",
               "hook_type": "myth_bust", "trigger": "fomo", "niche_slug": "saas-tech",
               "virality_score": 0.5, "score": 1.0 - i * 0.01} for i in range(12)]
     monkeypatch.setattr(ai_service.viral_library, "retrieve",
                         lambda *a, **k: hooks, raising=False)
-    monkeypatch.setattr(ai_service.variety_planner, "recent_exemplar_ids",
-                        AsyncMock(return_value=set()))
     logged = {}
 
     async def fake_log(db, client_id, ids):
@@ -195,31 +190,22 @@ def test_block_samples_pool_and_logs_usage(monkeypatch):
 
     out = _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "topic", db=MagicMock()))
 
-    rendered = [l for l in out.splitlines() if l.strip() and l.strip()[0].isdigit()]
-    assert len(rendered) == ai_service.content_dna.EXEMPLAR_K
+    assert "unique viral line number 0" in out      # top hook (highest score)
+    assert "unique viral line number 1" not in out  # others not injected
     assert logged["client_id"] == "c1"
-    assert len(logged["ids"]) == ai_service.content_dna.EXEMPLAR_K
-    assert all(i.startswith("h") for i in logged["ids"])
+    assert logged["ids"] == ["h0"]
 
 
 # ─── _build_hook_patterns_block: anti-sameness ────────────────────────────────
 
-def test_block_drops_client_recent_similar_hooks(monkeypatch):
-    # Recent hook is near-identical to h1 -> h1 must be dropped, h2 kept.
+def test_block_does_not_pre_filter_recent_openings(monkeypatch):
+    # Even if the top hook resembles a recent opening, the block still uses it —
+    # repetition is enforced post-generation by the semantic gate, not here.
     async def _recent(*a, **k):
         return ["You are not lazy you are exhausted"]
     monkeypatch.setattr(ai_service, "_recent_hook_texts", _recent)
     out = _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "topic", db="db"))
-    assert "You are not lazy. You are exhausted." not in out
-    assert "Stop scaling. Start surviving." in out
-
-
-def test_block_empty_when_all_hooks_filtered(monkeypatch):
-    async def _recent(*a, **k):
-        return ["You are not lazy you are exhausted", "Stop scaling start surviving"]
-    monkeypatch.setattr(ai_service, "_recent_hook_texts", _recent)
-    out = _run(ai_service._build_hook_patterns_block(_CLIENT, _ONBOARDING, "topic", db="db"))
-    assert out == ""
+    assert "You are not lazy. You are exhausted." in out
 
 
 # ─── injection into generation paths ──────────────────────────────────────────
@@ -259,7 +245,7 @@ def test_single_image_injects_hook_patterns_block():
         mock, client, _ONBOARDING, topic="founder burnout", platform="instagram",
     ))
     sysprompt = _system_text(mock)
-    assert "Stop scaling. Start surviving." in sysprompt
+    assert "You are not lazy. You are exhausted." in sysprompt
 
 
 def test_carousel_no_block_when_disabled(monkeypatch):
