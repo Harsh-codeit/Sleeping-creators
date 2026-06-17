@@ -180,6 +180,8 @@ PERMISSION_MAP: dict[tuple[str, str], tuple] = {
     # These MUST precede the /clients/{id}/ catch-alls below to win first-match.
     ("GET",    r"^/api/clients/[^/]+/drive-clips"):       (("clients", "view"), ("studio", "view")),
     ("GET",    r"^/api/clients/[^/]+/drive-images"):      (("clients", "view"), ("studio", "view")),
+    ("GET",    r"^/api/clients/[^/]+/excluded-images"):   (("clients", "view"), ("studio", "view")),
+    ("POST",   r"^/api/clients/[^/]+/excluded-images/"):  (("clients", "edit"), ("studio", "create")),
     ("GET",    r"^/api/clients/[^/]+/clips/presign"):     (("clients", "view"), ("studio", "create")),
     ("POST",   r"^/api/clients/[^/]+/clips/register"):    (("clients", "edit"), ("studio", "create")),
     ("GET",    r"^/api/clients/[^/]+$"):                  ("clients", "view"),
@@ -8818,6 +8820,30 @@ async def delete_clip(client_id: str, clip_id: str):
         )
     await db.drive_clips.delete_one({"client_id": client_id, "drive_file_id": clip_id})
     return {"deleted": True, "excluded_from_carousel": _should_tombstone_image(clip)}
+
+
+@api_router.get("/clients/{client_id}/excluded-images")
+async def list_excluded_images(client_id: str):
+    """Tombstoned (deleted) carousel images, for the Media tab's Excluded view."""
+    client = await db.clients.find_one({"id": client_id}, {"_id": 0, "excluded_image_ids": 1})
+    if not client:
+        raise HTTPException(404, "Client not found")
+    ids = client.get("excluded_image_ids", []) or []
+    return [
+        {"drive_file_id": fid, "name": "", "thumbnail_url": f"https://drive.google.com/thumbnail?id={fid}&sz=w320"}
+        for fid in ids
+    ]
+
+
+@api_router.post("/clients/{client_id}/excluded-images/{drive_file_id}/restore", status_code=200)
+async def restore_excluded_image(client_id: str, drive_file_id: str):
+    """Clear an image tombstone so the next Sync Drive re-adds it to the carousel pool."""
+    res = await db.clients.update_one(
+        {"id": client_id}, {"$pull": {"excluded_image_ids": drive_file_id}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Client not found")
+    return {"restored": True, "drive_file_id": drive_file_id}
 
 
 class ClearClipCacheRequest(BaseModel):
