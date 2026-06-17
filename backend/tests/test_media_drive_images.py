@@ -46,6 +46,37 @@ async def test_list_carousel_images_override_lists_live():
 
 
 @pytest.mark.asyncio
+async def test_list_carousel_images_falls_back_to_live_when_pool_empty():
+    import server, google_drive_service
+    live = [
+        {"drive_file_id": "L1", "name": "a.jpg", "mime_type": "image/jpeg"},
+        {"drive_file_id": "L2", "name": "b.png", "mime_type": "image/png"},
+    ]
+    fake_db = MagicMock()
+    fake_db.drive_clips.find.return_value = _fake_drive_clips_cursor([])  # synced pool empty
+    fake_db.clients.find_one = AsyncMock(return_value={
+        "drive_images_folder_id": "FOLDERX", "excluded_image_ids": ["L2"],
+    })
+    with patch.object(server, "db", fake_db), \
+         patch.object(server, "_get_google_refresh_token", AsyncMock(return_value="tok")), \
+         patch.object(google_drive_service, "list_images", return_value=live):
+        out = await server._list_carousel_images("c1")
+    # Falls back to live folder, minus the tombstoned L2
+    assert [r["drive_file_id"] for r in out] == ["L1"]
+
+
+@pytest.mark.asyncio
+async def test_list_carousel_images_no_fallback_without_folder():
+    import server
+    fake_db = MagicMock()
+    fake_db.drive_clips.find.return_value = _fake_drive_clips_cursor([])
+    fake_db.clients.find_one = AsyncMock(return_value={"drive_images_folder_id": None})
+    with patch.object(server, "db", fake_db):
+        out = await server._list_carousel_images("c1")
+    assert out == []
+
+
+@pytest.mark.asyncio
 async def test_download_at_index_uses_carousel_pool(tmp_path):
     import server, google_drive_service, os
     pool = [

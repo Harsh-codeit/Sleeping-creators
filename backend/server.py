@@ -6352,26 +6352,45 @@ def _with_drive_thumbnails(images: list[dict]) -> list[dict]:
     ]
 
 
+async def _live_list_images(folder: str) -> list[dict]:
+    """List a Drive folder's images live: [{drive_file_id, name, mime_type}]. [] on any failure."""
+    refresh_token = await _get_google_refresh_token()
+    if not refresh_token:
+        return []
+    from google_drive_service import list_images, extract_folder_id
+    resolved = extract_folder_id(folder) or folder
+    loop = asyncio.get_running_loop()
+    try:
+        return await loop.run_in_executor(None, list_images, refresh_token, resolved)
+    except Exception as e:
+        logger.warning(f"Carousel image live-list failed for folder {folder!r}: {e}")
+        return []
+
+
 async def _list_carousel_images(client_id: str, folder_id_override: Optional[str] = None) -> list[dict]:
     """Carousel image pool. Default: the client's synced drive_clips image rows
     (source='drive'), name-sorted. If folder_id_override is set (custom-template
-    element folder), list THAT folder live instead (legacy behavior)."""
+    element folder), list THAT folder live. If the synced pool is empty (client
+    hasn't run Sync Drive yet), fall back to listing the client's images folder
+    live, minus any tombstoned (deleted) ids — so the picker/carousel work without
+    requiring a sync first."""
     if folder_id_override:
-        refresh_token = await _get_google_refresh_token()
-        if not refresh_token:
-            return []
-        from google_drive_service import list_images, extract_folder_id
-        resolved = extract_folder_id(folder_id_override) or folder_id_override
-        loop = asyncio.get_running_loop()
-        try:
-            return await loop.run_in_executor(None, list_images, refresh_token, resolved)
-        except Exception as e:
-            logger.warning(f"Carousel image live-list failed for override folder: {e}")
-            return []
-    return await db.drive_clips.find(
+        return await _live_list_images(folder_id_override)
+    rows = await db.drive_clips.find(
         {"client_id": client_id, "source": "drive", "mime_type": {"$regex": "^image/"}},
         {"_id": 0},
     ).sort("name", 1).to_list(500)
+    if rows:
+        return rows
+    # Not synced yet — fall back to the live images folder, honoring deletions.
+    client = await db.clients.find_one(
+        {"id": client_id}, {"_id": 0, "drive_images_folder_id": 1, "excluded_image_ids": 1}
+    )
+    if not client or not client.get("drive_images_folder_id"):
+        return []
+    excluded = set(client.get("excluded_image_ids", []) or [])
+    imgs = await _live_list_images(client["drive_images_folder_id"])
+    return [i for i in imgs if i["drive_file_id"] not in excluded]
 
 
 async def _resolve_drive_image_for_export(client_id: str, folder_id_override: Optional[str] = None) -> Optional[str]:
