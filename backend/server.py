@@ -8871,6 +8871,28 @@ async def clear_clip_r2_cache(request: Request, body: ClearClipCacheRequest):
     return {**preview, "dry_run": False, "status": "cleared"}
 
 
+def _drive_images_to_media_rows(images: list[dict], client_id: str, now: str, excluded_ids) -> list[dict]:
+    """Map list_images() output to drive_clips media rows, skipping tombstoned ids."""
+    excluded = set(excluded_ids or [])
+    rows = []
+    for img in images:
+        fid = img["drive_file_id"]
+        if fid in excluded:
+            continue
+        rows.append({
+            "drive_file_id": fid,
+            "name": img.get("name", ""),
+            "mime_type": img.get("mime_type", "image/jpeg"),
+            "source": "drive",
+            "thumbnail_url": f"https://drive.google.com/thumbnail?id={fid}&sz=w320",
+            "duration": 0,
+            "width": 0,
+            "height": 0,
+            "client_id": client_id,
+            "synced_at": now,
+        })
+    return rows
+
 class DriveSyncRequest(BaseModel):
     folder_id: Optional[str] = None
 

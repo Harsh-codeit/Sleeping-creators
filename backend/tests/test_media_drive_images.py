@@ -67,3 +67,21 @@ async def test_download_at_index_returns_none_on_empty_pool():
     import server
     with patch.object(server, "_list_carousel_images", AsyncMock(return_value=[])):
         assert await server._download_drive_image_at_index("c1", 0) is None
+
+
+def test_drive_images_to_media_rows_maps_and_skips_excluded():
+    from server import _drive_images_to_media_rows
+    images = [
+        {"drive_file_id": "i1", "name": "a.jpg", "mime_type": "image/jpeg"},
+        {"drive_file_id": "i2", "name": "b.png", "mime_type": "image/png"},
+    ]
+    rows = _drive_images_to_media_rows(images, "c1", "2026-06-17T00:00:00Z", {"i2"})
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["drive_file_id"] == "i1"
+    assert r["client_id"] == "c1"
+    assert r["source"] == "drive"
+    assert r["mime_type"] == "image/jpeg"
+    assert r["thumbnail_url"] == "https://drive.google.com/thumbnail?id=i1&sz=w320"
+    assert r["synced_at"] == "2026-06-17T00:00:00Z"
+    assert r["duration"] == 0 and r["width"] == 0 and r["height"] == 0
