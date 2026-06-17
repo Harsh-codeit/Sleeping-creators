@@ -110,24 +110,35 @@ async def get_team(api_key: str, team_id: str) -> dict:
     return await _get(api_key, f"/team/{team_id}")
 
 
-async def get_connected_platforms(api_key: str, team_id: str) -> list[str]:
-    """Lowercase PLATFORM_MAP keys for accounts currently connected in this team.
+async def get_connected_accounts(api_key: str, team_id: str) -> dict:
+    """Live snapshot of a Bundle team's social accounts.
 
-    This is the source of truth for whether a post can be published: Bundle rejects
-    POST /post with "400: No social accounts selected" when none of the requested
-    socialAccountTypes have a connected account. Mirrors the mapping the
-    /bundle/refresh endpoint uses to populate client["bundle_platforms"].
+    Returns ``{"connected": [lowercase PLATFORM_MAP keys with a usable account],
+               "accounts": [{"type","status","username"} for every account Bundle lists]}``.
+
+    The ``accounts`` breakdown is what makes Bundle's "400: No social accounts selected"
+    debuggable: it shows whether the team has zero accounts, an account in a bad state,
+    or an account type we don't map. ``connected`` is the source of truth for whether a
+    post can publish; it mirrors the mapping /bundle/refresh uses for bundle_platforms.
     """
     team_data = await get_team(api_key, team_id)
     social_accounts = team_data.get("socialAccounts", []) or []
     reverse = {v: k for k, v in PLATFORM_MAP.items()}
-    out: list[str] = []
+    connected: list[str] = []
+    accounts: list[dict] = []
     for acct in social_accounts:
-        acct_type = acct.get("type") or acct.get("socialAccountType", "")
+        acct_type = acct.get("type") or acct.get("socialAccountType") or ""
+        status = acct.get("status") or acct.get("state") or acct.get("connectionStatus") or ""
+        username = acct.get("username") or acct.get("name") or acct.get("displayName") or ""
+        accounts.append({"type": acct_type, "status": status, "username": username})
         key = reverse.get(acct_type)
-        if key and key not in out:
-            out.append(key)
-    return out
+        if key and key not in connected:
+            connected.append(key)
+    logger.info(
+        "Bundle team %s social accounts: %s -> connected=%s",
+        team_id, accounts or "[none]", connected,
+    )
+    return {"connected": connected, "accounts": accounts}
 
 
 async def create_portal_link(

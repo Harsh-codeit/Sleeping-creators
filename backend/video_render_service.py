@@ -948,9 +948,12 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
     # run, stale when an account was disconnected — which is exactly how we keep hitting
     # Bundle's "400: No social accounts selected". Query Bundle for the source of truth;
     # fall back to the cache only when the live call itself fails.
-    connected = None  # None = couldn't verify; [] = verified none connected
+    connected = None        # None = couldn't verify; [] = verified none connected
+    bundle_accounts = None  # raw account breakdown for diagnostics (None = unchecked)
     try:
-        connected = await bundle_service.get_connected_platforms(api_key, team_id)
+        snap = await bundle_service.get_connected_accounts(api_key, team_id)
+        connected = snap["connected"]
+        bundle_accounts = snap["accounts"]
     except Exception as e:
         logger.warning(
             "video post %s: live Bundle account check failed (%s); using cached bundle_platforms",
@@ -958,8 +961,9 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
         )
         connected = [p for p in (client.get("bundle_platforms") or []) if p] or None
     logger.info(
-        "video post %s: target platforms=%s, Bundle-connected=%s",
-        post.get("id"), platforms, connected,
+        "video post %s: targets=%s, Bundle team=%s, connected=%s, accounts=%s",
+        post.get("id"), platforms, team_id, connected,
+        bundle_accounts if bundle_accounts is not None else "(unchecked)",
     )
     if connected is not None:
         skipped = [p for p in platforms if p not in connected]
@@ -970,11 +974,25 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
             )
         platforms = [p for p in platforms if p in connected]
         if not platforms:
+            if bundle_accounts is None:
+                why = "could not verify the Bundle team's accounts (live check failed)"
+                acct_detail = "unknown (live check failed)"
+            elif not bundle_accounts:
+                why = "the Bundle team has no social accounts connected at all"
+                acct_detail = "none"
+            else:
+                why = "none of the connected accounts match the target platform(s)"
+                acct_detail = ", ".join(
+                    f"{a.get('type') or '?'}[{a.get('status') or 'no-status'}]"
+                    + (f" @{a['username']}" if a.get("username") else "")
+                    for a in bundle_accounts
+                )
             raise RuntimeError(
-                f"Video post {post.get('id')} has no Bundle-connected target platform "
-                f"(targets={post.get('target_platforms') or post.get('platform')}, "
-                f"connected={connected or 'none — connect an account in the Bundle portal'}). "
-                f"Connect the account in the Bundle portal and retry."
+                f"Video post {post.get('id')} cannot be scheduled to Bundle — {why}. "
+                f"team_id={team_id}, targets={post.get('target_platforms') or post.get('platform')}, "
+                f"Bundle accounts=[{acct_detail}], connected={connected or 'none'}. "
+                f"Fix: connect the target account in the Bundle portal, or configure this "
+                f"client to publish via direct Instagram."
             )
 
     mp4_bytes = await _fetch_url_bytes(r2_video_url)

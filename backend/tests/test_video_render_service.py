@@ -192,7 +192,10 @@ async def test_handoff_to_bundle_uploads_and_creates_post(monkeypatch):
     import bundle_service
     monkeypatch.setattr(bundle_service, "upload_file", AsyncMock(return_value="upload-id-1"))
     monkeypatch.setattr(bundle_service, "create_post", AsyncMock(return_value={"id": "bundle-post-1"}))
-    monkeypatch.setattr(bundle_service, "get_connected_platforms", AsyncMock(return_value=["instagram"]))
+    monkeypatch.setattr(bundle_service, "get_connected_accounts", AsyncMock(return_value={
+        "connected": ["instagram"],
+        "accounts": [{"type": "INSTAGRAM", "status": "ACTIVE", "username": "acme"}],
+    }))
     monkeypatch.setattr(video_render_service, "_fetch_url_bytes", AsyncMock(return_value=b"mp4-bytes"))
 
     post = {
@@ -228,7 +231,9 @@ async def test_handoff_to_bundle_blocks_when_no_account_connected(monkeypatch):
     create_post = AsyncMock(return_value={"id": "should-not-be-called"})
     monkeypatch.setattr(bundle_service, "create_post", create_post)
     monkeypatch.setattr(bundle_service, "upload_file", AsyncMock(return_value="upload-id-1"))
-    monkeypatch.setattr(bundle_service, "get_connected_platforms", AsyncMock(return_value=[]))
+    monkeypatch.setattr(bundle_service, "get_connected_accounts", AsyncMock(return_value={
+        "connected": [], "accounts": [],
+    }))
     monkeypatch.setattr(video_render_service, "_fetch_url_bytes", AsyncMock(return_value=b"mp4-bytes"))
 
     post = {
@@ -236,7 +241,7 @@ async def test_handoff_to_bundle_blocks_when_no_account_connected(monkeypatch):
         "scheduled_at": "2099-01-01T00:00:00+00:00",
         "caption": "Big sale!", "hashtags": ["#sale"],
     }
-    with pytest.raises(RuntimeError, match="no Bundle-connected target platform"):
+    with pytest.raises(RuntimeError, match="cannot be scheduled to Bundle"):
         await video_render_service.handoff_to_bundle(
             db, post, "https://r2.x/v.mp4", "https://r2.x/v.jpg",
         )
