@@ -943,11 +943,25 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
         p = str(x).strip().lower()
         if p in bundle_service.PLATFORM_MAP and p not in platforms:
             platforms.append(p)
-    # Restrict to platforms actually connected in Bundle for this client (when known).
-    # `bundle_platforms` is populated by /bundle/refresh; when empty we can't tell,
-    # so we keep the target list rather than block a possibly-valid post.
-    connected = [p for p in (client.get("bundle_platforms") or []) if p]
-    if connected:
+    # Restrict to platforms with a LIVE-connected Bundle account. The cached
+    # client["bundle_platforms"] is unreliable — empty when /bundle/refresh was never
+    # run, stale when an account was disconnected — which is exactly how we keep hitting
+    # Bundle's "400: No social accounts selected". Query Bundle for the source of truth;
+    # fall back to the cache only when the live call itself fails.
+    connected = None  # None = couldn't verify; [] = verified none connected
+    try:
+        connected = await bundle_service.get_connected_platforms(api_key, team_id)
+    except Exception as e:
+        logger.warning(
+            "video post %s: live Bundle account check failed (%s); using cached bundle_platforms",
+            post.get("id"), e,
+        )
+        connected = [p for p in (client.get("bundle_platforms") or []) if p] or None
+    logger.info(
+        "video post %s: target platforms=%s, Bundle-connected=%s",
+        post.get("id"), platforms, connected,
+    )
+    if connected is not None:
         skipped = [p for p in platforms if p not in connected]
         if skipped:
             logger.warning(
@@ -955,13 +969,13 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
                 "account: %s (connected=%s)", post.get("id"), skipped, connected,
             )
         platforms = [p for p in platforms if p in connected]
-    if not platforms:
-        raise RuntimeError(
-            f"Video post {post.get('id')} has no Bundle-connected target platform "
-            f"(targets={post.get('target_platforms') or post.get('platform')}, "
-            f"connected={connected or 'unknown — run Bundle refresh'}). "
-            f"Reconnect the client's social accounts in the Bundle portal and retry."
-        )
+        if not platforms:
+            raise RuntimeError(
+                f"Video post {post.get('id')} has no Bundle-connected target platform "
+                f"(targets={post.get('target_platforms') or post.get('platform')}, "
+                f"connected={connected or 'none — connect an account in the Bundle portal'}). "
+                f"Connect the account in the Bundle portal and retry."
+            )
 
     mp4_bytes = await _fetch_url_bytes(r2_video_url)
     upload_id = await bundle_service.upload_file(

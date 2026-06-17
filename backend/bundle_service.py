@@ -110,6 +110,26 @@ async def get_team(api_key: str, team_id: str) -> dict:
     return await _get(api_key, f"/team/{team_id}")
 
 
+async def get_connected_platforms(api_key: str, team_id: str) -> list[str]:
+    """Lowercase PLATFORM_MAP keys for accounts currently connected in this team.
+
+    This is the source of truth for whether a post can be published: Bundle rejects
+    POST /post with "400: No social accounts selected" when none of the requested
+    socialAccountTypes have a connected account. Mirrors the mapping the
+    /bundle/refresh endpoint uses to populate client["bundle_platforms"].
+    """
+    team_data = await get_team(api_key, team_id)
+    social_accounts = team_data.get("socialAccounts", []) or []
+    reverse = {v: k for k, v in PLATFORM_MAP.items()}
+    out: list[str] = []
+    for acct in social_accounts:
+        acct_type = acct.get("type") or acct.get("socialAccountType", "")
+        key = reverse.get(acct_type)
+        if key and key not in out:
+            out.append(key)
+    return out
+
+
 async def create_portal_link(
     api_key: str,
     team_id: str,

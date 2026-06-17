@@ -192,6 +192,7 @@ async def test_handoff_to_bundle_uploads_and_creates_post(monkeypatch):
     import bundle_service
     monkeypatch.setattr(bundle_service, "upload_file", AsyncMock(return_value="upload-id-1"))
     monkeypatch.setattr(bundle_service, "create_post", AsyncMock(return_value={"id": "bundle-post-1"}))
+    monkeypatch.setattr(bundle_service, "get_connected_platforms", AsyncMock(return_value=["instagram"]))
     monkeypatch.setattr(video_render_service, "_fetch_url_bytes", AsyncMock(return_value=b"mp4-bytes"))
 
     post = {
@@ -205,5 +206,38 @@ async def test_handoff_to_bundle_uploads_and_creates_post(monkeypatch):
     assert bundle_post_id == "bundle-post-1"
     db.posts.update_one.assert_awaited_with(
         {"id": "p1"},
-        {"$set": {"status": "bundle_scheduled", "bundle_post_id": "bundle-post-1"}}
+        {"$set": {"status": "bundle_scheduled", "bundle_post_id": "bundle-post-1", "platform_post_id": "bundle-post-1"}}
     )
+
+
+@pytest.mark.asyncio
+async def test_handoff_to_bundle_blocks_when_no_account_connected(monkeypatch):
+    """When Bundle reports no connected account for the target platform, raise a
+    clear error instead of letting Bundle return '400: No social accounts selected',
+    and never attempt to create the post."""
+    db = MagicMock()
+    db.posts.update_one = AsyncMock()
+    db.clients.find_one = AsyncMock(return_value={
+        "id": "c1", "bundle_team_id": "team-1", "platforms": ["instagram"],
+    })
+
+    import server
+    monkeypatch.setattr(server, "get_settings", AsyncMock(return_value={"bundle_api_key": "BK"}), raising=False)
+
+    import bundle_service
+    create_post = AsyncMock(return_value={"id": "should-not-be-called"})
+    monkeypatch.setattr(bundle_service, "create_post", create_post)
+    monkeypatch.setattr(bundle_service, "upload_file", AsyncMock(return_value="upload-id-1"))
+    monkeypatch.setattr(bundle_service, "get_connected_platforms", AsyncMock(return_value=[]))
+    monkeypatch.setattr(video_render_service, "_fetch_url_bytes", AsyncMock(return_value=b"mp4-bytes"))
+
+    post = {
+        "id": "p1", "client_id": "c1", "platform": "instagram",
+        "scheduled_at": "2099-01-01T00:00:00+00:00",
+        "caption": "Big sale!", "hashtags": ["#sale"],
+    }
+    with pytest.raises(RuntimeError, match="no Bundle-connected target platform"):
+        await video_render_service.handoff_to_bundle(
+            db, post, "https://r2.x/v.mp4", "https://r2.x/v.jpg",
+        )
+    create_post.assert_not_awaited()
