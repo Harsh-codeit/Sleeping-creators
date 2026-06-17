@@ -8898,45 +8898,76 @@ class DriveSyncRequest(BaseModel):
 
 @api_router.post("/clients/{client_id}/drive-clips/sync")
 async def sync_drive_clips(client_id: str, body: DriveSyncRequest = DriveSyncRequest()):
-    from google_drive_service import list_clips, extract_folder_id
+    from google_drive_service import list_clips, list_images, extract_folder_id
     client = await db.clients.find_one({"id": client_id})
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
     raw_folder = body.folder_id or client.get("drive_folder_id")
-    if not raw_folder:
+    if not raw_folder and not client.get("drive_images_folder_id"):
         raise HTTPException(status_code=400, detail="No Drive folder configured for this client")
-    folder_id = extract_folder_id(raw_folder)
-    if not folder_id:
-        raise HTTPException(status_code=400, detail=f"Could not parse a folder ID from: {raw_folder!r}")
 
     refresh_token = await _get_google_refresh_token()
     if not refresh_token:
         raise HTTPException(status_code=400, detail="Google account not connected. Visit /api/auth/google/start to connect.")
 
-    loop = asyncio.get_event_loop()
-    try:
-        clips = await loop.run_in_executor(None, list_clips, refresh_token, folder_id)
-    except Exception as exc:
-        logging.error(f"[drive-clips] list_clips failed for folder {folder_id}: {exc}")
-        raise HTTPException(status_code=502, detail=f"Drive API error: {exc}")
-
     now = now_iso()
-    current_ids = [clip["drive_file_id"] for clip in clips]
+    loop = asyncio.get_event_loop()
 
-    # Remove clips that are no longer in the Drive folder
-    await db.drive_clips.delete_many({
-        "client_id": client_id,
-        "drive_file_id": {"$nin": current_ids},
-    })
+    # ── Videos (drive_folder_id) ──────────────────────────────────────────────
+    video_count = 0
+    if raw_folder:
+        folder_id = extract_folder_id(raw_folder)
+        if not folder_id:
+            raise HTTPException(status_code=400, detail=f"Could not parse a folder ID from: {raw_folder!r}")
+        try:
+            clips = await loop.run_in_executor(None, list_clips, refresh_token, folder_id)
+        except Exception as exc:
+            logging.error(f"[drive-clips] list_clips failed for folder {folder_id}: {exc}")
+            raise HTTPException(status_code=502, detail=f"Drive API error: {exc}")
+        video_ids = [c["drive_file_id"] for c in clips]
+        # delete only video drive-rows that are no longer in the folder
+        await db.drive_clips.delete_many({
+            "client_id": client_id, "source": "drive",
+            "mime_type": {"$regex": "^video/"},
+            "drive_file_id": {"$nin": video_ids},
+        })
+        for clip in clips:
+            await db.drive_clips.update_one(
+                {"client_id": client_id, "drive_file_id": clip["drive_file_id"]},
+                {"$set": {**clip, "client_id": client_id, "synced_at": now}},
+                upsert=True,
+            )
+        video_count = len(clips)
 
-    for clip in clips:
-        await db.drive_clips.update_one(
-            {"client_id": client_id, "drive_file_id": clip["drive_file_id"]},
-            {"$set": {**clip, "client_id": client_id, "synced_at": now}},
-            upsert=True,
-        )
-    return {"synced": len(clips)}
+    # ── Images (drive_images_folder_id) ───────────────────────────────────────
+    image_count = 0
+    raw_img_folder = client.get("drive_images_folder_id")
+    if raw_img_folder:
+        img_folder_id = extract_folder_id(raw_img_folder) or raw_img_folder
+        try:
+            imgs = await loop.run_in_executor(None, list_images, refresh_token, img_folder_id)
+        except Exception as exc:
+            logging.error(f"[drive-images] list_images failed for folder {img_folder_id}: {exc}")
+            raise HTTPException(status_code=502, detail=f"Drive API error: {exc}")
+        excluded = set(client.get("excluded_image_ids", []))
+        rows = _drive_images_to_media_rows(imgs, client_id, now, excluded)
+        image_ids = [r["drive_file_id"] for r in rows]
+        # delete only image drive-rows no longer present (or now excluded)
+        await db.drive_clips.delete_many({
+            "client_id": client_id, "source": "drive",
+            "mime_type": {"$regex": "^image/"},
+            "drive_file_id": {"$nin": image_ids},
+        })
+        for row in rows:
+            await db.drive_clips.update_one(
+                {"client_id": client_id, "drive_file_id": row["drive_file_id"]},
+                {"$set": row},
+                upsert=True,
+            )
+        image_count = len(rows)
+
+    return {"synced": video_count + image_count, "videos": video_count, "images": image_count}
 
 
 @api_router.get("/clients/{client_id}/clips/{clip_id}/stream")
