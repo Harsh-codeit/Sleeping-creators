@@ -6350,6 +6350,28 @@ def _with_drive_thumbnails(images: list[dict]) -> list[dict]:
     ]
 
 
+async def _list_carousel_images(client_id: str, folder_id_override: Optional[str] = None) -> list[dict]:
+    """Carousel image pool. Default: the client's synced drive_clips image rows
+    (source='drive'), name-sorted. If folder_id_override is set (custom-template
+    element folder), list THAT folder live instead (legacy behavior)."""
+    if folder_id_override:
+        refresh_token = await _get_google_refresh_token()
+        if not refresh_token:
+            return []
+        from google_drive_service import list_images, extract_folder_id
+        resolved = extract_folder_id(folder_id_override) or folder_id_override
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(None, list_images, refresh_token, resolved)
+        except Exception as e:
+            logger.warning(f"Carousel image live-list failed for override folder: {e}")
+            return []
+    return await db.drive_clips.find(
+        {"client_id": client_id, "source": "drive", "mime_type": {"$regex": "^image/"}},
+        {"_id": 0},
+    ).sort("name", 1).to_list(500)
+
+
 async def _resolve_drive_image_for_export(client_id: str, folder_id_override: Optional[str] = None) -> Optional[str]:
     """
     Download the next Drive image for this client and return the local temp file path.
