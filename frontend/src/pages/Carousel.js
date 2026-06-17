@@ -1175,6 +1175,12 @@ export default function Carousel() {
                                 onDelete={(id) => deleteImageElement(idx, id)}
                               />
                             ))}
+                            {previewLoading && preview?.url && (
+                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 pointer-events-none">
+                                <div className="w-5 h-5 border-2 border-zinc-500 border-t-white rounded-full animate-spin" />
+                                <span className="text-[10px] font-mono text-zinc-200">Rendering...</span>
+                              </div>
+                            )}
                           </div>
                         </button>
                         {/* Slide info */}
