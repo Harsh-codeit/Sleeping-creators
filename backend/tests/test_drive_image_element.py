@@ -172,3 +172,50 @@ async def test_download_by_file_id_returns_none_without_token():
     import server
     with patch.object(server, "_get_google_refresh_token", AsyncMock(return_value=None)):
         assert await server._download_drive_image_by_file_id("F") is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_prefers_file_id():
+    import server
+    with patch.object(server, "_download_drive_image_by_file_id", AsyncMock(return_value="/tmp/pick.png")) as by_id, \
+         patch.object(server, "_download_drive_image_at_index", AsyncMock(return_value="/tmp/idx.png")) as by_idx:
+        out = await server._resolve_carousel_drive_image(
+            {"client_id": "c1", "drive_image_file_id": "F", "drive_image_index": 3})
+    assert out == "/tmp/pick.png"
+    by_id.assert_awaited_once_with("F")
+    by_idx.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_resolve_falls_back_to_index_when_no_file_id():
+    import server
+    with patch.object(server, "_download_drive_image_by_file_id", AsyncMock(return_value=None)) as by_id, \
+         patch.object(server, "_download_drive_image_at_index", AsyncMock(return_value="/tmp/idx.png")) as by_idx:
+        out = await server._resolve_carousel_drive_image(
+            {"client_id": "c1", "drive_image_index": 2})
+    assert out == "/tmp/idx.png"
+    by_id.assert_not_awaited()
+    by_idx.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_falls_back_to_index_when_file_id_unresolvable():
+    import server
+    with patch.object(server, "_download_drive_image_by_file_id", AsyncMock(return_value=None)) as by_id, \
+         patch.object(server, "_download_drive_image_at_index", AsyncMock(return_value="/tmp/idx.png")) as by_idx:
+        out = await server._resolve_carousel_drive_image(
+            {"client_id": "c1", "drive_image_file_id": "GONE", "drive_image_index": 5})
+    assert out == "/tmp/idx.png"
+    by_id.assert_awaited_once_with("GONE")
+    by_idx.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_export_legacy_increments_counter():
+    import server
+    with patch.object(server, "_download_drive_image_by_file_id", AsyncMock(return_value=None)), \
+         patch.object(server, "_resolve_drive_image_for_export", AsyncMock(return_value="/tmp/leg.png")) as legacy:
+        out = await server._resolve_carousel_drive_image(
+            {"client_id": "c1"}, increment_counter=True)
+    assert out == "/tmp/leg.png"
+    legacy.assert_awaited_once()

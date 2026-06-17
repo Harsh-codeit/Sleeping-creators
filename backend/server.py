@@ -6192,7 +6192,11 @@ async def preview_carousel_slides(data: CarouselPreviewRequest):
     drive_preview_path = None
     drive_image_src = ""
     if data.client_id:
-        drive_preview_path = await _peek_drive_image_for_preview(data.client_id, assigned_index=data.drive_image_index)
+        drive_preview_path = await _resolve_carousel_drive_image({
+            "client_id": data.client_id,
+            "drive_image_index": data.drive_image_index,
+            "drive_image_file_id": data.drive_image_file_id,
+        }, increment_counter=False)
         if drive_preview_path:
             import base64, mimetypes
             mime = mimetypes.guess_type(drive_preview_path)[0] or "image/jpeg"
@@ -6488,6 +6492,29 @@ async def _peek_drive_image_for_preview(client_id: str, assigned_index: Optional
     return await _download_drive_image_at_index(client_id, index)
 
 
+async def _resolve_carousel_drive_image(
+    carousel: dict, *, folder_id_override: Optional[str] = None, increment_counter: bool = False
+) -> Optional[str]:
+    """Resolve the Drive image for a carousel render. Priority:
+       1. drive_image_file_id (explicit pick) -> that exact file
+       2. drive_image_index -> that index (no counter change)
+       3. legacy: increment counter (export) or peek current index (preview)
+       Returns a local temp path or None."""
+    file_id = carousel.get("drive_image_file_id")
+    if file_id:
+        path = await _download_drive_image_by_file_id(file_id)
+        if path:
+            return path
+        logger.info(f"Picked Drive image {file_id} unresolved; falling back to rotation")
+    client_id = carousel.get("client_id", "") or ""
+    idx = carousel.get("drive_image_index")
+    if idx is not None:
+        return await _download_drive_image_at_index(client_id, idx, folder_id_override=folder_id_override)
+    if increment_counter:
+        return await _resolve_drive_image_for_export(client_id, folder_id_override=folder_id_override)
+    return await _peek_drive_image_for_preview(client_id, assigned_index=None)
+
+
 @api_router.post("/carousels/{carousel_id}/export")
 async def export_carousel(carousel_id: str):
     """Render all slides to PNGs and return public URLs."""
@@ -6549,15 +6576,9 @@ async def export_carousel(carousel_id: str):
 
     drive_image_path = None
     try:
-        if carousel.get("drive_image_index") is not None:
-            # Index was assigned at save time — use it directly, no counter increment
-            drive_image_path = await _download_drive_image_at_index(
-                carousel.get("client_id", ""), carousel["drive_image_index"],
-                folder_id_override=_folder_override,
-            )
-        else:
-            # Legacy carousels saved before this feature — fall back to counter-based approach
-            drive_image_path = await _resolve_drive_image_for_export(carousel.get("client_id", ""), folder_id_override=_folder_override)
+        drive_image_path = await _resolve_carousel_drive_image(
+            carousel, folder_id_override=_folder_override, increment_counter=True,
+        )
         urls = await render_carousel_to_pngs(
             carousel, frontend_url,
             custom_jinja2=custom_jinja2, custom_zones=custom_zones, design_ctx=design_ctx,
