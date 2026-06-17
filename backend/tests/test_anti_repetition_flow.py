@@ -341,6 +341,42 @@ def test_generate_carousel_passes_planner_block(monkeypatch):
     assert captured["recent_text_memory"] == ""  # legacy block suppressed
 
 
+def test_generate_carousel_passes_top_hook_to_gate(monkeypatch):
+    import persona_service
+    monkeypatch.setattr(persona_service, "get_or_build_persona", AsyncMock(return_value=None))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(ai_service.anthropic, "Anthropic", lambda api_key=None: MagicMock())
+    monkeypatch.setattr(ai_service, "_recent_hook_texts", AsyncMock(return_value=[]))
+    monkeypatch.setattr(ai_service.content_dna, "ensure_dna", AsyncMock(return_value=[]))
+    monkeypatch.setattr(ai_service.variety_planner, "plan_next", AsyncMock(return_value=None))
+
+    top_hook = {"id": "h1", "hook_text": "the locked hook", "hook_type": "myth_bust",
+                "trigger": "fomo", "niche_slug": "saas-tech", "virality_score": 0.9, "score": 1.2}
+    monkeypatch.setattr(ai_service, "_retrieve_top_hook", AsyncMock(return_value=top_hook))
+
+    async def fake_single_pass(*args, **kwargs):
+        return _carousel_response()
+
+    monkeypatch.setattr(ai_service, "_generate_carousel_single_pass", fake_single_pass)
+
+    captured = {}
+
+    async def fake_gate(db, client, result_data, gen_fn, variety_spec, top_hook=None):
+        captured["top_hook"] = top_hook
+        result_data.pop("hook_variants", None)
+        return result_data
+
+    monkeypatch.setattr(ai_service, "_run_carousel_gate", fake_gate)
+
+    db = MagicMock()
+    db.token_usage.insert_one = AsyncMock(return_value=None)
+    _run(ai_service.generate_carousel(
+        {"id": "c1", "name": "Acme", "industry": "Tech", "onboarding_data": {}},
+        "instagram", "full_white", topic="t", slide_count=5, db=db,
+    ))
+    assert captured["top_hook"] == top_hook
+
+
 def test_generate_carousel_legacy_when_planner_none(monkeypatch):
     import persona_service
     monkeypatch.setattr(persona_service, "get_or_build_persona", AsyncMock(return_value=None))

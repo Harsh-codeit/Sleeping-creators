@@ -1648,7 +1648,11 @@ async def generate_carousel(
 
     # Semantic gate — hard wall vs the 30-day cross-format DNA window. Replaces
     # the old Jaccard-0.6 retry-once-ship-anyway gate. Fail-open by construction.
-    result_data = await _run_carousel_gate(db, client, result_data, _gen, variety_spec)
+    # Adapt-exact anchor: the single best-matching library hook (or None). Decides
+    # the gate's retry strategy (re-adapt same hook vs. forced hook-type rotation).
+    top_hook = await _retrieve_top_hook(client, onboarding, topic)
+    result_data = await _run_carousel_gate(
+        db, client, result_data, _gen, variety_spec, top_hook=top_hook)
 
     resolved_format = (
         slide_format
