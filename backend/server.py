@@ -8792,6 +8792,11 @@ async def register_clip(client_id: str, body: ClipRegisterRequest):
     return {k: v for k, v in clip.items() if k != "_id"}
 
 
+def _should_tombstone_image(clip: dict) -> bool:
+    """True when deleting this clip should exclude it from future carousel syncs."""
+    return clip.get("source") == "drive" and str(clip.get("mime_type", "")).startswith("image/")
+
+
 @api_router.delete("/clients/{client_id}/clips/{clip_id}", status_code=200)
 async def delete_clip(client_id: str, clip_id: str):
     clip = await db.drive_clips.find_one({"client_id": client_id, "drive_file_id": clip_id}, {"_id": 0})
@@ -8807,8 +8812,12 @@ async def delete_clip(client_id: str, clip_id: str):
                 _storage.delete_file(key)
         except Exception as _e:
             logger.warning("delete_clip: R2 delete failed for %s: %s", clip_id, _e)
+    if _should_tombstone_image(clip):
+        await db.clients.update_one(
+            {"id": client_id}, {"$addToSet": {"excluded_image_ids": clip_id}}
+        )
     await db.drive_clips.delete_one({"client_id": client_id, "drive_file_id": clip_id})
-    return {"deleted": True}
+    return {"deleted": True, "excluded_from_carousel": _should_tombstone_image(clip)}
 
 
 class ClearClipCacheRequest(BaseModel):

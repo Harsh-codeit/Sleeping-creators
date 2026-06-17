@@ -85,3 +85,11 @@ def test_drive_images_to_media_rows_maps_and_skips_excluded():
     assert r["thumbnail_url"] == "https://drive.google.com/thumbnail?id=i1&sz=w320"
     assert r["synced_at"] == "2026-06-17T00:00:00Z"
     assert r["duration"] == 0 and r["width"] == 0 and r["height"] == 0
+
+
+def test_should_tombstone_image_only_for_drive_images():
+    from server import _should_tombstone_image
+    assert _should_tombstone_image({"source": "drive", "mime_type": "image/png"}) is True
+    assert _should_tombstone_image({"source": "drive", "mime_type": "video/mp4"}) is False
+    assert _should_tombstone_image({"source": "upload", "mime_type": "image/png"}) is False
+    assert _should_tombstone_image({"mime_type": "image/png"}) is False
