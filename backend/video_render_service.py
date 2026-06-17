@@ -932,13 +932,42 @@ async def handoff_to_bundle(db, post: dict, r2_video_url: str, r2_snapshot_url: 
     if not api_key:
         raise RuntimeError("bundle_api_key not configured")
 
+    # Resolve the Bundle target platforms BEFORE uploading so we fail fast with a
+    # clear error instead of a cryptic Bundle "400: No social accounts selected".
+    raw_platforms = post.get("target_platforms") or ([post.get("platform")] if post.get("platform") else client.get("platforms", []))
+    # Normalize: lowercase, dedupe, drop blanks and anything Bundle can't map.
+    platforms = []
+    for x in raw_platforms:
+        if not x:
+            continue
+        p = str(x).strip().lower()
+        if p in bundle_service.PLATFORM_MAP and p not in platforms:
+            platforms.append(p)
+    # Restrict to platforms actually connected in Bundle for this client (when known).
+    # `bundle_platforms` is populated by /bundle/refresh; when empty we can't tell,
+    # so we keep the target list rather than block a possibly-valid post.
+    connected = [p for p in (client.get("bundle_platforms") or []) if p]
+    if connected:
+        skipped = [p for p in platforms if p not in connected]
+        if skipped:
+            logger.warning(
+                "video post %s: skipping target platforms with no connected Bundle "
+                "account: %s (connected=%s)", post.get("id"), skipped, connected,
+            )
+        platforms = [p for p in platforms if p in connected]
+    if not platforms:
+        raise RuntimeError(
+            f"Video post {post.get('id')} has no Bundle-connected target platform "
+            f"(targets={post.get('target_platforms') or post.get('platform')}, "
+            f"connected={connected or 'unknown — run Bundle refresh'}). "
+            f"Reconnect the client's social accounts in the Bundle portal and retry."
+        )
+
     mp4_bytes = await _fetch_url_bytes(r2_video_url)
     upload_id = await bundle_service.upload_file(
         api_key, team_id, mp4_bytes, "video.mp4", "video/mp4",
     )
 
-    platforms = post.get("target_platforms") or ([post.get("platform")] if post.get("platform") else client.get("platforms", []))
-    platforms = [p for p in platforms if p]
     overrides_post = {**post, "_upload_ids": [upload_id]}
     platform_overrides = _platform_overrides_for_video(overrides_post, platforms)
 

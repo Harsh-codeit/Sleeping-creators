@@ -1144,7 +1144,7 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
     settings = await db.settings.find_one({"key": "global"}) or {}
     api_key = settings.get("bundle_api_key", "")
     team_id = client.get("bundle_team_id", "")
-    platform = post.get("platform", "")
+    platform = (post.get("platform", "") or "").strip().lower()
 
     if not api_key or not team_id:
         return {"status": "failed", "error": "Bundle not configured — run setup first", "metrics": {}}
@@ -1247,6 +1247,21 @@ async def publish_bundle(post: dict, client: dict, publish_now: bool = False) ->
     bundle_platform = BUNDLE_PLATFORM_MAP.get(platform)
     if not bundle_platform:
         return {"status": "failed", "error": f"Platform '{platform}' not supported by Bundle", "metrics": {}}
+
+    # Don't hand Bundle a platform with no connected account for this client — it
+    # returns a cryptic "400: No social accounts selected". `bundle_platforms` is
+    # populated by /bundle/refresh; when empty we can't tell, so we don't block.
+    connected = [p for p in (client.get("bundle_platforms") or []) if p]
+    if connected and platform not in connected:
+        return {
+            "status": "failed",
+            "error": (
+                f"'{platform}' is not connected in Bundle for this client "
+                f"(connected: {', '.join(connected) or 'none'}). "
+                f"Reconnect via the Bundle portal and retry."
+            ),
+            "metrics": {},
+        }
 
     platform_data = _build_platform_data(post, platform, upload_ids)
 
