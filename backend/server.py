@@ -6373,40 +6373,26 @@ async def _list_carousel_images(client_id: str, folder_id_override: Optional[str
 
 
 async def _resolve_drive_image_for_export(client_id: str, folder_id_override: Optional[str] = None) -> Optional[str]:
-    """
-    Download the next Drive image for this client and return the local temp file path.
-    Returns None if no Drive folder is configured on the client or via override.
-    Increments drive_images_index on the client only after a successful download.
-    folder_id_override: if set, use this folder instead of the client's drive_images_folder_id.
-    """
+    """Download the next carousel-pool image for this client; increment the rotation
+    counter only after a successful download. Returns None if no pool/client."""
     if not client_id:
         return None
     client = await db.clients.find_one({"id": client_id})
     if not client:
         return None
-    folder_id = folder_id_override or client.get("drive_images_folder_id")
-    if not folder_id:
+    images = await _list_carousel_images(client_id, folder_id_override)
+    if not images:
         return None
-
     refresh_token = await _get_google_refresh_token()
     if not refresh_token:
         raise HTTPException(
             status_code=400,
             detail="Google account not connected — cannot load Drive images. Visit /api/auth/google/start first.",
         )
-
-    from google_drive_service import list_images, extract_folder_id, download_clip
-
-    resolved_folder = extract_folder_id(folder_id) or folder_id
-    loop = asyncio.get_running_loop()
-    images = await loop.run_in_executor(None, list_images, refresh_token, resolved_folder)
-
-    try:
-        chosen = _pick_drive_image(images, client.get("drive_images_index", 0))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Drive images folder is empty or contains no supported images (jpeg/png/webp/gif)")
-
+    from google_drive_service import download_clip
+    chosen = _pick_drive_image(images, client.get("drive_images_index", 0))
     suffix = Path(chosen["name"]).suffix or ".jpg"
+    loop = asyncio.get_running_loop()
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -6416,7 +6402,6 @@ async def _resolve_drive_image_for_export(client_id: str, folder_id_override: Op
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise
-
     new_index = client.get("drive_images_index", 0) + 1
     await db.clients.update_one({"id": client_id}, {"$set": {"drive_images_index": new_index}})
     logger.info(f"Drive image resolved for export: {chosen['name']} (index {new_index - 1} → {new_index})")
@@ -6424,39 +6409,19 @@ async def _resolve_drive_image_for_export(client_id: str, folder_id_override: Op
 
 
 async def _download_drive_image_at_index(client_id: str, index: int, folder_id_override: Optional[str] = None) -> Optional[str]:
-    """Download the Drive image at a specific index WITHOUT touching the counter."""
+    """Download the carousel-pool image at a specific index WITHOUT touching the counter."""
     if not client_id:
         return None
-    client = await db.clients.find_one({"id": client_id})
-    if not client:
+    images = await _list_carousel_images(client_id, folder_id_override)
+    if not images:
         return None
-    folder_id = folder_id_override or client.get("drive_images_folder_id")
-    if not folder_id:
-        return None
-
     refresh_token = await _get_google_refresh_token()
     if not refresh_token:
         return None
-
-    from google_drive_service import list_images, extract_folder_id, download_clip
-
-    resolved_folder = extract_folder_id(folder_id) or folder_id
-    loop = asyncio.get_running_loop()
-    try:
-        images = await loop.run_in_executor(None, list_images, refresh_token, resolved_folder)
-    except Exception as e:
-        from google_drive_service import GoogleTokenExpiredError
-        if isinstance(e, GoogleTokenExpiredError):
-            logger.error(f"Drive image list failed — Google token expired/revoked. Re-authorize at /api/auth/google/start")
-        else:
-            logger.warning(f"Drive image list failed: {e}")
-        return None
-
-    if not images:
-        return None
-
+    from google_drive_service import download_clip
     chosen = _pick_drive_image(images, index)
     suffix = Path(chosen["name"]).suffix or ".jpg"
+    loop = asyncio.get_running_loop()
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -8671,24 +8636,12 @@ async def list_drive_clips(client_id: str):
 
 @api_router.get("/clients/{client_id}/drive-images")
 async def list_drive_images(client_id: str):
-    """List the client's Drive images folder with thumbnails (live, no DB sync)."""
-    client = await db.clients.find_one({"id": client_id}, {"_id": 0})
-    if not client:
-        raise HTTPException(404, "Client not found")
-    folder_id = client.get("drive_images_folder_id")
-    if not folder_id:
-        return []
-    refresh_token = await _get_google_refresh_token()
-    if not refresh_token:
-        raise HTTPException(400, "Google account not connected — visit /api/auth/google/start first.")
-    from google_drive_service import list_images, extract_folder_id, GoogleTokenExpiredError
-    resolved = extract_folder_id(folder_id) or folder_id
-    loop = asyncio.get_running_loop()
-    try:
-        images = await loop.run_in_executor(None, list_images, refresh_token, resolved)
-    except GoogleTokenExpiredError:
-        raise HTTPException(400, "Google token expired/revoked — re-authorize at /api/auth/google/start")
-    return _with_drive_thumbnails(images)
+    """Carousel picker source: the client's synced, non-excluded Drive images."""
+    images = await _list_carousel_images(client_id)
+    return _with_drive_thumbnails([
+        {"drive_file_id": img["drive_file_id"], "name": img.get("name", ""), "mime_type": img.get("mime_type", "")}
+        for img in images
+    ])
 
 
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB

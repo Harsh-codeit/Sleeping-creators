@@ -43,3 +43,27 @@ async def test_list_carousel_images_override_lists_live():
         out = await server._list_carousel_images("c1", folder_id_override="FOLDERX")
     assert out == live
     li.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_download_at_index_uses_carousel_pool(tmp_path):
+    import server, google_drive_service, os
+    pool = [
+        {"drive_file_id": "i1", "name": "a.jpg", "mime_type": "image/jpeg"},
+        {"drive_file_id": "i2", "name": "b.png", "mime_type": "image/png"},
+    ]
+    with patch.object(server, "_list_carousel_images", AsyncMock(return_value=pool)), \
+         patch.object(server, "_get_google_refresh_token", AsyncMock(return_value="tok")), \
+         patch.object(google_drive_service, "download_clip", return_value="ok") as dl:
+        path = await server._download_drive_image_at_index("c1", 1)
+    assert path is not None and path.endswith(".png")     # index 1 -> b.png
+    assert dl.call_args.args[1] == "i2"
+    if path and os.path.exists(path):
+        os.unlink(path)
+
+
+@pytest.mark.asyncio
+async def test_download_at_index_returns_none_on_empty_pool():
+    import server
+    with patch.object(server, "_list_carousel_images", AsyncMock(return_value=[])):
+        assert await server._download_drive_image_at_index("c1", 0) is None
