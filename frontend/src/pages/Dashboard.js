@@ -627,21 +627,21 @@ function ProviderBalanceBanner({ alerts }) {
           <div
             key={p.provider}
             data-testid={`provider-alert-${p.provider}`}
-            className={`flex items-center gap-3 border px-4 py-2.5 ${
+            className={`flex items-start gap-3 border px-4 py-2.5 ${
               critical
                 ? "border-red-500/40 bg-red-500/10"
                 : "border-amber-500/40 bg-amber-500/10"
             }`}
           >
-            <AlertTriangle size={15} className={critical ? "text-red-400" : "text-amber-400"} />
+            <AlertTriangle size={15} className={`mt-0.5 shrink-0 ${critical ? "text-red-400" : "text-amber-400"}`} />
             <span
-              className={`text-xs font-mono font-semibold uppercase whitespace-nowrap ${
+              className={`text-xs font-mono font-semibold uppercase whitespace-nowrap shrink-0 ${
                 critical ? "text-red-400" : "text-amber-400"
               }`}
             >
               {p.provider} · {p.status}
             </span>
-            <span className="text-xs text-zinc-400 truncate">{p.detail}</span>
+            <span className="text-xs text-zinc-400 flex-1 min-w-0 break-words whitespace-pre-wrap">{p.detail}</span>
           </div>
         );
       })}
