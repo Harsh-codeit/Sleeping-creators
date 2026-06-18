@@ -525,26 +525,31 @@ def _format_recent_text_memory(hooks: list) -> str:
 # Model routing layer (Phase C) — removes hardcoded model IDs so future cost
 # levers (Batch API, cheaper OpenRouter models gated by RAG) are config-only.
 #
-# DEFAULTS REPRODUCE TODAY EXACTLY: every current generation type resolves to
-# "claude-sonnet-4-5", so shipping this changes nothing. Persona generation stays
-# on Haiku inside persona_service and is intentionally out of scope here.
+# Carousel + video generation route to Haiku to control Anthropic spend — the
+# carousel pipeline was the dominant cost and Haiku is ~3-4x cheaper than Sonnet.
+# generate_content and the playground stay on Sonnet (quality-sensitive, lower
+# volume). To lift a specific client back to Sonnet add a MODEL_TIERS entry; to
+# revert a route globally point it at _DEFAULT_MODEL. Persona generation stays on
+# Haiku inside persona_service and is intentionally out of scope here.
 #
 # Resolution order: per-client tier override (client.get("model_tier")) ->
 # route default (MODEL_ROUTES) -> global default (_DEFAULT_MODEL).
 # ─────────────────────────────────────────────────────────────────────────────
 _DEFAULT_MODEL = "claude-sonnet-4-5"
+_HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 MODEL_ROUTES: dict[str, str] = {
-    "carousel_single_pass": _DEFAULT_MODEL,
-    "carousel_caption": _DEFAULT_MODEL,
-    "single_image_hook": _DEFAULT_MODEL,
+    # Carousel generation — moved Sonnet -> Haiku for cost (see note above).
+    "carousel_single_pass": _HAIKU_MODEL,
+    "carousel_caption": _HAIKU_MODEL,
+    "single_image_hook": _HAIKU_MODEL,
+    # Single-post text + playground stay on Sonnet.
     "generate_content": _DEFAULT_MODEL,
     "playground_generate": _DEFAULT_MODEL,
-    # Video routes (anti-repetition Phase 4) — defaults reproduce the previously
-    # hardcoded Haiku EXACTLY; per-client model_tier can lift reels to Sonnet.
-    "video_content": "claude-haiku-4-5-20251001",
-    "video_hook": "claude-haiku-4-5-20251001",
-    "video_ai_text": "claude-haiku-4-5-20251001",
+    # Video routes (anti-repetition Phase 4).
+    "video_content": _HAIKU_MODEL,
+    "video_hook": _HAIKU_MODEL,
+    "video_ai_text": _HAIKU_MODEL,
 }
 
 # Per-tier overrides: {tier_name: {generation_type: model}}. Empty by default,

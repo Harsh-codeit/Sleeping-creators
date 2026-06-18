@@ -2,7 +2,7 @@
 Phase 1 (Spicy / Viral Content Overhaul) unit tests.
 
 Covers:
-  1.1 — caption + single-image writer upgraded Haiku -> Sonnet 4.5
+  1.1 — caption + single-image writer model routing (now Haiku, switched from Sonnet for cost)
   1.2 — per-client spice dial (_build_spice_block + injection into prompts)
   1.3 — softened _humanize_content (keep voice + render-safety, drop voice-flatteners)
 
@@ -110,12 +110,12 @@ def _fake_db():
 
 # ─── 1.1 — model swap ─────────────────────────────────────────────────────────
 
-def test_single_image_hook_uses_sonnet():
+def test_single_image_hook_uses_haiku():
     mock_client = _async_mock_client(_single_image_response())
     _run(_generate_single_image_hook(
         mock_client, _CLIENT, _ONBOARDING, topic="Test", platform="instagram",
     ))
-    assert _model_of(mock_client) == "claude-sonnet-4-5"
+    assert _model_of(mock_client) == "claude-haiku-4-5-20251001"
 
 
 def test_single_image_hook_records_usage_with_correct_type():
@@ -135,14 +135,14 @@ def _caption_response():
     return {"caption": "Stop scrolling. Here is the truth.", "topic_hashtags": ["#a", "#b"]}
 
 
-def test_carousel_caption_uses_sonnet():
+def test_carousel_caption_uses_haiku():
     mock_client = _mock_client(_caption_response())
     carousel_data = {"title": "T", "slides": [{"content": "hook"}]}
     _run(_generate_carousel_caption(
         mock_client, _CLIENT, _ONBOARDING, carousel_data, "instagram",
         cta_keyword=None, cta_offer=None,
     ))
-    assert _model_of(mock_client) == "claude-sonnet-4-5"
+    assert _model_of(mock_client) == "claude-haiku-4-5-20251001"
 
 
 # ─── 1.2 — spice dial helper ──────────────────────────────────────────────────

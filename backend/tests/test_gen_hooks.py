@@ -282,10 +282,11 @@ def test_use_hook_library_root_overrides_onboarding():
 
 # ─── resolve_model ────────────────────────────────────────────────────────────
 
-def test_resolve_model_defaults_reproduce_today():
-    for gen_type in ("carousel_single_pass", "carousel_caption",
-                     "single_image_hook", "generate_content"):
-        assert ai_service.resolve_model(gen_type) == "claude-sonnet-4-5"
+def test_resolve_model_route_defaults():
+    # Carousel routes moved to Haiku for cost; generate_content stays on Sonnet.
+    for gen_type in ("carousel_single_pass", "carousel_caption", "single_image_hook"):
+        assert ai_service.resolve_model(gen_type) == "claude-haiku-4-5-20251001"
+    assert ai_service.resolve_model("generate_content") == "claude-sonnet-4-5"
 
 
 def test_resolve_model_unknown_type_falls_back_to_default():
@@ -297,16 +298,16 @@ def test_resolve_model_per_client_tier_override():
     try:
         assert ai_service.resolve_model(
             "carousel_single_pass", client_tier="cheap") == "test-cheap-model"
-        # A tier that doesn't define this gen_type falls back to the route default.
+        # A tier that doesn't define this gen_type falls back to the route default (Haiku).
         assert ai_service.resolve_model(
-            "carousel_caption", client_tier="cheap") == "claude-sonnet-4-5"
+            "carousel_caption", client_tier="cheap") == "claude-haiku-4-5-20251001"
     finally:
         ai_service.MODEL_TIERS.pop("cheap", None)
 
 
 def test_resolve_model_unknown_tier_falls_back_to_default():
     assert ai_service.resolve_model(
-        "carousel_single_pass", client_tier="does-not-exist") == "claude-sonnet-4-5"
+        "carousel_single_pass", client_tier="does-not-exist") == "claude-haiku-4-5-20251001"
 
 
 def test_resolve_model_video_routes_reproduce_todays_haiku_exactly():
