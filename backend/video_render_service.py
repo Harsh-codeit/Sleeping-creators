@@ -198,21 +198,9 @@ async def generate_video_hook(client: dict, keyword: str = "", db=None) -> dict:
         )
     if forbidden_block:
         prompt = prompt + forbidden_block
-    msg = _anthropic_client().messages.create(
-        model=_video_model("video_hook", client),
-        max_tokens=400,
-        messages=[{"role": "user", "content": prompt}],
+    data = await _video_llm_json(
+        prompt, generation_type="video_hook", client=client, db=db, max_tokens=400,
     )
-    if db is not None:
-        await record_usage(db, msg, generation_type="video_hook",
-                           client_id=client.get("id"), client_name=client.get("name"))
-    raw = msg.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```", 2)[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.rsplit("```", 1)[0]
-    data = json.loads(raw)
     return {
         "title":  (data.get("title") or "").strip()[:80],
         "prompt": (data.get("prompt") or "").strip(),
@@ -297,21 +285,9 @@ async def generate_ai_text(ai_text_fields: list[dict], client: dict, topic: str,
     if variety_block:
         prompt = variety_block.strip() + "\n\n" + prompt
 
-    msg = _anthropic_client().messages.create(
-        model=_video_model("video_ai_text", client),
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}],
+    return await _video_llm_json(
+        prompt, generation_type="video_ai_text", client=client, db=db, max_tokens=1000,
     )
-    if db is not None:
-        await record_usage(db, msg, generation_type="video_ai_text",
-                           client_id=client.get("id"), client_name=client.get("name"))
-    raw = msg.content[0].text.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```", 2)[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.rsplit("```", 1)[0]
-    return json.loads(raw)
 
 
 _CONTENT_PROMPT = """You are writing content for a social media video post.
@@ -513,7 +489,9 @@ async def generate_video_content(
         model=_video_model("video_content", client),
         token_tiers=(8000, 12000) if use_variants else (4096, 8000),
     )
-    if db is not None:
+    # _usage_msg is None when the OpenRouter fallback produced the content —
+    # there is no Anthropic message/token count to record (same as carousels).
+    if db is not None and _usage_msg is not None:
         await record_usage(db, _usage_msg, generation_type="video_content",
                            client_id=client.get("id"), client_name=client.get("name"))
 
@@ -595,30 +573,132 @@ def _generate_content_json(full_prompt: str, *,
                            model: str = "claude-haiku-4-5-20251001",
                            token_tiers: tuple = (4096, 8000)) -> dict:
     """Call Claude and parse the JSON response. Retries once with more tokens
-    if the first attempt returns malformed/truncated JSON."""
+    if the first attempt returns malformed/truncated JSON.
+
+    Two-tier provider strategy mirroring ai_service.generate_carousel: Anthropic
+    is primary; a soft Anthropic error (missing key, billing/APIError, or output
+    unparseable after the retry) reports the billing incident and falls back to
+    OpenRouter so a video still ships. OverloadedError still surfaces as 503;
+    transient infra errors (RateLimit / APIConnection / APITimeout) propagate.
+    Returns (data, msg) — msg is None on the OpenRouter path (no Anthropic usage
+    to record)."""
     import anthropic as _anthropic
     from fastapi import HTTPException
     client = _anthropic_client()
     last_raw = ""
-    for attempt, max_tokens in enumerate(token_tiers, start=1):
-        try:
+    try:
+        for attempt, max_tokens in enumerate(token_tiers, start=1):
             msg = client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": full_prompt}],
             )
-        except _anthropic.OverloadedError:
-            raise HTTPException(status_code=503, detail="AI service is temporarily overloaded — please try again in a moment")
-        last_raw = msg.content[0].text if msg.content else ""
-        data = _parse_content_json(last_raw)
+            last_raw = msg.content[0].text if msg.content else ""
+            data = _parse_content_json(last_raw)
+            if data is not None:
+                return data, msg
+            logger.warning(
+                "video content JSON parse failed (attempt %d, max_tokens=%d, stop_reason=%s); raw head=%r",
+                attempt, max_tokens, getattr(msg, "stop_reason", None), last_raw[:300],
+            )
+    except _anthropic.OverloadedError:
+        raise HTTPException(status_code=503, detail="AI service is temporarily overloaded — please try again in a moment")
+    except (_anthropic.RateLimitError, _anthropic.APIConnectionError, _anthropic.APITimeoutError):
+        # Transient infra — let the caller / retry layer see it, don't degrade.
+        raise
+    except _anthropic.APIError as e:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("anthropic", e)
+        logger.warning("video content Claude call failed (%s); trying OpenRouter fallback", e)
+        data = _video_via_openrouter(full_prompt, max_tokens=max(token_tiers))
         if data is not None:
-            return data, msg
-        logger.warning(
-            "video content JSON parse failed (attempt %d, max_tokens=%d, stop_reason=%s); raw head=%r",
-            attempt, max_tokens, getattr(msg, "stop_reason", None), last_raw[:300],
-        )
+            return data, None
+        raise ValueError(
+            f"video content generation failed: Claude error ({e}) and OpenRouter fallback unavailable"
+        ) from e
+
+    # Both Anthropic attempts returned unparseable JSON (no exception). Try
+    # OpenRouter before giving up — mirrors the carousel soft-failure fallback.
+    logger.warning("video content unparseable after retry; trying OpenRouter fallback")
+    data = _video_via_openrouter(full_prompt, max_tokens=max(token_tiers))
+    if data is not None:
+        return data, None
     raise ValueError(
-        f"Claude returned unparseable JSON after retry; raw head: {last_raw[:300]!r}"
+        f"Claude returned unparseable JSON after retry and OpenRouter fallback "
+        f"unavailable; raw head: {last_raw[:300]!r}"
+    )
+
+
+# ── OpenRouter fallback for video text generation ─────────────────────────────
+# Second-tier provider, identical strategy to the carousel fallback in
+# ai_service.generate_carousel: when the Anthropic primary is unkeyed or returns
+# a soft error, the same prompt is re-run through OpenRouter (GPT-5 by default)
+# so a video still ships rather than failing the post.
+OPENROUTER_VIDEO_MODEL = os.environ.get("OPENROUTER_VIDEO_MODEL", "openai/gpt-5")
+
+_OPENROUTER_VIDEO_SYSTEM = (
+    "You write copy for short social-media videos. "
+    "Respond with ONLY valid minified JSON — no markdown fences, no explanation."
+)
+
+
+def _video_via_openrouter(prompt: str, *, max_tokens: int) -> Optional[dict]:
+    """Run one OpenRouter chat completion for a video text prompt and return the
+    parsed JSON dict, or None on any call/parse failure.
+
+    Reuses the carousel fallback's OpenRouter plumbing
+    (ai_service._openrouter_chat_completion -> hook_clients auth/headers +
+    billing-error reporting; requires OPENROUTER_API_KEY). Never touches the
+    Anthropic client, so it works when the primary is unkeyed or down."""
+    try:
+        from ai_service import _openrouter_chat_completion
+        raw = _openrouter_chat_completion(
+            _OPENROUTER_VIDEO_SYSTEM, prompt,
+            model=OPENROUTER_VIDEO_MODEL, max_tokens=max_tokens,
+        )
+    except Exception as e:
+        logger.warning("OpenRouter video fallback failed (%s)", e)
+        return None
+    return _parse_content_json(raw)
+
+
+async def _video_llm_json(prompt: str, *, generation_type: str, client: dict,
+                          db, max_tokens: int) -> dict:
+    """One video text prompt -> parsed JSON dict, Anthropic-primary with an
+    OpenRouter fallback (mirrors ai_service.generate_carousel).
+
+    A soft Anthropic failure (missing key surfaces as an APIError, billing
+    APIError, or output that won't parse) reports a billing incident and falls
+    back to OpenRouter. Transient infra errors (RateLimit / APIConnection /
+    APITimeout) propagate so a retry layer sees them. Raises if both providers
+    fail — we never silently ship empty text."""
+    import anthropic
+    try:
+        msg = _anthropic_client().messages.create(
+            model=_video_model(generation_type, client),
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        if db is not None:
+            await record_usage(db, msg, generation_type=generation_type,
+                               client_id=client.get("id"), client_name=client.get("name"))
+        data = _parse_content_json(msg.content[0].text if msg.content else "")
+        if data is not None:
+            return data
+        logger.warning("%s: Claude returned unparseable JSON; trying OpenRouter fallback", generation_type)
+    except (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.APITimeoutError):
+        raise
+    except anthropic.APIError as e:
+        import balance_alert_service as _bas
+        _bas.report_billing_error_nowait("anthropic", e)
+        logger.warning("%s: Claude failed (%s); trying OpenRouter fallback", generation_type, e)
+
+    data = _video_via_openrouter(prompt, max_tokens=max_tokens)
+    if data is not None:
+        return data
+    raise RuntimeError(
+        f"{generation_type} generation failed: Claude unavailable and OpenRouter "
+        f"fallback unavailable."
     )
 
 

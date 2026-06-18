@@ -656,3 +656,123 @@ def test_video_model_tier_override_lifts_to_sonnet():
             "video_hook", {"model_tier": "premium"}) == "claude-haiku-4-5-20251001"
     finally:
         ai_service.MODEL_TIERS.pop("premium", None)
+
+
+# ─── video: OpenRouter fallback (mirrors the carousel fallback) ───────────────
+
+def _fake_anthropic_ns():
+    """A fake `anthropic` module whose error classes are REAL exception types.
+    The suite stubs anthropic with a bare MagicMock, so video_render_service's
+    `except anthropic.APIError` clauses can't match without this."""
+    class APIError(Exception):
+        pass
+
+    class RateLimitError(APIError):
+        pass
+
+    class APIConnectionError(APIError):
+        pass
+
+    class APITimeoutError(APIError):
+        pass
+
+    class OverloadedError(APIError):
+        pass
+
+    ns = MagicMock()
+    ns.APIError = APIError
+    ns.RateLimitError = RateLimitError
+    ns.APIConnectionError = APIConnectionError
+    ns.APITimeoutError = APITimeoutError
+    ns.OverloadedError = OverloadedError
+    return ns
+
+
+def _patch_video_openrouter(monkeypatch, response):
+    """Mock the shared OpenRouter chat helper. `response` is a JSON string
+    (success) or a callable (e.g. to raise). Returns a captured-args dict."""
+    captured = {}
+
+    def fake_chat(system, user, *, model, max_tokens):
+        captured.update(system=system, user=user, model=model, max_tokens=max_tokens)
+        if callable(response):
+            return response()
+        return response
+
+    monkeypatch.setattr(ai_service, "_openrouter_chat_completion", fake_chat)
+    return captured
+
+
+def test_video_via_openrouter_parses_json(monkeypatch):
+    captured = _patch_video_openrouter(
+        monkeypatch, '{"caption": "from openrouter", "hashtags": ["x"]}')
+    out = video_render_service._video_via_openrouter("a prompt", max_tokens=500)
+    assert out["caption"] == "from openrouter"
+    assert captured["model"] == "openai/gpt-5"   # default slug, like carousels
+    assert captured["max_tokens"] == 500
+
+
+def test_video_via_openrouter_returns_none_on_failure(monkeypatch):
+    def boom():
+        raise RuntimeError("OpenRouter down")
+    _patch_video_openrouter(monkeypatch, boom)
+    assert video_render_service._video_via_openrouter("p", max_tokens=100) is None
+
+
+def test_video_llm_json_falls_back_to_openrouter_on_api_error(monkeypatch):
+    ns = _fake_anthropic_ns()
+    monkeypatch.setitem(sys.modules, "anthropic", ns)
+    bad = MagicMock()
+    bad.messages.create.side_effect = ns.APIError("billing: insufficient credits")
+    monkeypatch.setattr(video_render_service, "_anthropic_client", lambda: bad)
+    _patch_video_openrouter(monkeypatch, '{"title": "OR title", "prompt": "OR prompt"}')
+
+    out = _run(video_render_service._video_llm_json(
+        "p", generation_type="video_hook", client={"id": "c1"}, db=None, max_tokens=400))
+    assert out == {"title": "OR title", "prompt": "OR prompt"}
+
+
+def test_video_llm_json_propagates_transient_errors(monkeypatch):
+    ns = _fake_anthropic_ns()
+    monkeypatch.setitem(sys.modules, "anthropic", ns)
+    bad = MagicMock()
+    bad.messages.create.side_effect = ns.RateLimitError("slow down")
+    monkeypatch.setattr(video_render_service, "_anthropic_client", lambda: bad)
+    captured = _patch_video_openrouter(monkeypatch, '{"x": 1}')
+
+    with pytest.raises(ns.RateLimitError):
+        _run(video_render_service._video_llm_json(
+            "p", generation_type="video_hook", client={"id": "c1"}, db=None, max_tokens=400))
+    assert captured == {}  # transient infra error must NOT trigger the fallback
+
+
+def test_generate_content_json_falls_back_to_openrouter(monkeypatch):
+    ns = _fake_anthropic_ns()
+    monkeypatch.setitem(sys.modules, "anthropic", ns)
+    bad = MagicMock()
+    bad.messages.create.side_effect = ns.APIError("billing error")
+    monkeypatch.setattr(video_render_service, "_anthropic_client", lambda: bad)
+    _patch_video_openrouter(
+        monkeypatch,
+        '{"merge_values": {"H": "x"}, "caption": "from OR", "hashtags": ["a"]}')
+
+    data, msg = video_render_service._generate_content_json(
+        "p", model="m", token_tiers=(100, 200))
+    assert msg is None  # no Anthropic usage to record on the fallback path
+    assert data["caption"] == "from OR"
+
+
+def test_generate_video_hook_uses_openrouter_when_claude_fails(monkeypatch):
+    """End-to-end: a soft Claude failure routes generate_video_hook through
+    OpenRouter, and the result is shaped exactly like the primary path."""
+    monkeypatch.setattr(video_render_service, "_resolve_custom_video_prompt",
+                        AsyncMock(return_value=None))
+    ns = _fake_anthropic_ns()
+    monkeypatch.setitem(sys.modules, "anthropic", ns)
+    bad = MagicMock()
+    bad.messages.create.side_effect = ns.APIError("no anthropic key")
+    monkeypatch.setattr(video_render_service, "_anthropic_client", lambda: bad)
+    _patch_video_openrouter(monkeypatch, '{"title": "OR hook", "prompt": "do OR things"}')
+
+    out = _run(video_render_service.generate_video_hook({"id": "c1", "name": "Acme"}, "kw"))
+    assert out == {"title": "OR hook", "prompt": "do OR things"}
