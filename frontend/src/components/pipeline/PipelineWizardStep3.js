@@ -185,19 +185,39 @@ export default function PipelineWizardStep3({ form, onChange }) {
         </div>
       )}
 
-      {/* Daily cap (non-video) */}
-      {form.pipeline_type !== "video" && (
-        <div>
-          <label className="label-xs">Daily Post Cap</label>
-          <input
-            type="number" min={1} max={20}
-            value={form.max_posts_per_day}
-            onChange={e => onChange("max_posts_per_day", parseInt(e.target.value) || 10)}
-            className="w-24 field font-mono text-center"
-          />
-          <p className="text-[10px] font-mono text-zinc-600 mt-1">resets midnight UTC</p>
+      {/* Daily cap (non-video) + Require approval */}
+      <div className="grid grid-cols-2 gap-4 items-start">
+        {form.pipeline_type !== "video" && (
+          <div>
+            <label className="label-xs">Daily Post Cap</label>
+            <input
+              type="number" min={1} max={20}
+              value={form.max_posts_per_day}
+              onChange={e => onChange("max_posts_per_day", parseInt(e.target.value) || 10)}
+              className="w-24 field font-mono text-center"
+            />
+            <p className="text-[10px] font-mono text-zinc-600 mt-1">resets midnight UTC</p>
+          </div>
+        )}
+        <div className={`flex items-center justify-between pt-1 ${form.pipeline_type === "video" ? "col-span-2" : ""}`}>
+          <div>
+            <div className="text-sm text-white">Require Approval</div>
+            <div className="text-[10px] font-mono text-zinc-500 mt-0.5">Goes to draft · Approve via Telegram</div>
+          </div>
+          <button
+            type="button"
+            data-testid="require-approval-toggle"
+            onClick={() => onChange("require_approval", !form.require_approval)}
+            className={`w-10 h-5 relative transition-colors duration-200 flex-shrink-0 ${
+              form.require_approval ? "bg-amber-500" : "bg-zinc-700"
+            }`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 bg-white transition-transform duration-200 ${
+              form.require_approval ? "translate-x-5" : "translate-x-0.5"
+            }`} />
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

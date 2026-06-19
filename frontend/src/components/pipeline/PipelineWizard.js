@@ -101,8 +101,6 @@ export default function PipelineWizard({ open, onClose, onSave, saving, initial,
     const payload = {
       ...form,
       carousel_topics: form.carousel_topics.split(",").map(t => t.trim()).filter(Boolean),
-      // Approval gating was removed from pipelines — always publish without holding for approval.
-      require_approval: false,
     };
     onSave(payload);
   };
