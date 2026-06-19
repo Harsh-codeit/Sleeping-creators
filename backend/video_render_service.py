@@ -632,9 +632,17 @@ def _generate_content_json(full_prompt: str, *,
 # ── OpenRouter fallback for video text generation ─────────────────────────────
 # Second-tier provider, identical strategy to the carousel fallback in
 # ai_service.generate_carousel: when the Anthropic primary is unkeyed or returns
-# a soft error, the same prompt is re-run through OpenRouter (GPT-5 by default)
+# a soft error, the same prompt is re-run through OpenRouter (Gemini Flash by default)
 # so a video still ships rather than failing the post.
-OPENROUTER_VIDEO_MODEL = os.environ.get("OPENROUTER_VIDEO_MODEL", "openai/gpt-5")
+OPENROUTER_VIDEO_MODEL = os.environ.get("OPENROUTER_VIDEO_MODEL", "google/gemini-3.1-flash-lite")
+
+# Third-tier (last-resort) video fallback: a $0 OpenRouter ":free" model billed
+# against the free daily quota, not the paid balance — so video text still ships
+# after the paid balance is exhausted. Only fires when the paid model above also
+# fails. Set to "" to disable (chain reverts to the paid model only).
+OPENROUTER_FREE_VIDEO_MODEL = os.environ.get(
+    "OPENROUTER_FREE_VIDEO_MODEL", "deepseek/deepseek-chat-v3-0324:free"
+)
 
 _OPENROUTER_VIDEO_SYSTEM = (
     "You write copy for short social-media videos. "
@@ -649,17 +657,26 @@ def _video_via_openrouter(prompt: str, *, max_tokens: int) -> Optional[dict]:
     Reuses the carousel fallback's OpenRouter plumbing
     (ai_service._openrouter_chat_completion -> hook_clients auth/headers +
     billing-error reporting; requires OPENROUTER_API_KEY). Never touches the
-    Anthropic client, so it works when the primary is unkeyed or down."""
-    try:
-        from ai_service import _openrouter_chat_completion
-        raw = _openrouter_chat_completion(
-            _OPENROUTER_VIDEO_SYSTEM, prompt,
-            model=OPENROUTER_VIDEO_MODEL, max_tokens=max_tokens,
-        )
-    except Exception as e:
-        logger.warning("OpenRouter video fallback failed (%s)", e)
-        return None
-    return _parse_content_json(raw)
+    Anthropic client, so it works when the primary is unkeyed or down.
+
+    Tries the paid model first, then the $0 ":free" model so video text still
+    ships after the paid balance is exhausted."""
+    from ai_service import _openrouter_chat_completion, _openrouter_model_chain
+    chain = _openrouter_model_chain(OPENROUTER_VIDEO_MODEL, OPENROUTER_FREE_VIDEO_MODEL)
+    for model in chain:
+        try:
+            raw = _openrouter_chat_completion(
+                _OPENROUTER_VIDEO_SYSTEM, prompt,
+                model=model, max_tokens=max_tokens,
+            )
+        except Exception as e:
+            logger.warning("OpenRouter video fallback failed on %s (%s)", model, e)
+            continue
+        data = _parse_content_json(raw)
+        if data is not None:
+            return data
+        logger.warning("OpenRouter video fallback returned unparseable JSON on %s", model)
+    return None
 
 
 async def _video_llm_json(prompt: str, *, generation_type: str, client: dict,

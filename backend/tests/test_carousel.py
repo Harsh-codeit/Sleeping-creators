@@ -582,7 +582,7 @@ def test_safe_for_prompt_strips_quotes_and_newlines():
     assert len(_safe_for_prompt(long, max_len=100)) <= 100
 
 
-# ─── OpenRouter GPT-5 fallback ────────────────────────────────────────────────
+# ─── OpenRouter paid fallback ─────────────────────────────────────────────────
 
 _OR_CLIENT = {
     "name": "Shaniya Sevangiya",
@@ -625,7 +625,7 @@ def test_openrouter_fallback_builds_full_carousel(monkeypatch):
     ))
 
     assert res is not None
-    assert captured["model"] == "openai/gpt-5"        # default slug
+    assert captured["model"] == "google/gemini-3.1-flash-lite"   # default slug
     assert res["title"] == "3 pricing truths"
     assert len(res["slides"]) == 4
     assert res["caption"] == "Pricing is positioning."
@@ -670,3 +670,86 @@ def test_openrouter_fallback_returns_none_on_empty_slides(monkeypatch):
         _OR_CLIENT, {}, "topic", 4, "tips", "instagram", None, None
     ))
     assert res is None
+
+
+# ─── Free-model (paid -> free) fallback chain ────────────────────────────────
+
+def _patch_openrouter_per_model(monkeypatch, responses, *, fail_models=()):
+    """Patch _openrouter_chat_completion with per-model behavior and record the
+    ordered list of attempted model slugs. `responses` maps slug -> response dict
+    (returned as JSON); slugs in `fail_models` raise."""
+    attempts = []
+
+    def fake_chat(system, user, *, model, max_tokens):
+        attempts.append(model)
+        if model in fail_models:
+            raise RuntimeError(f"{model} down")
+        return json.dumps(responses.get(model, {}))
+
+    monkeypatch.setattr(ai_service, "_openrouter_chat_completion", fake_chat)
+    return attempts
+
+
+def test_openrouter_model_chain_dedups_and_drops_empty():
+    assert ai_service._openrouter_model_chain("a", "b") == ["a", "b"]
+    assert ai_service._openrouter_model_chain("a", "a") == ["a"]
+    assert ai_service._openrouter_model_chain("a", "") == ["a"]
+    assert ai_service._openrouter_model_chain("", "b") == ["b"]
+    assert ai_service._openrouter_model_chain("  a  ", "b") == ["a", "b"]
+    assert ai_service._openrouter_model_chain("", "") == []
+
+
+def test_openrouter_fallback_uses_free_model_when_paid_fails(monkeypatch):
+    """When the paid model raises (e.g. balance exhausted), the $0 free model is
+    tried next and its carousel is used."""
+    paid = ai_service.OPENROUTER_CAROUSEL_MODEL
+    free = ai_service.OPENROUTER_FREE_CAROUSEL_MODEL
+    free_resp = {
+        "title": "Free win",
+        "slides": [{"slide_number": i + 1, "content": f"s{i}"} for i in range(4)],
+        "caption": "c",
+        "hashtags": ["#x"],
+        "strategy": {"format": "tips", "hook_type": "listicle"},
+    }
+    attempts = _patch_openrouter_per_model(
+        monkeypatch, {free: free_resp}, fail_models=(paid,)
+    )
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "topic", 4, "tips", "instagram", None, None
+    ))
+    assert res is not None
+    assert res["title"] == "Free win"
+    assert attempts == [paid, free]   # paid tried first, then the free model
+
+
+def test_openrouter_fallback_uses_free_model_when_paid_returns_no_slides(monkeypatch):
+    """An empty-slides paid response also falls through to the free model."""
+    paid = ai_service.OPENROUTER_CAROUSEL_MODEL
+    free = ai_service.OPENROUTER_FREE_CAROUSEL_MODEL
+    free_resp = {
+        "title": "F",
+        "slides": [{"slide_number": i + 1, "content": f"s{i}"} for i in range(4)],
+        "caption": "c",
+        "hashtags": [],
+    }
+    attempts = _patch_openrouter_per_model(
+        monkeypatch, {paid: {"title": "P", "slides": []}, free: free_resp}
+    )
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "topic", 4, "tips", "instagram", None, None
+    ))
+    assert res is not None
+    assert res["title"] == "F"
+    assert attempts == [paid, free]
+
+
+def test_openrouter_fallback_skips_free_when_disabled(monkeypatch):
+    """Setting the free model env to "" reverts to the paid-only chain."""
+    paid = ai_service.OPENROUTER_CAROUSEL_MODEL
+    monkeypatch.setattr(ai_service, "OPENROUTER_FREE_CAROUSEL_MODEL", "")
+    attempts = _patch_openrouter_per_model(monkeypatch, {}, fail_models=(paid,))
+    res = _run(_carousel_via_openrouter(
+        _OR_CLIENT, {}, "topic", 4, "tips", "instagram", None, None
+    ))
+    assert res is None
+    assert attempts == [paid]   # free model never attempted

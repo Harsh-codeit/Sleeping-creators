@@ -708,7 +708,7 @@ def test_video_via_openrouter_parses_json(monkeypatch):
         monkeypatch, '{"caption": "from openrouter", "hashtags": ["x"]}')
     out = video_render_service._video_via_openrouter("a prompt", max_tokens=500)
     assert out["caption"] == "from openrouter"
-    assert captured["model"] == "openai/gpt-5"   # default slug, like carousels
+    assert captured["model"] == "google/gemini-3.1-flash-lite"   # default slug, like carousels
     assert captured["max_tokens"] == 500
 
 
@@ -717,6 +717,41 @@ def test_video_via_openrouter_returns_none_on_failure(monkeypatch):
         raise RuntimeError("OpenRouter down")
     _patch_video_openrouter(monkeypatch, boom)
     assert video_render_service._video_via_openrouter("p", max_tokens=100) is None
+
+
+def test_video_via_openrouter_uses_free_model_when_paid_fails(monkeypatch):
+    """When the paid model raises (balance exhausted), the $0 free model is tried
+    next and its video text is used."""
+    paid = video_render_service.OPENROUTER_VIDEO_MODEL
+    free = video_render_service.OPENROUTER_FREE_VIDEO_MODEL
+    attempts = []
+
+    def fake_chat(system, user, *, model, max_tokens):
+        attempts.append(model)
+        if model == paid:
+            raise RuntimeError("paid balance exhausted")
+        return '{"caption": "from free model", "hashtags": ["y"]}'
+
+    monkeypatch.setattr(ai_service, "_openrouter_chat_completion", fake_chat)
+    out = video_render_service._video_via_openrouter("p", max_tokens=200)
+    assert out is not None
+    assert out["caption"] == "from free model"
+    assert attempts == [paid, free]
+
+
+def test_video_via_openrouter_skips_free_when_disabled(monkeypatch):
+    """Setting the free video model env to "" reverts to the paid-only chain."""
+    paid = video_render_service.OPENROUTER_VIDEO_MODEL
+    monkeypatch.setattr(video_render_service, "OPENROUTER_FREE_VIDEO_MODEL", "")
+    attempts = []
+
+    def fake_chat(system, user, *, model, max_tokens):
+        attempts.append(model)
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(ai_service, "_openrouter_chat_completion", fake_chat)
+    assert video_render_service._video_via_openrouter("p", max_tokens=100) is None
+    assert attempts == [paid]
 
 
 def test_video_llm_json_falls_back_to_openrouter_on_api_error(monkeypatch):

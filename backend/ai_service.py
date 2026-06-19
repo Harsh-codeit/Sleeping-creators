@@ -560,11 +560,38 @@ MODEL_TIERS: dict[str, dict[str, str]] = {}
 
 # Second-tier carousel fallback. When the primary (Anthropic) generation can't
 # produce — no ANTHROPIC_API_KEY, or a soft failure (bad JSON / APIError) — we
-# generate via OpenRouter GPT-5 instead. There is NO canned static template: if
+# generate via OpenRouter (Gemini Flash) instead. There is NO canned static template: if
 # OpenRouter also fails, carousel generation raises and the post fails with an
 # error rather than shipping placeholder copy.
 # Slug is env-overridable so operators can swap models without a deploy.
-OPENROUTER_CAROUSEL_MODEL = os.environ.get("OPENROUTER_CAROUSEL_MODEL", "openai/gpt-5")
+# Default is a cheap, reliable, provider-diverse model (vs Anthropic primary):
+# Gemini Flash Lite is ~JSON-strong, multilingual, and cheap enough to absorb a
+# traffic surge if the Anthropic primary goes fully down. The undated alias
+# auto-tracks the latest dated version so it won't 404 on deprecation.
+OPENROUTER_CAROUSEL_MODEL = os.environ.get("OPENROUTER_CAROUSEL_MODEL", "google/gemini-3.1-flash-lite")
+
+# Third-tier (last-resort) carousel fallback. A $0 OpenRouter ":free" model that
+# is billed against the free daily quota, NOT the paid credit balance — so it
+# keeps generating after the paid balance is exhausted. It only fires when the
+# paid OpenRouter call above also fails (billing/HTTP error or unparseable JSON).
+# Set to "" to disable (chain reverts to the paid model only).
+OPENROUTER_FREE_CAROUSEL_MODEL = os.environ.get(
+    "OPENROUTER_FREE_CAROUSEL_MODEL", "deepseek/deepseek-chat-v3-0324:free"
+)
+
+
+def _openrouter_model_chain(*models: str) -> list[str]:
+    """Ordered, de-duplicated, non-empty list of OpenRouter model slugs.
+
+    Used to build a paid->free fallback chain while letting operators disable a
+    tier by setting its env var to "" (it is simply dropped from the chain).
+    """
+    chain: list[str] = []
+    for m in models:
+        slug = (m or "").strip()
+        if slug and slug not in chain:
+            chain.append(slug)
+    return chain
 
 
 def resolve_model(generation_type: str, *, spice_level: str | None = None,
@@ -1545,7 +1572,7 @@ async def generate_carousel(
 ) -> dict:
     api_key = os.environ.get('ANTHROPIC_API_KEY', '')
     if not api_key:
-        # No primary provider — try OpenRouter GPT-5. We never ship canned static
+        # No primary provider — try the OpenRouter fallback. We never ship canned static
         # slides: if no AI provider can generate, fail the post with a clear error
         # so it surfaces to the user instead of silently publishing placeholder copy.
         _or = await _carousel_via_openrouter(
@@ -1636,7 +1663,7 @@ async def generate_carousel(
     except (anthropic.APIError, ValueError, KeyError, _json.JSONDecodeError) as e:
         import balance_alert_service as _bas
         _bas.report_billing_error_nowait("anthropic", e)
-        logger.warning(f"Carousel single-pass failed ({e}), trying OpenRouter GPT-5 fallback")
+        logger.warning(f"Carousel single-pass failed ({e}), trying OpenRouter fallback")
         _or = await _carousel_via_openrouter(
             client, onboarding, topic, slide_count,
             slide_format, platform, cta_keyword, cta_offer,
@@ -1771,7 +1798,7 @@ async def _generate_carousel_openrouter(
     cta_keyword: str | None,
     cta_offer: str | None,
 ) -> dict | None:
-    """Generate a carousel via OpenRouter GPT-5 — the second-tier fallback.
+    """Generate a carousel via OpenRouter — the second-tier fallback.
 
     Self-contained: never touches the Anthropic client, so it works when the
     primary provider is down or unkeyed. Returns a data dict shaped like
@@ -1818,20 +1845,32 @@ async def _generate_carousel_openrouter(
     )
 
     max_tokens = min(8192, 600 + slide_count * 220)
-    try:
-        raw = await asyncio.to_thread(
-            _openrouter_chat_completion, system, user,
-            model=OPENROUTER_CAROUSEL_MODEL, max_tokens=max_tokens,
-        )
-        data = _parse_json_response(raw)
-    except Exception as e:
-        logger.warning(f"OpenRouter carousel fallback failed ({e})")
+
+    # Paid -> free fallback chain. The paid model is tried first; only if it
+    # fails (billing/HTTP error or empty/unparseable slides) do we fall through
+    # to the $0 ":free" model, which survives paid-balance exhaustion.
+    chain = _openrouter_model_chain(OPENROUTER_CAROUSEL_MODEL, OPENROUTER_FREE_CAROUSEL_MODEL)
+    data = None
+    used_model = None
+    for model in chain:
+        try:
+            raw = await asyncio.to_thread(
+                _openrouter_chat_completion, system, user,
+                model=model, max_tokens=max_tokens,
+            )
+            parsed = _parse_json_response(raw)
+        except Exception as e:
+            logger.warning(f"OpenRouter carousel fallback failed on {model} ({e})")
+            continue
+        if parsed and (parsed.get("slides") or []):
+            data, used_model = parsed, model
+            break
+        logger.warning(f"OpenRouter carousel fallback returned no slides on {model}")
+
+    if data is None:
         return None
 
     raw_slides = data.get("slides") or []
-    if not raw_slides:
-        logger.warning("OpenRouter carousel fallback returned no slides")
-        return None
 
     target = min(slide_count, MAX_CAROUSEL_SLIDES) if isinstance(slide_count, int) and slide_count > 0 else MAX_CAROUSEL_SLIDES
     norm_slides = []
@@ -1846,7 +1885,7 @@ async def _generate_carousel_openrouter(
     )
     data.setdefault("author_title", client.get("carousel_author_title") or industry)
     logger.info(
-        f"OpenRouter GPT-5 carousel fallback produced {len(norm_slides)} slides "
+        f"OpenRouter carousel fallback ({used_model}) produced {len(norm_slides)} slides "
         f"for '{data.get('title', '')}'"
     )
     return data
