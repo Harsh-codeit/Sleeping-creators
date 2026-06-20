@@ -354,6 +354,7 @@ function MonthView({ currentDate, postsByDate, clientColorMap, onSelectPost, onD
           const dayPosts = postsByDate[key] || [];
           const inMonth = isSameMonth(day, currentDate);
           const today = isToday(day);
+          const publishedToday = today ? dayPosts.filter(p => p.status === "published").length : 0;
           const maxShow = 2;
           const overflow = dayPosts.length - maxShow;
 
@@ -376,7 +377,15 @@ function MonthView({ currentDate, postsByDate, clientColorMap, onSelectPost, onD
                 >
                   {format(day, "d")}
                 </button>
-                {dayPosts.length === 0 && inMonth && (
+                {today ? (
+                  <span
+                    className="flex items-center gap-0.5 text-[9px] font-mono text-emerald-400"
+                    title={`${publishedToday} published today`}
+                  >
+                    <CheckCircle size={9} />
+                    {publishedToday}
+                  </span>
+                ) : (dayPosts.length === 0 && inMonth && (
                   <a
                     href={`/queue?schedule_date=${key}`}
                     className="opacity-0 hover:opacity-100 p-0.5 text-zinc-600 hover:text-zinc-400 transition-all"
@@ -384,7 +393,7 @@ function MonthView({ currentDate, postsByDate, clientColorMap, onSelectPost, onD
                   >
                     <Plus size={10} />
                   </a>
-                )}
+                ))}
               </div>
               <div className="space-y-0.5">
                 {dayPosts.slice(0, maxShow).map(post => (
