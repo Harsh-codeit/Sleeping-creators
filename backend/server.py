@@ -2003,8 +2003,9 @@ async def execute_pipeline(pipeline: dict, now: datetime, stagger_minutes: int =
                 post_text = content["text"]
                 extra = {"hashtags": content.get("hashtags", [])}
 
-            needs_approval = bool(pipeline.get("require_approval"))
-            approval_token = str(uuid.uuid4()) if needs_approval else None
+            # Approval flow removed — AI posts always schedule directly (never draft).
+            needs_approval = False
+            approval_token = None
 
             # Assign drive image index for carousel posts so preview and export stay in sync
             drive_image_index_for_post = None
@@ -2266,7 +2267,7 @@ async def _generate_and_schedule_plan_for_client(client: dict):
 
     # Schedule all posts immediately
     platforms = pipeline.get("platforms", ["instagram"])
-    require_approval = pipeline.get("require_approval", False)
+    require_approval = False  # approval flow removed — posts schedule directly
     post_time_str = pipeline.get("post_time", "09:00") or "09:00"
     pipeline_id = pipeline.get("id")
     pipeline_name = pipeline.get("name", "Content Plan")
@@ -3821,7 +3822,7 @@ async def schedule_content_plan(client_id: str, req: ContentPlanScheduleRequest)
         )
 
     platforms = (pipeline or {}).get("platforms", ["instagram"])
-    require_approval = (pipeline or {}).get("require_approval", False)
+    require_approval = False  # approval flow removed — posts schedule directly
     post_time_str = (pipeline or {}).get("post_time", "09:00") or "09:00"
     pipeline_id = (pipeline or {}).get("id")
     pipeline_name = (pipeline or {}).get("name", "Content Plan")
@@ -4180,7 +4181,7 @@ async def onboard_client(data: OnboardingCreate):
         delay_hours = int(app_settings.get("onboard_pipeline_delay_hours") or 0)
         posting_time = app_settings.get("onboard_pipeline_posting_time") or "09:00"
         slide_count = app_settings.get("onboard_pipeline_slide_count") or None
-        require_approval = bool(app_settings.get("require_approval", False))
+        require_approval = False  # approval flow removed — pipelines never gate on approval
         created = await create_pipeline(client["id"], PipelineCreate(
             name="Daily Content",
             pipeline_type="standard",

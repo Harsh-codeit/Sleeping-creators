@@ -194,7 +194,6 @@ export default function Settings() {
             {[
               { key: "automation_enabled", label: "Enable Automation Engine", desc: "Master switch for all background automation tasks" },
               { key: "auto_publish", label: "Auto-Publish Posts", desc: "Publish approved posts automatically at scheduled times" },
-              { key: "require_approval", label: "Require Human Approval", desc: "AI-generated posts require manual approval before scheduling" },
             ].map(({ key, label, desc }) => (
               <div key={key} className="flex items-start justify-between gap-4">
                 <div>
