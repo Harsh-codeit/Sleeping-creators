@@ -456,7 +456,7 @@ export default function Clients() {
             <div
               key={client.id}
               className="grid grid-cols-12 gap-4 px-4 py-3 data-row cursor-pointer"
-              onClick={() => navigate(`/clients/${client.id}?tab=Pipeline`)}
+              onClick={() => navigate(`/clients/${client.id}`)}
               data-testid={`client-table-row-${client.id}`}
             >
               <div className="col-span-3 flex items-center gap-2.5">
@@ -496,7 +496,11 @@ export default function Clients() {
               {(() => {
                 const b = pipelineBadge(client.pipeline_status ?? "none", client.pipeline_next_run);
                 return (
-                  <div className="col-span-2 flex items-center gap-1.5 text-xs font-mono min-w-0">
+                  <div
+                    onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}?tab=Pipeline`); }}
+                    title="Open pipeline"
+                    className="col-span-2 flex items-center gap-1.5 text-xs font-mono min-w-0 cursor-pointer hover:opacity-80"
+                  >
                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${b.dot}`} />
                     <span className={`${b.color} truncate`}>{b.label}</span>
                     {b.sub !== "—" && <span className="text-zinc-600 truncate">· {b.sub}</span>}
@@ -516,7 +520,7 @@ export default function Clients() {
                 </button>
                 <button type="button"
                   data-testid={`client-view-btn-${client.id}`}
-                  onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}?tab=Pipeline`); }}
+                  onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
                   className="p-1.5 text-zinc-500 hover:text-white border border-transparent hover:border-zinc-700 transition-colors duration-150"
                 >
                   <ExternalLink size={13} />
