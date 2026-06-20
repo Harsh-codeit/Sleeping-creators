@@ -11,6 +11,7 @@ from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Union, Literal
 from client_utils import _recompute_derived, _get_tone, _expand_derived_into_doc
+from pipeline_status import rollup_pipeline_status
 import taxonomy
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from passlib.context import CryptContext
@@ -3451,16 +3452,24 @@ async def list_clients():
             {"$group": {"_id": "$client_id", "error": {"$first": "$error_message"}}},
         ]).to_list(None),
         db.pipelines.aggregate([
-            {"$group": {"_id": "$client_id", "count": {"$sum": 1}}},
+            {"$group": {
+                "_id": "$client_id",
+                "count": {"$sum": 1},
+                "pipelines": {"$push": {"status": "$status", "next_run_at": "$next_run_at"}},
+            }},
         ]).to_list(None),
     )
     scheduled_map = {r["_id"]: r["count"] for r in scheduled_raw}
     failed_map = {r["_id"]: r["error"] for r in failed_raw}
-    pipeline_map = {r["_id"]: r["count"] for r in pipeline_raw}
+    pipeline_map = {r["_id"]: r for r in pipeline_raw}
     for c in clients:
         c["scheduled_count"] = scheduled_map.get(c["id"], 0)
         c["last_post_error"] = failed_map.get(c["id"])
-        c["pipeline_count"] = pipeline_map.get(c["id"], 0)
+        row = pipeline_map.get(c["id"])
+        c["pipeline_count"] = row["count"] if row else 0
+        status, next_run = rollup_pipeline_status(row["pipelines"] if row else [])
+        c["pipeline_status"] = status
+        c["pipeline_next_run"] = next_run
     return clients
 
 @api_router.post("/clients", status_code=201)
