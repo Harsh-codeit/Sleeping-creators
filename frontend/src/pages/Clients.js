@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Plus, Pause, Play, Trash2, Circle, ExternalLink, RefreshCw, Sparkles, Search, X, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUser } from "../context/UserContext";
+import { pipelineBadge } from "@/lib/pipelineBadge";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -434,10 +435,11 @@ export default function Clients() {
         <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-zinc-800 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
           <div className="col-span-3">Client</div>
           <div className="col-span-2">Industry</div>
-          <div className="col-span-3">Platforms</div>
+          <div className="col-span-2">Platforms</div>
+          <div className="col-span-2">Pipeline</div>
           <div className="col-span-1 text-center">Today</div>
           <div className="col-span-1 text-center">Total</div>
-          <div className="col-span-2 text-right">Actions</div>
+          <div className="col-span-1 text-right">Actions</div>
         </div>
 
         {loading ? (
@@ -454,7 +456,7 @@ export default function Clients() {
             <div
               key={client.id}
               className="grid grid-cols-12 gap-4 px-4 py-3 data-row cursor-pointer"
-              onClick={() => navigate(`/clients/${client.id}`)}
+              onClick={() => navigate(`/clients/${client.id}?tab=Pipeline`)}
               data-testid={`client-table-row-${client.id}`}
             >
               <div className="col-span-3 flex items-center gap-2.5">
@@ -481,7 +483,7 @@ export default function Clients() {
                 </div>
               </div>
               <div className="col-span-2 flex items-center text-xs text-zinc-400 font-mono"><span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{client.carousel_author_title || client.niche || client.industry || "—"}</span></div>
-              <div className="col-span-3 flex items-center flex-wrap gap-1">
+              <div className="col-span-2 flex items-center flex-wrap gap-1">
                 {(client.platforms || []).slice(0, 4).map(p => (
                   <span key={p} className="text-[9px] font-mono px-1 py-0.5 border border-zinc-700 text-zinc-500">
                     {p.slice(0, 2).toUpperCase()}
@@ -491,9 +493,19 @@ export default function Clients() {
                   <span className="text-[9px] text-zinc-600 font-mono">+{client.platforms.length - 4}</span>
                 )}
               </div>
+              {(() => {
+                const b = pipelineBadge(client.pipeline_status ?? "none", client.pipeline_next_run);
+                return (
+                  <div className="col-span-2 flex items-center gap-1.5 text-xs font-mono min-w-0">
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${b.dot}`} />
+                    <span className={`${b.color} truncate`}>{b.label}</span>
+                    {b.sub !== "—" && <span className="text-zinc-600 truncate">· {b.sub}</span>}
+                  </div>
+                );
+              })()}
               <div className="col-span-1 flex items-center justify-center text-sm font-mono text-white">{client.posts_today ?? 0}</div>
               <div className="col-span-1 flex items-center justify-center text-sm font-mono text-zinc-400">{client.posts_total ?? 0}</div>
-              <div className="col-span-2 flex items-center justify-end gap-1">
+              <div className="col-span-1 flex items-center justify-end gap-1">
                 <button type="button"
                   data-testid={`client-pause-btn-${client.id}`}
                   onClick={e => togglePause(client, e)}
@@ -504,7 +516,7 @@ export default function Clients() {
                 </button>
                 <button type="button"
                   data-testid={`client-view-btn-${client.id}`}
-                  onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}`); }}
+                  onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}?tab=Pipeline`); }}
                   className="p-1.5 text-zinc-500 hover:text-white border border-transparent hover:border-zinc-700 transition-colors duration-150"
                 >
                   <ExternalLink size={13} />
