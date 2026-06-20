@@ -4728,7 +4728,7 @@ async def dashboard_overview():
         "scheduled": scheduled,
         "drafts": drafts,
         "posts_today": posts_today,
-        "queue_size": scheduled + drafts,
+        "queue_size": scheduled,
         "success_rate": success_rate,
         "platform_distribution": platform_counts,
         "recent_activity": recent_logs,

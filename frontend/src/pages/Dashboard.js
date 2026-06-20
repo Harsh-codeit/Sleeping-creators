@@ -778,7 +778,7 @@ export default function Dashboard() {
         <StatCard
           icon={Clock} label="Queue Size"
           value={overview?.queue_size ?? 0}
-          sub={`${overview?.scheduled ?? 0} scheduled · ${overview?.drafts ?? 0} drafts`}
+          sub="scheduled to publish"
           accentClass="text-amber-400"
           testId="stat-card-queue-size"
         />
