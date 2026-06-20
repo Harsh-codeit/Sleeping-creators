@@ -11,6 +11,7 @@ import WeekPlanTab from "@/components/strategy/WeekPlanTab";
 import ReportTab from "@/components/strategy/ReportTab";
 import { StatusBadge, getPostActions } from "@/lib/postStatus";
 import { errText } from "@/lib/errText";
+import { resolveInitialTab } from "@/lib/initialTab";
 import { render } from "@react-email/render";
 import { ContentStrategyOnboardingEmail } from "../emails/ContentStrategyOnboardingEmail";
 
@@ -1878,8 +1879,10 @@ export default function ClientDetail() {
   const [client, setClient] = useState(null);
   const [posts, setPosts] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [activeTab, setActiveTab] = useState("Overview");
   const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() =>
+    resolveInitialTab(searchParams.get("tab"), TABS)
+  );
   const strategyTab = searchParams.get("strategyTab") || "overview";
   const setStrategyTab = (t) => setSearchParams(prev => {
     const next = new URLSearchParams(prev);
