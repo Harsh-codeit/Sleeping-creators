@@ -1,4 +1,5 @@
 import os
+import asyncio
 import json
 import logging
 import re
@@ -484,11 +485,33 @@ async def generate_video_content(
             "COMPLETELY different opening line and hook angle. No two variants may share their first sentence."
         )
 
-    data, _usage_msg = _generate_content_json(
-        full_prompt,
-        model=_video_model("video_content", client),
-        token_tiers=(8000, 12000) if use_variants else (4096, 8000),
-    )
+    # Retry caption/content generation up to 3 times before giving up. Transient
+    # failures (rate limits, a momentary unparseable response from the OpenRouter
+    # fallback) frequently clear on a later attempt; only the 3rd consecutive
+    # failure surfaces as an error so the caller marks the post failed.
+    _gen_model = _video_model("video_content", client)
+    _gen_tiers = (8000, 12000) if use_variants else (4096, 8000)
+    _max_attempts = 3
+    data = _usage_msg = None
+    for _attempt in range(1, _max_attempts + 1):
+        try:
+            data, _usage_msg = _generate_content_json(
+                full_prompt, model=_gen_model, token_tiers=_gen_tiers,
+            )
+            break
+        except Exception as _gen_err:
+            if _attempt >= _max_attempts:
+                logger.error(
+                    "video content generation failed after %d attempts: %s",
+                    _max_attempts, _gen_err,
+                )
+                raise
+            _backoff = 2 ** (_attempt - 1)  # 1s, then 2s
+            logger.warning(
+                "video content generation attempt %d/%d failed (%s); retrying in %ds",
+                _attempt, _max_attempts, _gen_err, _backoff,
+            )
+            await asyncio.sleep(_backoff)
     # _usage_msg is None when the OpenRouter fallback produced the content —
     # there is no Anthropic message/token count to record (same as carousels).
     if db is not None and _usage_msg is not None:
