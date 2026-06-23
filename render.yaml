@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: sleeping-creators-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URL
+        sync: false          # you paste this in Render dashboard
+      - key: DB_NAME
+        value: sleeping-creators
+      - key: JWT_SECRET_KEY
+        generateValue: true  # Render auto-generates a secure secret
+      - key: FRONTEND_URL
+        value: https://sleeping-creators-api.onrender.com   # update after deploy
+      - key: STORAGE_BACKEND
+        value: local         # no R2 needed for MVP
+      - key: ANTHROPIC_API_KEY
+        sync: false          # paste your key in dashboard
+      - key: REDIS_URL
+        value: ""            # leave blank, scheduler will run without Redis
+      - key: APIFY_API_KEY
+        value: ""
+      - key: BUNDLE_API_KEY
+        value: ""
+      - key: GOOGLE_CLIENT_ID
+        value: ""
+      - key: GOOGLE_CLIENT_SECRET
+        value: ""
+      - key: INSTAGRAM_APP_ID
+        value: ""
+      - key: INSTAGRAM_APP_SECRET
+        value: ""
+      - key: FACEBOOK_APP_ID
+        value: ""
+      - key: FACEBOOK_APP_SECRET
+        value: ""
+      - key: CREATOMATE_API_KEY
+        value: ""
+      - key: CREATOMATE_WEBHOOK_SECRET
+        value: ""
+      - key: CREATOMATE_WEBHOOK_URL
+        value: ""
+      - key: R2_ACCOUNT_ID
+        value: ""
+      - key: R2_ACCESS_KEY_ID
+        value: ""
+      - key: R2_SECRET_ACCESS_KEY
+        value: ""
+      - key: R2_BUCKET_NAME
+        value: ""
+      - key: R2_PUBLIC_URL
+        value: ""

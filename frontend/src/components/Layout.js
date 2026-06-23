@@ -1,97 +1,79 @@
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
-  LayoutDashboard, Users, LayoutTemplate, CalendarRange, BarChart3,
-  Settings, Circle, Layers, LogOut, AlertTriangle, Mail, Sparkles
+  LayoutDashboard, LayoutTemplate, CalendarRange, BarChart3,
+  Settings, Layers, LogOut, Sparkles, User, ChevronDown
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import axios from "axios";
+import { useState } from "react";
 import { useUser } from "../context/UserContext";
 import ErrorBoundary from "./ErrorBoundary";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-const NAV = [
-  { path: "/",                label: "Dashboard", icon: LayoutDashboard, exact: true,  resource: "dashboard" },
-  { path: "/clients",         label: "Clients",   icon: Users,                          resource: "clients" },
-  { path: "/templates",       label: "Templates", icon: LayoutTemplate,                 resource: "templates" },
-  { path: "/calendar",        label: "Calendar",  icon: CalendarRange,                  resource: "calendar" },
-  { path: "/carousel",        label: "Studio",    icon: Layers,                         resource: "studio" },
-  { path: "/analytics",       label: "Analytics", icon: BarChart3,                      resource: "analytics" },
-  { path: "/settings",        label: "Settings",  icon: Settings,                       resource: "settings" },
-  { path: "/hook-library",    label: "Hook Library",    icon: Sparkles,    resource: "settings" },
-  { path: "/mail",            label: "Mail",      icon: Mail,          ownerOnly: true, resource: null },
+const BOTTOM_NAV = [
+  { path: "/",          label: "Home",      icon: LayoutDashboard, exact: true },
+  { path: "/create",    label: "Create",    icon: Layers },
+  { path: "/templates", label: "Templates", icon: LayoutTemplate },
+  { path: "/calendar",  label: "Calendar",  icon: CalendarRange },
+  { path: "/settings",  label: "Settings",  icon: Settings },
 ];
 
+const SIDEBAR_NAV = [
+  { path: "/",             label: "Dashboard",   icon: LayoutDashboard, exact: true },
+  { path: "/carousel",     label: "Create",      icon: Layers },
+  { path: "/templates",    label: "Templates",   icon: LayoutTemplate },
+  { path: "/calendar",     label: "Calendar",    icon: CalendarRange },
+  { path: "/analytics",    label: "Analytics",   icon: BarChart3 },
+  { path: "/hook-library", label: "Inspiration", icon: Sparkles },
+  { path: "/settings",     label: "Settings",    icon: Settings },
+];
+
+function isActive(nav, pathname) {
+  if (nav.exact) return pathname === nav.path;
+  return pathname.startsWith(nav.path);
+}
+
 export default function Layout({ onLogout }) {
-  const location = useLocation();
-  const [engineRunning, setEngineRunning] = useState(true);
-  const [driveConnected, setDriveConnected] = useState(true);
-  const { role, permissions } = useUser();
+  const location              = useLocation();
+  const navigate              = useNavigate();
+  const { name, email, role } = useUser() ?? {};
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const visibleNav = NAV.filter(nav => {
-    if (nav.ownerOnly) return role === "owner";
-    if (role === "owner" || !permissions) return true;
-    return permissions[nav.resource]?.view === true;
-  });
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const autoResp = await axios.get(`${API}/automation/status`);
-        setEngineRunning(autoResp.data.scheduler_running);
-      } catch {}
-    };
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const checkDrive = async () => {
-      try {
-        const resp = await axios.get(`${API}/auth/google/status`);
-        setDriveConnected(resp.data.connected);
-      } catch {}
-    };
-    checkDrive();
-    const interval = setInterval(checkDrive, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isActive = (nav) => {
-    if (nav.exact) return location.pathname === nav.path;
-    return location.pathname.startsWith(nav.path);
-  };
+  const initials = name
+    ? name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+    : "SC";
 
   return (
-    <div className="flex h-screen bg-zinc-950 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+    <div className="flex h-screen overflow-hidden" style={{ background: "#f5f4fb" }}>
+
+      {/* ── Desktop sidebar ── */}
+      <aside className="hidden md:flex w-56 flex-shrink-0 flex-col"
+        style={{ background: "#fff", borderRight: "1px solid #ebe9f6" }}>
+
         {/* Logo */}
-        <div className="h-14 flex items-center gap-2.5 px-4 border-b border-zinc-800">
-          <img src={logo} alt="Sleeping Creators" className="w-7 h-7 rounded" />
+        <div className="h-14 flex items-center gap-2.5 px-4" style={{ borderBottom: "1px solid #ebe9f6" }}>
+          <img src={logo} alt="Sleeping Creators" className="w-7 h-7 rounded-lg" />
           <div>
-            <div className="text-sm font-bold tracking-tight text-white">Sleeping Creators</div>
-            <div className="text-[10px] text-zinc-500 font-mono">CONTENT ENGINE</div>
+            <div className="text-sm font-bold tracking-tight" style={{ color: "#5B5BD6" }}>Sleeping Creators</div>
+            <div className="text-[10px] font-medium" style={{ color: "#9ca3af" }}>CONTENT STUDIO</div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto scrollbar-thin">
-          {visibleNav.map((nav) => {
-            const Icon = nav.icon;
-            const active = isActive(nav);
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+          {SIDEBAR_NAV.map(nav => {
+            const Icon   = nav.icon;
+            const active = isActive(nav, location.pathname);
             return (
               <NavLink
                 key={nav.path}
                 to={nav.path}
                 data-testid={`nav-${nav.label.toLowerCase().replace(/\s+/g, "-")}`}
-                className={`flex items-center gap-2.5 px-3 py-2 text-sm transition-colors duration-150 ${
-                  active
-                    ? "bg-white text-black font-semibold"
-                    : "text-zinc-400 hover:text-white hover:bg-zinc-800"
-                }`}
+                className="flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-xl transition-all"
+                style={active
+                  ? { background: "#EEF0FF", color: "#5B5BD6", fontWeight: 600 }
+                  : { color: "#6b7280" }
+                }
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = "#f5f4fb"; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = ""; }}
               >
                 <Icon size={15} />
                 <span>{nav.label}</span>
@@ -100,49 +82,97 @@ export default function Layout({ onLogout }) {
           })}
         </nav>
 
-        {/* Engine Status + Logout */}
-        <div className="p-3 border-t border-zinc-800 space-y-2">
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800">
-            <Circle
-              size={7}
-              className={`fill-current ${engineRunning ? "text-emerald-400 animate-pulse" : "text-red-500"}`}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-mono text-zinc-400">AUTOMATION ENGINE</div>
-              <div className={`text-[11px] font-semibold ${engineRunning ? "text-emerald-400" : "text-red-400"}`}>
-                {engineRunning ? "RUNNING" : "STOPPED"}
+        {/* User footer */}
+        <div className="p-3" style={{ borderTop: "1px solid #ebe9f6" }}>
+          <div className="relative">
+            <button
+              onClick={() => setUserMenuOpen(v => !v)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors"
+              style={{ color: "#374151" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f5f4fb"}
+              onMouseLeave={e => e.currentTarget.style.background = ""}
+            >
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0"
+                style={{ background: "#EEF0FF", color: "#5B5BD6" }}>
+                {initials}
               </div>
-            </div>
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-xs font-semibold truncate" style={{ color: "#111827" }}>
+                  {name || (role === "owner" ? "Admin" : "User")}
+                </div>
+                {email && <div className="text-[10px] truncate" style={{ color: "#9ca3af" }}>{email}</div>}
+              </div>
+              <ChevronDown size={13} style={{ color: "#d1d5db", flexShrink: 0, transform: userMenuOpen ? "rotate(180deg)" : "" }} />
+            </button>
+
+            {userMenuOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 rounded-xl overflow-hidden shadow-lg z-50"
+                style={{ background: "#fff", border: "1px solid #ebe9f6" }}>
+                <NavLink
+                  to="/settings"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2.5 text-xs transition-colors"
+                  style={{ color: "#374151" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#f5f4fb"}
+                  onMouseLeave={e => e.currentTarget.style.background = ""}
+                >
+                  <User size={13} /> Profile & Settings
+                </NavLink>
+                <div style={{ height: 1, background: "#ebe9f6" }} />
+                <button
+                  data-testid="logout-btn"
+                  onClick={() => { setUserMenuOpen(false); onLogout(); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs transition-colors"
+                  style={{ color: "#6b7280" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#fff0f0"; e.currentTarget.style.color = "#dc2626"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = ""; e.currentTarget.style.color = "#6b7280"; }}
+                >
+                  <LogOut size={13} /> Sign Out
+                </button>
+              </div>
+            )}
           </div>
-          <button
-            data-testid="logout-btn"
-            onClick={onLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 text-zinc-500 hover:text-white hover:bg-zinc-800 text-xs font-mono transition-colors duration-150"
-          >
-            <LogOut size={13} />
-            Sign Out
-          </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto scrollbar-thin flex flex-col">
-        {!driveConnected && (
-          <div className="flex items-center gap-3 px-5 py-2.5 bg-amber-500/10 border-b border-amber-500/30 text-amber-400 text-xs font-mono flex-shrink-0">
-            <AlertTriangle size={13} className="flex-shrink-0" />
-            <span className="flex-1">Google Drive is disconnected — video clips and images cannot be downloaded.</span>
-            <a
-              href={`${process.env.REACT_APP_BACKEND_URL}/api/auth/google/start`}
-              className="px-3 py-1 border border-amber-500/50 hover:border-amber-400 hover:text-amber-300 transition-colors duration-150 whitespace-nowrap"
-            >
-              Reconnect Drive
-            </a>
-          </div>
-        )}
-        <ErrorBoundary resetKey={location.pathname}>
-          <Outlet />
-        </ErrorBoundary>
-      </main>
+      {/* ── Main content ── */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+
+        {/* Mobile top bar */}
+        <header className="md:hidden flex items-center px-4 h-14 flex-shrink-0"
+          style={{ background: "#fff", borderBottom: "1px solid #ebe9f6", paddingTop: "env(safe-area-inset-top)" }}>
+          <img src={logo} alt="" className="w-6 h-6 rounded-md" />
+          <span className="text-sm font-bold ml-2" style={{ color: "#5B5BD6" }}>Sleeping Creators</span>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0" style={{ background: "#f5f4fb" }}>
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
+        </main>
+
+        {/* ── Mobile bottom nav ── */}
+        <nav className="md:hidden flex items-center"
+          style={{ background: "#fff", borderTop: "1px solid #ebe9f6", paddingBottom: "env(safe-area-inset-bottom)" }}>
+          {BOTTOM_NAV.map(nav => {
+            const Icon   = nav.icon;
+            const active = isActive(nav, location.pathname);
+            return (
+              <NavLink
+                key={nav.path}
+                to={nav.path}
+                className="flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors"
+                style={{ color: active ? "#5B5BD6" : "#9ca3af" }}
+              >
+                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+                <span className="text-[10px] font-medium">{nav.label}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+      </div>
+
     </div>
   );
 }

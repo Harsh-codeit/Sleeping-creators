@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { useUser } from "../context/UserContext";
 import { toast } from "sonner";
 import {
   Wand2, Film, Download, X, Upload, HardDrive,
@@ -27,7 +28,7 @@ function isVideo(url) {
 
 // ── Step indicator ────────────────────────────────────────────────────────────
 function StepBar({ step, onStepClick, canGoTo }) {
-  const STEPS = ["Client", "Template", "Style", "Content", "Render"];
+  const STEPS = ["Brief", "Template", "Style", "Content", "Render"];
   return (
     <div className="flex items-center justify-center py-4 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
       {STEPS.map((label, i) => {
@@ -112,11 +113,11 @@ function TemplateCard({ template, selected, onClick }) {
 }
 
 // ── Caption mock card (IG-style social feed preview) ─────────────────────────
-function CaptionMockCard({ client, caption, hashtags }) {
+function CaptionMockCard({ caption, hashtags }) {
   if (!caption && !hashtags) return null;
   const allTags = (hashtags || "").split(",").map(t => t.trim().replace(/^#/, "")).filter(Boolean);
   const tags = allTags.slice(0, 5);
-  const initials = (client?.avatar || (client?.name || "?").slice(0, 2)).toUpperCase();
+  const initials = "SC";
 
   return (
     <div className="bg-zinc-900 border border-zinc-800">
@@ -144,7 +145,7 @@ function CaptionMockCard({ client, caption, hashtags }) {
 }
 
 // ── Preview pane — persistent video preview across steps 3-5 ─────────────────
-function PreviewPane({ step, selectedClient, selectedTemplate, filterName, caption, hashtags, rendering, pollAttempt, post, isSucceeded, isFailed }) {
+function PreviewPane({ step, selectedTemplate, filterName, caption, hashtags, rendering, pollAttempt, post, isSucceeded, isFailed }) {
   const cssFilter = filterName ? FILTER_CSS[filterName] : "none";
 
   // Step 5 — succeeded: real rendered MP4
@@ -152,7 +153,7 @@ function PreviewPane({ step, selectedClient, selectedTemplate, filterName, capti
     return (
       <div className="p-6 flex flex-col gap-4">
         <video src={post.r2_video_url} controls className="w-full bg-zinc-900 border border-zinc-800" />
-        <CaptionMockCard client={selectedClient} caption={caption} hashtags={hashtags} />
+        <CaptionMockCard caption={caption} hashtags={hashtags} />
       </div>
     );
   }
@@ -172,7 +173,7 @@ function PreviewPane({ step, selectedClient, selectedTemplate, filterName, capti
             <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest">{stage}…</span>
           </div>
         </div>
-        <CaptionMockCard client={selectedClient} caption={caption} hashtags={hashtags} />
+        <CaptionMockCard caption={caption} hashtags={hashtags} />
       </div>
     );
   }
@@ -232,20 +233,29 @@ function PreviewPane({ step, selectedClient, selectedTemplate, filterName, capti
         {selectedTemplate.name}
         {filterName && <span className="text-zinc-300"> · {filterName}</span>}
       </div>
-      {step >= 4 && <CaptionMockCard client={selectedClient} caption={caption} hashtags={hashtags} />}
+      {step >= 4 && <CaptionMockCard caption={caption} hashtags={hashtags} />}
     </div>
   );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function VideoCreator() {
+  const user = useUser();
+  const userClientId = user?.client_id || "";
+
   const [step, setStep] = useState(1);
 
-  // Step 1
-  const [clients, setClients] = useState([]);
-  const [selectedClient, setSelectedClient] = useState(null);
-  const [clientSearch, setClientSearch] = useState("");
-  const [globalVideoPrompt, setGlobalVideoPrompt] = useState("");
+  // Step 1 — Video Brief
+  const [brief, setBrief] = useState({
+    topic: "",
+    hookStyle: "",
+    tone: "",
+    duration: "",
+    targetAudience: "",
+    cta: "",
+    notes: "",
+  });
+  const updateBrief = (key, val) => setBrief(p => ({ ...p, [key]: val }));
 
   // Step 2
   const [templates, setTemplates] = useState([]);
@@ -300,20 +310,6 @@ export function VideoCreator() {
   const [draftLoaded, setDraftLoaded] = useState(false); // prevents autosave from clobbering during restore
 
   // ── Data fetching ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    axios.get(`${API}/clients`)
-      .then(r => setClients(r.data))
-      .catch(() => toast.error("Failed to load clients"));
-    axios.get(`${API}/settings`)
-      .then(r => setGlobalVideoPrompt(r.data.global_video_prompt || ""))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!selectedClient) return;
-    const clientPrompt = selectedClient.strategy?.video_prompt || "";
-    setPrompt(clientPrompt || globalVideoPrompt);
-  }, [selectedClient, globalVideoPrompt]); // re-fire when global prompt loads (settings/clients race)
 
   useEffect(() => {
     if (step === 2) {
@@ -364,7 +360,7 @@ export function VideoCreator() {
       if (!raw) return;
       const d = JSON.parse(raw);
       // Don't offer to restore if it's just a step-1 stub
-      if (d?.selectedClientId && (d.selectedTemplateId || d.caption || d.prompt || Object.keys(d.texts || {}).length)) {
+      if (d?.selectedTemplateId && (d.caption || d.prompt || Object.keys(d.texts || {}).length)) {
         setDraft(d);
       } else {
         localStorage.removeItem(DRAFT_KEY);
@@ -374,15 +370,14 @@ export function VideoCreator() {
 
   // Autosave on state change (debounced 400ms). Skip while rendering/posted.
   useEffect(() => {
-    if (!selectedClient && !selectedTemplate) return;  // nothing to save
-    if (post || rendering) return;                     // don't save during/after render
+    if (!selectedTemplate) return;
+    if (post || rendering) return;
     const t = setTimeout(() => {
       const payload = {
         savedAt: new Date().toISOString(),
         step,
-        selectedClientId: selectedClient?.id,
         selectedTemplateId: selectedTemplate?.id,
-        filterName, musicUrl,
+        brief, filterName, musicUrl,
         selectedTrack,
         prompt, texts, caption, hashtags,
         thumbnailOffsetMs,
@@ -392,7 +387,7 @@ export function VideoCreator() {
       try { localStorage.setItem(DRAFT_KEY, JSON.stringify(payload)); } catch {}
     }, 400);
     return () => clearTimeout(t);
-  }, [step, selectedClient, selectedTemplate, filterName, musicUrl, selectedTrack,
+  }, [step, selectedTemplate, brief, filterName, musicUrl, selectedTrack,
       prompt, texts, caption, hashtags, thumbnailOffsetMs, alsoPostStory, selectedClips, post, rendering]);
 
   const clearDraft = () => {
@@ -403,13 +398,6 @@ export function VideoCreator() {
   const handleResumeDraft = async () => {
     if (!draft) return;
     try {
-      const client = clients.find(c => c.id === draft.selectedClientId);
-      if (!client) { toast.error("Client from draft no longer exists"); clearDraft(); return; }
-
-      // Restore client (also fetches drive clips)
-      await handleSelectClient(client);
-
-      // Fetch templates + find saved one
       let template = null;
       if (draft.selectedTemplateId) {
         try {
@@ -420,6 +408,7 @@ export function VideoCreator() {
         } catch { toast.error("Failed to load template from draft"); }
       }
 
+      if (draft.brief) setBrief(draft.brief);
       setSelectedTemplate(template);
       setFilterName(draft.filterName || null);
       setMusicUrl(draft.musicUrl || "");
@@ -434,7 +423,7 @@ export function VideoCreator() {
       setAlsoPostStory(typeof draft.alsoPostStory === "boolean" ? draft.alsoPostStory : true);
       setSelectedClips(draft.selectedClips || []);
       setStep(Math.min(draft.step || 1, template ? 5 : 2));
-      setDraft(null);  // hide banner
+      setDraft(null);
       toast.success("Draft restored");
     } catch {
       toast.error("Failed to restore draft");
@@ -442,14 +431,6 @@ export function VideoCreator() {
   };
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleSelectClient = async (client) => {
-    setSelectedClient(client);
-    try {
-      const r = await axios.get(`${API}/clients/${client.id}/drive-clips`);
-      setClips(r.data);
-    } catch { setClips([]); }
-  };
-
   const handleSelectTemplate = (t) => {
     if (selectedTemplate?.id === t.id) return;
     setSelectedTemplate(t);
@@ -458,11 +439,6 @@ export function VideoCreator() {
     setMusicUrl("");
     setSelectedTrack(null);
     setFilterName(null);
-    // Reset prompt to the client/global default, not blank — otherwise the
-    // user hits step 4 with an empty AI Prompt even though a global prompt
-    // is configured. The useEffect on selectedClient won't re-fire here.
-    const clientPrompt = selectedClient?.strategy?.video_prompt || "";
-    setPrompt(clientPrompt || globalVideoPrompt || "");
     setCaption("");
     setHashtags("");
     setPost(null);
@@ -470,14 +446,27 @@ export function VideoCreator() {
     setRendering(false);
   };
 
+  const buildPromptFromBrief = () => {
+    const parts = [];
+    if (brief.topic)          parts.push(`Topic: ${brief.topic}`);
+    if (brief.hookStyle)      parts.push(`Hook style: ${brief.hookStyle}`);
+    if (brief.tone)           parts.push(`Tone: ${brief.tone}`);
+    if (brief.duration)       parts.push(`Duration: ${brief.duration}`);
+    if (brief.targetAudience) parts.push(`Target audience: ${brief.targetAudience}`);
+    if (brief.cta)            parts.push(`Call to action: ${brief.cta}`);
+    if (brief.notes)          parts.push(`Additional notes: ${brief.notes}`);
+    return parts.join(". ");
+  };
+
   const handleGenerate = async () => {
-    if (!prompt.trim()) { toast.error("Enter a prompt first"); return; }
+    const builtPrompt = prompt.trim() || buildPromptFromBrief();
+    if (!builtPrompt) { toast.error("Fill in at least one brief field or enter a prompt"); return; }
     setGenerating(true);
     try {
       const r = await axios.post(`${API}/videos/generate-content`, {
         template_id: selectedTemplate.id,
-        client_id: selectedClient.id,
-        prompt: prompt.trim(),
+        client_id: userClientId,
+        prompt: builtPrompt,
       });
       setTexts(prev => ({ ...prev, ...r.data.merge_values }));
       setCaption(r.data.caption || "");
@@ -487,7 +476,7 @@ export function VideoCreator() {
   };
 
   const handleRender = async () => {
-    if (!selectedTemplate || !selectedClient) return;
+    if (!selectedTemplate) return;
     const requiredClips = selectedTemplate?.merge_fields?.filter(f => f.role === "clip").length || 0;
     if (requiredClips > 0 && selectedClips.length < requiredClips) {
       toast.error(`This template needs ${requiredClips} clip${requiredClips === 1 ? "" : "s"}; you've added ${selectedClips.length}. Go to Content → Clips.`);
@@ -498,12 +487,12 @@ export function VideoCreator() {
       const filled = Object.fromEntries(Object.entries(texts).filter(([, v]) => v.trim()));
       const hashtagArr = hashtags.split(",").map(h => h.trim().replace(/^#/, "")).filter(Boolean);
       const body = {
-        client_id: selectedClient.id,
+        client_id: userClientId,
         template_id: selectedTemplate.id,
         clip_drive_ids: selectedClips.map(c => c.drive_file_id),
         music_url: musicUrl.trim() || undefined,
         filter_name: filterName || undefined,
-        prompt: prompt.trim() || undefined,
+        prompt: (prompt.trim() || buildPromptFromBrief()) || undefined,
         caption: caption.trim() || undefined,
         hashtags: hashtagArr.length ? hashtagArr : undefined,
         generated_merge_values: Object.keys(filled).length ? filled : undefined,
@@ -556,7 +545,7 @@ export function VideoCreator() {
 
       // Get presigned URL
       const { data: { upload_url, key, clip_id } } = await axios.get(
-        `${API}/clients/${selectedClient.id}/clips/presign`,
+        `${API}/clients/${userClientId}/clips/presign`,
         { params: { filename: file.name, content_type: file.type || "video/mp4" } }
       );
 
@@ -571,7 +560,7 @@ export function VideoCreator() {
       setUploadProgress(100);
 
       // Register metadata with server
-      const r = await axios.post(`${API}/clients/${selectedClient.id}/clips/register`, {
+      const r = await axios.post(`${API}/clients/${userClientId}/clips/register`, {
         key, clip_id, filename: file.name,
         content_type: file.type || "video/mp4",
         duration: meta.duration, width: meta.width, height: meta.height,
@@ -658,7 +647,8 @@ export function VideoCreator() {
 
   const handleStartOver = () => {
     setStep(1);
-    setSelectedClient(null); setSelectedTemplate(null);
+    setSelectedTemplate(null);
+    setBrief({ topic: "", hookStyle: "", tone: "", duration: "", targetAudience: "", cta: "", notes: "" });
     setTexts({}); setSelectedClips([]); setMusicUrl(""); setSelectedTrack(null);
     setFilterName(null); setPrompt(""); setCaption(""); setHashtags("");
     setPost(null); setPostId(null); setRendering(false);
@@ -675,11 +665,11 @@ export function VideoCreator() {
   const hasAudioMergeField = selectedTemplate?.merge_fields?.some(f => f.role === "audio") || false;
   const hasTemplateAudio = !!selectedTemplate?.audio_url || hasAudioMergeField;
 
-  const canNext = { 1: !!selectedClient, 2: !!selectedTemplate, 3: true, 4: true };
+  const canNext = { 1: !!brief.topic.trim(), 2: !!selectedTemplate, 3: true, 4: true };
   const canGoTo = (n) => {
     if (n === 1) return true;
-    if (n === 2) return !!selectedClient;
-    return !!selectedClient && !!selectedTemplate;
+    if (n === 2) return !!brief.topic.trim();
+    return !!brief.topic.trim() && !!selectedTemplate;
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -693,7 +683,6 @@ export function VideoCreator() {
           <div className="w-[400px] xl:w-[440px] flex-shrink-0 border-r border-zinc-800 overflow-y-auto bg-zinc-950">
             <PreviewPane
               step={step}
-              selectedClient={selectedClient}
               selectedTemplate={selectedTemplate}
               filterName={filterName}
               caption={caption}
@@ -708,87 +697,88 @@ export function VideoCreator() {
         )}
         <div className="flex-1 overflow-y-auto">
 
-        {/* Step 1: Client */}
+        {/* Step 1: Video Brief */}
         {step === 1 && (
-          <div className="p-6">
-            {/* Draft restore banner */}
-            {draft && !selectedClient && (
-              <div className="mb-5 border border-amber-400/30 bg-amber-400/5 px-4 py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-amber-200">Unsaved draft from earlier</div>
-                  <div className="text-[10px] font-mono text-zinc-500 mt-0.5">
-                    Saved {new Date(draft.savedAt).toLocaleString()}
-                  </div>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={clearDraft}
-                    className="border border-zinc-700 text-zinc-400 text-xs hover:bg-zinc-800 transition-colors duration-200 px-3 py-1.5"
-                  >
-                    Discard
-                  </button>
-                  <button
-                    onClick={handleResumeDraft}
-                    className="bg-white text-black text-xs font-semibold hover:bg-zinc-200 transition-colors duration-200 px-3 py-1.5"
-                  >
-                    Resume
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="p-6 max-w-2xl">
+            <div className="mb-6">
+              <h2 className="text-base font-semibold text-white mb-1">Video Brief</h2>
+              <p className="text-xs text-zinc-500">Fill in the details below — all fields feed into the AI generation in one go.</p>
+            </div>
 
-            <input
-              type="text"
-              value={clientSearch}
-              onChange={e => setClientSearch(e.target.value)}
-              placeholder="Search clients…"
-              className="w-full max-w-sm bg-zinc-900 border border-zinc-700 text-white text-xs px-3 py-2 font-mono focus:outline-none focus:border-zinc-500 transition-colors duration-200 mb-5"
-            />
-            {clients.length === 0 ? (
-              <div className="py-16 text-center font-mono text-xs text-zinc-600">No clients found.</div>
-            ) : (() => {
-              const q = clientSearch.trim().toLowerCase();
-              const filtered = q ? clients.filter(c => (c.name || "").toLowerCase().includes(q) || (c.niche || c.industry || "").toLowerCase().includes(q)) : clients;
-              return filtered.length === 0 ? (
-                <div className="py-8 text-center font-mono text-xs text-zinc-600">No clients match "{clientSearch}"</div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {filtered.map(c => {
-                    const initials = (c.avatar || (c.name || "?").split(" ").map(w => w[0]).join("").slice(0, 2)).toUpperCase();
-                    const isSelected = selectedClient?.id === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => handleSelectClient(c)}
-                        className={`p-3 text-left border transition-all duration-200 flex items-center gap-3 ${
-                          isSelected ? "border-white bg-zinc-900" : "border-zinc-800 hover:border-zinc-600 bg-zinc-900"
-                        }`}
-                      >
-                        {c.profile_photo_url ? (
-                          <img
-                            src={c.profile_photo_url}
-                            alt={c.name}
-                            className={`w-11 h-11 flex-shrink-0 object-cover ${isSelected ? "ring-2 ring-white" : ""}`}
-                          />
-                        ) : (
-                          <div className={`w-11 h-11 flex-shrink-0 flex items-center justify-center font-bold text-sm ${
-                            isSelected ? "bg-white text-black" : "bg-zinc-800 text-zinc-300"
-                          }`}>
-                            {initials}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-white truncate leading-tight">{c.name}</div>
-                          <div className="text-[10px] font-mono text-zinc-500 mt-0.5 truncate">
-                            {c.niche || c.industry || "—"}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            <div className="space-y-4">
+              {/* Topic */}
+              <BriefField label="Topic / Subject *" hint="What is this video about?">
+                <input
+                  type="text"
+                  value={brief.topic}
+                  onChange={e => updateBrief("topic", e.target.value)}
+                  placeholder="e.g. 5 morning habits that changed my life"
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-sm px-3 py-2.5 focus:outline-none focus:border-zinc-400 transition-colors"
+                />
+              </BriefField>
+
+              {/* Hook Style + Tone in a row */}
+              <div className="grid grid-cols-2 gap-4">
+                <BriefField label="Hook Style" hint="How to open the video">
+                  <BriefSelect
+                    value={brief.hookStyle}
+                    onChange={v => updateBrief("hookStyle", v)}
+                    options={["Question", "Bold Claim", "Statistic", "Story / Anecdote", "Challenge / Dare"]}
+                    placeholder="Choose hook style"
+                  />
+                </BriefField>
+                <BriefField label="Tone" hint="Overall feel">
+                  <BriefSelect
+                    value={brief.tone}
+                    onChange={v => updateBrief("tone", v)}
+                    options={["Educational", "Inspirational", "Entertaining", "Professional", "Casual / Conversational"]}
+                    placeholder="Choose tone"
+                  />
+                </BriefField>
+              </div>
+
+              {/* Duration + CTA in a row */}
+              <div className="grid grid-cols-2 gap-4">
+                <BriefField label="Duration" hint="Target length">
+                  <BriefSelect
+                    value={brief.duration}
+                    onChange={v => updateBrief("duration", v)}
+                    options={["15 seconds", "30 seconds", "60 seconds", "90 seconds"]}
+                    placeholder="Choose duration"
+                  />
+                </BriefField>
+                <BriefField label="Call to Action" hint="What should viewers do?">
+                  <BriefSelect
+                    value={brief.cta}
+                    onChange={v => updateBrief("cta", v)}
+                    options={["Follow for more", "Link in bio", "Comment below", "Share this", "Save for later", "Send a DM"]}
+                    placeholder="Choose CTA"
+                  />
+                </BriefField>
+              </div>
+
+              {/* Target Audience */}
+              <BriefField label="Target Audience" hint="Who is this for?">
+                <input
+                  type="text"
+                  value={brief.targetAudience}
+                  onChange={e => updateBrief("targetAudience", e.target.value)}
+                  placeholder="e.g. fitness beginners aged 20–35"
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-sm px-3 py-2.5 focus:outline-none focus:border-zinc-400 transition-colors"
+                />
+              </BriefField>
+
+              {/* Additional Notes */}
+              <BriefField label="Additional Notes" hint="Anything specific to include or avoid">
+                <textarea
+                  value={brief.notes}
+                  onChange={e => updateBrief("notes", e.target.value)}
+                  rows={3}
+                  placeholder="e.g. mention the free guide, avoid jargon, end with a quote..."
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-sm px-3 py-2.5 focus:outline-none focus:border-zinc-400 transition-colors resize-none"
+                />
+              </BriefField>
+            </div>
           </div>
         )}
 
@@ -969,30 +959,17 @@ export function VideoCreator() {
                 {/* Generate tab */}
                 {step4Tab === "generate" && (
                   <div className="flex flex-col gap-6">
-                    {/* Saved hooks — chip strip; clicking a chip fills the AI Prompt textarea */}
-                    {(selectedClient?.strategy?.video_hooks?.length ?? 0) > 0 && (
+                    {brief.topic && (
                       <div>
                         <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-2">
-                          Saved hooks
+                          Brief summary
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {selectedClient.strategy.video_hooks.map(h => {
-                            const isActive = prompt.trim() === (h.prompt || "").trim();
-                            return (
-                              <button
-                                key={h.id}
-                                onClick={() => setPrompt(h.prompt)}
-                                title={h.prompt}
-                                className={`font-mono text-[11px] px-2.5 py-1 border transition-colors duration-200 max-w-[240px] truncate ${
-                                  isActive
-                                    ? "border-white text-white bg-zinc-900"
-                                    : "border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-900"
-                                }`}
-                              >
-                                {h.title || (h.prompt ? h.prompt.slice(0, 40) + "…" : "Untitled")}
-                              </button>
-                            );
-                          })}
+                          {[brief.hookStyle, brief.tone, brief.duration, brief.cta].filter(Boolean).map((tag, i) => (
+                            <span key={i} className="font-mono text-[11px] px-2.5 py-1 border border-zinc-700 text-zinc-400">
+                              {tag}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -1200,8 +1177,8 @@ export function VideoCreator() {
                     <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Summary</div>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center text-xs">
-                    <span className="font-mono text-zinc-500">Client</span>
-                    <span className="text-white font-semibold">{selectedClient?.name}</span>
+                    <span className="font-mono text-zinc-500">Topic</span>
+                    <span className="text-white font-semibold truncate max-w-[220px]">{brief.topic || "—"}</span>
                   </div>
                   <div className="px-4 py-3 flex justify-between items-center text-xs">
                     <span className="font-mono text-zinc-500">Template</span>
@@ -1529,6 +1506,36 @@ export function VideoCreator() {
 
       <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
     </div>
+  );
+}
+
+// ── Video Brief helpers ───────────────────────────────────────────────────────
+
+function BriefField({ label, hint, children }) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <label className="text-xs font-semibold text-zinc-300">{label}</label>
+        {hint && <span className="text-[10px] font-mono text-zinc-600">{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BriefSelect({ value, onChange, options, placeholder }) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full bg-zinc-900 border border-zinc-700 text-sm px-3 py-2.5 focus:outline-none focus:border-zinc-400 transition-colors appearance-none"
+      style={{ color: value ? "#fff" : "#52525b" }}
+    >
+      <option value="" disabled>{placeholder}</option>
+      {options.map(o => (
+        <option key={o} value={o} style={{ color: "#fff", background: "#18181b" }}>{o}</option>
+      ))}
+    </select>
   );
 }
 

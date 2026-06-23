@@ -1,173 +1,230 @@
-import { useState, useEffect } from "react";
-import logo from "../assets/logo.png";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import logo from "../assets/logo.png";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Login({ onLogin }) {
-  const [mode, setMode]         = useState(null); // "setup" | "login"
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm]   = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [showPw, setShowPw]     = useState(false);
-  const [email, setEmail]       = useState("");
+  const [step, setStep]         = useState(1);
+  const [identifier, setId]     = useState("");
+  const [notFound, setNotFound] = useState(false);
+  const [sending, setSending]   = useState(false);
+  const [devMode, setDevMode]   = useState(false);
+  const [devOtp, setDevOtp]     = useState("");
 
+  const sendOTP = async () => {
+    const val = identifier.trim();
+    if (!val) return toast.error("Enter your phone number or email");
+    setNotFound(false);
+    setSending(true);
+    try {
+      const resp = await axios.post(`${API}/auth/otp/send`, { identifier: val, purpose: "login" });
+      if (resp.data.debug_otp) { setDevMode(true); setDevOtp(resp.data.debug_otp); }
+      setStep(2);
+    } catch (err) {
+      if (err.response?.status === 404) setNotFound(true);
+      else toast.error(err.response?.data?.detail || "Could not send OTP");
+    } finally { setSending(false); }
+  };
+
+  return (
+    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#f5f4fb" }}>
+      {/* Left panel — desktop only */}
+      <div className="hidden lg:flex lg:w-[42%] flex-col justify-between p-12"
+        style={{ background: "#fff", borderRight: "1px solid #ebe9f6" }}>
+        <div className="flex items-center gap-3">
+          <img src={logo} alt="Sleeping Creators" className="w-9 h-9 rounded-xl" />
+          <span className="font-bold text-lg" style={{ color: "#5B5BD6" }}>Sleeping Creators</span>
+        </div>
+        <div>
+          <div className="text-3xl font-bold leading-snug mb-3" style={{ color: "#111827" }}>
+            Create content<br />while you sleep.
+          </div>
+          <p style={{ color: "#6b7280", fontSize: 14 }}>
+            Schedule once, publish to Instagram automatically — powered by AI.
+          </p>
+        </div>
+        <p style={{ fontSize: 11, color: "#d1d5db" }}>Free to start · No credit card required</p>
+      </div>
+
+      {/* Right form — scrollable */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "40px 24px 32px" }}>
+        <div style={{ maxWidth: 380, margin: "0 auto" }}>
+          <div className="flex items-center gap-2.5 lg:hidden" style={{ marginBottom: 32 }}>
+            <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 10 }} />
+            <span className="font-bold" style={{ color: "#5B5BD6", fontSize: 15 }}>Sleeping Creators</span>
+          </div>
+
+          {step === 1 && (
+            <Step1 identifier={identifier} setId={setId} notFound={notFound} sending={sending} onSend={sendOTP} />
+          )}
+          {step === 2 && (
+            <Step2
+              identifier={identifier}
+              devMode={devMode}
+              devOtp={devOtp}
+              onBack={() => { setStep(1); setNotFound(false); setDevMode(false); }}
+              onLogin={onLogin}
+            />
+          )}
+
+          <p className="text-center text-sm" style={{ marginTop: 24, color: "#9ca3af" }}>
+            Don't have an account?{" "}
+            <Link to="/signup" className="font-semibold" style={{ color: "#5B5BD6" }}>Sign up free</Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Step1({ identifier, setId, notFound, sending, onSend }) {
+  return (
+    <>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="font-bold" style={{ fontSize: 22, color: "#111827", marginBottom: 4 }}>Welcome back</h1>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>Enter your phone or email to log in</p>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#374151", marginBottom: 5 }}>
+            Phone number or email
+          </label>
+          <div style={{ background: "#fff", border: `1.5px solid ${notFound ? "#fca5a5" : "#e5e4f0"}`, borderRadius: 14, overflow: "hidden" }}>
+            <input
+              type="text" value={identifier} onChange={e => setId(e.target.value)}
+              placeholder="+91 98765 43210 or you@email.com"
+              autoFocus onKeyDown={e => e.key === "Enter" && onSend()}
+              style={{ width: "100%", background: "transparent", padding: "13px 16px", fontSize: 14, color: "#111827", outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+          {notFound && (
+            <p style={{ fontSize: 12, color: "#dc2626", marginTop: 6 }}>
+              No account found.{" "}
+              <Link to="/signup" style={{ color: "#dc2626", textDecoration: "underline" }}>Sign up instead →</Link>
+            </p>
+          )}
+        </div>
+        <Btn loading={sending} onClick={onSend}>
+          {sending ? <><Loader2 size={15} className="animate-spin" /> Sending…</> : "Continue"}
+        </Btn>
+      </div>
+    </>
+  );
+}
+
+function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
+  const [otp, setOtp]         = useState(["", "", "", "", "", ""]);
+  const [loading, setLoading] = useState(false);
+  const [countdown, setCd]    = useState(30);
+  const refs = useRef([]);
+
+  useEffect(() => { refs.current[0]?.focus(); }, []);
   useEffect(() => {
-    axios.get(`${API}/auth/status`).then(r => {
-      setMode(r.data.setup_required ? "setup" : "login");
-    }).catch(() => setMode("login"));
-  }, []);
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCd(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
 
-  const handleSubmit = async e => {
-    e.preventDefault();
-    if (!password) return toast.error("Enter a password");
-    if (mode === "setup") {
-      if (password.length < 6) return toast.error("Password must be at least 6 characters");
-      if (password !== confirm) return toast.error("Passwords don't match");
-    }
+  const handleChange = (i, val) => {
+    const d = val.replace(/\D/g, "").slice(-1);
+    const next = [...otp]; next[i] = d; setOtp(next);
+    if (d && i < 5) refs.current[i + 1]?.focus();
+  };
+  const handleKey = (i, e) => {
+    if (e.key === "Backspace" && !otp[i] && i > 0) refs.current[i - 1]?.focus();
+  };
+
+  const verify = async () => {
+    const code = otp.join("") || devOtp;
+    if (!devMode && code.length < 6) return toast.error("Enter all 6 digits");
     setLoading(true);
     try {
-      let data;
-      if (email.trim()) {
-        const resp = await axios.post(`${API}/auth/team/login`, { email: email.trim(), password });
-        data = resp.data;
-      } else {
-        const endpoint = mode === "setup" ? "/auth/setup" : "/auth/login";
-        const resp = await axios.post(`${API}${endpoint}`, { password });
-        data = resp.data;
-      }
-      localStorage.setItem("sc_token", data.token);
-      onLogin(data.token);
+      // In dev mode, use the debug OTP that backend will accept
+      const resp = await axios.post(`${API}/auth/otp/verify`, {
+        identifier: identifier.trim(),
+        otp: devMode ? devOtp : code,
+        purpose: "login",
+      });
+      localStorage.setItem("sc_token", resp.data.token);
+      onLogin(resp.data.token);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Authentication failed");
-    } finally {
+      toast.error(err.response?.data?.detail || "Could not verify. Try again.");
       setLoading(false);
     }
   };
 
-  if (!mode) return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="w-5 h-5 border-2 border-zinc-600 border-t-white rounded-full animate-spin" />
-    </div>
-  );
+  const resend = async () => {
+    try {
+      await axios.post(`${API}/auth/otp/send`, { identifier: identifier.trim(), purpose: "login" });
+      setOtp(["", "", "", "", "", ""]); setCd(30);
+      refs.current[0]?.focus();
+    } catch { toast.error("Could not resend"); }
+  };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-6">
-      <div className="w-full max-w-sm">
-
-        {/* Brand */}
-        <div className="text-center mb-10">
-          <img
-            src={logo}
-            alt="Sleeping Creators"
-            className="w-14 h-14 rounded-2xl mb-5 mx-auto"
-          />
-          <h1 className="text-2xl font-bold text-white tracking-tight">Sleeping Creators</h1>
-          <p className="text-zinc-500 text-sm mt-1 font-mono">
-            {mode === "setup" ? "Set up your admin password to get started" : "Enter your password to continue"}
-          </p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-zinc-950 border border-zinc-800 p-6 space-y-4">
-
-          {mode === "setup" && (
-            <div className="bg-zinc-900 border border-zinc-700 px-4 py-3 text-xs text-zinc-400 font-mono">
-              First time setup — choose a strong password to protect your dashboard.
-            </div>
-          )}
-
-          {/* Email field (team members only, login mode) */}
-          {mode === "login" && (
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
-                Email
-              </label>
-              <input
-                data-testid="email-input"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="team@agency.com"
-                className="w-full bg-zinc-900 border border-zinc-800 px-4 py-3 text-white text-sm placeholder-zinc-700 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-colors rounded-none"
-              />
-              <p className="text-[10px] font-mono text-zinc-600 mt-1">
-                TEAM MEMBERS ONLY — LEAVE BLANK FOR ADMIN
-              </p>
-            </div>
-          )}
-
-          {/* Password field */}
-          <div>
-            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
-              {mode === "setup" ? "New Password" : "Password"}
-            </label>
-            <div className="relative">
-              <input
-                data-testid="password-input"
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && !confirm && handleSubmit(e)}
-                placeholder="••••••••"
-                autoFocus
-                className="w-full bg-black border border-zinc-700 px-4 py-3 text-white text-sm placeholder-zinc-700 focus:outline-none focus:border-zinc-400 transition-colors pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 text-xs font-mono"
-              >
-                {showPw ? "hide" : "show"}
-              </button>
-            </div>
-          </div>
-
-          {/* Confirm field (setup only) */}
-          {mode === "setup" && (
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1.5">
-                Confirm Password
-              </label>
-              <input
-                data-testid="confirm-password-input"
-                type={showPw ? "text" : "password"}
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleSubmit(e)}
-                placeholder="••••••••"
-                className="w-full bg-black border border-zinc-700 px-4 py-3 text-white text-sm placeholder-zinc-700 focus:outline-none focus:border-zinc-400 transition-colors"
-              />
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            data-testid="login-submit-btn"
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 bg-white text-black font-bold text-sm hover:bg-zinc-200 disabled:opacity-50 transition-colors duration-150 mt-2"
-          >
-            {loading ? "Please wait..." : mode === "setup" ? "Set Password & Enter" : "Enter Dashboard"}
-          </button>
-        </div>
-
-        <div className="mt-4 flex items-center justify-center gap-4 text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-600">
-          <Link to="/privacy-policy" className="transition-colors duration-150 hover:text-white">
-            Privacy Policy
-          </Link>
-          <span className="text-zinc-800">/</span>
-          <Link to="/terms-of-service" className="transition-colors duration-150 hover:text-white">
-            Terms of Service
-          </Link>
-        </div>
-
-        <p className="text-center text-[10px] font-mono text-zinc-700 mt-6 tracking-widest">
-          SLEEPING CREATORS · CONTENT ENGINE
+    <>
+      <div style={{ marginBottom: 20 }}>
+        <button onClick={onBack} className="flex items-center gap-1.5 font-medium"
+          style={{ color: "#5B5BD6", fontSize: 13, marginBottom: 12 }}>
+          <ArrowLeft size={13} /> Change
+        </button>
+        <h1 className="font-bold" style={{ fontSize: 22, color: "#111827", marginBottom: 4 }}>Enter OTP</h1>
+        <p style={{ fontSize: 14, color: "#6b7280" }}>
+          Sent to <strong style={{ color: "#111827" }}>{identifier}</strong>
         </p>
       </div>
-    </div>
+
+      {devMode && (
+        <div style={{ background: "#fefce8", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#854d0e", textAlign: "center" }}>
+          Dev mode — enter any 6 digits to continue
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          {otp.map((digit, i) => (
+            <input key={i} ref={el => refs.current[i] = el}
+              type="text" inputMode="numeric" maxLength={1} value={digit}
+              onChange={e => handleChange(i, e.target.value)}
+              onKeyDown={e => handleKey(i, e)}
+              style={{
+                flex: 1, height: 50, textAlign: "center", fontSize: 22, fontWeight: 700,
+                borderRadius: 12, border: `2px solid ${digit ? "#5B5BD6" : "#e5e4f0"}`,
+                background: digit ? "#EEF0FF" : "#fff", color: "#5B5BD6", outline: "none",
+              }}
+            />
+          ))}
+        </div>
+
+        <Btn loading={loading} onClick={verify}>
+          {loading ? <><Loader2 size={15} className="animate-spin" /> Logging in…</> : "Login"}
+        </Btn>
+
+        <p className="text-center" style={{ fontSize: 13, color: "#9ca3af" }}>
+          {countdown > 0 ? `Resend in ${countdown}s` : (
+            <button onClick={resend} style={{ color: "#5B5BD6", fontWeight: 600 }}>Resend OTP</button>
+          )}
+        </p>
+      </div>
+    </>
+  );
+}
+
+function Btn({ children, loading, onClick }) {
+  return (
+    <button disabled={loading} onClick={onClick}
+      style={{
+        width: "100%", padding: "14px 0", fontWeight: 600, fontSize: 14, borderRadius: 16,
+        color: "#fff", background: "#5B5BD6", border: "none",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+        opacity: loading ? 0.6 : 1, cursor: loading ? "default" : "pointer",
+        boxShadow: "0 4px 14px rgba(91,91,214,0.28)",
+      }}>
+      {children}
+    </button>
   );
 }

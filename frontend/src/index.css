@@ -37,12 +37,20 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-zinc-950 text-white;
+    background-color: #f5f4fb;
+    color: #111827;
     font-family: 'IBM Plex Sans', sans-serif;
     -webkit-font-smoothing: antialiased;
-    background-image: 
+    overscroll-behavior: none;
+    /* Safe area insets for notch / home indicator */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    background-image:
       linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
     background-size: 40px 40px;
@@ -60,6 +68,15 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+  /* Safe area helpers for Capacitor / notch devices */
+  .pb-safe   { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe   { padding-top: env(safe-area-inset-top); }
+  .mb-safe   { margin-bottom: env(safe-area-inset-bottom); }
+  /* Mobile tap target minimum — never go below 44px on touch */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
   }
   .scrollbar-thin::-webkit-scrollbar {
     width: 4px;

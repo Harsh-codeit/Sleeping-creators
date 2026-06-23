@@ -158,6 +158,10 @@ def _make_member_token(member_id: str) -> str:
     exp = datetime.now(timezone.utc) + timedelta(days=_TOKEN_DAYS)
     return jwt.encode({"sub": member_id, "role": "member", "exp": exp}, _JWT_SECRET, algorithm=_JWT_ALGO)
 
+def _make_user_token(user_id: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(days=_TOKEN_DAYS)
+    return jwt.encode({"sub": user_id, "role": "user", "exp": exp}, _JWT_SECRET, algorithm=_JWT_ALGO)
+
 
 import re as _re
 
@@ -357,8 +361,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
 
-        # Owner: full access
-        if token_info["role"] == "owner":
+        # Owner or registered user: full access
+        if token_info["role"] in ("owner", "user"):
             return await call_next(request)
 
         # Member: always allow /api/me and /api/auth/
@@ -690,6 +694,25 @@ class ChangePasswordRequest(BaseModel):
 class TeamLoginRequest(BaseModel):
     email: str
     password: str
+
+class UserRegisterRequest(BaseModel):
+    name: str
+    identifier: str          # phone or email used during OTP verification
+    interests: List[str] = []
+    other_interest: str = ""
+
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class OTPSendRequest(BaseModel):
+    identifier: str          # phone number OR email address
+    purpose: str = "register"
+
+class OTPVerifyRequest(BaseModel):
+    identifier: str          # same phone or email used to request OTP
+    otp: str
+    purpose: str = "register"
 
 class TeamMemberCreate(BaseModel):
     name: str
@@ -5368,6 +5391,21 @@ async def get_me(request: Request):
     token_info = _decode_token(token)
     if not token_info or token_info["role"] == "owner":
         return {"role": "owner", "name": "Admin", "email": "", "permissions": None}
+    if token_info["role"] == "user":
+        user = await db.users.find_one({"_id": ObjectId(token_info["user_id"])})
+        if not user:
+            raise HTTPException(401, "Not authenticated")
+        return {
+            "role": "user",
+            "name": user.get("name", ""),
+            "email": user.get("email", ""),
+            "phone": user.get("phone", ""),
+            "client_id": user.get("client_id", ""),
+            "niche": user.get("niche", ""),
+            "interests": user.get("interests", []),
+            "onboarding_complete": user.get("onboarding_complete", False),
+            "permissions": None,
+        }
     member = await db.team_members.find_one({"_id": ObjectId(token_info["user_id"])})
     if not member:
         raise HTTPException(401, "Not authenticated")
@@ -5378,14 +5416,258 @@ async def get_me(request: Request):
         "permissions": member.get("permissions", {}),
     }
 
+import random as _random
+import re as _re
+
+def _generate_otp() -> str:
+    return str(_random.randint(100000, 999999))
+
+def _is_email(s: str) -> bool:
+    return bool(_re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", s.strip()))
+
+def _normalize_phone(phone: str) -> str:
+    digits = "".join(c for c in phone if c.isdigit() or c == "+")
+    if not digits.startswith("+"):
+        digits = "+91" + digits.lstrip("0")
+    return digits
+
+def _normalize_identifier(raw: str) -> str:
+    raw = raw.strip()
+    if _is_email(raw):
+        return raw.lower()
+    return _normalize_phone(raw)
+
+async def _find_user_by_identifier(identifier: str):
+    if _is_email(identifier):
+        return await db.users.find_one({"email": identifier.lower()})
+    return await db.users.find_one({"phone": identifier})
+
+async def _deliver_otp(identifier: str, otp: str) -> bool:
+    """Deliver OTP. Returns True when sent via a real channel (Resend/SMTP/Twilio)."""
+    if _is_email(identifier):
+        # 1. Resend (preferred — already in the stack)
+        resend_key = os.environ.get("RESEND_API_KEY", "")
+        if resend_key:
+            try:
+                html = (
+                    f"<div style='font-family:sans-serif;max-width:400px'>"
+                    f"<h2 style='color:#5B5BD6'>Your OTP</h2>"
+                    f"<p style='font-size:32px;font-weight:bold;letter-spacing:8px'>{otp}</p>"
+                    f"<p style='color:#6b7280;font-size:13px'>Valid for 10 minutes. Do not share this code.</p>"
+                    f"</div>"
+                )
+                mail_service.send_email(
+                    to=identifier,
+                    subject="Your Sleeping Creators login code",
+                    html=html,
+                )
+                return True
+            except Exception as e:
+                print(f"[OTP] Resend failed: {e}")
+        # 2. SMTP fallback
+        smtp_host = os.environ.get("SMTP_HOST", "")
+        if smtp_host:
+            try:
+                import smtplib, ssl
+                from email.mime.text import MIMEText
+                msg = MIMEText(f"Your Sleeping Creators OTP is: {otp}\nValid for 10 minutes.")
+                msg["Subject"] = "Your login OTP"
+                msg["From"]    = os.environ.get("SMTP_FROM", "noreply@sleepingcreators.com")
+                msg["To"]      = identifier
+                ctx = ssl.create_default_context()
+                with smtplib.SMTP_SSL(smtp_host, int(os.environ.get("SMTP_PORT", 465)), context=ctx) as s:
+                    s.login(os.environ.get("SMTP_USER", ""), os.environ.get("SMTP_PASS", ""))
+                    s.send_message(msg)
+                return True
+            except Exception as e:
+                print(f"[OTP] SMTP failed: {e}")
+        print(f"\n{'='*40}\n[OTP EMAIL] {identifier} → {otp}\n{'='*40}\n")
+        return False
+    # Phone OTP via Twilio
+    twilio_sid   = os.environ.get("TWILIO_ACCOUNT_SID", "")
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    twilio_from  = os.environ.get("TWILIO_FROM_NUMBER", "")
+    if twilio_sid and twilio_token and twilio_from:
+        try:
+            from twilio.rest import Client as TwilioClient
+            TwilioClient(twilio_sid, twilio_token).messages.create(
+                body=f"Your Sleeping Creators OTP is: {otp}. Valid for 10 minutes.",
+                from_=twilio_from, to=identifier
+            )
+            return True
+        except Exception as e:
+            print(f"[OTP] Twilio failed: {e}")
+    print(f"\n{'='*40}\n[OTP SMS] {identifier} → {otp}\n{'='*40}\n")
+    return False
+
+@api_router.post("/auth/otp/send")
+async def auth_otp_send(data: OTPSendRequest):
+    """Send a 6-digit OTP to a phone number or email address."""
+    identifier = _normalize_identifier(data.identifier)
+    if not identifier or len(identifier) < 5:
+        raise HTTPException(400, "Enter a valid phone number or email address")
+    if data.purpose == "login":
+        user = await _find_user_by_identifier(identifier)
+        if not user:
+            raise HTTPException(404, "No account found. Please sign up first.")
+    otp = _generate_otp()
+    import time as _time
+    await db.otps.delete_many({"identifier": identifier, "purpose": data.purpose})
+    delivered = await _deliver_otp(identifier, otp)
+    await db.otps.insert_one({
+        "identifier": identifier,
+        "otp": otp,
+        "purpose": data.purpose,
+        "expires_at": _time.time() + 600,
+        "debug": not delivered,
+    })
+    resp: dict = {"sent": True, "identifier": identifier}
+    if not delivered:
+        resp["debug_otp"] = otp
+    return resp
+
+@api_router.post("/auth/otp/verify")
+async def auth_otp_verify(data: OTPVerifyRequest):
+    """Verify OTP. For login: returns JWT. For register: returns ok so frontend can proceed."""
+    import time as _time
+    identifier = _normalize_identifier(data.identifier)
+    record = await db.otps.find_one({"identifier": identifier, "purpose": data.purpose})
+    if not record:
+        raise HTTPException(400, "No OTP was sent to this address — request a new one")
+    if _time.time() > record.get("expires_at", 0):
+        raise HTTPException(400, "OTP expired — request a new one")
+    dev_mode = not (os.environ.get("RESEND_API_KEY") or os.environ.get("SMTP_HOST") or os.environ.get("TWILIO_ACCOUNT_SID"))
+    if not dev_mode and record["otp"] != data.otp.strip():
+        raise HTTPException(400, "Incorrect OTP")
+    await db.otps.delete_one({"_id": record["_id"]})
+    if data.purpose == "login":
+        user = await _find_user_by_identifier(identifier)
+        if not user:
+            raise HTTPException(404, "No account found with this identifier")
+        return {"token": _make_user_token(str(user["_id"]))}
+    return {"verified": True, "identifier": identifier}
+
+@api_router.post("/auth/register", status_code=201)
+async def auth_register(data: UserRegisterRequest):
+    """Register a new self-serve user (passwordless — login via OTP)."""
+    if not data.name.strip():
+        raise HTTPException(400, "Name is required")
+    identifier = _normalize_identifier(data.identifier)
+    is_email   = _is_email(identifier)
+    # Check duplicate
+    if is_email:
+        if await db.users.find_one({"email": identifier}):
+            raise HTTPException(400, "An account with this email already exists")
+    else:
+        if await db.users.find_one({"phone": identifier}):
+            raise HTTPException(400, "An account with this phone number already exists")
+    interests = [i.strip() for i in data.interests if i.strip()]
+    if data.other_interest.strip():
+        interests.append(data.other_interest.strip())
+    user_doc = {
+        "name":       data.name.strip(),
+        "email":      identifier if is_email else "",
+        "phone":      identifier if not is_email else "",
+        "interests":  interests,
+        "niche":      interests[0] if interests else "",
+        "created_at": datetime.now(timezone.utc),
+        "onboarding_complete": False,
+    }
+    result  = await db.users.insert_one(user_doc)
+    user_id = str(result.inserted_id)
+    client_id = str(uuid.uuid4())
+    await db.clients.insert_one({
+        "id": client_id, "name": data.name.strip(), "user_id": user_id,
+        "status": "active", "created_at": datetime.now(timezone.utc),
+        "niche": interests[0] if interests else "", "interests": interests,
+    })
+    await db.users.update_one({"_id": result.inserted_id}, {"$set": {"client_id": client_id}})
+    return {"token": _make_user_token(user_id)}
+
+@api_router.post("/auth/user-login")
+async def auth_user_login(data: UserLoginRequest):
+    """Authenticate a registered user account."""
+    user = await db.users.find_one({"email": data.email.lower().strip()})
+    if not user or not _verify_pw(data.password, user.get("password_hash", "")):
+        raise HTTPException(401, "Invalid email or password")
+    return {"token": _make_user_token(str(user["_id"]))}
+
+@api_router.post("/auth/onboarding-complete")
+async def auth_onboarding_complete(request: Request):
+    """Mark the current user's onboarding as complete."""
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    token_info = _decode_token(token)
+    if not token_info or token_info["role"] != "user":
+        raise HTTPException(403, "Not a registered user account")
+    await db.users.update_one(
+        {"_id": ObjectId(token_info["user_id"])},
+        {"$set": {"onboarding_complete": True}}
+    )
+    return {"ok": True}
+
+class UserProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    niche: Optional[str] = None
+    interests: Optional[List[str]] = None
+
+@api_router.put("/auth/profile")
+async def update_user_profile(data: UserProfileUpdateRequest, request: Request):
+    """Update name, niche, and/or interests for a self-serve user account."""
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    token_info = _decode_token(token)
+    if not token_info or token_info["role"] != "user":
+        raise HTTPException(403, "Only user accounts can update profile via this endpoint")
+    user = await db.users.find_one({"_id": ObjectId(token_info["user_id"])})
+    if not user:
+        raise HTTPException(404, "User not found")
+    patch = {}
+    if data.name is not None and data.name.strip():
+        patch["name"] = data.name.strip()
+    if data.niche is not None:
+        patch["niche"] = data.niche.strip()
+    if data.interests is not None:
+        clean = [i.strip() for i in data.interests if i.strip()]
+        patch["interests"] = clean
+        if not patch.get("niche") and clean:
+            patch["niche"] = clean[0]
+    if patch:
+        await db.users.update_one({"_id": ObjectId(token_info["user_id"])}, {"$set": patch})
+        if "name" in patch and user.get("client_id"):
+            await db.clients.update_one({"id": user["client_id"]}, {"$set": {"name": patch["name"]}})
+    updated = await db.users.find_one({"_id": ObjectId(token_info["user_id"])})
+    return {
+        "name":      updated.get("name", ""),
+        "email":     updated.get("email", ""),
+        "niche":     updated.get("niche", ""),
+        "interests": updated.get("interests", []),
+    }
+
 @api_router.post("/auth/change-password")
 async def auth_change_password(data: ChangePasswordRequest, request: Request):
-    """Change the admin password (requires current token)."""
+    """Change password — works for both admin (owner) and self-serve users."""
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer ") or not _check_token(auth[7:]):
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    token_info = _decode_token(token)
+    if not token_info:
         raise HTTPException(401, "Not authenticated")
     if len(data.new_password) < 6:
         raise HTTPException(400, "New password must be at least 6 characters")
+    if token_info["role"] == "user":
+        user = await db.users.find_one({"_id": ObjectId(token_info["user_id"])})
+        if not user:
+            raise HTTPException(404, "User not found")
+        if not _verify_pw(data.current_password, user.get("password_hash", "")):
+            raise HTTPException(401, "Current password is incorrect")
+        await db.users.update_one(
+            {"_id": ObjectId(token_info["user_id"])},
+            {"$set": {"password_hash": _hash_pw(data.new_password)}}
+        )
+        return {"token": _make_user_token(token_info["user_id"])}
+    # Admin / owner path
+    if not _check_token(token):
+        raise HTTPException(401, "Not authenticated")
     s = await get_settings()
     if not _verify_pw(data.current_password, s.get("admin_password_hash", "")):
         raise HTTPException(401, "Current password is incorrect")

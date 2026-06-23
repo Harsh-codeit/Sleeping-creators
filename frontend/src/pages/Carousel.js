@@ -5,14 +5,13 @@ import { toast } from "sonner";
 import {
   Wand2, Plus, Trash2, Save, Check, LayoutGrid,
   ImageDown, Download, ExternalLink, ChevronDown,
-  Sparkles, X, PenLine, Copy, Send, Image as ImageIcon
+  Sparkles, X, PenLine, Copy, Send
 } from "lucide-react";
 import ImageElementOverlay from "../components/ImageElementOverlay";
 import { VideoCreator } from "../components/VideoCreator";
-import DriveImageGrid from "../components/DriveImageGrid";
+import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const PLATFORMS = ["instagram", "facebook", "linkedin", "twitter", "threads"];
 const CHAR_LIMIT_DEFAULT = 280;
 const FORMAT_OPTIONS = [
   { value: "auto", label: "Auto (AI picks)" },
@@ -364,65 +363,27 @@ function OptionPill({ label, value, active, options, onChange, searchable }) {
   );
 }
 
-// ─── Drive Image picker pill (toolbar) ───────────────────────────────────────
-function DriveImagePill({ clientId, selectedFileId, onSelect, onClear }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const active = !!selectedFileId;
-
-  return (
-    <div className="relative" ref={ref}>
-      <button type="button"
-        onClick={() => setOpen(o => !o)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-mono border transition-colors duration-150
-          ${active ? "border-zinc-500 text-white bg-zinc-800" : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"}`}
-      >
-        <ImageIcon size={11} />
-        <span>{active ? "Image set" : "Drive Image"}</span>
-        <ChevronDown size={9} className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="absolute bottom-full left-0 mb-1 bg-zinc-900 border border-zinc-700 shadow-lg z-50 w-72 p-2">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Carousel image</span>
-            {active && (
-              <button type="button"
-                onClick={onClear}
-                className="text-[10px] font-mono text-zinc-500 hover:text-white transition-colors">
-                Use rotation
-              </button>
-            )}
-          </div>
-          <DriveImageGrid
-            clientId={clientId}
-            selectedFileId={selectedFileId}
-            onSelect={(img) => onSelect(img.drive_file_id)}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Main Carousel Page ──────────────────────────────────────────────────────
 
 export default function Carousel() {
+  const user = useUser();
+  const userClientId = user?.client_id || "";
+
   const [studioTab, setStudioTab] = useState("carousel"); // "carousel" | "video"
   const [template, setTemplate] = useState("dark_card");
-  const [clients, setClients] = useState([]);
   const [savedCarousels, setSavedCarousels] = useState([]);
-  const [selectedClientId, setSelectedClientId] = useState("");
   const [config, setConfig] = useState({
     authorName: "", authorHandle: "", authorTitle: "", profilePhotoUrl: "",
     topic: "", slideCount: 5, platform: "instagram"
   });
+
+  // Pre-fill author name from user profile
+  useEffect(() => {
+    if (user?.name && !config.authorName) {
+      setConfig(p => ({ ...p, authorName: p.authorName || user.name }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name]);
   const [slideFormat, setSlideFormat] = useState("auto");
   const [slides, setSlides] = useState([]);
   const [editingSlideIdx, setEditingSlideIdx] = useState(null);
@@ -521,10 +482,10 @@ export default function Carousel() {
       setSlidePreviews({});
     }
     return () => { if (previewTimerRef.current) clearTimeout(previewTimerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides, template, config.authorName, config.authorHandle, config.authorTitle, config.profilePhotoUrl, config.clientId, config.driveImageIndex, config.driveImageFileId, designContext, requestPreviews]);
 
   useEffect(() => {
-    axios.get(`${API}/clients`).then(r => setClients(r.data)).catch(() => {});
     loadSavedCarousels();
     axios.get(`${API}/templates`).then(r => {
       const builtIn = [
@@ -548,70 +509,18 @@ export default function Carousel() {
     });
   }, []);
 
-  // Re-fetch the selected client on window focus so author block changes made
-  // in ClientDetail are reflected immediately without a full page reload.
-  useEffect(() => {
-    const onFocus = () => {
-      if (!selectedClientId) return;
-      axios.get(`${API}/clients/${selectedClientId}`).then(r => {
-        const c = r.data;
-        setClients(prev => prev.map(cl => cl.id === c.id ? c : cl));
-        setConfig(prev => ({
-          ...prev,
-          authorName:      c.carousel_author_name    || c.name,
-          authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-          authorTitle:     c.carousel_author_title   || c.niche || c.industry || "",
-          profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
-        }));
-      }).catch(() => {});
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [selectedClientId]);
-
-  useEffect(() => {
-    if (!selectedClientId) return;
-    // Always fetch the client fresh so carousel_author_* changes in ClientDetail
-    // are reflected immediately without needing a page reload.
-    axios.get(`${API}/clients/${selectedClientId}`).then(r => {
-      const c = r.data;
-      setClients(prev => prev.map(cl => cl.id === c.id ? c : cl));
-      setConfig(prev => ({
-        ...prev,
-        clientId: selectedClientId,
-        driveImageIndex: null,
-        authorName:      c.carousel_author_name    || c.name,
-        authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-        authorTitle:     c.carousel_author_title   || c.niche || c.industry || "",
-        profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
-      }));
-    }).catch(() => {
-      // Fallback to stale clients array if fetch fails
-      const c = clients.find(x => x.id === selectedClientId);
-      if (c) setConfig(prev => ({
-        ...prev,
-        clientId: selectedClientId,
-        driveImageIndex: null,
-        authorName:      c.carousel_author_name    || c.name,
-        authorHandle:    c.carousel_author_handle  || (c.instagram_username ? `@${c.instagram_username}` : `@${c.name.toLowerCase().replace(/\s+/g, "")}`),
-        authorTitle:     c.carousel_author_title   || c.niche || c.industry || "",
-        profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || "",
-      }));
-    });
-  }, [selectedClientId]);
-
   const loadSavedCarousels = async () => {
     try { setSavedCarousels((await axios.get(`${API}/carousels`)).data); } catch {}
   };
 
   const generateAI = async (topicOverride) => {
     const topic = topicOverride || promptText || config.topic;
-    if (!selectedClientId) return toast.error("Select a client first");
+    if (!userClientId) return toast.error("Your account isn't fully set up yet — please contact support");
     setGenerating(true);
     setPromptText("");
     try {
       const resp = await axios.post(`${API}/carousel/generate`, {
-        client_id: selectedClientId, platform: config.platform, template,
+        client_id: userClientId, platform: config.platform, template,
         topic: topic || undefined, slide_count: postType === "single_image" ? 1 : config.slideCount,
         slide_format: slideFormat === "auto" ? undefined : slideFormat,
       });
@@ -765,11 +674,11 @@ export default function Carousel() {
   }, []);
 
   const saveCarousel = async () => {
-    if (!selectedClientId || slides.length === 0) return toast.error("Select client and add slides first");
+    if (slides.length === 0) return toast.error("Add at least one slide first");
     setSaving(true);
     try {
       const resp = await axios.post(`${API}/carousels`, {
-        client_id: selectedClientId, platform: config.platform, template,
+        client_id: userClientId, platform: config.platform, template,
         post_type: postType,
         title: carouselTitle || `Carousel - ${new Date().toLocaleDateString()}`,
         author_name: config.authorName, author_handle: config.authorHandle,
@@ -928,27 +837,16 @@ export default function Carousel() {
   };
 
   const loadCarousel = async (carousel) => {
-    setSelectedClientId(carousel.client_id || "");
     setTemplate(carousel.template || "dark_card");
     setCarouselTitle(carousel.title || "");
-    // Always fetch the client fresh so carousel_author_* changes are reflected immediately
-    let c = clients.find(x => x.id === carousel.client_id) || {};
-    if (carousel.client_id) {
-      try {
-        const r = await axios.get(`${API}/clients/${carousel.client_id}`);
-        c = r.data;
-        setClients(prev => prev.map(cl => cl.id === c.id ? c : cl));
-      } catch {}
-    }
     setConfig(prev => ({
       ...prev,
-      clientId: carousel.client_id || "",
       driveImageIndex: carousel.drive_image_index ?? null,
       driveImageFileId: carousel.drive_image_file_id ?? null,
-      authorName: c.carousel_author_name || carousel.author_name || c.name || "",
-      authorHandle: c.carousel_author_handle || carousel.author_handle || "",
-      authorTitle: c.carousel_author_title || carousel.author_title || "",
-      profilePhotoUrl: c.profile_photo_url || c.onboarding_data?.profile_photo_link || prev.profilePhotoUrl || "",
+      authorName: carousel.author_name || prev.authorName || "",
+      authorHandle: carousel.author_handle || prev.authorHandle || "",
+      authorTitle: carousel.author_title || prev.authorTitle || "",
+      profilePhotoUrl: carousel.profile_photo_url || prev.profilePhotoUrl || "",
       platform: carousel.platform || "instagram"
     }));
     setSlides((carousel.slides || []).map((s, i) => ({ id: Date.now() + i, ...s, elements: s.elements || [] })));
@@ -968,10 +866,7 @@ export default function Carousel() {
     generateAI(promptText.trim() || "");
   };
 
-  const selectedClient = clients.find(c => c.id === selectedClientId);
   const isSingleImageMode = postType === "single_image";
-  const clientHashtags   = selectedClient?.strategy?.hashtags ?? [];
-  const hashtagOverLimit = isSingleImageMode && clientHashtags.length > 30;
   const editingSlide = editingSlideIdx !== null ? slides[editingSlideIdx] : null;
 
   return (
@@ -1005,7 +900,7 @@ export default function Carousel() {
           </button>
           {slides.length > 0 && (
             <>
-              <button type="button" onClick={saveCarousel} disabled={saving || !selectedClientId}
+              <button type="button" onClick={saveCarousel} disabled={saving}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-40">
                 <Save size={12} /> {saving ? "Saving..." : "Save"}
               </button>
@@ -1255,26 +1150,13 @@ export default function Carousel() {
           <div className="flex-shrink-0 border-t border-zinc-800 bg-zinc-950 px-6 py-4">
             {/* Options row */}
             <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <OptionPill label="Client" value={selectedClient?.name || ""} active={!!selectedClientId}
-                options={clients.map(c => ({ value: c.id, label: c.name }))} onChange={setSelectedClientId} searchable />
               <OptionPill label="Template" value={availableTemplates.find(t => t.value === template)?.label || template} active={true}
                 options={availableTemplates} onChange={setTemplate} />
-              <OptionPill label="Platform" value={config.platform.charAt(0).toUpperCase() + config.platform.slice(1)} active={true}
-                options={PLATFORMS.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
-                onChange={v => setConfig(f => ({ ...f, platform: v }))} />
               <OptionPill label="Format" value={FORMAT_OPTIONS.find(o => o.value === slideFormat)?.label || "Auto"} active={true}
                 options={FORMAT_OPTIONS} onChange={setSlideFormat} />
               <OptionPill label="Post Type" value={postType === "single_image" ? "Single Image" : "Carousel"} active={true}
                 options={[{ value: "carousel", label: "Carousel" }, { value: "single_image", label: "Single Image" }]}
                 onChange={setPostType} />
-              {selectedClient?.drive_images_folder_id && (
-                <DriveImagePill
-                  clientId={selectedClientId}
-                  selectedFileId={config.driveImageFileId || null}
-                  onSelect={(fid) => setConfig(f => ({ ...f, driveImageFileId: fid }))}
-                  onClear={() => setConfig(f => ({ ...f, driveImageFileId: null }))}
-                />
-              )}
               {postType !== "single_image" && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-zinc-800 text-[11px] font-mono text-zinc-500">
                   <span>Slides</span>
@@ -1287,49 +1169,18 @@ export default function Carousel() {
                 <span className="text-[10px] font-mono text-zinc-600 ml-auto">Save to enable export</span>
               )}
             </div>
-            {/* Topic Rules panel — shown when client has rules configured */}
-            {selectedClientId && (() => {
-              const includeEntries = (selectedClient?.strategy?.topics_include || []).map(e =>
-                typeof e === "string" ? { text: e, type: "topic" } : e
-              ).filter(e => e.text);
-              const neverCover = (selectedClient?.onboarding_data?.not_to_do_list || []).filter(Boolean);
-              if (!includeEntries.length && !neverCover.length) return null;
-              return (
-                <div className="flex items-start gap-3 mb-3 px-3 py-2 border border-zinc-800 bg-zinc-900/60">
-                  <span className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest mt-0.5 flex-shrink-0">Topic Rules</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {includeEntries.map((e, i) => (
-                      <span key={i} className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono border ${
-                        e.type === "mention"
-                          ? "bg-sky-950/40 border-sky-900/60 text-sky-400/80"
-                          : "bg-emerald-950/40 border-emerald-900/60 text-emerald-400/80"
-                      }`}>
-                        {e.text}
-                        <span className="text-[8px] opacity-60 uppercase">{e.type}</span>
-                      </span>
-                    ))}
-                    {neverCover.map((tag, i) => (
-                      <span key={`nc-${i}`} className="inline-flex items-center px-2 py-0.5 text-[10px] font-mono border bg-rose-950/40 border-rose-900/60 text-rose-400/80">
-                        <span className="text-[8px] opacity-60 uppercase mr-1">never</span>{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
             {/* Prompt input */}
             <form onSubmit={handlePromptSubmit} className="flex items-center gap-3">
               <div className="flex-1 flex items-center bg-zinc-900 border border-zinc-700 focus-within:border-zinc-500 transition-colors duration-150">
                 <input type="text" value={promptText} onChange={e => setPromptText(e.target.value)}
-                  placeholder={selectedClientId ? "Describe your carousel topic or just hit Generate..." : "Select a client to get started..."}
-                  disabled={!selectedClientId}
+                  placeholder="Describe your carousel topic, or just hit Generate…"
                   className="flex-1 bg-transparent px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none font-mono" />
-                <button type="button" onClick={addSlide} disabled={!selectedClientId} title="Add blank slide"
-                  className="px-3 py-2 text-zinc-600 hover:text-zinc-300 transition-colors duration-150 disabled:opacity-30">
+                <button type="button" onClick={addSlide} title="Add blank slide"
+                  className="px-3 py-2 text-zinc-600 hover:text-zinc-300 transition-colors duration-150">
                   <PenLine size={14} />
                 </button>
               </div>
-              <button type="submit" disabled={generating || !selectedClientId}
+              <button type="submit" disabled={generating}
                 className="flex items-center gap-2 px-5 py-3 bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-40 flex-shrink-0">
                 {generating
                   ? <><Wand2 size={14} className="animate-spin" /> Generating...</>
@@ -1534,26 +1385,6 @@ export default function Carousel() {
                   placeholder="Role / Company" className="field" />
               </div>
 
-              {/* Drive Image */}
-              {selectedClient?.drive_images_folder_id && (
-                <>
-                  <div className="label-xs mt-5 flex items-center justify-between">
-                    <span>Drive Image</span>
-                    {config.driveImageFileId && (
-                      <button type="button"
-                        onClick={() => setConfig(p => ({ ...p, driveImageFileId: null }))}
-                        className="text-[10px] font-mono text-zinc-500 hover:text-white transition-colors">
-                        Use rotation
-                      </button>
-                    )}
-                  </div>
-                  <DriveImageGrid
-                    clientId={selectedClientId}
-                    selectedFileId={config.driveImageFileId || null}
-                    onSelect={(img) => setConfig(p => ({ ...p, driveImageFileId: img.drive_file_id }))}
-                  />
-                </>
-              )}
 
               {/* Design Profile badge */}
               {designContext && (

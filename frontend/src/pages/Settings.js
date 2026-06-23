@@ -1,801 +1,659 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { Save, Send, Zap, Bot, Settings2, Lock, FileSpreadsheet, CheckCircle2, AlertCircle, Link, Copy, Tags, Plus, Trash2 } from "lucide-react";
+import {
+  User, Link2, CreditCard,
+  Instagram, Check, Camera, Pencil, Mail, LogOut,
+  Zap, BarChart3, Calendar, FileText,
+  AlertCircle, Loader2
+} from "lucide-react";
 import { useUser } from "../context/UserContext";
-import Logs from "./Logs";
-import TeamPage from "./TeamPage";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-// Mirrors the per-client SpiceDial in ClientDetail. This sets the global default
-// that newly-created clients inherit; each client can still override on Strategy.
-const SPICE_DEFAULT = "balanced";
-const SPICE_LEVELS = [
-  { value: "safe",     label: "Safe",     helper: "Professional, broadly agreeable, no controversy." },
-  { value: "balanced", label: "Balanced", helper: "Sharp but measured (default)." },
-  { value: "bold",     label: "Bold",     helper: "Strong opinions and contrarian angles. Spicy, not alienating." },
-  { value: "unhinged", label: "Unhinged", helper: "Maximum heat. Hot takes. Highest reach, higher risk." },
+const INTERESTS = [
+  { value: "lifestyle",     label: "Lifestyle" },
+  { value: "business",      label: "Business & Entrepreneurship" },
+  { value: "education",     label: "Education & Learning" },
+  { value: "fitness",       label: "Fitness & Health" },
+  { value: "diets",         label: "Diets & Nutrition" },
+  { value: "food",          label: "Food & Cooking" },
+  { value: "travel",        label: "Travel & Adventure" },
+  { value: "fashion",       label: "Fashion & Beauty" },
+  { value: "finance",       label: "Finance & Investing" },
+  { value: "tech",          label: "Tech & Gaming" },
+  { value: "science",       label: "Science & Research" },
+  { value: "music",         label: "Music & Entertainment" },
+  { value: "motivation",    label: "Motivation & Mindset" },
+  { value: "mental_health", label: "Mental Health" },
+  { value: "sports",        label: "Sports & Athletics" },
+  { value: "personal_dev",  label: "Personal Development" },
 ];
 
-function localToUTC(hhmm) {
-  const [h, m] = hhmm.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-}
+const TABS = [
+  { key: "profile",      label: "Profile",      icon: User },
+  { key: "connections",  label: "Connections",  icon: Link2 },
+  { key: "subscription", label: "Subscription", icon: CreditCard },
+];
 
-function utcToLocal(hhmm) {
-  if (!hhmm) return hhmm;
-  const [h, m] = hhmm.split(":").map(Number);
-  const d = new Date();
-  d.setUTCHours(h, m, 0, 0);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-export default function Settings() {
+export default function Settings({ onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "general";
-  const setTab = (t) => setSearchParams({ tab: t });
-  const { role } = useUser();
-  const isOwner = role === "owner";
-
-  const [settings, setSettings] = useState(null);
-  const [form, setForm] = useState({});
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [autoStatus, setAutoStatus] = useState(null);
-  const [googleConnected, setGoogleConnected] = useState(null);
-  const [templates, setTemplates] = useState([]);
-
-  useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [sResp, aResp, gResp, tResp] = await Promise.all([
-          axios.get(`${API}/settings`),
-          axios.get(`${API}/automation/status`),
-          axios.get(`${API}/auth/google/status`),
-          axios.get(`${API}/templates`),
-        ]);
-        setSettings(sResp.data);
-        setForm(sResp.data);
-        setAutoStatus(aResp.data);
-        setGoogleConnected(gResp.data.connected);
-        setTemplates(tResp.data || []);
-      } catch { toast.error("Failed to load settings"); }
-      finally { setLoading(false); }
-    };
-    fetchAll();
-  }, []);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const resp = await axios.put(`${API}/settings`, form);
-      setSettings(resp.data);
-      toast.success("Settings saved");
-    } catch { toast.error("Failed to save settings"); }
-    finally { setSaving(false); }
-  };
-
-  const testTelegram = async () => {
-    setTesting(true);
-    try {
-      await axios.post(`${API}/settings/telegram/test`, {
-        bot_token: form.telegram_bot_token,
-        chat_id: form.telegram_chat_id,
-      });
-      toast.success("Test message sent! Check your Telegram.");
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Telegram test failed. Check your token and chat ID.");
-    } finally { setTesting(false); }
-  };
-
-  const triggerAutomation = async () => {
-    try {
-      await axios.post(`${API}/automation/trigger`);
-      toast.success("Automation cycle triggered");
-    } catch { toast.error("Failed to trigger automation"); }
-  };
-
-  const updateForm = (key, value) => setForm(f => ({ ...f, [key]: value }));
+  const activeTab = searchParams.get("tab") || "profile";
+  const setTab = t => setSearchParams({ tab: t });
+  const user = useUser();
 
   return (
-    <div className="h-full bg-zinc-950 flex flex-col" data-testid="settings-page">
-      {/* Tab bar */}
-      <div className="flex items-center gap-0 px-6 pt-4 border-b border-zinc-800 flex-shrink-0">
-        <h1 className="text-lg font-bold text-white tracking-tight mr-6">Settings</h1>
-        {[
-          { key: "general", label: "General" },
-          { key: "niches",  label: "Niches" },
-          { key: "logs",    label: "Logs" },
-          ...(isOwner ? [{ key: "team", label: "Team & Permissions" }] : []),
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-4 py-3 text-xs font-mono font-semibold border-b-2 transition-colors ${
-              activeTab === key
-                ? "border-white text-white"
-                : "border-transparent text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Niches tab */}
-      {activeTab === "niches" && <NichesSettings />}
-
-      {/* Logs tab */}
-      {activeTab === "logs" && <Logs />}
-
-      {/* Team tab */}
-      {activeTab === "team" && isOwner && <TeamPage />}
-
-      {/* General tab */}
-      {activeTab === "general" && (loading ? (
-        <div className="flex items-center justify-center h-full text-zinc-500 font-mono text-sm animate-pulse">LOADING SETTINGS...</div>
-      ) : (
-      <div className="p-6 max-w-2xl overflow-y-auto">
-      <div className="space-y-6">
-        {/* Telegram */}
-        <div className="bg-zinc-900 border border-zinc-800 p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-            <Bot size={14} className="text-zinc-400" />
-            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Telegram Alerts</div>
-          </div>
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Bot Token</label>
-              <input
-                data-testid="telegram-token-input"
-                type="password"
-                value={form.telegram_bot_token || ""}
-                onChange={e => updateForm("telegram_bot_token", e.target.value)}
-                placeholder="1234567890:ABCdefGHIjklMNOpqrstUVWxyz"
-                className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
-              />
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">Get from @BotFather on Telegram</div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Chat ID</label>
-              <input
-                data-testid="telegram-chat-id-input"
-                value={form.telegram_chat_id || ""}
-                onChange={e => updateForm("telegram_chat_id", e.target.value)}
-                placeholder="-1001234567890"
-                className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
-              />
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">Your Telegram user ID or group chat ID</div>
-            </div>
-          </div>
-          <button
-            data-testid="test-telegram-btn"
-            onClick={testTelegram}
-            disabled={testing || !form.telegram_bot_token || !form.telegram_chat_id}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-40"
-          >
-            <Send size={12} className={testing ? "animate-pulse" : ""} />
-            {testing ? "Sending..." : "Test Connection"}
-          </button>
-        </div>
-
-        {/* Automation */}
-        <div className="bg-zinc-900 border border-zinc-800 p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-            <Settings2 size={14} className="text-zinc-400" />
-            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Automation Engine</div>
-          </div>
-          <div className="space-y-4">
-            {[
-              { key: "automation_enabled", label: "Enable Automation Engine", desc: "Master switch for all background automation tasks" },
-              { key: "auto_publish", label: "Auto-Publish Posts", desc: "Publish approved posts automatically at scheduled times" },
-            ].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-sm text-white">{label}</div>
-                  <div className="text-xs font-mono text-zinc-500 mt-0.5">{desc}</div>
-                </div>
-                <button
-                  data-testid={`toggle-${key}`}
-                  onClick={() => updateForm(key, !form[key])}
-                  className={`w-10 h-5 relative flex-shrink-0 mt-0.5 transition-colors duration-200 ${form[key] ? "bg-white" : "bg-zinc-700"}`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 bg-black transition-transform duration-200 ${form[key] ? "translate-x-5" : "translate-x-0.5"}`} />
-                </button>
-              </div>
+    <div className="flex-1 overflow-y-auto" style={{ background: "#f5f4fb" }} data-testid="settings-page">
+      {/* Header */}
+      <div className="flex-shrink-0" style={{ background: "#fff", borderBottom: "1px solid #ebe9f6" }}>
+        <div className="max-w-2xl mx-auto px-6 pt-6 pb-0">
+          <h1 className="text-xl font-bold mb-4" style={{ color: "#111827" }}>Settings</h1>
+          <div className="flex items-center gap-0">
+            {TABS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
+                style={activeTab === key
+                  ? { borderColor: "#5B5BD6", color: "#5B5BD6" }
+                  : { borderColor: "transparent", color: "#6b7280" }
+                }
+              >
+                <Icon size={14} />
+                {label}
+              </button>
             ))}
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Posts Per Day Per Client</label>
-              <input
-                data-testid="posts-per-day-input"
-                type="number"
-                min={1}
-                max={20}
-                value={form.posts_per_day_per_client || 3}
-                onChange={e => updateForm("posts_per_day_per_client", parseInt(e.target.value))}
-                className="w-24 bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Competitor Scrape Limit</label>
-              <input
-                data-testid="competitor-scrape-limit-input"
-                type="number"
-                min={1}
-                max={200}
-                value={form.competitor_scrape_limit ?? 10}
-                onChange={e => updateForm("competitor_scrape_limit", parseInt(e.target.value))}
-                className="w-24 bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 font-mono"
-              />
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">Max posts Apify scrapes per competitor (1–200)</div>
-            </div>
           </div>
         </div>
-
-        {/* Video Generation Prompt */}
-        <div className="bg-zinc-900 border border-zinc-800 p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-            <Bot size={14} className="text-zinc-400" />
-            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Video Generation Prompt</div>
-          </div>
-          <div className="space-y-2">
-            <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
-              Global voice/style instructions used when generating video captions and on-screen text.
-              Each client can override via their Strategy page. Leave empty to use the built-in default prompt.
-            </div>
-            <div className="text-[10px] font-mono text-zinc-600 leading-relaxed">
-              Supported placeholders: <code className="text-zinc-400">[TARGET AUDIENCE]</code>, <code className="text-zinc-400">[WHAT THEY TEACH OR SELL OR SOLVE]</code> — replaced with each client's data at render time.
-            </div>
-            <textarea
-              data-testid="global-video-prompt-input"
-              value={form.global_video_prompt || ""}
-              onChange={e => updateForm("global_video_prompt", e.target.value)}
-              rows={10}
-              placeholder="e.g. Write a scroll-stopping B Roll Reel hook between 15 to 20 words..."
-              className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono leading-relaxed resize-y"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono text-zinc-600">
-                {(form.global_video_prompt || "").length} chars
-              </span>
-              <button
-                data-testid="save-global-video-prompt"
-                onClick={save}
-                disabled={saving}
-                className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 text-white text-[11px] font-semibold hover:bg-zinc-700 disabled:opacity-50 transition-colors border border-zinc-700"
-              >
-                <Save size={11} />
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Default Content Spice Level */}
-        <div className="bg-zinc-900 border border-zinc-800 p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-            <Zap size={14} className="text-zinc-400" />
-            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Default Content Spice Level</div>
-          </div>
-          {(() => {
-            const value = form.default_spice_level || SPICE_DEFAULT;
-            const current = SPICE_LEVELS.find(l => l.value === value) || SPICE_LEVELS.find(l => l.value === SPICE_DEFAULT);
-            return (
-              <div className="space-y-2">
-                <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
-                  Applied to every newly-created client. Each client can override it on their Strategy page.
-                </div>
-                <div className="flex border border-zinc-700 w-fit" data-testid="default-spice-dial">
-                  {SPICE_LEVELS.map((lvl, i) => {
-                    const selected = current.value === lvl.value;
-                    return (
-                      <button
-                        type="button"
-                        key={lvl.value}
-                        data-testid={`default-spice-level-${lvl.value}`}
-                        aria-pressed={selected}
-                        onClick={() => updateForm("default_spice_level", lvl.value)}
-                        className={`px-4 py-1.5 text-xs font-mono uppercase transition-colors duration-150 ${i > 0 ? "border-l border-zinc-700" : ""} ${
-                          selected ? "bg-white text-black font-semibold" : "bg-zinc-950 text-zinc-500 hover:text-white"
-                        }`}
-                      >
-                        {lvl.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] font-mono text-zinc-600 leading-relaxed">{current.helper}</p>
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* Google Sheets */}
-        <div className="bg-zinc-900 border border-zinc-800 p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-            <FileSpreadsheet size={14} className="text-zinc-400" />
-            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Google Sheets</div>
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                {googleConnected === null ? (
-                  <span className="text-xs font-mono text-zinc-500">Checking...</span>
-                ) : googleConnected ? (
-                  <>
-                    <CheckCircle2 size={13} className="text-emerald-400" />
-                    <span className="text-xs font-mono text-emerald-400">Connected</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={13} className="text-amber-400" />
-                    <span className="text-xs font-mono text-amber-400">Not connected</span>
-                  </>
-                )}
-              </div>
-              <div className="text-[10px] font-mono text-zinc-600 leading-relaxed max-w-sm">
-                {googleConnected
-                  ? "Sleeping Creators can create and sync Google Sheets for clients."
-                  : "Authorize Sleeping Creators to create and manage Google Sheets on your behalf. One-time setup."}
-              </div>
-            </div>
-            <a
-              href={`${process.env.REACT_APP_BACKEND_URL}/api/auth/google/start`}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs border transition-colors duration-150 ${
-                googleConnected
-                  ? "border-zinc-700 text-zinc-500 hover:bg-zinc-800"
-                  : "border-emerald-700 text-emerald-400 hover:bg-emerald-950"
-              }`}
-            >
-              <FileSpreadsheet size={11} />
-              {googleConnected ? "Re-authorize" : "Connect Google"}
-            </a>
-          </div>
-        </div>
-
-        {/* Engine Status */}
-        {autoStatus && (
-          <div className="bg-zinc-900 border border-zinc-800 p-5">
-            <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Engine Status</div>
-            <div className="space-y-2">
-              {(autoStatus.jobs || []).map(job => (
-                <div key={job.id} className="flex items-center justify-between p-2 bg-zinc-950 border border-zinc-800">
-                  <div className="text-xs font-mono text-zinc-400">{job.id}</div>
-                  <div className="text-[10px] font-mono text-zinc-600">
-                    Next: {job.next_run ? new Date(job.next_run).toLocaleTimeString() : "—"}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              data-testid="trigger-automation-settings-btn"
-              onClick={triggerAutomation}
-              className="mt-3 flex items-center gap-2 px-3 py-1.5 text-xs border border-zinc-700 text-zinc-400 hover:bg-zinc-800 transition-colors duration-150"
-            >
-              <Zap size={11} />
-              Manual Trigger
-            </button>
-          </div>
-        )}
-
-        {/* Bundle.social */}
-        <BundleSettings />
-
-        {/* New Client Defaults */}
-        <div className="bg-zinc-900 border border-zinc-800 p-5">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-            <Bot size={14} className="text-zinc-400" />
-            <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">New Client Defaults</div>
-          </div>
-          <div className="space-y-4">
-            <div className="text-[11px] font-mono text-zinc-500 leading-relaxed">
-              A <span className="text-zinc-300">Daily Content</span> pipeline is created automatically for every new client (1 post/day, Instagram). Configure the defaults below.
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Default Carousel Template</label>
-              <select
-                value={form.default_carousel_template || ""}
-                onChange={e => updateForm("default_carousel_template", e.target.value || null)}
-                className="w-full bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
-              >
-                <option value="">AI decides per post</option>
-                {templates.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">You can override this per pipeline after the client is created.</div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Daily Posting Time</label>
-              {(() => {
-                const raw = utcToLocal(form.onboard_pipeline_posting_time || "09:00");
-                const [hStr, mStr] = raw.split(":");
-                const h24 = parseInt(hStr, 10);
-                const ampm = h24 >= 12 ? "PM" : "AM";
-                const h12 = h24 % 12 || 12;
-                const setTime = (newH12, newAmpm, newMin) => {
-                  let h = newH12 % 12;
-                  if (newAmpm === "PM") h += 12;
-                  const localHHMM = `${String(h).padStart(2, "0")}:${newMin}`;
-                  updateForm("onboard_pipeline_posting_time", localToUTC(localHHMM));
-                };
-                return (
-                  <div className="flex items-center gap-1">
-                    <select
-                      value={h12}
-                      onChange={e => setTime(parseInt(e.target.value), ampm, mStr)}
-                      className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-2 py-2 focus:outline-none focus:border-zinc-500"
-                    >
-                      {Array.from({length: 12}, (_, i) => i + 1).map(h => (
-                        <option key={h} value={h}>{String(h).padStart(2, "0")}</option>
-                      ))}
-                    </select>
-                    <span className="text-zinc-500 font-mono text-xs">:</span>
-                    <select
-                      value={mStr}
-                      onChange={e => setTime(h12, ampm, e.target.value)}
-                      className="bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-2 py-2 focus:outline-none focus:border-zinc-500"
-                    >
-                      {["00","15","30","45"].map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                    <div className="flex border border-zinc-700 overflow-hidden">
-                      {["AM","PM"].map(p => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setTime(h12, p, mStr)}
-                          className={`px-2.5 py-2 text-xs font-mono transition-colors ${ampm === p ? "bg-zinc-700 text-white" : "bg-zinc-950 text-zinc-500 hover:text-zinc-300"}`}
-                        >{p}</button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">Time of day the daily post fires for all new clients (your local timezone).</div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Delay Before First Post (hours)</label>
-              <input
-                type="number"
-                min="0"
-                max="720"
-                value={form.onboard_pipeline_delay_hours ?? 0}
-                onChange={e => updateForm("onboard_pipeline_delay_hours", parseInt(e.target.value) || 0)}
-                className="w-32 bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
-              />
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">0 = pipeline starts immediately. E.g. 48 = first post 2 days after onboarding.</div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Slides Per Carousel</label>
-              <select
-                value={form.onboard_pipeline_slide_count || ""}
-                onChange={e => updateForm("onboard_pipeline_slide_count", e.target.value ? parseInt(e.target.value) : null)}
-                className="w-32 bg-zinc-950 border border-zinc-700 text-zinc-200 text-xs font-mono px-3 py-2 focus:outline-none focus:border-zinc-500"
-              >
-                <option value="">Default (5)</option>
-                {[3,4,5,6,7,8,9,10].map(n => (
-                  <option key={n} value={n}>{n} slides</option>
-                ))}
-              </select>
-              <div className="text-[10px] text-zinc-600 font-mono mt-1">Number of slides in each carousel post.</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Save */}
-        <button
-          data-testid="save-settings-btn"
-          onClick={save}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-3 bg-white text-black font-semibold text-sm hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
-        >
-          <Save size={14} />
-          {saving ? "Saving..." : "Save Settings"}
-        </button>
-
-        {/* Change Password */}
-        <ChangePassword />
       </div>
+
+      <div className="max-w-2xl mx-auto px-6 py-8">
+        {activeTab === "profile"      && <ProfileTab user={user} onLogout={onLogout} />}
+        {activeTab === "connections"  && <ConnectionsTab user={user} />}
+        {activeTab === "subscription" && <SubscriptionTab user={user} />}
       </div>
-      ))}
     </div>
   );
 }
 
-// Derive a kebab-case slug from a label (lowercase, alnum → hyphens, trimmed).
-function slugify(label) {
-  return (label || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+// ─── Profile ──────────────────────────────────────────────────────────────────
 
-function NichesSettings() {
-  // rows: [{ value, label, locked }] — locked rows (e.g. "other") can't be deleted.
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+function ProfileTab({ user, onLogout }) {
+  const clientId    = user?.client_id;
+  const refreshUser = user?.refreshUser;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const resp = await axios.get(`${API}/taxonomy/niches`);
-      const list = Array.isArray(resp.data?.niches) ? resp.data.niches : [];
-      setRows(list.map(n => ({
-        value: n.value,
-        label: n.label,
-        locked: n.value === "other",
-      })));
-    } catch { toast.error("Failed to load niches"); }
-    finally { setLoading(false); }
-  }, []);
+  const [editMode, setEditMode]         = useState(false);
+  const [name, setName]                 = useState("");
+  const [bio, setBio]                   = useState("");
+  const [interests, setInterests]       = useState([]);
+  const [photoFile, setPhotoFile]       = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [saving, setSaving]             = useState(false);
+  const [igStatus, setIgStatus]         = useState(null);
+  const fileInputRef                    = useRef(null);
 
-  useEffect(() => { load(); }, [load]);
-
-  const updateLabel = (idx, label) => {
-    setRows(rs => rs.map((r, i) => {
-      if (i !== idx) return r;
-      // Locked rows keep their canonical slug; new/unlocked rows re-derive it.
-      const value = r.locked ? r.value : slugify(label);
-      return { ...r, label, value };
-    }));
-  };
-
-  const addRow = () => {
-    setRows(rs => [...rs, { value: "", label: "", locked: false }]);
-  };
-
-  const deleteRow = (idx) => {
-    setRows(rs => rs.filter((r, i) => i !== idx || r.locked));
-  };
-
-  const save = async () => {
-    // Build payload: drop empty labels, dedupe by value, ensure "other" present.
-    const cleaned = rows
-      .map(r => ({ value: r.locked ? r.value : slugify(r.label), label: (r.label || "").trim() }))
-      .filter(r => r.label && r.value);
-    const seen = new Set();
-    const deduped = [];
-    for (const r of cleaned) {
-      if (seen.has(r.value)) continue;
-      seen.add(r.value);
-      deduped.push(r);
+  // Sync form from user context
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setBio(user.bio || "");
+      setInterests(user.interests || []);
+      setPhotoPreview(user.avatar_url || null);
     }
-    if (!deduped.some(r => r.value === "other")) {
-      deduped.push({ value: "other", label: "Other" });
-    }
-    setSaving(true);
-    try {
-      await axios.put(`${API}/taxonomy/niches`, { niches: deduped });
-      toast.success("Niches saved");
-      await load();
-    } catch { toast.error("Failed to save niches"); }
-    finally { setSaving(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name, user?.bio, user?.interests, user?.avatar_url]);
+
+  // Fetch Instagram status
+  useEffect(() => {
+    if (!clientId) return;
+    axios.get(`${API}/instagram/status/${clientId}`)
+      .then(r => setIgStatus(r.data)).catch(() => {});
+  }, [clientId]);
+
+  const handlePhotoChange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
 
-  return (
-    <div className="p-6 max-w-2xl overflow-y-auto">
-      <div className="bg-zinc-900 border border-zinc-800 p-5">
-        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-          <Tags size={14} className="text-zinc-400" />
-          <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Niches</div>
-        </div>
-        <div className="text-[11px] font-mono text-zinc-500 leading-relaxed mb-4">
-          The canonical niche list used across onboarding and client profiles. Editing a label re-derives its
-          slug automatically. The <span className="text-zinc-300">Other</span> entry is required and cannot be removed.
-        </div>
-
-        {loading ? (
-          <div className="text-zinc-500 font-mono text-sm animate-pulse py-4">LOADING NICHES...</div>
-        ) : (
-          <>
-            <div className="space-y-2 mb-4">
-              {rows.map((row, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    data-testid={`niche-label-${idx}`}
-                    value={row.label}
-                    onChange={e => updateLabel(idx, e.target.value)}
-                    placeholder="Niche label"
-                    className="flex-1 bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
-                  />
-                  <div className="w-40 flex-shrink-0 bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-500 truncate" title={row.value}>
-                    {row.value || <span className="text-zinc-700">slug…</span>}
-                  </div>
-                  <button
-                    data-testid={`niche-delete-${idx}`}
-                    onClick={() => deleteRow(idx)}
-                    disabled={row.locked}
-                    title={row.locked ? "Required — cannot delete" : "Delete niche"}
-                    className="flex-shrink-0 flex items-center justify-center w-8 h-8 border border-zinc-700 text-zinc-500 hover:text-red-400 hover:border-red-900 transition-colors disabled:opacity-30 disabled:hover:text-zinc-500 disabled:hover:border-zinc-700"
-                  >
-                    {row.locked ? <Lock size={12} /> : <Trash2 size={12} />}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <button
-                data-testid="niche-add-btn"
-                onClick={addRow}
-                className="flex items-center gap-2 px-3 py-2 text-xs border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150"
-              >
-                <Plus size={12} />
-                Add Niche
-              </button>
-              <button
-                data-testid="save-niches-btn"
-                onClick={save}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-white text-black font-semibold text-sm hover:bg-zinc-200 transition-colors duration-150 disabled:opacity-50"
-              >
-                <Save size={14} />
-                {saving ? "Saving..." : "Save Niches"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BundleSettings() {
-  const [form, setForm] = useState({ bundle_api_key: "", bundle_webhook_secret: "" });
-  const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const resp = await axios.get(`${API}/settings/bundle`);
-      setForm(resp.data);
-      setLoaded(true);
-    } catch { /* silently skip if endpoint not yet deployed */ setLoaded(true); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const cancelEdit = () => {
+    setEditMode(false);
+    setName(user?.name || "");
+    setBio(user?.bio || "");
+    setInterests(user?.interests || []);
+    setPhotoFile(null);
+    setPhotoPreview(user?.avatar_url || null);
+  };
 
   const save = async () => {
+    if (!name.trim()) return toast.error("Name can't be empty");
     setSaving(true);
     try {
-      await axios.put(`${API}/settings/bundle`, form);
-      toast.success("Bundle settings saved");
-    } catch { toast.error("Failed to save Bundle settings"); }
-    finally { setSaving(false); }
-  };
-
-  const webhookUrl = `${window.location.origin}/webhooks/bundle`;
-
-  const copyWebhookUrl = () => {
-    navigator.clipboard.writeText(webhookUrl).then(() => toast.success("Copied!"));
-  };
-
-  if (!loaded) return null;
-
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 p-5">
-      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-        <Link size={14} className="text-zinc-400" />
-        <div className="text-xs font-mono text-zinc-300 uppercase tracking-widest font-semibold">Publishing Integration</div>
-      </div>
-      <div className="space-y-3 mb-4">
-        <div>
-          <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">API Key</label>
-          <input
-            type="password"
-            value={form.bundle_api_key || ""}
-            onChange={e => setForm(f => ({ ...f, bundle_api_key: e.target.value }))}
-            placeholder="pk_live_..."
-            className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
-          />
-          <div className="text-[10px] text-zinc-600 font-mono mt-1">From your publishing dashboard → API Keys</div>
-        </div>
-        <div>
-          <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Webhook Secret</label>
-          <input
-            type="password"
-            value={form.bundle_webhook_secret || ""}
-            onChange={e => setForm(f => ({ ...f, bundle_webhook_secret: e.target.value }))}
-            placeholder="wh_..."
-            className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-mono text-zinc-500 uppercase mb-1.5">Webhook URL</label>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs font-mono text-zinc-400 truncate select-all">
-              {webhookUrl}
-            </div>
-            <button
-              onClick={copyWebhookUrl}
-              className="flex items-center gap-1.5 px-2.5 py-2 border border-zinc-700 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors text-xs"
-            >
-              <Copy size={11} />
-            </button>
-          </div>
-          <div className="text-[10px] text-zinc-600 font-mono mt-1">Register in Bundle dashboard → Organization → Webhooks</div>
-        </div>
-      </div>
-      <button
-        onClick={save}
-        disabled={saving}
-        className="flex items-center gap-2 px-4 py-2 text-sm border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors duration-150 disabled:opacity-40"
-      >
-        <Save size={12} className={saving ? "animate-pulse" : ""} />
-        {saving ? "Saving..." : "Save Bundle Settings"}
-      </button>
-    </div>
-  );
-}
-
-function ChangePassword() {
-  const [form, setForm] = useState({ current: "", next: "", confirm: "" });
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!form.current || !form.next) return toast.error("Fill all fields");
-    if (form.next.length < 6) return toast.error("New password must be at least 6 characters");
-    if (form.next !== form.confirm) return toast.error("New passwords don't match");
-    setSaving(true);
-    try {
-      const { data } = await axios.post(`${API}/auth/change-password`, {
-        current_password: form.current,
-        new_password: form.next,
-      });
-      localStorage.setItem("sc_token", data.token);
-      axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
-      toast.success("Password changed");
-      setForm({ current: "", next: "", confirm: "" });
+      if (photoFile) {
+        const fd = new FormData();
+        fd.append("photo", photoFile);
+        try { await axios.post(`${API}/auth/profile/photo`, fd); } catch {}
+      }
+      await axios.put(`${API}/auth/profile`, { name: name.trim(), bio: bio.trim(), interests });
+      if (refreshUser) await refreshUser();
+      toast.success("Profile updated");
+      setEditMode(false);
+      setPhotoFile(null);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to change password");
+      toast.error(err.response?.data?.detail || "Failed to update");
     } finally {
       setSaving(false);
     }
   };
 
+  const toggleInterest = val =>
+    setInterests(p => p.includes(val) ? p.filter(v => v !== val) : [...p, val]);
+
+  const initials   = (name || user?.name || "?")[0]?.toUpperCase() || "?";
+  const joinedDate = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : null;
+
+  // Shared avatar element
+  const Avatar = ({ clickable }) => (
+    <div
+      onClick={() => clickable && fileInputRef.current?.click()}
+      style={{
+        width: 88, height: 88, borderRadius: "50%", flexShrink: 0,
+        background: photoPreview ? "transparent" : "#EEF0FF",
+        border: "4px solid #fff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        position: "relative", overflow: "hidden",
+        cursor: clickable ? "pointer" : "default",
+        boxShadow: "0 4px 20px rgba(91,91,214,0.2)",
+      }}
+    >
+      {photoPreview
+        ? <img src={photoPreview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        : <span style={{ fontSize: 30, fontWeight: 700, color: "#5B5BD6" }}>{initials}</span>
+      }
+      {clickable && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3 }}>
+          <Camera size={18} style={{ color: "#fff" }} />
+          <span style={{ fontSize: 9, color: "#fff", fontWeight: 700, letterSpacing: "0.5px" }}>CHANGE</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="bg-zinc-900 border border-zinc-800 p-5 max-w-md">
-      <div className="flex items-center gap-2 mb-4">
-        <Lock size={14} className="text-zinc-400" />
-        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Change Password</span>
-      </div>
-      <div className="space-y-3">
-        {[
-          ["current", "Current Password"],
-          ["next",    "New Password"],
-          ["confirm", "Confirm New Password"],
-        ].map(([key, label]) => (
-          <div key={key}>
-            <label className="block text-[10px] font-mono text-zinc-600 uppercase tracking-wider mb-1.5">{label}</label>
-            <input
-              data-testid={`change-pw-${key}`}
-              type="password"
-              value={form[key]}
-              onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-              className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-400 transition-colors"
-              placeholder="••••••••"
-            />
+    <div>
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhotoChange} />
+
+      {editMode ? (
+        /* ══════════ EDIT MODE ══════════ */
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Photo */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "12px 0 4px" }}>
+            <Avatar clickable />
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>Tap to change photo</span>
           </div>
-        ))}
-        <button
-          data-testid="change-pw-btn"
-          onClick={save}
-          disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 bg-zinc-800 text-white text-xs font-semibold hover:bg-zinc-700 disabled:opacity-50 transition-colors border border-zinc-700"
-        >
-          <Lock size={12} />
-          {saving ? "Updating..." : "Update Password"}
-        </button>
+
+          {/* Name */}
+          <PfField label="Full Name">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
+              style={{ ...pfInput, fontSize: 15, fontWeight: 600 }} />
+          </PfField>
+
+          {/* Bio */}
+          <PfField label="Quick Bio">
+            <textarea value={bio} onChange={e => setBio(e.target.value)}
+              placeholder="Tell your audience who you are and what you create…"
+              rows={3} style={{ ...pfInput, resize: "vertical", lineHeight: 1.6 }} />
+          </PfField>
+
+          {/* Content niches */}
+          <div>
+            <div style={pfSectionLabel}>Content Niches</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {INTERESTS.map(({ value, label }) => {
+                const on = interests.includes(value);
+                return (
+                  <button key={value} type="button" onClick={() => toggleInterest(value)} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "9px 12px", borderRadius: 11, textAlign: "left", fontSize: 12, fontWeight: 500,
+                    border: `1.5px solid ${on ? "#5B5BD6" : "#e5e4f0"}`,
+                    background: on ? "#EEF0FF" : "#fff", color: on ? "#5B5BD6" : "#374151",
+                    cursor: "pointer", transition: "all 0.15s",
+                  }}>
+                    <span>{label}</span>
+                    {on && <Check size={11} style={{ color: "#5B5BD6" }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+            <button onClick={save} disabled={saving} style={{
+              flex: 1, padding: "13px 0", fontSize: 13, fontWeight: 700, borderRadius: 12,
+              border: "none", background: "#5B5BD6", color: "#fff",
+              cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1,
+              boxShadow: "0 4px 14px rgba(91,91,214,0.25)",
+            }}>
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+            <button onClick={cancelEdit} disabled={saving} style={{
+              flex: 1, padding: "13px 0", fontSize: 13, fontWeight: 600, borderRadius: 12,
+              border: "1.5px solid #e5e4f0", background: "#fff", color: "#6b7280", cursor: "pointer",
+            }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ══════════ VIEW MODE ══════════ */
+        <div>
+
+          {/* ── Banner + Avatar ── */}
+          <div style={{ position: "relative", marginBottom: 56 }}>
+            <div style={{
+              height: 112, borderRadius: 20,
+              background: "linear-gradient(135deg, #5B5BD6 0%, #8B5CF6 55%, #EC4899 100%)",
+            }} />
+            <div style={{ position: "absolute", bottom: -44, left: 20 }}>
+              <Avatar clickable={false} />
+            </div>
+          </div>
+
+          {/* ── Name + email + bio ── */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#111827", lineHeight: 1.2 }}>
+              {user?.name || "—"}
+            </div>
+            {user?.email && (
+              <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>{user.email}</div>
+            )}
+            {bio ? (
+              <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.7, marginTop: 10, marginBottom: 0 }}>{bio}</p>
+            ) : (
+              <p style={{ fontSize: 13, color: "#c4c2d4", fontStyle: "italic", marginTop: 10, marginBottom: 0 }}>
+                No bio yet — click Edit Profile to add one
+              </p>
+            )}
+          </div>
+
+          {/* ── Content niches ── */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={pfSectionLabel}>Content Niches</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {interests.length > 0
+                ? interests.map(val => {
+                    const lbl = INTERESTS.find(i => i.value === val)?.label;
+                    return lbl ? (
+                      <span key={val} style={{ fontSize: 12, fontWeight: 500, padding: "5px 13px", borderRadius: 20, background: "#EEF0FF", color: "#5B5BD6", border: "1px solid #c7d2fe" }}>
+                        {lbl}
+                      </span>
+                    ) : null;
+                  })
+                : <span style={{ fontSize: 13, color: "#9ca3af" }}>No niches selected yet</span>
+              }
+            </div>
+          </div>
+
+          {/* ── Account details ── */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={pfSectionLabel}>Account Details</div>
+            <div style={{ background: "#fff", border: "1.5px solid #ebe9f6", borderRadius: 16, overflow: "hidden" }}>
+              {[
+                user?.email   && { Icon: Mail,      label: "Email",        value: user.email,   color: "#111827" },
+                joinedDate    && { Icon: Calendar,   label: "Member since", value: joinedDate,   color: "#111827" },
+                {                  Icon: Instagram,  label: "Instagram",
+                  value: igStatus?.connected ? `@${igStatus.username || igStatus.name || "Connected"}` : "Not connected",
+                  color: igStatus?.connected ? "#059669" : "#9ca3af" },
+              ].filter(Boolean).map(({ Icon, label, value, color }, i, arr) => (
+                <div key={label} style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "13px 16px",
+                  borderBottom: i < arr.length - 1 ? "1px solid #ebe9f6" : "none",
+                }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f5f4fb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Icon size={15} style={{ color: "#5B5BD6" }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>{label}</div>
+                    <div style={{ fontSize: 13, color, fontWeight: 500, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Edit button ── */}
+          <button onClick={() => setEditMode(true)} style={{
+            width: "100%", padding: "13px 0", fontSize: 13, fontWeight: 600, borderRadius: 12,
+            border: "1.5px solid #5B5BD6", background: "#fff", color: "#5B5BD6",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}>
+            <Pencil size={13} /> Edit Profile
+          </button>
+
+          {/* ── Sign Out ── */}
+          <button
+            onClick={onLogout}
+            style={{
+              width: "100%", padding: "13px 0", fontSize: 13, fontWeight: 600, borderRadius: 12,
+              border: "1.5px solid #dc2626", background: "#fff", color: "#dc2626",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              marginTop: 10,
+            }}
+          >
+            <LogOut size={13} /> Sign Out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Connections ──────────────────────────────────────────────────────────────
+
+function ConnectionsTab({ user }) {
+  const clientId = user?.client_id;
+  const [ig, setIg]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!clientId) return;
+    setLoading(true);
+    try {
+      const igR = await axios.get(`${API}/instagram/status/${clientId}`);
+      setIg(igR.data);
+    } catch {}
+    finally { setLoading(false); }
+  }, [clientId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await axios.delete(`${API}/instagram/disconnect/${clientId}`);
+      toast.success("Instagram disconnected");
+      await load();
+    } catch {
+      toast.error("Failed to disconnect");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Section title="Social Accounts" description="Connect Instagram to publish and schedule posts automatically">
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm py-6" style={{ color: "#9ca3af" }}>
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-4 rounded-2xl border-2 transition-all"
+              style={{
+                background:  ig?.connected ? "#f0fdf4" : "#fff",
+                borderColor: ig?.connected ? "#86efac" : "#ebe9f6",
+              }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)", color: "#fff" }}>
+                  <Instagram size={18} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: "#111827" }}>Instagram</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>
+                    {ig?.connected ? `@${ig.username || ig.name}` : "Reels, feed posts, stories"}
+                  </div>
+                  {ig?.warning && (
+                    <div className="flex items-center gap-1 mt-1 text-xs" style={{ color: "#d97706" }}>
+                      <AlertCircle size={11} /> {ig.warning}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {ig?.connected ? (
+                  <>
+                    <div className="flex items-center gap-1 text-xs font-medium" style={{ color: "#059669" }}>
+                      <CheckCircle2 size={13} /> Connected
+                    </div>
+                    <button
+                      onClick={disconnect}
+                      disabled={disconnecting}
+                      className="text-xs ml-2 transition-colors disabled:opacity-50"
+                      style={{ color: "#9ca3af" }}
+                      onMouseEnter={e => e.currentTarget.style.color = "#dc2626"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#9ca3af"}
+                    >
+                      {disconnecting ? "…" : "Disconnect"}
+                    </button>
+                  </>
+                ) : (
+                  <a
+                    href={clientId ? `${process.env.REACT_APP_BACKEND_URL}/api/instagram/connect/${clientId}` : "#"}
+                    className="text-xs font-semibold px-4 py-2 rounded-xl text-white transition-colors"
+                    style={{ background: clientId ? "#5B5BD6" : "#e5e4f0", pointerEvents: clientId ? "auto" : "none" }}
+                  >
+                    Connect
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs" style={{ color: "#9ca3af" }}>
+              More platforms (YouTube, TikTok, Threads) coming soon
+            </p>
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ─── Subscription ─────────────────────────────────────────────────────────────
+
+const FREE_LIMITS = { posts: 30, scheduled: 10 };
+
+function SubscriptionTab({ user }) {
+  const clientId = user?.client_id;
+  const [stats, setStats]   = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!clientId) return;
+    const fetchStats = async () => {
+      try {
+        const resp = await axios.get(`${API}/posts?client_id=${clientId}&limit=500`);
+        const posts = resp.data?.posts || resp.data || [];
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const thisMonth = posts.filter(p => new Date(p.created_at || p.scheduled_at) >= monthStart);
+        setStats({
+          total:      posts.length,
+          published:  posts.filter(p => p.status === "published").length,
+          scheduled:  posts.filter(p => p.status === "scheduled").length,
+          drafts:     posts.filter(p => p.status === "draft").length,
+          this_month: thisMonth.length,
+        });
+      } catch { setStats({ total: 0, published: 0, scheduled: 0, drafts: 0, this_month: 0 }); }
+      finally { setLoading(false); }
+    };
+    fetchStats();
+  }, [clientId]);
+
+  const joinedDate = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : "—";
+
+  return (
+    <div className="space-y-6">
+      {/* Current Plan */}
+      <Section title="Current Plan">
+        <div className="p-5 rounded-2xl border-2" style={{ background: "#fff", borderColor: "#ebe9f6" }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: "#EEF0FF", color: "#5B5BD6" }}>
+                <Zap size={18} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold" style={{ color: "#111827" }}>Free Plan</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: "#EEF0FF", color: "#5B5BD6" }}>
+                    CURRENT
+                  </span>
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>Member since {joinedDate}</div>
+              </div>
+            </div>
+            <button
+              className="text-xs font-semibold px-4 py-2 rounded-xl text-white transition-colors"
+              style={{ background: "#5B5BD6" }}
+              onClick={() => toast.info("Pro plan coming soon! We'll notify you when it launches.")}
+            >
+              Upgrade
+            </button>
+          </div>
+
+          {/* Pro teaser */}
+          <div className="mt-4 p-4 rounded-xl border" style={{ background: "#f5f4fb", borderColor: "#ebe9f6" }}>
+            <div className="text-xs font-semibold mb-2" style={{ color: "#5B5BD6" }}>Pro Plan — Coming Soon</div>
+            <ul className="space-y-1.5">
+              {[
+                "Unlimited posts & scheduling",
+                "AI-generated captions with no monthly cap",
+                "Advanced analytics & growth insights",
+                "Priority support",
+              ].map(f => (
+                <li key={f} className="flex items-center gap-2 text-xs" style={{ color: "#6b7280" }}>
+                  <Check size={11} style={{ color: "#5B5BD6", flexShrink: 0 }} /> {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </Section>
+
+      {/* Usage */}
+      <Section title="Account Usage" description="Your activity this month and all time">
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm py-4" style={{ color: "#9ca3af" }}>
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <UsageStat
+              icon={<FileText size={14} style={{ color: "#9ca3af" }} />}
+              label="Posts this month"
+              value={stats?.this_month ?? 0}
+              limit={FREE_LIMITS.posts}
+            />
+            <UsageStat
+              icon={<Calendar size={14} style={{ color: "#9ca3af" }} />}
+              label="Scheduled posts"
+              value={stats?.scheduled ?? 0}
+              limit={FREE_LIMITS.scheduled}
+            />
+            <UsageStat
+              icon={<BarChart3 size={14} style={{ color: "#9ca3af" }} />}
+              label="Total posts published"
+              value={stats?.published ?? 0}
+              limit={null}
+            />
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {[
+                { label: "Drafts", value: stats?.drafts ?? 0 },
+                { label: "All posts", value: stats?.total ?? 0 },
+              ].map(({ label, value }) => (
+                <div key={label} className="p-4 rounded-2xl border" style={{ background: "#fff", borderColor: "#ebe9f6" }}>
+                  <div className="text-2xl font-bold" style={{ color: "#111827" }}>{value}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+function UsageStat({ icon, label, value, limit }) {
+  const pct = limit ? Math.min((value / limit) * 100, 100) : null;
+  const nearLimit = pct !== null && pct >= 80;
+
+  return (
+    <div className="p-4 rounded-2xl border" style={{ background: "#fff", borderColor: "#ebe9f6" }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-xs" style={{ color: "#374151" }}>
+          {icon} {label}
+        </div>
+        <div className="text-sm font-semibold" style={{ color: "#111827" }}>
+          {value}{limit ? <span className="text-xs font-normal" style={{ color: "#9ca3af" }}> / {limit}</span> : ""}
+        </div>
       </div>
+      {limit && (
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#f3f4f6" }}>
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${pct}%`, background: nearLimit ? "#f59e0b" : "#5B5BD6" }}
+          />
+        </div>
+      )}
+      {nearLimit && (
+        <p className="text-[10px] mt-1.5" style={{ color: "#d97706" }}>Approaching limit — upgrade for unlimited</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Security ─────────────────────────────────────────────────────────────────
+
+// ─── Shared ───────────────────────────────────────────────────────────────────
+
+const pfSectionLabel = {
+  fontSize: 11, fontWeight: 700, color: "#374151",
+  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10,
+};
+
+const pfInput = {
+  width: "100%", boxSizing: "border-box", padding: "11px 14px",
+  fontSize: 13, color: "#111827", background: "transparent",
+  border: "none", outline: "none", fontFamily: "inherit",
+};
+
+function PfField({ label, children }) {
+  return (
+    <div>
+      <div style={pfSectionLabel}>{label}</div>
+      <div
+        style={{ background: "#fff", border: "1.5px solid #e5e4f0", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s" }}
+        onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+        onBlurCapture={e => e.currentTarget.style.borderColor = "#e5e4f0"}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, description, children }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold" style={{ color: "#111827" }}>{title}</h2>
+        {description && <p className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>{description}</p>}
+      </div>
+      {children}
     </div>
   );
 }
