@@ -101,7 +101,8 @@ function CarouselForm() {
       setSlideIdx(0);
       toast.success("Carousel generated!");
     } catch (err) {
-      const msg = err.response?.data?.detail || err.message;
+      const raw = err.response?.data?.detail;
+      const msg = typeof raw === "string" ? raw : (Array.isArray(raw) ? raw.map(e => e.msg).join(", ") : (raw ? JSON.stringify(raw) : err.message));
       toast.error(`Generation failed: ${msg}`);
     } finally {
       setLoading(false);
