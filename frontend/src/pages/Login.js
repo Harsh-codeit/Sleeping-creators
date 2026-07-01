@@ -31,23 +31,23 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#f5f4fb" }}>
+    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
       {/* Left panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] flex-col justify-between p-12"
-        style={{ background: "#fff", borderRight: "1px solid #ebe9f6" }}>
+        style={{ background: "#141414", borderRight: "1px solid #2a2a2a" }}>
         <div className="flex items-center gap-3">
           <img src={logo} alt="Sleeping Creators" className="w-9 h-9 rounded-xl" />
-          <span className="font-bold text-lg" style={{ color: "#5B5BD6" }}>Sleeping Creators</span>
+          <span className="font-bold text-lg" style={{ color: "#7c7cf8" }}>Sleeping Creators</span>
         </div>
         <div>
-          <div className="text-3xl font-bold leading-snug mb-3" style={{ color: "#111827" }}>
+          <div className="text-3xl font-bold leading-snug mb-3" style={{ color: "#fff" }}>
             Create content<br />while you sleep.
           </div>
-          <p style={{ color: "#6b7280", fontSize: 14 }}>
+          <p style={{ color: "#888", fontSize: 14 }}>
             Schedule once, publish to Instagram automatically — powered by AI.
           </p>
         </div>
-        <p style={{ fontSize: 11, color: "#d1d5db" }}>Free to start · No credit card required</p>
+        <p style={{ fontSize: 11, color: "#444" }}>Free to start · No credit card required</p>
       </div>
 
       {/* Right form — scrollable */}
@@ -55,7 +55,7 @@ export default function Login({ onLogin }) {
         <div style={{ maxWidth: 380, margin: "0 auto" }}>
           <div className="flex items-center gap-2.5 lg:hidden" style={{ marginBottom: 32 }}>
             <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 10 }} />
-            <span className="font-bold" style={{ color: "#5B5BD6", fontSize: 15 }}>Sleeping Creators</span>
+            <span className="font-bold" style={{ color: "#7c7cf8", fontSize: 15 }}>Sleeping Creators</span>
           </div>
 
           {step === 1 && (
@@ -71,9 +71,9 @@ export default function Login({ onLogin }) {
             />
           )}
 
-          <p className="text-center text-sm" style={{ marginTop: 24, color: "#9ca3af" }}>
+          <p className="text-center text-sm" style={{ marginTop: 24, color: "#555" }}>
             Don't have an account?{" "}
-            <Link to="/signup" className="font-semibold" style={{ color: "#5B5BD6" }}>Sign up free</Link>
+            <Link to="/signup" className="font-semibold" style={{ color: "#8080ff" }}>Sign up free</Link>
           </p>
         </div>
       </div>
@@ -85,26 +85,26 @@ function Step1({ identifier, setId, notFound, sending, onSend }) {
   return (
     <>
       <div style={{ marginBottom: 24 }}>
-        <h1 className="font-bold" style={{ fontSize: 22, color: "#111827", marginBottom: 4 }}>Welcome back</h1>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Enter your phone or email to log in</p>
+        <h1 className="font-bold" style={{ fontSize: 22, color: "#fff", marginBottom: 4 }}>Welcome back</h1>
+        <p style={{ fontSize: 14, color: "#888" }}>Enter your phone or email to log in</p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#374151", marginBottom: 5 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#bbb", marginBottom: 5 }}>
             Phone number or email
           </label>
-          <div style={{ background: "#fff", border: `1.5px solid ${notFound ? "#fca5a5" : "#e5e4f0"}`, borderRadius: 14, overflow: "hidden" }}>
+          <div style={{ background: "#1a1a1a", border: `1.5px solid ${notFound ? "#7f1d1d" : "#333"}`, borderRadius: 14, overflow: "hidden" }}>
             <input
               type="text" value={identifier} onChange={e => setId(e.target.value)}
               placeholder="+91 98765 43210 or you@email.com"
               autoFocus onKeyDown={e => e.key === "Enter" && onSend()}
-              style={{ width: "100%", background: "transparent", padding: "13px 16px", fontSize: 14, color: "#111827", outline: "none", boxSizing: "border-box" }}
+              style={{ width: "100%", background: "transparent", padding: "13px 16px", fontSize: 14, color: "#fff", outline: "none", boxSizing: "border-box" }}
             />
           </div>
           {notFound && (
-            <p style={{ fontSize: 12, color: "#dc2626", marginTop: 6 }}>
+            <p style={{ fontSize: 12, color: "#ef4444", marginTop: 6 }}>
               No account found.{" "}
-              <Link to="/signup" style={{ color: "#dc2626", textDecoration: "underline" }}>Sign up instead →</Link>
+              <Link to="/signup" style={{ color: "#ef4444", textDecoration: "underline" }}>Sign up instead →</Link>
             </p>
           )}
         </div>
@@ -117,33 +117,28 @@ function Step1({ identifier, setId, notFound, sending, onSend }) {
 }
 
 function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
-  const [otp, setOtp]         = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp]         = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCd]    = useState(30);
-  const refs = useRef([]);
+  const inputRef              = useRef(null);
 
-  useEffect(() => { refs.current[0]?.focus(); }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setTimeout(() => setCd(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
 
-  const handleChange = (i, val) => {
-    const d = val.replace(/\D/g, "").slice(-1);
-    const next = [...otp]; next[i] = d; setOtp(next);
-    if (d && i < 5) refs.current[i + 1]?.focus();
-  };
-  const handleKey = (i, e) => {
-    if (e.key === "Backspace" && !otp[i] && i > 0) refs.current[i - 1]?.focus();
+  const handleChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setOtp(val);
   };
 
   const verify = async () => {
-    const code = otp.join("") || devOtp;
+    const code = otp || devOtp;
     if (!devMode && code.length < 6) return toast.error("Enter all 6 digits");
     setLoading(true);
     try {
-      // In dev mode, use the debug OTP that backend will accept
       const resp = await axios.post(`${API}/auth/otp/verify`, {
         identifier: identifier.trim(),
         otp: devMode ? devOtp : code,
@@ -160,8 +155,8 @@ function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
   const resend = async () => {
     try {
       await axios.post(`${API}/auth/otp/send`, { identifier: identifier.trim(), purpose: "login" });
-      setOtp(["", "", "", "", "", ""]); setCd(30);
-      refs.current[0]?.focus();
+      setOtp(""); setCd(30);
+      inputRef.current?.focus();
     } catch { toast.error("Could not resend"); }
   };
 
@@ -169,44 +164,59 @@ function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
     <>
       <div style={{ marginBottom: 20 }}>
         <button onClick={onBack} className="flex items-center gap-1.5 font-medium"
-          style={{ color: "#5B5BD6", fontSize: 13, marginBottom: 12 }}>
+          style={{ color: "#8080ff", fontSize: 13, marginBottom: 12 }}>
           <ArrowLeft size={13} /> Change
         </button>
-        <h1 className="font-bold" style={{ fontSize: 22, color: "#111827", marginBottom: 4 }}>Enter OTP</h1>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>
-          Sent to <strong style={{ color: "#111827" }}>{identifier}</strong>
+        <h1 className="font-bold" style={{ fontSize: 22, color: "#fff", marginBottom: 4 }}>Enter OTP</h1>
+        <p style={{ fontSize: 14, color: "#888" }}>
+          Sent to <strong style={{ color: "#fff" }}>{identifier}</strong>
         </p>
       </div>
 
       {devMode && (
-        <div style={{ background: "#fefce8", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#854d0e", textAlign: "center" }}>
+        <div style={{ background: "#1a1400", border: "1px solid #3a2e00", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#d97706", textAlign: "center" }}>
           Dev mode — enter any 6 digits to continue
         </div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          {otp.map((digit, i) => (
-            <input key={i} ref={el => refs.current[i] = el}
-              type="text" inputMode="numeric" maxLength={1} value={digit}
-              onChange={e => handleChange(i, e.target.value)}
-              onKeyDown={e => handleKey(i, e)}
-              style={{
-                flex: 1, height: 50, textAlign: "center", fontSize: 22, fontWeight: 700,
-                borderRadius: 12, border: `2px solid ${digit ? "#5B5BD6" : "#e5e4f0"}`,
-                background: digit ? "#EEF0FF" : "#fff", color: "#5B5BD6", outline: "none",
-              }}
-            />
-          ))}
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>
+            6-digit code
+          </label>
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            value={otp}
+            onChange={handleChange}
+            onKeyDown={e => e.key === "Enter" && verify()}
+            placeholder="••••••"
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "14px 18px",
+              background: "#1a1a1a",
+              border: `2px solid ${otp.length === 6 ? "#5B5BD6" : "#333"}`,
+              borderRadius: 14,
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: "0.3em",
+              color: "#8080ff",
+              outline: "none",
+              textAlign: "center",
+              transition: "border-color 0.15s",
+            }}
+          />
         </div>
 
         <Btn loading={loading} onClick={verify}>
           {loading ? <><Loader2 size={15} className="animate-spin" /> Logging in…</> : "Login"}
         </Btn>
 
-        <p className="text-center" style={{ fontSize: 13, color: "#9ca3af" }}>
+        <p className="text-center" style={{ fontSize: 13, color: "#555" }}>
           {countdown > 0 ? `Resend in ${countdown}s` : (
-            <button onClick={resend} style={{ color: "#5B5BD6", fontWeight: 600 }}>Resend OTP</button>
+            <button onClick={resend} style={{ color: "#8080ff", fontWeight: 600 }}>Resend OTP</button>
           )}
         </p>
       </div>
@@ -222,7 +232,7 @@ function Btn({ children, loading, onClick }) {
         color: "#fff", background: "#5B5BD6", border: "none",
         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
         opacity: loading ? 0.6 : 1, cursor: loading ? "default" : "pointer",
-        boxShadow: "0 4px 14px rgba(91,91,214,0.28)",
+        boxShadow: "0 4px 14px rgba(91,91,214,0.3)",
       }}>
       {children}
     </button>

@@ -2,46 +2,22 @@ services:
   - type: web
     name: sleeping-creators-api
     runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    rootDir: .
+    buildCommand: pip install -r backend_mobile/requirements.txt && pip install -e backend_mobile/
+    startCommand: uvicorn backend_mobile.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGO_URL
-        sync: false          # you paste this in Render dashboard
+        sync: false          # paste Atlas connection string in Render dashboard
       - key: DB_NAME
-        value: sleeping-creators
+        value: sc_mobile
       - key: JWT_SECRET_KEY
-        generateValue: true  # Render auto-generates a secure secret
-      - key: FRONTEND_URL
-        value: https://sleeping-creators-api.onrender.com   # update after deploy
-      - key: STORAGE_BACKEND
-        value: local         # no R2 needed for MVP
+        sync: false          # paste existing JWT secret (keeps users logged in)
       - key: ANTHROPIC_API_KEY
-        sync: false          # paste your key in dashboard
+        sync: false          # paste your Anthropic API key
       - key: REDIS_URL
-        value: ""            # leave blank, scheduler will run without Redis
-      - key: APIFY_API_KEY
-        value: ""
+        value: ""            # leave blank — caching disabled without Redis
       - key: BUNDLE_API_KEY
-        value: ""
-      - key: GOOGLE_CLIENT_ID
-        value: ""
-      - key: GOOGLE_CLIENT_SECRET
-        value: ""
-      - key: INSTAGRAM_APP_ID
-        value: ""
-      - key: INSTAGRAM_APP_SECRET
-        value: ""
-      - key: FACEBOOK_APP_ID
-        value: ""
-      - key: FACEBOOK_APP_SECRET
-        value: ""
-      - key: CREATOMATE_API_KEY
-        value: ""
-      - key: CREATOMATE_WEBHOOK_SECRET
-        value: ""
-      - key: CREATOMATE_WEBHOOK_URL
-        value: ""
+        sync: false
       - key: R2_ACCOUNT_ID
         value: ""
       - key: R2_ACCESS_KEY_ID

@@ -21,8 +21,11 @@ export function UserProvider({ children, token }) {
   const fetchUser = useCallback(() => {
     if (!token) { setUser({ role: "guest" }); return; }
     setUser(null);
-    axios.get(`${API}/me`)
-      .then(r => setUser({ ...DEFAULT, ...r.data }))
+    axios.get(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => {
+        const data = r.data;
+        setUser({ ...DEFAULT, ...data, client_id: data.client_id || data.id || null });
+      })
       .catch(() => setUser(DEFAULT));
   }, [token]);
 

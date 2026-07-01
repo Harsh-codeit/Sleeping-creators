@@ -44,11 +44,11 @@ export default function Settings({ onLogout }) {
   const user = useUser();
 
   return (
-    <div className="flex-1 overflow-y-auto" style={{ background: "#f5f4fb" }} data-testid="settings-page">
+    <div className="flex-1 overflow-y-auto" style={{ background: "#0d0d0d" }} data-testid="settings-page">
       {/* Header */}
-      <div className="flex-shrink-0" style={{ background: "#fff", borderBottom: "1px solid #ebe9f6" }}>
+      <div className="flex-shrink-0" style={{ background: "#161616", borderBottom: "1px solid #2a2a2a" }}>
         <div className="max-w-2xl mx-auto px-6 pt-6 pb-0">
-          <h1 className="text-xl font-bold mb-4" style={{ color: "#111827" }}>Settings</h1>
+          <h1 className="text-xl font-bold mb-4" style={{ color: "#ffffff" }}>Settings</h1>
           <div className="flex items-center gap-0">
             {TABS.map(({ key, label, icon: Icon }) => (
               <button
@@ -57,7 +57,7 @@ export default function Settings({ onLogout }) {
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors"
                 style={activeTab === key
                   ? { borderColor: "#5B5BD6", color: "#5B5BD6" }
-                  : { borderColor: "transparent", color: "#6b7280" }
+                  : { borderColor: "transparent", color: "#888888" }
                 }
               >
                 <Icon size={14} />
@@ -162,8 +162,8 @@ function ProfileTab({ user, onLogout }) {
       onClick={() => clickable && fileInputRef.current?.click()}
       style={{
         width: 88, height: 88, borderRadius: "50%", flexShrink: 0,
-        background: photoPreview ? "transparent" : "#EEF0FF",
-        border: "4px solid #fff",
+        background: photoPreview ? "transparent" : "#1e1e3a",
+        border: "4px solid #161616",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden",
         cursor: clickable ? "pointer" : "default",
@@ -194,7 +194,7 @@ function ProfileTab({ user, onLogout }) {
           {/* Photo */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "12px 0 4px" }}>
             <Avatar clickable />
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>Tap to change photo</span>
+            <span style={{ fontSize: 11, color: "#666666" }}>Tap to change photo</span>
           </div>
 
           {/* Name */}
@@ -220,8 +220,8 @@ function ProfileTab({ user, onLogout }) {
                   <button key={value} type="button" onClick={() => toggleInterest(value)} style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     padding: "9px 12px", borderRadius: 11, textAlign: "left", fontSize: 12, fontWeight: 500,
-                    border: `1.5px solid ${on ? "#5B5BD6" : "#e5e4f0"}`,
-                    background: on ? "#EEF0FF" : "#fff", color: on ? "#5B5BD6" : "#374151",
+                    border: `1.5px solid ${on ? "#5B5BD6" : "#2a2a2a"}`,
+                    background: on ? "#1e1e3a" : "#161616", color: on ? "#5B5BD6" : "#cccccc",
                     cursor: "pointer", transition: "all 0.15s",
                   }}>
                     <span>{label}</span>
@@ -244,7 +244,7 @@ function ProfileTab({ user, onLogout }) {
             </button>
             <button onClick={cancelEdit} disabled={saving} style={{
               flex: 1, padding: "13px 0", fontSize: 13, fontWeight: 600, borderRadius: 12,
-              border: "1.5px solid #e5e4f0", background: "#fff", color: "#6b7280", cursor: "pointer",
+              border: "1.5px solid #2a2a2a", background: "#161616", color: "#888888", cursor: "pointer",
             }}>
               Cancel
             </button>
@@ -267,16 +267,16 @@ function ProfileTab({ user, onLogout }) {
 
           {/* ── Name + email + bio ── */}
           <div style={{ marginBottom: 22 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#111827", lineHeight: 1.2 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#ffffff", lineHeight: 1.2 }}>
               {user?.name || "—"}
             </div>
             {user?.email && (
-              <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>{user.email}</div>
+              <div style={{ fontSize: 12, color: "#666666", marginTop: 3 }}>{user.email}</div>
             )}
             {bio ? (
-              <p style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.7, marginTop: 10, marginBottom: 0 }}>{bio}</p>
+              <p style={{ fontSize: 13, color: "#888888", lineHeight: 1.7, marginTop: 10, marginBottom: 0 }}>{bio}</p>
             ) : (
-              <p style={{ fontSize: 13, color: "#c4c2d4", fontStyle: "italic", marginTop: 10, marginBottom: 0 }}>
+              <p style={{ fontSize: 13, color: "#555", fontStyle: "italic", marginTop: 10, marginBottom: 0 }}>
                 No bio yet — click Edit Profile to add one
               </p>
             )}
@@ -290,12 +290,12 @@ function ProfileTab({ user, onLogout }) {
                 ? interests.map(val => {
                     const lbl = INTERESTS.find(i => i.value === val)?.label;
                     return lbl ? (
-                      <span key={val} style={{ fontSize: 12, fontWeight: 500, padding: "5px 13px", borderRadius: 20, background: "#EEF0FF", color: "#5B5BD6", border: "1px solid #c7d2fe" }}>
+                      <span key={val} style={{ fontSize: 12, fontWeight: 500, padding: "5px 13px", borderRadius: 20, background: "#1e1e3a", color: "#5B5BD6", border: "1px solid #3a3a6a" }}>
                         {lbl}
                       </span>
                     ) : null;
                   })
-                : <span style={{ fontSize: 13, color: "#9ca3af" }}>No niches selected yet</span>
+                : <span style={{ fontSize: 13, color: "#666666" }}>No niches selected yet</span>
               }
             </div>
           </div>
@@ -303,23 +303,23 @@ function ProfileTab({ user, onLogout }) {
           {/* ── Account details ── */}
           <div style={{ marginBottom: 24 }}>
             <div style={pfSectionLabel}>Account Details</div>
-            <div style={{ background: "#fff", border: "1.5px solid #ebe9f6", borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, overflow: "hidden" }}>
               {[
-                user?.email   && { Icon: Mail,      label: "Email",        value: user.email,   color: "#111827" },
-                joinedDate    && { Icon: Calendar,   label: "Member since", value: joinedDate,   color: "#111827" },
+                user?.email   && { Icon: Mail,      label: "Email",        value: user.email,   color: "#ffffff" },
+                joinedDate    && { Icon: Calendar,   label: "Member since", value: joinedDate,   color: "#ffffff" },
                 {                  Icon: Instagram,  label: "Instagram",
                   value: igStatus?.connected ? `@${igStatus.username || igStatus.name || "Connected"}` : "Not connected",
-                  color: igStatus?.connected ? "#059669" : "#9ca3af" },
+                  color: igStatus?.connected ? "#059669" : "#666666" },
               ].filter(Boolean).map(({ Icon, label, value, color }, i, arr) => (
                 <div key={label} style={{
                   display: "flex", alignItems: "center", gap: 12, padding: "13px 16px",
-                  borderBottom: i < arr.length - 1 ? "1px solid #ebe9f6" : "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid #2a2a2a" : "none",
                 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f5f4fb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#0d0d0d", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Icon size={15} style={{ color: "#5B5BD6" }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 500 }}>{label}</div>
+                    <div style={{ fontSize: 11, color: "#666666", fontWeight: 500 }}>{label}</div>
                     <div style={{ fontSize: 13, color, fontWeight: 500, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
                   </div>
                 </div>
@@ -330,7 +330,7 @@ function ProfileTab({ user, onLogout }) {
           {/* ── Edit button ── */}
           <button onClick={() => setEditMode(true)} style={{
             width: "100%", padding: "13px 0", fontSize: 13, fontWeight: 600, borderRadius: 12,
-            border: "1.5px solid #5B5BD6", background: "#fff", color: "#5B5BD6",
+            border: "1.5px solid #5B5BD6", background: "#161616", color: "#5B5BD6",
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}>
             <Pencil size={13} /> Edit Profile
@@ -341,7 +341,7 @@ function ProfileTab({ user, onLogout }) {
             onClick={onLogout}
             style={{
               width: "100%", padding: "13px 0", fontSize: 13, fontWeight: 600, borderRadius: 12,
-              border: "1.5px solid #dc2626", background: "#fff", color: "#dc2626",
+              border: "1.5px solid #dc2626", background: "#161616", color: "#dc2626",
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
               marginTop: 10,
             }}
@@ -374,6 +374,18 @@ function ConnectionsTab({ user }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const connectInstagram = async () => {
+    const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    try {
+      const { data } = await axios.get(`${API}/bundle/connect/${clientId}`, { headers });
+      if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
+      else toast.error("Could not get connect URL");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to initiate connect");
+    }
+  };
+
   const disconnect = async () => {
     setDisconnecting(true);
     try {
@@ -391,15 +403,15 @@ function ConnectionsTab({ user }) {
     <div className="space-y-6">
       <Section title="Social Accounts" description="Connect Instagram to publish and schedule posts automatically">
         {loading ? (
-          <div className="flex items-center gap-2 text-sm py-6" style={{ color: "#9ca3af" }}>
+          <div className="flex items-center gap-2 text-sm py-6" style={{ color: "#666666" }}>
             <Loader2 size={14} className="animate-spin" /> Loading…
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between p-4 rounded-2xl border-2 transition-all"
               style={{
-                background:  ig?.connected ? "#f0fdf4" : "#fff",
-                borderColor: ig?.connected ? "#86efac" : "#ebe9f6",
+                background:  ig?.connected ? "#0a2016" : "#161616",
+                borderColor: ig?.connected ? "#14532d" : "#2a2a2a",
               }}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -407,8 +419,8 @@ function ConnectionsTab({ user }) {
                   <Instagram size={18} />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold" style={{ color: "#111827" }}>Instagram</div>
-                  <div className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>
+                  <div className="text-sm font-semibold" style={{ color: "#ffffff" }}>Instagram</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#666666" }}>
                     {ig?.connected ? `@${ig.username || ig.name}` : "Reels, feed posts, stories"}
                   </div>
                   {ig?.warning && (
@@ -429,26 +441,27 @@ function ConnectionsTab({ user }) {
                       onClick={disconnect}
                       disabled={disconnecting}
                       className="text-xs ml-2 transition-colors disabled:opacity-50"
-                      style={{ color: "#9ca3af" }}
+                      style={{ color: "#666666" }}
                       onMouseEnter={e => e.currentTarget.style.color = "#dc2626"}
-                      onMouseLeave={e => e.currentTarget.style.color = "#9ca3af"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#666666"}
                     >
                       {disconnecting ? "…" : "Disconnect"}
                     </button>
                   </>
                 ) : (
-                  <a
-                    href={clientId ? `${process.env.REACT_APP_BACKEND_URL}/api/instagram/connect/${clientId}` : "#"}
-                    className="text-xs font-semibold px-4 py-2 rounded-xl text-white transition-colors"
-                    style={{ background: clientId ? "#5B5BD6" : "#e5e4f0", pointerEvents: clientId ? "auto" : "none" }}
+                  <button
+                    onClick={connectInstagram}
+                    disabled={!clientId}
+                    className="text-xs font-semibold px-4 py-2 rounded-xl text-white transition-colors disabled:opacity-50"
+                    style={{ background: "#5B5BD6", border: "none", cursor: clientId ? "pointer" : "not-allowed" }}
                   >
                     Connect
-                  </a>
+                  </button>
                 )}
               </div>
             </div>
 
-            <p className="text-xs" style={{ color: "#9ca3af" }}>
+            <p className="text-xs" style={{ color: "#666666" }}>
               More platforms (YouTube, TikTok, Threads) coming soon
             </p>
           </div>
@@ -497,22 +510,22 @@ function SubscriptionTab({ user }) {
     <div className="space-y-6">
       {/* Current Plan */}
       <Section title="Current Plan">
-        <div className="p-5 rounded-2xl border-2" style={{ background: "#fff", borderColor: "#ebe9f6" }}>
+        <div className="p-5 rounded-2xl border-2" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: "#EEF0FF", color: "#5B5BD6" }}>
+                style={{ background: "#1e1e3a", color: "#5B5BD6" }}>
                 <Zap size={18} />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold" style={{ color: "#111827" }}>Free Plan</span>
+                  <span className="text-sm font-bold" style={{ color: "#ffffff" }}>Free Plan</span>
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: "#EEF0FF", color: "#5B5BD6" }}>
+                    style={{ background: "#1e1e3a", color: "#5B5BD6" }}>
                     CURRENT
                   </span>
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>Member since {joinedDate}</div>
+                <div className="text-xs mt-0.5" style={{ color: "#666666" }}>Member since {joinedDate}</div>
               </div>
             </div>
             <button
@@ -525,7 +538,7 @@ function SubscriptionTab({ user }) {
           </div>
 
           {/* Pro teaser */}
-          <div className="mt-4 p-4 rounded-xl border" style={{ background: "#f5f4fb", borderColor: "#ebe9f6" }}>
+          <div className="mt-4 p-4 rounded-xl border" style={{ background: "#0d0d0d", borderColor: "#2a2a2a" }}>
             <div className="text-xs font-semibold mb-2" style={{ color: "#5B5BD6" }}>Pro Plan — Coming Soon</div>
             <ul className="space-y-1.5">
               {[
@@ -534,7 +547,7 @@ function SubscriptionTab({ user }) {
                 "Advanced analytics & growth insights",
                 "Priority support",
               ].map(f => (
-                <li key={f} className="flex items-center gap-2 text-xs" style={{ color: "#6b7280" }}>
+                <li key={f} className="flex items-center gap-2 text-xs" style={{ color: "#888888" }}>
                   <Check size={11} style={{ color: "#5B5BD6", flexShrink: 0 }} /> {f}
                 </li>
               ))}
@@ -546,25 +559,25 @@ function SubscriptionTab({ user }) {
       {/* Usage */}
       <Section title="Account Usage" description="Your activity this month and all time">
         {loading ? (
-          <div className="flex items-center gap-2 text-sm py-4" style={{ color: "#9ca3af" }}>
+          <div className="flex items-center gap-2 text-sm py-4" style={{ color: "#666666" }}>
             <Loader2 size={14} className="animate-spin" /> Loading…
           </div>
         ) : (
           <div className="space-y-3">
             <UsageStat
-              icon={<FileText size={14} style={{ color: "#9ca3af" }} />}
+              icon={<FileText size={14} style={{ color: "#666666" }} />}
               label="Posts this month"
               value={stats?.this_month ?? 0}
               limit={FREE_LIMITS.posts}
             />
             <UsageStat
-              icon={<Calendar size={14} style={{ color: "#9ca3af" }} />}
+              icon={<Calendar size={14} style={{ color: "#666666" }} />}
               label="Scheduled posts"
               value={stats?.scheduled ?? 0}
               limit={FREE_LIMITS.scheduled}
             />
             <UsageStat
-              icon={<BarChart3 size={14} style={{ color: "#9ca3af" }} />}
+              icon={<BarChart3 size={14} style={{ color: "#666666" }} />}
               label="Total posts published"
               value={stats?.published ?? 0}
               limit={null}
@@ -574,9 +587,9 @@ function SubscriptionTab({ user }) {
                 { label: "Drafts", value: stats?.drafts ?? 0 },
                 { label: "All posts", value: stats?.total ?? 0 },
               ].map(({ label, value }) => (
-                <div key={label} className="p-4 rounded-2xl border" style={{ background: "#fff", borderColor: "#ebe9f6" }}>
-                  <div className="text-2xl font-bold" style={{ color: "#111827" }}>{value}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>{label}</div>
+                <div key={label} className="p-4 rounded-2xl border" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
+                  <div className="text-2xl font-bold" style={{ color: "#ffffff" }}>{value}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#666666" }}>{label}</div>
                 </div>
               ))}
             </div>
@@ -592,17 +605,17 @@ function UsageStat({ icon, label, value, limit }) {
   const nearLimit = pct !== null && pct >= 80;
 
   return (
-    <div className="p-4 rounded-2xl border" style={{ background: "#fff", borderColor: "#ebe9f6" }}>
+    <div className="p-4 rounded-2xl border" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-xs" style={{ color: "#374151" }}>
+        <div className="flex items-center gap-2 text-xs" style={{ color: "#cccccc" }}>
           {icon} {label}
         </div>
-        <div className="text-sm font-semibold" style={{ color: "#111827" }}>
-          {value}{limit ? <span className="text-xs font-normal" style={{ color: "#9ca3af" }}> / {limit}</span> : ""}
+        <div className="text-sm font-semibold" style={{ color: "#ffffff" }}>
+          {value}{limit ? <span className="text-xs font-normal" style={{ color: "#666666" }}> / {limit}</span> : ""}
         </div>
       </div>
       {limit && (
-        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#f3f4f6" }}>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#1e1e1e" }}>
           <div
             className="h-full rounded-full transition-all"
             style={{ width: `${pct}%`, background: nearLimit ? "#f59e0b" : "#5B5BD6" }}
@@ -621,13 +634,13 @@ function UsageStat({ icon, label, value, limit }) {
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
 const pfSectionLabel = {
-  fontSize: 11, fontWeight: 700, color: "#374151",
+  fontSize: 11, fontWeight: 700, color: "#cccccc",
   textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10,
 };
 
 const pfInput = {
   width: "100%", boxSizing: "border-box", padding: "11px 14px",
-  fontSize: 13, color: "#111827", background: "transparent",
+  fontSize: 13, color: "#ffffff", background: "transparent",
   border: "none", outline: "none", fontFamily: "inherit",
 };
 
@@ -636,9 +649,9 @@ function PfField({ label, children }) {
     <div>
       <div style={pfSectionLabel}>{label}</div>
       <div
-        style={{ background: "#fff", border: "1.5px solid #e5e4f0", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s" }}
+        style={{ background: "#1a1a1a", border: "1.5px solid #2a2a2a", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s" }}
         onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
-        onBlurCapture={e => e.currentTarget.style.borderColor = "#e5e4f0"}
+        onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}
       >
         {children}
       </div>
@@ -650,8 +663,8 @@ function Section({ title, description, children }) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold" style={{ color: "#111827" }}>{title}</h2>
-        {description && <p className="text-xs mt-0.5" style={{ color: "#9ca3af" }}>{description}</p>}
+        <h2 className="text-sm font-semibold" style={{ color: "#ffffff" }}>{title}</h2>
+        {description && <p className="text-xs mt-0.5" style={{ color: "#666666" }}>{description}</p>}
       </div>
       {children}
     </div>

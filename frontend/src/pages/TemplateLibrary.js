@@ -7,22 +7,23 @@ import {
   Check,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
+import SlidePreview from "../components/SlidePreview";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const CATEGORY_COLORS = {
-  Education:        { bg: "#EEF0FF", text: "#5B5BD6" },
-  Technology:       { bg: "#e0f2fe", text: "#0284c7" },
-  Business:         { bg: "#fef9c3", text: "#854d0e" },
-  Marketing:        { bg: "#fce7f3", text: "#be185d" },
-  Finance:          { bg: "#d1fae5", text: "#065f46" },
-  "Product Showcase": { bg: "#f3e8ff", text: "#7e22ce" },
-  Motivation:       { bg: "#ffedd5", text: "#c2410c" },
-  Custom:           { bg: "#f5f4fb", text: "#6b7280" },
+  Education:        { bg: "#1e1e3a", text: "#8080ff" },
+  Technology:       { bg: "#0a1a2e", text: "#38bdf8" },
+  Business:         { bg: "#1a1400", text: "#fbbf24" },
+  Marketing:        { bg: "#2a0a1a", text: "#f472b6" },
+  Finance:          { bg: "#0a2016", text: "#34d399" },
+  "Product Showcase": { bg: "#1e0a2e", text: "#c084fc" },
+  Motivation:       { bg: "#2a1000", text: "#fb923c" },
+  Custom:           { bg: "#1e1e1e", text: "#888888" },
 };
 
 function categoryStyle(cat) {
-  return CATEGORY_COLORS[cat] || { bg: "#f5f4fb", text: "#6b7280" };
+  return CATEGORY_COLORS[cat] || { bg: "#1e1e1e", text: "#888888" };
 }
 
 function fmtDate(s) {
@@ -59,9 +60,14 @@ export default function TemplateLibrary() {
     }
   }, [search]);
 
+  const authHeaders = () => {
+    const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   useEffect(() => {
     fetchTemplates();
-    axios.post(`${API}/templates/seed`).catch(() => {});
+    axios.post(`${API}/templates/seed`, {}, { headers: authHeaders() }).catch(() => {});
   }, [fetchTemplates]);
 
   const carouselTemplates = templates.filter(t => t.kind !== "video");
@@ -70,7 +76,7 @@ export default function TemplateLibrary() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this template?")) return;
     try {
-      await axios.delete(`${API}/templates/${id}`);
+      await axios.delete(`${API}/templates/${id}`, { headers: authHeaders() });
       toast.success("Deleted");
       fetchTemplates();
     } catch (e) {
@@ -80,7 +86,7 @@ export default function TemplateLibrary() {
 
   const handleClone = async (id, isVideo) => {
     try {
-      const resp = await axios.post(`${API}/templates/${id}/clone`);
+      const resp = await axios.post(`${API}/templates/${id}/clone`, {}, { headers: authHeaders() });
       toast.success("Duplicated");
       if (isVideo) {
         fetchTemplates();
@@ -93,14 +99,14 @@ export default function TemplateLibrary() {
   };
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#f5f4fb" }}>
+    <div style={{ minHeight: "100dvh", background: "#0d0d0d" }}>
 
       {/* Header */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #ebe9f6" }}>
+      <div style={{ background: "#161616", borderBottom: "1px solid #2a2a2a" }}>
         <div style={{ maxWidth: 1152, margin: "0 auto", padding: "20px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: "#111827", margin: 0 }}>Template Library</h1>
-            <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>Choose a format and create AI-powered content in seconds</p>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "#ffffff", margin: 0 }}>Template Library</h1>
+            <p style={{ fontSize: 12, color: "#666666", marginTop: 2 }}>Choose a format and create AI-powered content in seconds</p>
           </div>
           {tp.create && contentTab === "carousel" && (
             <button onClick={() => navigate("/templates/new")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", fontSize: 13, fontWeight: 600, borderRadius: 12, border: "none", background: "#5B5BD6", color: "#fff", cursor: "pointer" }}
@@ -127,7 +133,7 @@ export default function TemplateLibrary() {
             <button key={key} onClick={() => setContentTab(key)} style={{
               display: "flex", alignItems: "center", gap: 6, padding: "12px 20px", fontSize: 13, fontWeight: 500,
               borderBottom: `2px solid ${contentTab === key ? "#5B5BD6" : "transparent"}`,
-              color: contentTab === key ? "#5B5BD6" : "#6b7280",
+              color: contentTab === key ? "#5B5BD6" : "#888888",
               background: "none", border: "none", borderBottomWidth: 2, borderBottomStyle: "solid",
               borderBottomColor: contentTab === key ? "#5B5BD6" : "transparent",
               cursor: "pointer", transition: "all 0.15s",
@@ -143,21 +149,21 @@ export default function TemplateLibrary() {
         <div style={{ maxWidth: 1152, margin: "0 auto", padding: "24px" }}>
           {/* Search only */}
           <div style={{ maxWidth: 320, marginBottom: 24, position: "relative" }}>
-            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#666666" }} />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search templates…"
-              style={{ width: "100%", boxSizing: "border-box", paddingLeft: 36, paddingRight: 14, paddingTop: 10, paddingBottom: 10, fontSize: 13, borderRadius: 12, background: "#fff", border: "1.5px solid #e5e4f0", color: "#111827", outline: "none" }}
+              style={{ width: "100%", boxSizing: "border-box", paddingLeft: 36, paddingRight: 14, paddingTop: 10, paddingBottom: 10, fontSize: 13, borderRadius: 12, background: "#1a1a1a", border: "1.5px solid #2a2a2a", color: "#ffffff", outline: "none" }}
               onFocus={e => e.currentTarget.style.borderColor = "#5B5BD6"}
-              onBlur={e => e.currentTarget.style.borderColor = "#e5e4f0"}
+              onBlur={e => e.currentTarget.style.borderColor = "#2a2a2a"}
             />
           </div>
 
           {loading ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 16 }}>
               {[1,2,3,4,5,6,7,8].map(i => (
-                <div key={i} style={{ borderRadius: 16, overflow: "hidden", background: "#fff", border: "1.5px solid #ebe9f6", opacity: 0.7 }}>
+                <div key={i} style={{ borderRadius: 16, overflow: "hidden", background: "#161616", border: "1.5px solid #2a2a2a", opacity: 0.7 }}>
                   <div style={{ aspectRatio: "4/5", background: "#f0edf8" }} />
                   <div style={{ padding: 12 }}>
                     <div style={{ height: 12, borderRadius: 6, background: "#f0edf8", width: "70%", marginBottom: 6 }} />
@@ -168,11 +174,11 @@ export default function TemplateLibrary() {
             </div>
           ) : carouselTemplates.length === 0 ? (
             <div style={{ textAlign: "center", paddingTop: 80, paddingBottom: 80 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: "#EEF0FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                <LayoutTemplate size={24} style={{ color: "#5B5BD6" }} />
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: "#1e1e3a", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <LayoutTemplate size={24} style={{ color: "#8080ff" }} />
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 4px" }}>No templates found</p>
-              <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 16px" }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#cccccc", margin: "0 0 4px" }}>No templates found</p>
+              <p style={{ fontSize: 12, color: "#666666", margin: "0 0 16px" }}>
                 {search ? `No results for "${search}"` : "Create your first template to get started"}
               </p>
               {tp.create && (
@@ -203,30 +209,30 @@ export default function TemplateLibrary() {
         <div style={{ maxWidth: 1152, margin: "0 auto", padding: "24px" }}>
           {/* Search */}
           <div style={{ maxWidth: 320, marginBottom: 24, position: "relative" }}>
-            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+            <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#666666" }} />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search video templates…"
-              style={{ width: "100%", boxSizing: "border-box", paddingLeft: 36, paddingRight: 14, paddingTop: 10, paddingBottom: 10, fontSize: 13, borderRadius: 12, background: "#fff", border: "1.5px solid #e5e4f0", color: "#111827", outline: "none" }}
+              style={{ width: "100%", boxSizing: "border-box", paddingLeft: 36, paddingRight: 14, paddingTop: 10, paddingBottom: 10, fontSize: 13, borderRadius: 12, background: "#1a1a1a", border: "1.5px solid #2a2a2a", color: "#ffffff", outline: "none" }}
               onFocus={e => e.currentTarget.style.borderColor = "#5B5BD6"}
-              onBlur={e => e.currentTarget.style.borderColor = "#e5e4f0"}
+              onBlur={e => e.currentTarget.style.borderColor = "#2a2a2a"}
             />
           </div>
 
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[1,2,3].map(i => (
-                <div key={i} style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #ebe9f6", padding: 16, height: 80, opacity: 0.6 }} />
+                <div key={i} style={{ background: "#161616", borderRadius: 16, border: "1.5px solid #2a2a2a", padding: 16, height: 80, opacity: 0.6 }} />
               ))}
             </div>
           ) : videoTemplates.length === 0 ? (
             <div style={{ textAlign: "center", paddingTop: 80, paddingBottom: 80 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: "#EEF0FF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-                <Film size={24} style={{ color: "#5B5BD6" }} />
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: "#1e1e3a", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <Film size={24} style={{ color: "#8080ff" }} />
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#374151", margin: "0 0 4px" }}>No video templates yet</p>
-              <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 16px" }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#cccccc", margin: "0 0 4px" }}>No video templates yet</p>
+              <p style={{ fontSize: 12, color: "#666666", margin: "0 0 16px" }}>
                 {search ? `No results for "${search}"` : "Create reusable video structures to speed up your content creation"}
               </p>
               {tp.create && (
@@ -260,46 +266,43 @@ export default function TemplateLibrary() {
 function CarouselCard({ tpl, tp, onEdit, onClone, onDelete }) {
   return (
     <div
-      style={{ borderRadius: 16, overflow: "hidden", background: "#fff", border: "1.5px solid #ebe9f6", transition: "all 0.15s" }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = "#c7d2fe"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(91,91,214,0.1)"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = "#ebe9f6"; e.currentTarget.style.boxShadow = ""; }}
+      style={{ borderRadius: 16, overflow: "hidden", background: "#161616", border: "1.5px solid #2a2a2a", transition: "all 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "#3a3a6a"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(91,91,214,0.1)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.boxShadow = ""; }}
     >
       {/* Preview */}
       <div
         onClick={onEdit}
-        style={{ aspectRatio: "4/5", background: "#f5f4fb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden" }}
+        style={{ aspectRatio: "4/5", cursor: "pointer", overflow: "hidden" }}
       >
         {tpl.thumbnail_url ? (
           <img src={tpl.thumbnail_url} alt={tpl.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <>
-            <LayoutTemplate size={28} style={{ color: "#c7d2fe" }} />
-            <span style={{ fontSize: 10, color: "#9ca3af", marginTop: 6 }}>No Preview</span>
-          </>
+          <SlidePreview template={tpl} compact={false} />
         )}
       </div>
 
       {/* Info */}
       <div style={{ padding: 12 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: "#111827", margin: 0, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{tpl.name}</p>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "#ffffff", margin: 0, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{tpl.name}</p>
         {tpl.dimension_preset && (
-          <p style={{ fontSize: 10, color: "#9ca3af", margin: "2px 0 0" }}>{tpl.dimension_preset}</p>
+          <p style={{ fontSize: 10, color: "#666666", margin: "2px 0 0" }}>{tpl.dimension_preset}</p>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10 }}>
-          <button onClick={onEdit} style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, border: "none", background: "#EEF0FF", color: "#5B5BD6", cursor: "pointer", flex: 1, justifyContent: "center" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#e0e0f8"}
-            onMouseLeave={e => e.currentTarget.style.background = "#EEF0FF"}>
+          <button onClick={onEdit} style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, border: "none", background: "#1e1e3a", color: "#8080ff", cursor: "pointer", flex: 1, justifyContent: "center" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#2a2a5a"}
+            onMouseLeave={e => e.currentTarget.style.background = "#1e1e3a"}>
             <Pencil size={10} /> Edit
           </button>
-          <button onClick={onClone} style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, border: "1px solid #ebe9f6", background: "#f5f4fb", color: "#6b7280", cursor: "pointer", flex: 1, justifyContent: "center" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#ebe9f6"}
-            onMouseLeave={e => e.currentTarget.style.background = "#f5f4fb"}>
+          <button onClick={onClone} style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, border: "1px solid #2a2a2a", background: "#1e1e1e", color: "#888888", cursor: "pointer", flex: 1, justifyContent: "center" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+            onMouseLeave={e => e.currentTarget.style.background = "#1e1e1e"}>
             <Copy size={10} /> Clone
           </button>
           {tp.delete && (
-            <button onClick={onDelete} style={{ padding: "6px 7px", borderRadius: 8, border: "none", background: "#f5f4fb", color: "#d1d5db", cursor: "pointer" }}
-              onMouseEnter={e => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "#f5f4fb"; e.currentTarget.style.color = "#d1d5db"; }}>
+            <button onClick={onDelete} style={{ padding: "6px 7px", borderRadius: 8, border: "none", background: "#1e1e1e", color: "#444444", cursor: "pointer" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "#2a0a0a"; e.currentTarget.style.color = "#dc2626"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#1e1e1e"; e.currentTarget.style.color = "#444444"; }}>
               <Trash2 size={11} />
             </button>
           )}
@@ -320,9 +323,9 @@ function VideoCard({ tpl, tp, onEdit, onClone, onDelete }) {
     : [];
 
   return (
-    <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #ebe9f6", padding: "16px 20px", display: "flex", alignItems: "flex-start", gap: 16, transition: "all 0.15s" }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = "#c7d2fe"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(91,91,214,0.08)"; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = "#ebe9f6"; e.currentTarget.style.boxShadow = ""; }}>
+    <div style={{ background: "#161616", borderRadius: 16, border: "1.5px solid #2a2a2a", padding: "16px 20px", display: "flex", alignItems: "flex-start", gap: 16, transition: "all 0.15s" }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = "#3a3a6a"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(91,91,214,0.08)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.boxShadow = ""; }}>
 
       {/* Icon */}
       <div style={{ width: 48, height: 48, borderRadius: 12, background: cs.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -333,54 +336,54 @@ function VideoCard({ tpl, tp, onEdit, onClone, onDelete }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#111827", margin: "0 0 6px", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{tpl.name}</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#ffffff", margin: "0 0 6px", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{tpl.name}</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
               {tpl.category && (
                 <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: cs.bg, color: cs.text }}>{tpl.category}</span>
               )}
               {tpl.number_of_scenes && (
-                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#f5f4fb", color: "#6b7280", border: "1px solid #ebe9f6" }}>{tpl.number_of_scenes} Scenes</span>
+                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#1e1e1e", color: "#888888", border: "1px solid #2a2a2a" }}>{tpl.number_of_scenes} Scenes</span>
               )}
               {tpl.visual_style && (
-                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#f5f4fb", color: "#6b7280", border: "1px solid #ebe9f6" }}>{tpl.visual_style}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#1e1e1e", color: "#888888", border: "1px solid #2a2a2a" }}>{tpl.visual_style}</span>
               )}
               {tpl.theme && (
-                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#f5f4fb", color: "#6b7280", border: "1px solid #ebe9f6" }}>{tpl.theme} Theme</span>
+                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#1e1e1e", color: "#888888", border: "1px solid #2a2a2a" }}>{tpl.theme} Theme</span>
               )}
             </div>
             {tpl.video_flow && (
-              <p style={{ fontSize: 11, color: "#5B5BD6", margin: "0 0 4px", fontWeight: 500 }}>{tpl.video_flow}</p>
+              <p style={{ fontSize: 11, color: "#8080ff", margin: "0 0 4px", fontWeight: 500 }}>{tpl.video_flow}</p>
             )}
             {contentItems.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
                 {contentItems.map(item => (
-                  <span key={item} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, color: "#6b7280" }}>
+                  <span key={item} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, color: "#888888" }}>
                     <Check size={8} style={{ color: "#10b981" }} /> {item}
                   </span>
                 ))}
               </div>
             )}
             {tpl.description && (
-              <p style={{ fontSize: 11, color: "#9ca3af", margin: 0, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{tpl.description}</p>
+              <p style={{ fontSize: 11, color: "#666666", margin: 0, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{tpl.description}</p>
             )}
           </div>
 
           {/* Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            <button onClick={onEdit} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: "none", background: "#EEF0FF", color: "#5B5BD6", cursor: "pointer" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#e0e0f8"}
-              onMouseLeave={e => e.currentTarget.style.background = "#EEF0FF"}>
+            <button onClick={onEdit} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: "none", background: "#1e1e3a", color: "#8080ff", cursor: "pointer" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#2a2a5a"}
+              onMouseLeave={e => e.currentTarget.style.background = "#1e1e3a"}>
               <Pencil size={11} /> Edit
             </button>
-            <button onClick={onClone} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: "1px solid #ebe9f6", background: "#f5f4fb", color: "#6b7280", cursor: "pointer" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#ebe9f6"}
-              onMouseLeave={e => e.currentTarget.style.background = "#f5f4fb"}>
+            <button onClick={onClone} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: "1px solid #2a2a2a", background: "#1e1e1e", color: "#888888", cursor: "pointer" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+              onMouseLeave={e => e.currentTarget.style.background = "#1e1e1e"}>
               <Copy size={11} /> Duplicate
             </button>
             {tp.delete && (
-              <button onClick={onDelete} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: "none", background: "#f5f4fb", color: "#d1d5db", cursor: "pointer" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "#f5f4fb"; e.currentTarget.style.color = "#d1d5db"; }}>
+              <button onClick={onDelete} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 12px", fontSize: 12, fontWeight: 600, borderRadius: 9, border: "none", background: "#1e1e1e", color: "#444444", cursor: "pointer" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#2a0a0a"; e.currentTarget.style.color = "#dc2626"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#1e1e1e"; e.currentTarget.style.color = "#444444"; }}>
                 <Trash2 size={11} /> Delete
               </button>
             )}
@@ -389,7 +392,7 @@ function VideoCard({ tpl, tp, onEdit, onClone, onDelete }) {
 
         {/* Footer meta */}
         {tpl.created_at && (
-          <p style={{ fontSize: 10, color: "#d1d5db", margin: "8px 0 0" }}>Created {fmtDate(tpl.created_at)}</p>
+          <p style={{ fontSize: 10, color: "#444444", margin: "8px 0 0" }}>Created {fmtDate(tpl.created_at)}</p>
         )}
       </div>
     </div>

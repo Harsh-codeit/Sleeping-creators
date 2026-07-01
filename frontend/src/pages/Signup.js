@@ -28,19 +28,19 @@ const INTERESTS = [
 ];
 
 export default function Signup({ onLogin }) {
-  const [step, setStep]     = useState(1);
-  const [name, setName]     = useState("");
-  const [identifier, setId] = useState("");
+  const [step, setStep]       = useState(1);
+  const [name, setName]       = useState("");
+  const [identifier, setId]   = useState("");
   const [devMode, setDevMode] = useState(false);
 
   return (
-    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#f5f4fb" }}>
+    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
       {/* Left panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] flex-col justify-between p-12"
-        style={{ background: "#fff", borderRight: "1px solid #ebe9f6" }}>
+        style={{ background: "#141414", borderRight: "1px solid #2a2a2a" }}>
         <div className="flex items-center gap-3">
           <img src={logo} alt="Sleeping Creators" className="w-9 h-9 rounded-xl" />
-          <span className="font-bold text-lg" style={{ color: "#5B5BD6" }}>Sleeping Creators</span>
+          <span className="font-bold text-lg" style={{ color: "#7c7cf8" }}>Sleeping Creators</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {[
@@ -49,17 +49,17 @@ export default function Signup({ onLogin }) {
             { title: "Auto-schedule", desc: "Posts go out automatically on your schedule." },
           ].map((item, i) => (
             <div key={i} style={{ display: "flex", gap: 14 }}>
-              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#EEF0FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                <Check size={11} style={{ color: "#5B5BD6" }} />
+              <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#1e1e3a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
+                <Check size={11} style={{ color: "#8080ff" }} />
               </div>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: "#111827", marginBottom: 2 }}>{item.title}</div>
-                <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5 }}>{item.desc}</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "#fff", marginBottom: 2 }}>{item.title}</div>
+                <div style={{ fontSize: 13, color: "#888", lineHeight: 1.5 }}>{item.desc}</div>
               </div>
             </div>
           ))}
         </div>
-        <p style={{ fontSize: 11, color: "#d1d5db" }}>Free to start · No credit card required</p>
+        <p style={{ fontSize: 11, color: "#444" }}>Free to start · No credit card required</p>
       </div>
 
       {/* Right form — scrollable */}
@@ -69,7 +69,7 @@ export default function Signup({ onLogin }) {
           {step === 1 && (
             <div className="flex items-center gap-2.5 lg:hidden" style={{ marginBottom: 20 }}>
               <img src={logo} alt="" style={{ width: 30, height: 30, borderRadius: 10 }} />
-              <span className="font-bold" style={{ color: "#5B5BD6", fontSize: 15 }}>Sleeping Creators</span>
+              <span className="font-bold" style={{ color: "#7c7cf8", fontSize: 15 }}>Sleeping Creators</span>
             </div>
           )}
 
@@ -80,16 +80,16 @@ export default function Signup({ onLogin }) {
                 <div style={{
                   width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center",
                   justifyContent: "center", fontSize: 11, fontWeight: 700,
-                  background: step >= s ? "#5B5BD6" : "#EEF0FF",
-                  color: step >= s ? "#fff" : "#9ca3af",
-                  boxShadow: step === s ? "0 0 0 3px rgba(91,91,214,0.18)" : "none",
+                  background: step >= s ? "#5B5BD6" : "#1e1e3a",
+                  color: step >= s ? "#fff" : "#555",
+                  boxShadow: step === s ? "0 0 0 3px rgba(91,91,214,0.25)" : "none",
                 }}>
                   {step > s ? <Check size={10} /> : s}
                 </div>
-                {s < 3 && <div style={{ width: 24, height: 2, borderRadius: 2, background: step > s ? "#5B5BD6" : "#e5e4f0" }} />}
+                {s < 3 && <div style={{ width: 24, height: 2, borderRadius: 2, background: step > s ? "#5B5BD6" : "#2a2a2a" }} />}
               </div>
             ))}
-            <span style={{ marginLeft: 4, fontSize: 11, color: "#9ca3af" }}>
+            <span style={{ marginLeft: 4, fontSize: 11, color: "#555" }}>
               {step === 1 ? "Your info" : step === 2 ? "Verify" : "Interests"}
             </span>
           </div>
@@ -113,9 +113,9 @@ export default function Signup({ onLogin }) {
             <StepInterests name={name} identifier={identifier} onBack={() => setStep(2)} onLogin={onLogin} />
           )}
 
-          <p className="text-center" style={{ marginTop: 20, fontSize: 13, color: "#9ca3af" }}>
+          <p className="text-center" style={{ marginTop: 20, fontSize: 13, color: "#555" }}>
             Already have an account?{" "}
-            <Link to="/login" className="font-semibold" style={{ color: "#5B5BD6" }}>Sign in</Link>
+            <Link to="/login" className="font-semibold" style={{ color: "#8080ff" }}>Sign in</Link>
           </p>
         </div>
       </div>
@@ -145,8 +145,8 @@ function StepInfo({ name, setName, identifier, setId, onNext }) {
   return (
     <>
       <div style={{ marginBottom: 20 }}>
-        <h1 className="font-bold" style={{ fontSize: 22, color: "#111827", marginBottom: 4 }}>Create your account</h1>
-        <p style={{ fontSize: 14, color: "#6b7280" }}>Takes less than a minute</p>
+        <h1 className="font-bold" style={{ fontSize: 22, color: "#fff", marginBottom: 4 }}>Create your account</h1>
+        <p style={{ fontSize: 14, color: "#888" }}>Takes less than a minute</p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <Field label="Full Name">
@@ -172,7 +172,7 @@ function StepOTP({ identifier, devMode, onBack, onVerified }) {
   const [otp, setOtp]         = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCd]    = useState(30);
-  const inputRef = useRef(null);
+  const inputRef              = useRef(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => {
@@ -212,23 +212,24 @@ function StepOTP({ identifier, devMode, onBack, onVerified }) {
     <>
       <div style={{ marginBottom: 14 }}>
         <button onClick={onBack} className="flex items-center gap-1.5 font-medium"
-          style={{ color: "#5B5BD6", fontSize: 13, marginBottom: 10 }}>
+          style={{ color: "#8080ff", fontSize: 13, marginBottom: 10 }}>
           <ArrowLeft size={13} /> Change
         </button>
-        <h1 className="font-bold" style={{ fontSize: 20, color: "#111827", marginBottom: 3 }}>Enter OTP</h1>
-        <p style={{ fontSize: 13, color: "#6b7280" }}>
-          Sent to <strong style={{ color: "#111827" }}>{identifier}</strong>
+        <h1 className="font-bold" style={{ fontSize: 20, color: "#fff", marginBottom: 3 }}>Enter OTP</h1>
+        <p style={{ fontSize: 13, color: "#888" }}>
+          Sent to <strong style={{ color: "#fff" }}>{identifier}</strong>
         </p>
       </div>
 
       {devMode && (
-        <div style={{ background: "#fefce8", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#854d0e", textAlign: "center" }}>
+        <div style={{ background: "#1a1400", border: "1px solid #3a2e00", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#d97706", textAlign: "center" }}>
           Dev mode — tap Verify to continue (any input works)
         </div>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <Field label="6-digit code">
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>6-digit code</label>
           <input
             ref={inputRef}
             type="text"
@@ -238,15 +239,24 @@ function StepOTP({ identifier, devMode, onBack, onVerified }) {
             onChange={handleChange}
             onKeyDown={e => e.key === "Enter" && verify()}
             placeholder="••••••"
-            style={{ ...inpStyle, letterSpacing: "0.25em", fontSize: 20, fontWeight: 700, color: "#5B5BD6" }}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              padding: "14px 18px",
+              background: "#1a1a1a",
+              border: `2px solid ${otp.length === 6 ? "#5B5BD6" : "#333"}`,
+              borderRadius: 14,
+              fontSize: 22, fontWeight: 700, letterSpacing: "0.3em",
+              color: "#8080ff", outline: "none", textAlign: "center",
+              transition: "border-color 0.15s",
+            }}
           />
-        </Field>
+        </div>
         <Btn loading={loading} onClick={verify}>
           {loading ? <><Loader2 size={15} className="animate-spin" /> Verifying…</> : "Verify OTP"}
         </Btn>
-        <p className="text-center" style={{ fontSize: 13, color: "#9ca3af" }}>
+        <p className="text-center" style={{ fontSize: 13, color: "#555" }}>
           {countdown > 0 ? `Resend in ${countdown}s` : (
-            <button onClick={resend} style={{ color: "#5B5BD6", fontWeight: 600 }}>Resend OTP</button>
+            <button onClick={resend} style={{ color: "#8080ff", fontWeight: 600 }}>Resend OTP</button>
           )}
         </p>
       </div>
@@ -255,9 +265,9 @@ function StepOTP({ identifier, devMode, onBack, onVerified }) {
 }
 
 function StepInterests({ name, identifier, onBack, onLogin }) {
-  const [selected, setSelected] = useState([]);
+  const [selected, setSelected]   = useState([]);
   const [otherText, setOtherText] = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading]     = useState(false);
   const toggle = val => setSelected(p => p.includes(val) ? p.filter(v => v !== val) : [...p, val]);
 
   const handleCreate = async () => {
@@ -279,11 +289,11 @@ function StepInterests({ name, identifier, onBack, onLogin }) {
     <>
       <div style={{ marginBottom: 16 }}>
         <button onClick={onBack} className="flex items-center gap-1.5 font-medium"
-          style={{ color: "#5B5BD6", fontSize: 13, marginBottom: 10 }}>
+          style={{ color: "#8080ff", fontSize: 13, marginBottom: 10 }}>
           <ArrowLeft size={13} /> Back
         </button>
-        <h1 className="font-bold" style={{ fontSize: 22, color: "#111827", marginBottom: 4 }}>Areas of interest</h1>
-        <p style={{ fontSize: 13, color: "#6b7280" }}>Pick what you create — editable later in Settings</p>
+        <h1 className="font-bold" style={{ fontSize: 22, color: "#fff", marginBottom: 4 }}>Areas of interest</h1>
+        <p style={{ fontSize: 13, color: "#888" }}>Pick what you create — editable later in Settings</p>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
@@ -293,13 +303,13 @@ function StepInterests({ name, identifier, onBack, onLogin }) {
               <button key={value} onClick={() => toggle(value)}
                 style={{
                   padding: "9px 10px", borderRadius: 12, fontSize: 12, fontWeight: 500, textAlign: "left",
-                  border: `2px solid ${on ? "#5B5BD6" : "#e5e4f0"}`,
-                  background: on ? "#EEF0FF" : "#fff", color: on ? "#5B5BD6" : "#374151",
+                  border: `2px solid ${on ? "#5B5BD6" : "#2a2a2a"}`,
+                  background: on ? "#1e1e3a" : "#1a1a1a", color: on ? "#8080ff" : "#aaa",
                   cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
                   minHeight: 38,
                 }}>
                 <span>{label}</span>
-                {on && <Check size={11} style={{ color: "#5B5BD6", flexShrink: 0 }} />}
+                {on && <Check size={11} style={{ color: "#8080ff", flexShrink: 0 }} />}
               </button>
             );
           })}
@@ -307,7 +317,7 @@ function StepInterests({ name, identifier, onBack, onLogin }) {
         {selected.includes("other") && (
           <input type="text" value={otherText} onChange={e => setOtherText(e.target.value)}
             placeholder="What do you create?" autoFocus
-            style={{ ...inpStyle, border: "2px solid #5B5BD6", borderRadius: 12, padding: "11px 14px" }} />
+            style={{ ...inpStyle, border: "2px solid #5B5BD6", borderRadius: 12, padding: "11px 14px", background: "#1a1a1a" }} />
         )}
         <Btn loading={loading} onClick={handleCreate}>
           {loading ? <><Loader2 size={15} className="animate-spin" /> Creating…</> : "Create Account"}
@@ -317,13 +327,16 @@ function StepInterests({ name, identifier, onBack, onLogin }) {
   );
 }
 
-const inpStyle = { width: "100%", background: "transparent", padding: "13px 16px", fontSize: 14, color: "#111827", outline: "none", boxSizing: "border-box" };
+const inpStyle = {
+  width: "100%", background: "transparent", padding: "13px 16px",
+  fontSize: 14, color: "#fff", outline: "none", boxSizing: "border-box",
+};
 
 function Field({ label, children }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#374151", marginBottom: 5 }}>{label}</label>
-      <div style={{ background: "#fff", border: "1.5px solid #e5e4f0", borderRadius: 14, overflow: "hidden" }}>{children}</div>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#bbb", marginBottom: 5 }}>{label}</label>
+      <div style={{ background: "#1a1a1a", border: "1.5px solid #333", borderRadius: 14, overflow: "hidden" }}>{children}</div>
     </div>
   );
 }
@@ -336,7 +349,7 @@ function Btn({ children, loading, onClick }) {
         color: "#fff", background: "#5B5BD6", border: "none",
         display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
         opacity: loading ? 0.6 : 1, cursor: loading ? "default" : "pointer",
-        boxShadow: "0 4px 14px rgba(91,91,214,0.28)",
+        boxShadow: "0 4px 14px rgba(91,91,214,0.3)",
       }}>
       {children}
     </button>

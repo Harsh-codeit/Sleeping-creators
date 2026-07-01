@@ -6,25 +6,25 @@ const config: CapacitorConfig = {
   webDir: "build",
   ios: {
     contentInset: "always",
-    backgroundColor: "#f5f4fb",
+    backgroundColor: "#0d0d0d",
     scrollEnabled: false,
   },
   android: {
-    backgroundColor: "#f5f4fb",
+    backgroundColor: "#0d0d0d",
     allowMixedContent: true,
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1500,
-      backgroundColor: "#f5f4fb",
+      launchShowDuration: 1200,
+      backgroundColor: "#0d0d0d",
       showSpinner: false,
       androidScaleType: "CENTER_CROP",
       splashFullScreen: true,
       splashImmersive: true,
     },
     StatusBar: {
-      style: "Light",
-      backgroundColor: "#ffffff",
+      style: "Dark",
+      backgroundColor: "#0d0d0d",
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],

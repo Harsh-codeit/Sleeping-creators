@@ -18,11 +18,11 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6 AM → 11 PM
 
 const STATUS_CFG = {
-  draft:      { label: "Draft",      color: "#6b7280", bg: "#f3f4f6", border: "#e5e7eb" },
-  scheduled:  { label: "Scheduled",  color: "#5B5BD6", bg: "#EEF0FF", border: "#c7d2fe" },
-  publishing: { label: "Publishing", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
-  published:  { label: "Published",  color: "#059669", bg: "#ecfdf5", border: "#6ee7b7" },
-  failed:     { label: "Failed",     color: "#dc2626", bg: "#fef2f2", border: "#fca5a5" },
+  draft:      { label: "Draft",      color: "#888888", bg: "#1e1e1e", border: "#2a2a2a" },
+  scheduled:  { label: "Scheduled",  color: "#8080ff", bg: "#0d0d25", border: "#2a2a5a" },
+  publishing: { label: "Publishing", color: "#2563eb", bg: "#0a1a2e", border: "#1a3a5a" },
+  published:  { label: "Published",  color: "#34d399", bg: "#0a2016", border: "#14532d" },
+  failed:     { label: "Failed",     color: "#f87171", bg: "#2a0a0a", border: "#7f1d1d" },
 };
 
 function statusCfg(status) { return STATUS_CFG[status] || STATUS_CFG.draft; }
@@ -113,7 +113,9 @@ export default function CalendarPage() {
       dt = setMinutes(setHours(date, getHours(orig)), orig.getMinutes());
     }
     try {
-      await axios.put(`${API}/posts/${postId}`, { scheduled_at: dt.toISOString() });
+      const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      await axios.put(`${API}/posts/${postId}`, { scheduled_at: dt.toISOString() }, { headers });
       toast.success(`Rescheduled to ${format(dt, "MMM d, h:mm a")}`);
       fetchData();
     } catch { toast.error("Failed to reschedule"); }
@@ -129,11 +131,11 @@ export default function CalendarPage() {
       : format(currentDate, "EEEE, MMMM d, yyyy");
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#f5f4fb" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#0d0d0d" }}>
 
       {/* Header */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #ebe9f6", padding: "14px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flexShrink: 0 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#111827", flex: 1 }}>Calendar</h1>
+      <div style={{ background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", flexShrink: 0 }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, color: "#ffffff", flex: 1 }}>Calendar</h1>
 
         {/* Nav controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -146,17 +148,17 @@ export default function CalendarPage() {
           </button>
         </div>
 
-        <span style={{ fontSize: 14, fontWeight: 600, color: "#111827", minWidth: 180, textAlign: "center" }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff", minWidth: 180, textAlign: "center" }}>
           {headerLabel}
         </span>
 
         {/* View switcher */}
-        <div style={{ display: "flex", background: "#f5f4fb", border: "1.5px solid #ebe9f6", borderRadius: 10, overflow: "hidden" }}>
+        <div style={{ display: "flex", background: "#1e1e1e", border: "1.5px solid #2a2a2a", borderRadius: 10, overflow: "hidden" }}>
           {["month", "week", "day"].map(v => (
             <button key={v} onClick={() => setView(v)} style={{
               padding: "6px 14px", fontSize: 12, fontWeight: 600,
               background: view === v ? "#5B5BD6" : "transparent",
-              color: view === v ? "#fff" : "#6b7280",
+              color: view === v ? "#fff" : "#888888",
               border: "none", cursor: "pointer", textTransform: "capitalize",
               transition: "all 0.15s",
             }}>
@@ -167,11 +169,11 @@ export default function CalendarPage() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden", background: "#0d0d0d" }}>
         {/* Calendar area */}
         <div style={{ flex: 1, minWidth: 0, overflow: "auto" }}>
           {loading ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#9ca3af", fontSize: 13 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#666666", fontSize: 13 }}>
               Loading calendar…
             </div>
           ) : view === "month" ? (
@@ -220,7 +222,7 @@ function MonthView({ currentDate, postsByDate, onSelectPost, onDrop, onDayClick 
   const calEnd     = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
   const days       = eachDayOfInterval({ start: calStart, end: calEnd });
 
-  const onDragOver  = e => { e.preventDefault(); e.currentTarget.style.background = "#EEF0FF"; };
+  const onDragOver  = e => { e.preventDefault(); e.currentTarget.style.background = "#1e1e3a"; };
   const onDragLeave = e => { e.currentTarget.style.background = ""; };
   const onDropDay   = (e, day) => {
     e.preventDefault();
@@ -232,9 +234,9 @@ function MonthView({ currentDate, postsByDate, onSelectPost, onDrop, onDayClick 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Day-of-week headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #ebe9f6", background: "#fff" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid #2a2a2a", background: "#161616" }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
-          <div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          <div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666666", textTransform: "uppercase", letterSpacing: "0.5px" }}>
             {d}
           </div>
         ))}
@@ -254,9 +256,9 @@ function MonthView({ currentDate, postsByDate, onSelectPost, onDrop, onDayClick 
             <div
               key={key}
               style={{
-                border: "1px solid #ebe9f6",
+                border: "1px solid #2a2a2a",
                 padding: "6px",
-                background: today ? "#f8f7ff" : "#fff",
+                background: today ? "#1a1a2e" : "#161616",
                 opacity: inMonth ? 1 : 0.4,
                 transition: "background 0.15s",
                 cursor: "default",
@@ -271,7 +273,7 @@ function MonthView({ currentDate, postsByDate, onSelectPost, onDrop, onDayClick 
                 style={{
                   width: 26, height: 26, borderRadius: "50%", fontSize: 12, fontWeight: today ? 700 : 500,
                   background: today ? "#5B5BD6" : "transparent",
-                  color: today ? "#fff" : "#374151",
+                  color: today ? "#fff" : "#cccccc",
                   border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                   marginBottom: 4, flexShrink: 0,
                 }}
@@ -321,7 +323,7 @@ function MonthPostPill({ post, onClick }) {
       <span style={{ fontSize: 10, fontWeight: 500, color: cfg.color, flexShrink: 0, whiteSpace: "nowrap" }}>
         {time || cfg.label}
       </span>
-      <span style={{ fontSize: 10, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+      <span style={{ fontSize: 10, color: "#cccccc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
         {truncate(post.caption || post.text, 18)}
       </span>
     </div>
@@ -359,22 +361,22 @@ function WeekView({ currentDate, posts, onSelectPost, onDrop }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Day headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "56px repeat(7, 1fr)", borderBottom: "1px solid #ebe9f6", background: "#fff", flexShrink: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "56px repeat(7, 1fr)", borderBottom: "1px solid #2a2a2a", background: "#161616", flexShrink: 0 }}>
         <div />
         {days.map(day => (
           <div key={day.toISOString()} style={{
             padding: "8px 4px", textAlign: "center",
-            borderLeft: "1px solid #ebe9f6",
-            background: isToday(day) ? "#f8f7ff" : "#fff",
+            borderLeft: "1px solid #2a2a2a",
+            background: isToday(day) ? "#1a1a2e" : "#161616",
           }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "#666666", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               {format(day, "EEE")}
             </div>
             <div style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               width: 28, height: 28, borderRadius: "50%", fontSize: 13, fontWeight: isToday(day) ? 700 : 500,
               background: isToday(day) ? "#5B5BD6" : "transparent",
-              color: isToday(day) ? "#fff" : "#374151",
+              color: isToday(day) ? "#fff" : "#cccccc",
               margin: "2px auto 0",
             }}>
               {format(day, "d")}
@@ -388,7 +390,7 @@ function WeekView({ currentDate, posts, onSelectPost, onDrop }) {
         {HOURS.map(hour => (
           <div key={hour} style={{ display: "grid", gridTemplateColumns: "56px repeat(7, 1fr)", minHeight: 64 }}>
             {/* Time label */}
-            <div style={{ padding: "4px 8px 0 0", textAlign: "right", fontSize: 10, color: "#9ca3af", fontWeight: 500, flexShrink: 0, borderRight: "1px solid #ebe9f6" }}>
+            <div style={{ padding: "4px 8px 0 0", textAlign: "right", fontSize: 10, color: "#666666", fontWeight: 500, flexShrink: 0, borderRight: "1px solid #2a2a2a" }}>
               {formatHour(hour)}
             </div>
             {days.map(day => {
@@ -396,7 +398,7 @@ function WeekView({ currentDate, posts, onSelectPost, onDrop }) {
               return (
                 <div
                   key={`${day.toISOString()}-${hour}`}
-                  style={{ borderLeft: "1px solid #ebe9f6", borderBottom: "1px solid #f3f4f6", padding: "2px 3px", background: isToday(day) ? "#fafafe" : "#fff", transition: "background 0.1s" }}
+                  style={{ borderLeft: "1px solid #2a2a2a", borderBottom: "1px solid #1e1e1e", padding: "2px 3px", background: isToday(day) ? "#1a1a2e" : "#161616", transition: "background 0.1s" }}
                   onDragOver={onDragOver}
                   onDragLeave={onDragLeave}
                   onDrop={e => onDropSlot(e, day, hour)}
@@ -429,7 +431,7 @@ function WeekPostCard({ post, onClick }) {
       <div style={{ fontSize: 10, fontWeight: 600, color: cfg.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {post.scheduled_at ? format(parseISO(post.scheduled_at), "h:mm a") : cfg.label}
       </div>
-      <div style={{ fontSize: 10, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <div style={{ fontSize: 10, color: "#cccccc", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {truncate(post.caption || post.text, 22)}
       </div>
     </div>
@@ -464,9 +466,9 @@ function DayView({ currentDate, posts, onSelectPost, onDrop }) {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Day header */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #ebe9f6", padding: "12px 20px", flexShrink: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{format(currentDate, "EEEE, MMMM d, yyyy")}</div>
-        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
+      <div style={{ background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "12px 20px", flexShrink: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#ffffff" }}>{format(currentDate, "EEEE, MMMM d, yyyy")}</div>
+        <div style={{ fontSize: 12, color: "#666666", marginTop: 2 }}>
           {dayPosts.length === 0 ? "No posts scheduled" : `${dayPosts.length} post${dayPosts.length > 1 ? "s" : ""} scheduled`}
         </div>
       </div>
@@ -478,12 +480,12 @@ function DayView({ currentDate, posts, onSelectPost, onDrop }) {
           return (
             <div
               key={hour}
-              style={{ display: "grid", gridTemplateColumns: "80px 1fr", minHeight: 80, borderBottom: "1px solid #f3f4f6", transition: "background 0.1s" }}
+              style={{ display: "grid", gridTemplateColumns: "80px 1fr", minHeight: 80, borderBottom: "1px solid #1e1e1e", transition: "background 0.1s" }}
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={e => onDropSlot(e, hour)}
             >
-              <div style={{ padding: "10px 12px 0 16px", textAlign: "right", fontSize: 11, color: "#9ca3af", fontWeight: 500, borderRight: "1px solid #ebe9f6" }}>
+              <div style={{ padding: "10px 12px 0 16px", textAlign: "right", fontSize: 11, color: "#666666", fontWeight: 500, borderRight: "1px solid #2a2a2a" }}>
                 {formatHour(hour)}
               </div>
               <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -519,7 +521,7 @@ function DayPostCard({ post, onClick }) {
               <Clock size={11} /> {format(parseISO(post.scheduled_at), "h:mm a")}
             </span>
           )}
-          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#fff", border: `1px solid ${cfg.border}`, color: cfg.color }}>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#161616", border: `1px solid ${cfg.border}`, color: cfg.color }}>
             {cfg.label}
           </span>
           {(post.kind === "video" || post.content_type === "video") && (
@@ -529,13 +531,13 @@ function DayPostCard({ post, onClick }) {
             <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#f0fdf4", color: "#059669" }}>Carousel</span>
           )}
         </div>
-        <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+        <p style={{ fontSize: 13, color: "#cccccc", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
           {post.caption || post.text || "No caption"}
         </p>
         {post.platform && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
-            <Instagram size={11} style={{ color: "#9ca3af" }} />
-            <span style={{ fontSize: 11, color: "#9ca3af", textTransform: "capitalize" }}>{post.platform}</span>
+            <Instagram size={11} style={{ color: "#666666" }} />
+            <span style={{ fontSize: 11, color: "#666666", textTransform: "capitalize" }}>{post.platform}</span>
           </div>
         )}
       </div>
@@ -570,6 +572,11 @@ function PostPanel({ post, onClose, onUpdate }) {
     });
   }, [post]);
 
+  const authHeaders = () => {
+    const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const savePost = async () => {
     setSaving(true);
     try {
@@ -577,7 +584,7 @@ function PostPanel({ post, onClose, onUpdate }) {
         ...(isVideo ? { caption: form.text } : { text: form.text }),
         ...(form.scheduled_at ? { scheduled_at: new Date(form.scheduled_at).toISOString() } : {}),
       };
-      await axios.put(`${API}/posts/${post.id}`, update);
+      await axios.put(`${API}/posts/${post.id}`, update, { headers: authHeaders() });
       toast.success("Post updated");
       onUpdate();
     } catch { toast.error("Failed to save"); }
@@ -586,7 +593,7 @@ function PostPanel({ post, onClose, onUpdate }) {
 
   const approvePost = async () => {
     try {
-      await axios.post(`${API}/posts/${post.id}/approve`);
+      await axios.post(`${API}/posts/${post.id}/approve`, {}, { headers: authHeaders() });
       toast.success("Post approved and scheduled");
       onUpdate();
     } catch { toast.error("Failed to approve"); }
@@ -597,7 +604,7 @@ function PostPanel({ post, onClose, onUpdate }) {
     publishingRef.current = true;
     setPublishing(true);
     try {
-      const resp = await axios.post(`${API}/posts/${post.id}/publish`, {}, { timeout: 60000 });
+      const resp = await axios.post(`${API}/posts/${post.id}/publish`, {}, { headers: authHeaders(), timeout: 60000 });
       if (resp.data.status === "published") toast.success("Post published!");
       else toast.error(resp.data.error_message || "Publish failed");
       onUpdate();
@@ -612,7 +619,7 @@ function PostPanel({ post, onClose, onUpdate }) {
   const deletePost = async () => {
     if (!window.confirm("Delete this post?")) return;
     try {
-      await axios.delete(`${API}/posts/${post.id}`);
+      await axios.delete(`${API}/posts/${post.id}`, { headers: authHeaders() });
       toast.success("Post deleted");
       onUpdate();
     } catch { toast.error("Failed to delete"); }
@@ -621,34 +628,34 @@ function PostPanel({ post, onClose, onUpdate }) {
   return (
     <div style={{
       width: 340, flexShrink: 0,
-      background: "#fff", borderLeft: "1px solid #ebe9f6",
+      background: "#161616", borderLeft: "1px solid #2a2a2a",
       display: "flex", flexDirection: "column", height: "100%",
     }}>
       {/* Header */}
-      <div style={{ padding: "14px 16px", borderBottom: "1px solid #ebe9f6", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid #2a2a2a", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
               {cfg.label}
             </span>
             {post.platform && (
-              <span style={{ fontSize: 11, color: "#9ca3af", textTransform: "capitalize" }}>{post.platform}</span>
+              <span style={{ fontSize: 11, color: "#666666", textTransform: "capitalize" }}>{post.platform}</span>
             )}
           </div>
           {post.scheduled_at && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#6b7280" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#888888" }}>
               <Clock size={12} />
               {format(parseISO(post.scheduled_at), "MMM d, yyyy · h:mm a")}
             </div>
           )}
         </div>
-        <button onClick={onClose} style={{ color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+        <button onClick={onClose} style={{ color: "#666666", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
           <X size={16} />
         </button>
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: 16, background: "#161616" }}>
 
         {/* Video player */}
         {isVideo && post.r2_video_url && (
@@ -672,12 +679,12 @@ function PostPanel({ post, onClose, onUpdate }) {
           placeholder="Post caption…"
           style={{
             width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13, lineHeight: 1.5,
-            color: "#111827", background: isViewOnly ? "#f9f8fe" : "#fff",
-            border: "1.5px solid #ebe9f6", borderRadius: 10, outline: "none", resize: "vertical",
+            color: "#ffffff", background: isViewOnly ? "#1e1e1e" : "#1a1a1a",
+            border: "1.5px solid #2a2a2a", borderRadius: 10, outline: "none", resize: "vertical",
             fontFamily: "inherit", marginBottom: 12, opacity: isViewOnly ? 0.7 : 1,
           }}
           onFocus={e => e.target.style.borderColor = "#5B5BD6"}
-          onBlur={e => e.target.style.borderColor = "#ebe9f6"}
+          onBlur={e => e.target.style.borderColor = "#2a2a2a"}
         />
 
         {/* Hashtags */}
@@ -686,7 +693,7 @@ function PostPanel({ post, onClose, onUpdate }) {
             <FormLabel>Hashtags</FormLabel>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
               {post.hashtags.map((tag, i) => (
-                <span key={i} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, background: "#EEF0FF", color: "#5B5BD6", border: "1px solid #c7d2fe" }}>
+                <span key={i} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, background: "#1e1e3a", color: "#8080ff", border: "1px solid #3a3a6a" }}>
                   {tag.startsWith("#") ? tag : `#${tag}`}
                 </span>
               ))}
@@ -703,13 +710,13 @@ function PostPanel({ post, onClose, onUpdate }) {
           disabled={isViewOnly}
           style={{
             width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13,
-            color: "#111827", background: isViewOnly ? "#f9f8fe" : "#fff",
-            border: "1.5px solid #ebe9f6", borderRadius: 10, outline: "none",
-            fontFamily: "inherit", marginBottom: 12, colorScheme: "light",
+            color: "#ffffff", background: isViewOnly ? "#1e1e1e" : "#1a1a1a",
+            border: "1.5px solid #2a2a2a", borderRadius: 10, outline: "none",
+            fontFamily: "inherit", marginBottom: 12, colorScheme: "dark",
             opacity: isViewOnly ? 0.7 : 1,
           }}
           onFocus={e => e.target.style.borderColor = "#5B5BD6"}
-          onBlur={e => e.target.style.borderColor = "#ebe9f6"}
+          onBlur={e => e.target.style.borderColor = "#2a2a2a"}
         />
 
         {/* Error */}
@@ -721,12 +728,12 @@ function PostPanel({ post, onClose, onUpdate }) {
 
         {/* Meta */}
         {(post.published_at || post.ai_generated) && (
-          <div style={{ borderTop: "1px solid #ebe9f6", paddingTop: 10, marginTop: 4 }}>
+          <div style={{ borderTop: "1px solid #2a2a2a", paddingTop: 10, marginTop: 4 }}>
             {post.ai_generated && (
-              <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 3 }}>AI Generated</div>
+              <div style={{ fontSize: 11, color: "#666666", marginBottom: 3 }}>AI Generated</div>
             )}
             {post.published_at && (
-              <div style={{ fontSize: 11, color: "#9ca3af" }}>
+              <div style={{ fontSize: 11, color: "#666666" }}>
                 Published {format(parseISO(post.published_at), "MMM d, h:mm a")}
               </div>
             )}
@@ -735,7 +742,7 @@ function PostPanel({ post, onClose, onUpdate }) {
       </div>
 
       {/* Actions */}
-      <div style={{ padding: "12px 16px", borderTop: "1px solid #ebe9f6", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ padding: "12px 16px", borderTop: "1px solid #2a2a2a", display: "flex", flexDirection: "column", gap: 8 }}>
         {!isViewOnly && (
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={savePost} disabled={saving} style={actionBtn("#5B5BD6", "#fff", "#4848C0")}>
@@ -770,7 +777,7 @@ function PostPanel({ post, onClose, onUpdate }) {
 
 function FormLabel({ children }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: "#cccccc", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
       {children}
     </div>
   );
@@ -785,12 +792,12 @@ function actionBtn(bg, color, hoverBg, border) {
 }
 
 const navBtn = {
-  width: 32, height: 32, borderRadius: 8, border: "1.5px solid #ebe9f6",
-  background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-  cursor: "pointer", color: "#6b7280",
+  width: 32, height: 32, borderRadius: 8, border: "1.5px solid #2a2a2a",
+  background: "#161616", display: "flex", alignItems: "center", justifyContent: "center",
+  cursor: "pointer", color: "#888888",
 };
 
 const todayBtn = {
   padding: "6px 12px", fontSize: 12, fontWeight: 600, borderRadius: 8,
-  border: "1.5px solid #ebe9f6", background: "#fff", color: "#374151", cursor: "pointer",
+  border: "1.5px solid #2a2a2a", background: "#161616", color: "#cccccc", cursor: "pointer",
 };
