@@ -20,6 +20,8 @@ async def compat_send_otp(body: dict, db: AsyncIOMotorDatabase = Depends(get_db)
     purpose = body.get("purpose", "login")
     try:
         return await iam_service.send_otp(db, identifier, purpose)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=exc.detail) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

@@ -57,6 +57,20 @@ def decode_access_token(token: str) -> dict:
 
 async def send_otp(db: AsyncIOMotorDatabase, identifier: str, purpose: str) -> dict:
     identifier = _normalize_identifier(identifier)
+
+    is_email = "@" in identifier
+    field = "email" if is_email else "phone"
+
+    if purpose == "login":
+        user = await db.users.find_one({field: identifier})
+        if not user:
+            raise NotFoundError("No account found with this phone/email. Please sign up first.")
+
+    if purpose == "register":
+        existing = await db.users.find_one({field: identifier})
+        if existing:
+            raise NotFoundError("Account already exists. Please sign in instead.")
+
     code = _generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=_OTP_TTL_SECONDS)
 
