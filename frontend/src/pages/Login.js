@@ -15,6 +15,9 @@ export default function Login({ onLogin }) {
   const [devMode, setDevMode]   = useState(false);
   const [devOtp, setDevOtp]     = useState("");
 
+  // Wake up Render on mount so it's warm when the user hits Continue
+  useEffect(() => { axios.get(`${API.replace("/api", "")}/health`).catch(() => {}); }, []);
+
   const sendOTP = async () => {
     const val = identifier.trim();
     if (!val) return toast.error("Enter your phone number or email");

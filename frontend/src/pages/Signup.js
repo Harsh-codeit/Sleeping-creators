@@ -34,6 +34,9 @@ export default function Signup({ onLogin }) {
   const [devMode, setDevMode] = useState(false);
   const [devOtp, setDevOtp]   = useState("");
 
+  // Wake up Render on mount so it's warm when the user hits Continue
+  useEffect(() => { axios.get(`${API.replace("/api", "")}/health`).catch(() => {}); }, []);
+
   return (
     <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
       {/* Left panel — desktop only */}
