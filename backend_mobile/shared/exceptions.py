@@ -2,8 +2,9 @@ from fastapi import HTTPException, status
 
 
 class NotFoundError(HTTPException):
-    def __init__(self, resource: str):
-        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=f"{resource} not found")
+    def __init__(self, resource: str, detail: str = ""):
+        msg = detail if detail else f"{resource} not found"
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
 
 
 class UnauthorizedError(HTTPException):
