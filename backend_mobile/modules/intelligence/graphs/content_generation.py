@@ -391,7 +391,7 @@ async def semantic_gate(state: ContentGenerationState, *, db) -> dict:
     gate_result = await gate_check(
         creator_id=state["creator_id"],
         candidate_text=hook_text,
-        embedding=embedding,
+        embedding=None,
         hook_type=content.get("hook_type", ""),
         db=db,
     )
