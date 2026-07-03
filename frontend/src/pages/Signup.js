@@ -32,6 +32,7 @@ export default function Signup({ onLogin }) {
   const [name, setName]       = useState("");
   const [identifier, setId]   = useState("");
   const [devMode, setDevMode] = useState(false);
+  const [devOtp, setDevOtp]   = useState("");
 
   return (
     <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
@@ -98,13 +99,14 @@ export default function Signup({ onLogin }) {
             <StepInfo
               name={name} setName={setName}
               identifier={identifier} setId={setId}
-              onNext={(isDev) => { setDevMode(isDev); setStep(2); }}
+              onNext={(otp) => { setDevMode(!!otp); setDevOtp(otp || ""); setStep(2); }}
             />
           )}
           {step === 2 && (
             <StepOTP
               identifier={identifier}
               devMode={devMode}
+              devOtp={devOtp}
               onBack={() => setStep(1)}
               onVerified={() => setStep(3)}
             />
@@ -134,7 +136,7 @@ function StepInfo({ name, setName, identifier, setId, onNext }) {
     try {
       const resp = await axios.post(`${API}/auth/otp/send`, { identifier: val, purpose: "register" });
       toast.success("OTP sent!");
-      onNext(!!resp.data.debug_otp);
+      onNext(resp.data.debug_otp || "");
     } catch (err) {
       const msg = err.response?.data?.detail || "Could not send OTP";
       if (msg.toLowerCase().includes("already exists")) toast.error("Account already exists — sign in instead");
@@ -168,7 +170,7 @@ function StepInfo({ name, setName, identifier, setId, onNext }) {
   );
 }
 
-function StepOTP({ identifier, devMode, onBack, onVerified }) {
+function StepOTP({ identifier, devMode, devOtp, onBack, onVerified }) {
   const [otp, setOtp]         = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCd]    = useState(30);
@@ -181,17 +183,22 @@ function StepOTP({ identifier, devMode, onBack, onVerified }) {
     return () => clearTimeout(t);
   }, [countdown]);
 
+  // Auto-submit when devOtp is available
+  useEffect(() => {
+    if (devMode && devOtp) verify(devOtp);
+  }, [devMode, devOtp]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleChange = (e) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 6);
     setOtp(val);
   };
 
-  const verify = async () => {
-    if (devMode) { onVerified(); return; }
-    if (otp.length < 6) return toast.error("Enter all 6 digits");
+  const verify = async (code) => {
+    const finalCode = code || otp;
+    if (finalCode.length < 6) return toast.error("Enter all 6 digits");
     setLoading(true);
     try {
-      await axios.post(`${API}/auth/otp/verify`, { identifier: identifier.trim(), otp, purpose: "register" });
+      await axios.post(`${API}/auth/otp/verify`, { identifier: identifier.trim(), otp: finalCode, purpose: "register" });
       onVerified();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Incorrect OTP");
