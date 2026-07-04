@@ -2,18 +2,18 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, LayoutTemplate, CalendarRange, BarChart3,
-  Settings, Layers, LogOut, Sparkles, User, ChevronDown
+  Settings, Layers, LogOut, Sparkles, User, ChevronDown, FileStack,
 } from "lucide-react";
 import { useState } from "react";
 import { useUser } from "../context/UserContext";
 import ErrorBoundary from "./ErrorBoundary";
 
 const BOTTOM_NAV = [
-  { path: "/",          label: "Home",      icon: LayoutDashboard, exact: true },
-  { path: "/create",    label: "Create",    icon: Layers },
-  { path: "/templates", label: "Templates", icon: LayoutTemplate },
-  { path: "/calendar",  label: "Calendar",  icon: CalendarRange },
-  { path: "/settings",  label: "Settings",  icon: Settings },
+  { path: "/",         label: "Home",     icon: LayoutDashboard, exact: true },
+  { path: "/create",   label: "Create",   icon: Layers },
+  { path: "/drafts",   label: "Drafts",   icon: FileStack },
+  { path: "/calendar", label: "Calendar", icon: CalendarRange },
+  { path: "/settings", label: "Settings", icon: Settings },
 ];
 
 const SIDEBAR_NAV = [

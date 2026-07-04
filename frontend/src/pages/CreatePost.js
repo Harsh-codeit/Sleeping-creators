@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import SlidePreview from "../components/SlidePreview";
@@ -56,6 +57,7 @@ export default function CreatePost() {
 // ─── Carousel Form ────────────────────────────────────────────────────────────
 
 function CarouselForm() {
+  const navigate = useNavigate();
   const [templates, setTemplates]     = useState([]);
   const [selectedTpl, setSelectedTpl] = useState(null);
   const [selectedTplObj, setSelectedTplObj] = useState(null);
@@ -129,12 +131,14 @@ function CarouselForm() {
       if (now) {
         await axios.post(`${API}/posts/${post.id}/publish`, {}, { headers: authHeaders() });
         toast.success("Published to Instagram!");
+        setResult(null);
+        setTopic("");
       } else {
         await axios.post(`${API}/posts/${post.id}/approve`, {}, { headers: authHeaders() });
-        toast.success("Scheduled successfully!");
+        const schedDate = new Date(scheduledAt);
+        toast.success(`Scheduled for ${schedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${schedDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
+        navigate("/calendar");
       }
-      setResult(null);
-      setTopic("");
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
       toast.error(msg);

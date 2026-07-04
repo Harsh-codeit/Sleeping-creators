@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -44,7 +44,7 @@ function SlideCard({ slide, total, idx }) {
   );
 }
 
-function DraftCard({ item, type, onScheduled, onDeleted }) {
+function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
   const [expanded, setExpanded]   = useState(false);
   const [slideIdx, setSlideIdx]   = useState(0);
   const [scheduledAt, setAt]      = useState("");
@@ -78,8 +78,10 @@ function DraftCard({ item, type, onScheduled, onDeleted }) {
         await axios.put(`${API}/posts/${item.id}`, { scheduled_at: new Date(scheduledAt).toISOString() }, { headers: authHeaders() });
         await axios.post(`${API}/posts/${item.id}/approve`, {}, { headers: authHeaders() });
       }
-      toast.success("Scheduled!");
+      const schedDate = new Date(scheduledAt);
+      toast.success(`Scheduled for ${schedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${schedDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
       onScheduled(item.id);
+      onNavigate("/calendar");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Schedule failed");
     } finally {
@@ -399,6 +401,7 @@ export default function DraftsPage() {
                 type={item._type}
                 onScheduled={handleScheduled}
                 onDeleted={handleDeleted}
+                onNavigate={navigate}
               />
             ))}
           </div>
