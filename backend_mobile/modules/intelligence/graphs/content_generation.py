@@ -19,6 +19,7 @@ import logging
 import re
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from anthropic import AsyncAnthropic
@@ -134,10 +135,47 @@ async def build_creator_context(state: ContentGenerationState, *, db, redis) -> 
     except Exception as exc:
         logger.warning("Creator context load failed for %s: %s — using defaults", creator_id, exc)
 
+    # Load recent content DNA — feeds the LRU variety planner and Claude history prompt
+    recent_post_dna: list[dict] = []
+    try:
+        window_start = (datetime.now(timezone.utc) - timedelta(days=settings.recent_window_days)).isoformat()
+        dna_docs = await (
+            db.content_dna
+            .find(
+                {"creator_id": creator_id, "created_at": {"$gte": window_start}},
+                {"hook_type": 1, "opening_structure": 1, "emotion": 1,
+                 "format": 1, "hook_text_preview": 1, "_id": 0},
+            )
+            .sort("created_at", -1)
+            .limit(50)
+            .to_list(50)
+        )
+        recent_post_dna = dna_docs
+        logger.debug("Loaded %d recent DNA entries for creator %s", len(dna_docs), creator_id[:8])
+    except Exception as exc:
+        logger.warning("Failed to load recent_post_dna for %s: %s", creator_id[:8], exc)
+
+    # Load winning examples — posts saved by the user as favourites or manually tagged
+    winning_examples: list[dict] = []
+    try:
+        winning_docs = await (
+            db.content_dna
+            .find(
+                {"creator_id": creator_id, "is_winner": True},
+                {"hook_type": 1, "hook_text_preview": 1, "emotion": 1, "format": 1, "_id": 0},
+            )
+            .sort("created_at", -1)
+            .limit(10)
+            .to_list(10)
+        )
+        winning_examples = winning_docs
+    except Exception as exc:
+        logger.warning("Failed to load winning_examples for %s: %s", creator_id[:8], exc)
+
     creator_context = {
         **base_context,
-        "recent_post_dna": [],
-        "winning_examples": [],
+        "recent_post_dna": recent_post_dna,
+        "winning_examples": winning_examples,
     }
 
     return {"creator_context": creator_context}
@@ -250,6 +288,30 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
             f"- {h}" for h in exemplars
         )
 
+    # Creator's own recent content — Claude avoids repeating similar hooks/angles
+    history_block = ""
+    recent_dna = ctx.get("recent_post_dna", [])
+    if recent_dna:
+        recent_previews = [d.get("hook_text_preview", "") for d in recent_dna[:15] if d.get("hook_text_preview")]
+        if recent_previews:
+            history_block = (
+                "\n\nCREATOR'S RECENT CONTENT (do NOT repeat these angles or hooks — the audience has already seen them):\n"
+                + "\n".join(f"- {h}" for h in recent_previews)
+            )
+
+    # Winning examples — content this creator has marked as best-performing
+    winning_block = ""
+    winning_examples = ctx.get("winning_examples", [])
+    if winning_examples:
+        winning_block = (
+            "\n\nWINNING CONTENT PATTERNS (these performed best for this creator — match the energy and style):\n"
+            + "\n".join(
+                f"- [{ex.get('hook_type', '')}] {ex.get('hook_text_preview', '')}"
+                for ex in winning_examples[:5]
+                if ex.get("hook_text_preview")
+            )
+        )
+
     trend_block = ""
     if trending:
         trend_block = (
@@ -294,6 +356,8 @@ SLIDE FORMAT GUIDANCE:
 
 {caption_rules}
 {exemplar_block}
+{history_block}
+{winning_block}
 {trend_block}
 {cta_block}
 

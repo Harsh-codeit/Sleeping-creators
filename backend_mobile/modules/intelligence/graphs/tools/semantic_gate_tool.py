@@ -94,12 +94,14 @@ async def record_dna(
     hook_text_preview: str,
     embedding: Optional[list[float]],
     db,  # AsyncIOMotorDatabase
+    generation_id: Optional[str] = None,
 ) -> None:
     """Persist a content fingerprint after a post is committed."""
     try:
         import uuid
         await db.content_dna.insert_one({
             "id": str(uuid.uuid4()),
+            "generation_id": generation_id,
             "creator_id": creator_id,
             "post_id": post_id,
             "hook_type": hook_type,
@@ -107,6 +109,8 @@ async def record_dna(
             "emotion": emotion,
             "format": format,
             "hook_text_preview": hook_text_preview[:256],
+            "is_winner": False,
+            "published": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     except Exception as exc:

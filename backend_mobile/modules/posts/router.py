@@ -200,11 +200,55 @@ async def publish_post(
             "bundle_post_id": bundle_post_id,
             "updated_at": _now_iso(),
         }})
+
+        # Flag the content DNA entry as published so the AI knows this made it to production
+        try:
+            carousel_id = doc.get("carousel_id")
+            if carousel_id:
+                carousel = await db.carousels.find_one({"id": carousel_id}, {"generation_id": 1})
+                if carousel and carousel.get("generation_id"):
+                    await db.content_dna.update_one(
+                        {"generation_id": carousel["generation_id"]},
+                        {"$set": {"published": True, "post_id": post_id}},
+                    )
+        except Exception:
+            pass  # non-fatal
+
         return {"ok": True, "bundle_post_id": bundle_post_id, "status": "published"}
 
     except Exception as exc:
         await db.posts.update_one({"id": post_id}, {"$set": {"status": "failed", "error": str(exc), "updated_at": _now_iso()}})
         raise HTTPException(500, f"Publish failed: {exc}")
+
+
+@router.post("/posts/{post_id}/star")
+async def star_post(
+    post_id: str,
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Mark a post as a winning example so future AI generations reference its style."""
+    doc = await db.posts.find_one({"id": post_id, "creator_id": user_id})
+    if not doc:
+        raise HTTPException(404, "Post not found")
+
+    is_starred = not doc.get("starred", False)
+    await db.posts.update_one({"id": post_id}, {"$set": {"starred": is_starred, "updated_at": _now_iso()}})
+
+    # Mirror the winner flag on the content DNA entry
+    try:
+        carousel_id = doc.get("carousel_id")
+        if carousel_id:
+            carousel = await db.carousels.find_one({"id": carousel_id}, {"generation_id": 1})
+            if carousel and carousel.get("generation_id"):
+                await db.content_dna.update_one(
+                    {"generation_id": carousel["generation_id"]},
+                    {"$set": {"is_winner": is_starred}},
+                )
+    except Exception:
+        pass
+
+    return {"ok": True, "starred": is_starred}
 
 
 # ── Calendar ──────────────────────────────────────────────────────────────────

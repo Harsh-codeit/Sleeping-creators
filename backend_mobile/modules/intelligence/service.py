@@ -114,6 +114,7 @@ class IntelligenceService:
                 hook_text_preview=hook_preview,
                 embedding=None,
                 db=db,
+                generation_id=generation_id,
             )
         except Exception as _dna_exc:
             logger.warning("record_dna failed (non-fatal): %s", _dna_exc)
