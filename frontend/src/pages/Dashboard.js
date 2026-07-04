@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { toast } from "sonner";
 import {
   Layers, CalendarRange, LayoutTemplate, BarChart3,
   Clock, CheckCircle2, Instagram, Plus,
-  ArrowRight, Sparkles, TrendingUp,
+  ArrowRight, Sparkles, TrendingUp, Star,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 
@@ -123,6 +124,18 @@ export default function Dashboard() {
   const scheduledCount = posts.filter(p => p.status === "scheduled").length;
   const publishedCount = posts.filter(p => p.status === "published").length;
   const draftCount     = posts.filter(p => p.status === "draft").length + drafts.length;
+
+  const starPost = async (postId) => {
+    try {
+      const resp = await axios.post(`${API}/posts/${postId}/star`, {}, { headers: authHeaders() });
+      setPosts(prev => prev.map(p =>
+        (p.id || p._id) === postId ? { ...p, starred: resp.data.starred } : p
+      ));
+      toast.success(resp.data.starred ? "Starred — AI will reference this style" : "Unstarred");
+    } catch {
+      toast.error("Could not update star");
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -255,9 +268,9 @@ export default function Dashboard() {
                   return (
                     <div key={post._id || post.id}
                       className="flex items-center gap-3 p-3.5 rounded-2xl border transition-all"
-                      style={{ background: "#161616", borderColor: "#2a2a2a" }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = "#3a3a6a"}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2a2a"}
+                      style={{ background: "#161616", borderColor: post.starred ? "#3a2a00" : "#2a2a2a" }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = post.starred ? "#5a4a00" : "#3a3a6a"}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = post.starred ? "#3a2a00" : "#2a2a2a"}
                     >
                       {PIcon && (
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -278,6 +291,17 @@ export default function Dashboard() {
                           </p>
                         )}
                       </div>
+                      <button
+                        onClick={() => starPost(post.id || post._id)}
+                        title={post.starred ? "Unstar (remove from AI training)" : "Star — teach AI to write like this"}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", flexShrink: 0, lineHeight: 0 }}
+                      >
+                        <Star size={14}
+                          fill={post.starred ? "#fbbf24" : "none"}
+                          stroke={post.starred ? "#fbbf24" : "#555"}
+                          strokeWidth={1.8}
+                        />
+                      </button>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={cfg.style}>
                         {cfg.label}
                       </span>
