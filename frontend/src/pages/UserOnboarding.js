@@ -52,7 +52,7 @@ export default function UserOnboarding() {
   const [spiceLevel, setSpiceLevel]         = useState(3);
 
   useEffect(() => {
-    axios.get(`${API}/templates`).then(r => {
+    axios.get(`${API}/templates`, { headers: authHeaders() }).then(r => {
       const list = r.data?.templates || r.data || [];
       setTemplates(list.slice(0, 12));
     }).catch(() => {});

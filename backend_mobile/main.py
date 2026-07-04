@@ -40,6 +40,12 @@ async def lifespan(app: FastAPI):
         logger.warning("Hook library seed failed (non-fatal): %s", _seed_exc)
 
     try:
+        from backend_mobile.modules.studio.service import seed_starters
+        await seed_starters(database.db)
+    except Exception as _seed_exc:
+        logger.warning("Template seed failed (non-fatal): %s", _seed_exc)
+
+    try:
         _redis_pool = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
         await _redis_pool.ping()
         logger.info("Redis connected")

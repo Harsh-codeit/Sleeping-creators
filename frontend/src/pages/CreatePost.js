@@ -72,7 +72,7 @@ function CarouselForm() {
   const [publishing, setPublishing]   = useState(false);
 
   useEffect(() => {
-    axios.get(`${API}/templates`).then(r => {
+    axios.get(`${API}/templates`, { headers: authHeaders() }).then(r => {
       const list = r.data?.templates || r.data || [];
       setTemplates(list);
       if (list.length > 0) {
@@ -328,7 +328,7 @@ function VideoForm() {
       })
       .catch(() => {
         // Fallback: load from templates endpoint filtered by kind
-        axios.get(`${API}/templates`).then(r => {
+        axios.get(`${API}/templates`, { headers: authHeaders() }).then(r => {
           const all = r.data?.templates ?? r.data ?? [];
           setVideoTemplates(all.filter(t => t.kind === "video"));
         }).catch(() => {});

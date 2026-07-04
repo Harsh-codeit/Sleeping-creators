@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, LayoutTemplate, CalendarRange, BarChart3,
@@ -33,7 +33,6 @@ function isActive(nav, pathname) {
 
 export default function Layout({ onLogout }) {
   const location              = useLocation();
-  const navigate              = useNavigate();
   const { name, email, role } = useUser() ?? {};
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
@@ -163,7 +162,7 @@ export default function Layout({ onLogout }) {
                 key={nav.path}
                 to={nav.path}
                 className="flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors"
-                style={{ color: active ? "#8080ff" : "#555" }}
+                style={{ color: active ? "#8080ff" : "#888" }}
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
                 <span className="text-[10px] font-medium">{nav.label}</span>

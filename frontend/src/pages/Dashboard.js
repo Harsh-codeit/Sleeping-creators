@@ -93,7 +93,7 @@ export default function Dashboard() {
       try {
         const [postsResp, tmplResp, carouselResp] = await Promise.allSettled([
           clientId ? axios.get(`${API}/posts?client_id=${clientId}&limit=8`, { headers: authHeaders() }) : Promise.resolve({ data: [] }),
-          axios.get(`${API}/templates`),
+          axios.get(`${API}/templates`, { headers: authHeaders() }),
           axios.get(`${API}/carousels?limit=6`, { headers: authHeaders() }),
         ]);
         if (postsResp.status === "fulfilled") {

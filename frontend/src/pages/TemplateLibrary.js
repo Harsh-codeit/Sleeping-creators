@@ -51,7 +51,7 @@ export default function TemplateLibrary() {
     try {
       const params = {};
       if (search) params.search = search;
-      const resp = await axios.get(`${API}/templates`, { params });
+      const resp = await axios.get(`${API}/templates`, { params, headers: authHeaders() });
       setTemplates(resp.data?.templates ?? resp.data ?? []);
     } catch {
       toast.error("Failed to load templates");
