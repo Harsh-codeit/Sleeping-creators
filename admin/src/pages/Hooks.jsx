@@ -44,7 +44,7 @@ export default function Hooks() {
     if (!confirm("Delete this hook?")) return;
     try {
       await api.delete(`/api/admin/hooks/${id}`);
-      setHooks(h => h.filter(x => x._id !== id));
+      setHooks(h => h.filter(x => x.id !== id));
       toast.success("Deleted");
     } catch {
       toast.error("Failed to delete");
@@ -201,7 +201,7 @@ function Section({ title, hooks, onDelete, onToggle, showUser = false }) {
                     </button>
                   </td>
                   <td style={{ padding: "12px 14px" }}>
-                    <button onClick={() => onDelete(h._id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+                    <button onClick={() => onDelete(h.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
                       <Trash2 size={13} style={{ color: "#555" }} />
                     </button>
                   </td>

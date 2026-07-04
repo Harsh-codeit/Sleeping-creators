@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Star, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
+import { ArrowLeft, Star, CheckCircle2, XCircle, ChevronDown, X, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import api from "../api.js";
 
 const SPICE_LABELS = { 1: "Conservative", 2: "Mild", 3: "Balanced", 4: "Bold", 5: "Very Bold" };
 const NICHES = ["fitness", "food", "travel", "fashion", "tech", "business", "beauty", "lifestyle", "education", "entertainment", "other"];
-const TABS = ["AI Profile", "Content DNA", "Generation History"];
+const HOOK_TYPES = ["question", "myth_bust", "story", "statistic", "challenge", "tip", "relatable", "controversial", "listicle", "family_relationship", "emotional_state", "relatable_scene", "shocking_number", "credibility_borrow", "direct_confront", "other"];
+const TABS = ["AI Profile", "Content DNA", "Generation History", "Hooks"];
 
 export default function UserDetail() {
   const { userId } = useParams();
@@ -17,21 +18,45 @@ export default function UserDetail() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({});
 
+  // Competitor chip input state
+  const [competitorInput, setCompetitorInput] = useState("");
+  const competitorRef = useRef(null);
+
+  // Hooks tab state
+  const [userHooks, setUserHooks] = useState([]);
+  const [hooksLoading, setHooksLoading] = useState(false);
+  const [hooksFetched, setHooksFetched] = useState(false);
+  const [showAddHook, setShowAddHook] = useState(false);
+  const [addingHook, setAddingHook] = useState(false);
+  const [hookForm, setHookForm] = useState({ hook_text: "", hook_type: "", niche: "" });
+
   const load = () => {
     api.get(`/api/admin/users/${userId}`).then(r => {
       setData(r.data);
       const u = r.data.user;
       setForm({
-        brand_voice: u.brand_voice || "",
+        brand_voice:     u.brand_voice || "",
         target_audience: u.target_audience || "",
-        spice_level: u.spice_level || 3,
-        niche: u.niche || "",
-        interests: (u.interests || []).join(", "),
+        spice_level:     u.spice_level || 3,
+        niche:           u.niche || "",
+        interests:       (u.interests || []).join(", "),
+        competitors:     u.competitors || [],
       });
     }).catch(() => toast.error("Failed to load user")).finally(() => setLoading(false));
   };
 
   useEffect(load, [userId]);
+
+  // Load hooks when Hooks tab is activated
+  useEffect(() => {
+    if (tab === 3 && !hooksFetched) {
+      setHooksLoading(true);
+      api.get(`/api/admin/hooks?creator_id=${userId}`)
+        .then(r => setUserHooks(Array.isArray(r.data) ? r.data : []))
+        .catch(() => toast.error("Failed to load hooks"))
+        .finally(() => { setHooksLoading(false); setHooksFetched(true); });
+    }
+  }, [tab, hooksFetched, userId]);
 
   const saveProfile = async () => {
     setSaving(true);
@@ -55,6 +80,57 @@ export default function UserDetail() {
       }));
     } catch {
       toast.error("Failed to toggle winner");
+    }
+  };
+
+  // Competitor helpers
+  const addCompetitor = () => {
+    const val = competitorInput.trim().replace(/^@/, "");
+    if (!val || form.competitors.includes(val) || form.competitors.length >= 10) return;
+    setForm(f => ({ ...f, competitors: [...f.competitors, val] }));
+    setCompetitorInput("");
+    competitorRef.current?.focus();
+  };
+
+  const removeCompetitor = (handle) => {
+    setForm(f => ({ ...f, competitors: f.competitors.filter(c => c !== handle) }));
+  };
+
+  // Hook management
+  const addHook = async e => {
+    e.preventDefault();
+    if (!hookForm.hook_text.trim()) return;
+    setAddingHook(true);
+    try {
+      const doc = await api.post("/api/admin/hooks", { ...hookForm, creator_id: userId });
+      setUserHooks(h => [doc.data, ...h]);
+      setHookForm({ hook_text: "", hook_type: "", niche: "" });
+      setShowAddHook(false);
+      toast.success("Hook added");
+    } catch {
+      toast.error("Failed to add hook");
+    } finally {
+      setAddingHook(false);
+    }
+  };
+
+  const deleteHook = async (id) => {
+    if (!confirm("Delete this hook?")) return;
+    try {
+      await api.delete(`/api/admin/hooks/${id}`);
+      setUserHooks(h => h.filter(x => x.id !== id));
+      toast.success("Deleted");
+    } catch {
+      toast.error("Failed to delete");
+    }
+  };
+
+  const toggleHookActive = async (hook) => {
+    try {
+      await api.patch(`/api/admin/hooks/${hook.id}`, { is_active: !hook.is_active });
+      setUserHooks(h => h.map(x => x.id === hook.id ? { ...x, is_active: !x.is_active } : x));
+    } catch {
+      toast.error("Failed to update");
     }
   };
 
@@ -83,10 +159,8 @@ export default function UserDetail() {
           <div style={{ fontSize: 18, fontWeight: 800, color: "#fff" }}>{u.name || "—"}</div>
           <div style={{ fontSize: 12, color: "#555" }}>{u.email || u.phone || "—"}</div>
         </div>
-
-        {/* Quick stats */}
         <div style={{ marginLeft: "auto", display: "flex", gap: 24 }}>
-          {[["Generations", stats.total_gens || 0], ["Published", stats.published || 0], ["Wins", stats.wins || 0]].map(([l, v]) => (
+          {[["Generations", stats.total_generations || 0], ["Published", stats.published || 0], ["Wins", stats.wins || 0]].map(([l, v]) => (
             <div key={l} style={{ textAlign: "center" }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{v}</div>
               <div style={{ fontSize: 10, color: "#555", textTransform: "uppercase", fontWeight: 700 }}>{l}</div>
@@ -104,37 +178,28 @@ export default function UserDetail() {
         ))}
       </div>
 
-      {/* Tab 0: AI Profile */}
+      {/* ── Tab 0: AI Profile ─────────────────────────────────────────────── */}
       {tab === 0 && (
-        <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, padding: 28, maxWidth: 600 }}>
+        <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, padding: 28, maxWidth: 620 }}>
           <Field label="Brand Voice">
-            <textarea
-              rows={3}
-              value={form.brand_voice}
+            <textarea rows={3} value={form.brand_voice}
               onChange={e => setForm(f => ({ ...f, brand_voice: e.target.value }))}
               placeholder="e.g. Friendly, conversational, slightly witty…"
-              style={textareaStyle}
-            />
+              style={textareaStyle} />
           </Field>
 
           <Field label="Target Audience">
-            <textarea
-              rows={2}
-              value={form.target_audience}
+            <textarea rows={2} value={form.target_audience}
               onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))}
               placeholder="e.g. Women 25-35 interested in fitness…"
-              style={textareaStyle}
-            />
+              style={textareaStyle} />
           </Field>
 
           <Field label={`Spice Level — ${SPICE_LABELS[form.spice_level] || ""}`}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <input
-                type="range" min={1} max={5} step={1}
-                value={form.spice_level}
+              <input type="range" min={1} max={5} step={1} value={form.spice_level}
                 onChange={e => setForm(f => ({ ...f, spice_level: parseInt(e.target.value) }))}
-                style={{ flex: 1, accentColor: "#5B5BD6" }}
-              />
+                style={{ flex: 1, accentColor: "#5B5BD6" }} />
               <span style={{ minWidth: 16, textAlign: "center", fontSize: 15, fontWeight: 700, color: "#fff" }}>{form.spice_level}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
@@ -144,11 +209,8 @@ export default function UserDetail() {
 
           <Field label="Niche">
             <div style={{ position: "relative" }}>
-              <select
-                value={form.niche}
-                onChange={e => setForm(f => ({ ...f, niche: e.target.value }))}
-                style={{ ...inputStyle, width: "100%", appearance: "none", paddingRight: 32 }}
-              >
+              <select value={form.niche} onChange={e => setForm(f => ({ ...f, niche: e.target.value }))}
+                style={{ ...inputStyle, width: "100%", appearance: "none", paddingRight: 32 }}>
                 <option value="">Select niche…</option>
                 {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
@@ -157,25 +219,53 @@ export default function UserDetail() {
           </Field>
 
           <Field label="Interests (comma-separated)">
-            <input
-              value={form.interests}
+            <input value={form.interests}
               onChange={e => setForm(f => ({ ...f, interests: e.target.value }))}
               placeholder="e.g. yoga, nutrition, mindfulness"
-              style={inputStyle}
-            />
+              style={inputStyle} />
           </Field>
 
-          <button
-            onClick={saveProfile}
-            disabled={saving}
-            style={{ marginTop: 8, padding: "12px 28px", background: saving ? "#3a3a6a" : "#5B5BD6", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}
-          >
+          {/* Competitors chip input */}
+          <Field label={`Competitors (${form.competitors.length}/10) — AI references these accounts for style and angles`}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {form.competitors.map(handle => (
+                <span key={handle} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#34d399", background: "#0a2a1a", border: "1px solid #1a4a2a", borderRadius: 20, padding: "4px 10px" }}>
+                  @{handle}
+                  <button onClick={() => removeCompetitor(handle)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#34d399", padding: 0, display: "flex", lineHeight: 1 }}>
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                ref={competitorRef}
+                value={competitorInput}
+                onChange={e => setCompetitorInput(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCompetitor(); } }}
+                placeholder="@username — press Enter to add"
+                disabled={form.competitors.length >= 10}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button onClick={addCompetitor} disabled={!competitorInput.trim() || form.competitors.length >= 10}
+                style={{ padding: "10px 16px", background: "#1a3a2a", border: "1px solid #1a4a2a", borderRadius: 10, color: "#34d399", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                Add
+              </button>
+            </div>
+            {form.competitors.length === 0 && (
+              <div style={{ fontSize: 11, color: "#444", marginTop: 6 }}>Add up to 10 Instagram accounts. The AI will use their content style as reference.</div>
+            )}
+          </Field>
+
+          <button onClick={saveProfile} disabled={saving}
+            style={{ marginTop: 4, padding: "12px 28px", background: saving ? "#3a3a6a" : "#5B5BD6", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
             {saving ? "Saving…" : "Save AI Settings"}
           </button>
         </div>
       )}
 
-      {/* Tab 1: Content DNA */}
+      {/* ── Tab 1: Content DNA ────────────────────────────────────────────── */}
       {tab === 1 && (
         <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, overflow: "hidden" }}>
           {!data.recent_dna?.length ? (
@@ -191,25 +281,21 @@ export default function UserDetail() {
               </thead>
               <tbody>
                 {data.recent_dna.map(d => (
-                  <tr key={d._id} style={{ borderBottom: "1px solid #1e1e1e" }}>
+                  <tr key={d._id || d.id} style={{ borderBottom: "1px solid #1e1e1e" }}>
                     <td style={{ padding: "12px 16px" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: "#a78bfa", background: "#1e1e3a", borderRadius: 6, padding: "3px 8px" }}>{d.hook_type || "—"}</span>
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "#ccc" }}>{d.emotion || "—"}</td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "#ccc" }}>{d.format || "—"}</td>
                     <td style={{ padding: "12px 16px" }}>
-                      <button
-                        onClick={() => toggleWinner(d._id, d.is_winner)}
+                      <button onClick={() => toggleWinner(d._id || d.id, d.is_winner)}
                         style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                        title={d.is_winner ? "Remove winner" : "Mark as winner"}
-                      >
+                        title={d.is_winner ? "Remove winner" : "Mark as winner"}>
                         <Star size={16} fill={d.is_winner ? "#f59e0b" : "none"} style={{ color: d.is_winner ? "#f59e0b" : "#444" }} />
                       </button>
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      {d.published
-                        ? <CheckCircle2 size={14} style={{ color: "#34d399" }} />
-                        : <XCircle size={14} style={{ color: "#444" }} />}
+                      {d.published ? <CheckCircle2 size={14} style={{ color: "#34d399" }} /> : <XCircle size={14} style={{ color: "#444" }} />}
                     </td>
                     <td style={{ padding: "12px 16px", fontSize: 11, color: "#555" }}>
                       {d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}
@@ -222,7 +308,7 @@ export default function UserDetail() {
         </div>
       )}
 
-      {/* Tab 2: Generation History */}
+      {/* ── Tab 2: Generation History ─────────────────────────────────────── */}
       {tab === 2 && (
         <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, overflow: "hidden" }}>
           {!data.recent_generations?.length ? (
@@ -238,13 +324,13 @@ export default function UserDetail() {
               </thead>
               <tbody>
                 {data.recent_generations.map((g, i) => (
-                  <tr key={g._id || i} style={{ borderBottom: "1px solid #1e1e1e" }}>
+                  <tr key={g._id || g.id || i} style={{ borderBottom: "1px solid #1e1e1e" }}>
                     <td style={{ padding: "12px 16px" }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: g.model?.includes("haiku") ? "#34d399" : "#5B5BD6", background: g.model?.includes("haiku") ? "#0a2a1a" : "#1e1e3a", borderRadius: 6, padding: "3px 8px" }}>
                         {g.model?.includes("haiku") ? "haiku" : "sonnet"}
                       </span>
                     </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#ccc" }}>{(g.total_tokens || g.tokens || 0).toLocaleString()}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#ccc" }}>{(g.total_tokens || g.tokens_used || 0).toLocaleString()}</td>
                     <td style={{ padding: "12px 16px", fontSize: 12, color: "#ccc" }}>{g.latency_ms ? `${(g.latency_ms / 1000).toFixed(1)}s` : "—"}</td>
                     <td style={{ padding: "12px 16px" }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: g.gate_result === "pass" ? "#34d399" : "#f87171", background: g.gate_result === "pass" ? "#0a2a1a" : "#2a0a0a", borderRadius: 6, padding: "3px 8px" }}>
@@ -265,6 +351,114 @@ export default function UserDetail() {
           )}
         </div>
       )}
+
+      {/* ── Tab 3: Hooks ─────────────────────────────────────────────────── */}
+      {tab === 3 && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "#555" }}>
+              Custom hooks for <span style={{ color: "#ccc", fontWeight: 600 }}>{u.name || "this user"}</span> — these are fed to the AI before generating content.
+            </div>
+            <button onClick={() => setShowAddHook(v => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", background: showAddHook ? "#2a2a2a" : "#5B5BD6", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+              <Plus size={13} /> {showAddHook ? "Cancel" : "Add Hook"}
+            </button>
+          </div>
+
+          {/* Add hook inline form */}
+          {showAddHook && (
+            <form onSubmit={addHook} style={{ background: "#161616", border: "1.5px solid #2a2a4a", borderRadius: 14, padding: 20, marginBottom: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={labelStyle}>Hook Text</label>
+                <textarea rows={3} value={hookForm.hook_text}
+                  onChange={e => setHookForm(f => ({ ...f, hook_text: e.target.value }))}
+                  placeholder="Write the hook text…"
+                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
+                  required />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Hook Type</label>
+                  <select value={hookForm.hook_type} onChange={e => setHookForm(f => ({ ...f, hook_type: e.target.value }))}
+                    style={{ ...inputStyle, width: "100%" }}>
+                    <option value="">Select type…</option>
+                    {HOOK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Niche</label>
+                  <select value={hookForm.niche} onChange={e => setHookForm(f => ({ ...f, niche: e.target.value }))}
+                    style={{ ...inputStyle, width: "100%" }}>
+                    <option value="">Select niche…</option>
+                    {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button type="button" onClick={() => setShowAddHook(false)}
+                  style={{ padding: "9px 18px", background: "none", border: "1px solid #2a2a2a", borderRadius: 10, color: "#555", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={addingHook}
+                  style={{ padding: "9px 20px", background: addingHook ? "#3a3a6a" : "#5B5BD6", border: "none", borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 13, cursor: addingHook ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                  {addingHook ? "Adding…" : "Add Hook"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {hooksLoading ? (
+            <div style={{ color: "#555", fontSize: 13, padding: 20 }}>Loading hooks…</div>
+          ) : !userHooks.length ? (
+            <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 14, padding: 40, textAlign: "center", color: "#444", fontSize: 13 }}>
+              No custom hooks for this user yet.<br />
+              <span style={{ color: "#555", fontSize: 12 }}>Add hooks to guide the AI for this specific creator.</span>
+            </div>
+          ) : (
+            <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #2a2a2a" }}>
+                    {["Hook Text", "Type", "Niche", "Usage", "Active", ""].map(h => (
+                      <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {userHooks.map(h => (
+                    <tr key={h.id} style={{ borderBottom: "1px solid #1e1e1e" }}>
+                      <td style={{ padding: "12px 14px", maxWidth: 380 }}>
+                        <div style={{ fontSize: 12, color: "#ccc", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                          {h.hook_text}
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        {h.hook_type ? <Tag>{h.hook_type}</Tag> : <span style={{ color: "#444", fontSize: 12 }}>—</span>}
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        {h.niche ? <Tag color="#34d399" bg="#0a2a1a">{h.niche}</Tag> : <span style={{ color: "#444", fontSize: 12 }}>—</span>}
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: "#888" }}>{h.usage_count || 0}</td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <button onClick={() => toggleHookActive(h)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                          {h.is_active !== false
+                            ? <ToggleRight size={20} style={{ color: "#34d399" }} />
+                            : <ToggleLeft size={20} style={{ color: "#444" }} />}
+                        </button>
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <button onClick={() => deleteHook(h.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+                          <Trash2 size={13} style={{ color: "#555" }} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -278,10 +472,13 @@ function Field({ label, children }) {
   );
 }
 
+function Tag({ children, color = "#a78bfa", bg = "#1e1e3a" }) {
+  return <span style={{ fontSize: 10, fontWeight: 700, color, background: bg, borderRadius: 6, padding: "3px 7px" }}>{children}</span>;
+}
+
+const labelStyle = { display: "block", fontSize: 10, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 };
 const inputStyle = {
   width: "100%", background: "#0d0d0d", border: "1.5px solid #2a2a2a", borderRadius: 10,
   padding: "10px 14px", color: "#fff", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
 };
-const textareaStyle = {
-  ...inputStyle, resize: "vertical", lineHeight: 1.5,
-};
+const textareaStyle = { ...inputStyle, resize: "vertical", lineHeight: 1.5 };

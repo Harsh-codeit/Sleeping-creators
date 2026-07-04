@@ -115,6 +115,7 @@ async def build_creator_context(state: ContentGenerationState, *, db, redis) -> 
         "content_pillars": [],
         "topic_excludes": [],
         "posting_frequency": 5,
+        "competitors": [],
     }
 
     # Load user from MongoDB
@@ -132,6 +133,8 @@ async def build_creator_context(state: ContentGenerationState, *, db, redis) -> 
             niches = user.get("interests", [])
             if niches:
                 base_context["content_pillars"] = niches
+            if user.get("competitors"):
+                base_context["competitors"] = user["competitors"]
     except Exception as exc:
         logger.warning("Creator context load failed for %s: %s — using defaults", creator_id, exc)
 
@@ -312,6 +315,14 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
             )
         )
 
+    competitor_block = ""
+    competitors = ctx.get("competitors", [])
+    if competitors:
+        competitor_block = (
+            "\n\nCOMPETITOR ACCOUNTS IN THIS NICHE (study the style and angles that work in this space — never copy, but draw inspiration from what resonates with this audience):\n"
+            + "\n".join(f"- @{c.lstrip('@')}" for c in competitors[:10])
+        )
+
     trend_block = ""
     if trending:
         trend_block = (
@@ -358,6 +369,7 @@ SLIDE FORMAT GUIDANCE:
 {exemplar_block}
 {history_block}
 {winning_block}
+{competitor_block}
 {trend_block}
 {cta_block}
 

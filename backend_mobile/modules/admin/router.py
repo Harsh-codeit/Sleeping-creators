@@ -150,21 +150,22 @@ async def list_users(
     _: None = Depends(_require_admin),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    raw = await db.users.find({}, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    raw = await db.users.find({}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     result = []
     for u in raw:
-        uid = u.get("id") or str(u.get("_id", ""))
+        uid = str(u["_id"])
         total_gens = await db.generation_log.count_documents({"creator_id": uid})
         wins       = await db.content_dna.count_documents({"creator_id": uid, "is_winner": True})
         published  = await db.content_dna.count_documents({"creator_id": uid, "published": True})
         total_dna  = await db.content_dna.count_documents({"creator_id": uid})
         last_gen   = await db.generation_log.find_one({"creator_id": uid}, sort=[("created_at", -1)])
         result.append({
-            "id":           uid,
+            "_id":          uid,
             "name":         u.get("name", ""),
             "email":        u.get("email", ""),
             "phone":        u.get("phone", ""),
             "niche":        u.get("niche", ""),
+            "avatar_url":   u.get("avatar_url", ""),
             "created_at":   u.get("created_at", ""),
             "total_gens":   total_gens,
             "wins":         wins,
@@ -172,7 +173,7 @@ async def list_users(
             "win_rate_pct": round((wins / total_dna * 100) if total_dna else 0, 1),
             "last_active":  last_gen["created_at"] if last_gen else None,
         })
-    return {"users": result, "total": len(result)}
+    return result
 
 
 @router.get("/users/{user_id}")
@@ -239,7 +240,7 @@ async def update_ai_settings(
     _: None = Depends(_require_admin),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    allowed = {"brand_voice", "target_audience", "spice_level", "niche", "interests", "bio"}
+    allowed = {"brand_voice", "target_audience", "spice_level", "niche", "interests", "bio", "competitors"}
     updates = {k: v for k, v in body.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
@@ -411,7 +412,7 @@ async def list_hooks(
         else:
             h["win_rate_pct"] = 0.0
 
-    return {"hooks": hooks, "total": len(hooks)}
+    return hooks
 
 
 @router.post("/hooks")

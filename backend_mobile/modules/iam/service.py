@@ -161,8 +161,13 @@ def _serialize_user(user: dict) -> dict:
         "phone": user.get("phone"),
         "niche": user.get("niche", ""),
         "interests": user.get("interests", []),
+        "competitors": user.get("competitors", []),
+        "brand_voice": user.get("brand_voice", ""),
+        "target_audience": user.get("target_audience", ""),
+        "spice_level": user.get("spice_level", 3),
         "onboarding_complete": user.get("onboarding_complete", False),
         "role": user.get("role", "user"),
+        "avatar_url": user.get("avatar_url", ""),
         "created_at": user.get("created_at"),
     }
 
