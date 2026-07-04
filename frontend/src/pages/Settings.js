@@ -127,6 +127,11 @@ function ProfileTab({ user, onLogout }) {
     setPhotoPreview(user?.avatar_url || null);
   };
 
+  const authHeaders = () => {
+    const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const save = async () => {
     if (!name.trim()) return toast.error("Name can't be empty");
     setSaving(true);
@@ -134,9 +139,11 @@ function ProfileTab({ user, onLogout }) {
       if (photoFile) {
         const fd = new FormData();
         fd.append("photo", photoFile);
-        try { await axios.post(`${API}/auth/profile/photo`, fd); } catch {}
+        try {
+          await axios.post(`${API}/auth/profile/photo`, fd, { headers: authHeaders() });
+        } catch {}
       }
-      await axios.put(`${API}/auth/profile`, { name: name.trim(), bio: bio.trim(), interests });
+      await axios.put(`${API}/auth/profile`, { name: name.trim(), bio: bio.trim(), interests }, { headers: authHeaders() });
       if (refreshUser) await refreshUser();
       toast.success("Profile updated");
       setEditMode(false);

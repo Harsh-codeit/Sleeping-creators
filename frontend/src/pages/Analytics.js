@@ -57,15 +57,21 @@ export default function Analytics() {
             <p className="text-xs text-zinc-500 font-mono mt-0.5">Your social account metrics</p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              data-testid="analytics-refresh-btn"
-              onClick={onRefresh}
-              disabled={refreshing || !clientId || !data?.bundle_connected}
-              className="flex items-center gap-2 bg-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-violet-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
-              {refreshing ? "Refreshing…" : "Refresh now"}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                data-testid="analytics-refresh-btn"
+                onClick={onRefresh}
+                disabled={refreshing || !clientId || !data?.bundle_connected}
+                title={!data?.bundle_connected ? "Connect Instagram in Settings → Connections to enable refresh" : "Refresh analytics"}
+                className="flex items-center gap-2 bg-violet-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-violet-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing…" : "Refresh now"}
+              </button>
+              {!data?.bundle_connected && (
+                <span className="text-[10px]" style={{ color: "#666" }}>Connect Instagram to enable</span>
+              )}
+            </div>
             <div className="text-[10px] font-mono text-zinc-500" data-testid="analytics-last-refreshed">
               {lastRefreshedLabel}
             </div>

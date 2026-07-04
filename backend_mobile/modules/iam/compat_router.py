@@ -1,7 +1,7 @@
 """Compat shim — old API paths the existing React frontend calls."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from backend_mobile.database import get_db
@@ -91,6 +91,20 @@ async def compat_update_profile(
     if "spice_level" in body:
         updates["spice_level"] = int(body["spice_level"])
     return await iam_service.update_user(db, user_id, updates)
+
+
+@router.post("/auth/profile/photo")
+async def compat_upload_profile_photo(
+    photo: UploadFile = File(...),
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    from backend_mobile.modules.posts.r2_client import upload_bytes
+    content = await photo.read()
+    ext = (photo.filename or "avatar.jpg").rsplit(".", 1)[-1].lower()
+    url = await upload_bytes(content, f"avatar.{ext}", content_type=photo.content_type or "image/jpeg", folder="avatars")
+    await iam_service.update_user(db, user_id, {"avatar_url": url})
+    return {"avatar_url": url}
 
 
 @router.post("/auth/onboarding-complete")
