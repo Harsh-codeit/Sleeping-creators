@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     default_generation_model: str = "claude-sonnet-4-6"
     default_strategy_model: str = "claude-sonnet-4-6"
 
+    # Admin dashboard
+    admin_secret: str = "change-me-admin"
+
     # Anti-repetition
     hook_cosine_max: float = 0.85
     jaccard_fallback_max: float = 0.5

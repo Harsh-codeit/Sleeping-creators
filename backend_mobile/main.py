@@ -103,6 +103,7 @@ def create_app() -> FastAPI:
     from backend_mobile.modules.posts.video_router import router as video_router
     from backend_mobile.modules.publishing.router import router as publishing_router
     from backend_mobile.modules.analytics.router import router as analytics_router
+    from backend_mobile.modules.admin.router import router as admin_router
 
     # ── Register routers ────────────────────────────────────────────────────────
     app.include_router(compat_router)         # /api/auth/* /api/me
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(video_router)          # /api/videos/* /api/shotstack-templates
     app.include_router(publishing_router)     # /api/bundle/*
     app.include_router(analytics_router)     # /api/analytics/clients/*
+    app.include_router(admin_router)         # /api/admin/*
 
     # ── Health ──────────────────────────────────────────────────────────────────
     @app.get("/health", tags=["ops"])
