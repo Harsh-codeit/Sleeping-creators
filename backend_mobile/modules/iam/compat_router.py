@@ -102,7 +102,8 @@ async def compat_upload_profile_photo(
     from backend_mobile.modules.posts.r2_client import upload_bytes
     content = await photo.read()
     ext = (photo.filename or "avatar.jpg").rsplit(".", 1)[-1].lower()
-    url = await upload_bytes(content, f"avatar.{ext}", content_type=photo.content_type or "image/jpeg", folder="avatars")
+    fixed_key = f"avatars/{user_id}.{ext}"
+    url = await upload_bytes(content, f"avatar.{ext}", content_type=photo.content_type or "image/jpeg", key=fixed_key)
     await iam_service.update_user(db, user_id, {"avatar_url": url})
     return {"avatar_url": url}
 

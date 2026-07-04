@@ -26,16 +26,22 @@ async def upload_bytes(
     filename: str,
     content_type: Optional[str] = None,
     folder: str = "slides",
+    key: Optional[str] = None,
 ) -> str:
-    """Upload bytes to R2, return public URL."""
+    """Upload bytes to R2, return public URL.
+
+    Pass `key` to use a fixed path (e.g. avatars) so re-uploads overwrite
+    the same object instead of accumulating orphaned files.
+    """
     import asyncio
 
     if not content_type:
         content_type, _ = mimetypes.guess_type(filename)
         content_type = content_type or "application/octet-stream"
 
-    ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
-    key = f"{folder}/{uuid.uuid4().hex}.{ext}"
+    if key is None:
+        ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
+        key = f"{folder}/{uuid.uuid4().hex}.{ext}"
 
     def _do_upload():
         client = _get_client()
