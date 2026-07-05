@@ -554,7 +554,7 @@ function PostPanel({ post, onClose, onUpdate }) {
     : (permissions?.calendar ?? { view: true, create: true, edit: true, delete: true });
 
   const cfg = statusCfg(post.status);
-  const isVideo    = post.kind === "video";
+  const isVideo    = post.kind === "video" || post.content_type === "video";
   const isViewOnly = post.status === "published";
 
   const [form, setForm]         = useState({
@@ -581,7 +581,7 @@ function PostPanel({ post, onClose, onUpdate }) {
     setSaving(true);
     try {
       const update = {
-        ...(isVideo ? { caption: form.text } : { text: form.text }),
+        caption: form.text,
         ...(form.scheduled_at ? { scheduled_at: new Date(form.scheduled_at).toISOString() } : {}),
       };
       await axios.put(`${API}/posts/${post.id}`, update, { headers: authHeaders() });

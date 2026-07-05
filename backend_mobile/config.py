@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     app_name: str = "Sleeping Creators Mobile API"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
+    app_base_url: str = "http://localhost:3000"  # Frontend base URL for OAuth callbacks
 
     # MongoDB (primary database)
     mongo_url: str = "mongodb://localhost:27017"
@@ -46,10 +47,15 @@ class Settings(BaseSettings):
 
     # Notifications
     resend_api_key: str = ""
+    resend_from_email: str = "Sleeping Creators <team@sleepingcreators.com>"
     fcm_server_key: str = ""
 
     # Scraping
     apify_api_key: str = ""
+    rapidapi_instagram_key: str = ""
+
+    # Fast inference
+    groq_api_key: str = ""
 
     # Video
     shotstack_key: str = ""

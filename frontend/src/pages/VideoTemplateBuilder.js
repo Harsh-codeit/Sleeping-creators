@@ -112,10 +112,10 @@ export default function VideoTemplateBuilder() {
   const toggleConfig = key => setContentConfig(p => ({ ...p, [key]: !p[key] }));
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#f5f4fb", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100dvh", background: "#0d0d0d", display: "flex", flexDirection: "column" }}>
 
       {/* Header */}
-      <header style={{ background: "#fff", borderBottom: "1px solid #ebe9f6", padding: "0 16px", height: 56, display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 10, flexShrink: 0 }}>
+      <header style={{ background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "0 16px", height: 56, display: "flex", alignItems: "center", gap: 10, position: "sticky", top: 0, zIndex: 10, flexShrink: 0 }}>
         <button onClick={() => navigate("/templates?tab=video")} style={hdrBtn}>
           <ArrowLeft size={16} />
         </button>
@@ -123,7 +123,7 @@ export default function VideoTemplateBuilder() {
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="Template name (required)"
-          style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#111827", background: "transparent", border: "none", outline: "none", minWidth: 0 }}
+          style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#ffffff", background: "transparent", border: "none", outline: "none", minWidth: 0 }}
         />
         <button onClick={handleSave} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 5, padding: "8px 16px", fontSize: 12, fontWeight: 700, borderRadius: 10, border: "none", background: "#5B5BD6", color: "#fff", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, boxShadow: "0 2px 8px rgba(91,91,214,0.25)", flexShrink: 0 }}>
           <Save size={13} /> {saving ? "Saving…" : "Save"}
@@ -154,9 +154,9 @@ export default function VideoTemplateBuilder() {
                 {SCENE_COUNTS.map(n => (
                   <button key={n} onClick={() => setScenes(n)} style={{
                     width: 52, height: 40, borderRadius: 10, fontSize: 14, fontWeight: 600,
-                    border: `1.5px solid ${scenes === n ? "#5B5BD6" : "#ebe9f6"}`,
-                    background: scenes === n ? "#5B5BD6" : "#fff",
-                    color: scenes === n ? "#fff" : "#374151",
+                    border: `1.5px solid ${scenes === n ? "#5B5BD6" : "#2a2a2a"}`,
+                    background: scenes === n ? "#5B5BD6" : "#161616",
+                    color: scenes === n ? "#fff" : "#cccccc",
                     cursor: "pointer", transition: "all 0.15s",
                   }}>{n}</button>
                 ))}
@@ -167,10 +167,10 @@ export default function VideoTemplateBuilder() {
                 {VIDEO_FLOWS.map((f, i) => (
                   <button key={f} onClick={() => setVideoFlow(f)} style={{
                     padding: "11px 14px", textAlign: "left", fontSize: 13,
-                    background: videoFlow === f ? "#EEF0FF" : "#fff",
-                    color: videoFlow === f ? "#5B5BD6" : "#374151",
+                    background: videoFlow === f ? "#1e1e3a" : "#161616",
+                    color: videoFlow === f ? "#8080ff" : "#cccccc",
                     fontWeight: videoFlow === f ? 600 : 400,
-                    border: "none", borderBottom: i < VIDEO_FLOWS.length - 1 ? "1px solid #f3f4f6" : "none",
+                    border: "none", borderBottom: i < VIDEO_FLOWS.length - 1 ? "1px solid #1e1e1e" : "none",
                     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
                   }}>
                     {f}
@@ -196,13 +196,13 @@ export default function VideoTemplateBuilder() {
                 return (
                   <button key={key} onClick={() => toggleConfig(key)} style={{
                     display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10,
-                    border: `1.5px solid ${on ? "#5B5BD6" : "#ebe9f6"}`,
-                    background: on ? "#EEF0FF" : "#fff", cursor: "pointer", transition: "all 0.15s",
+                    border: `1.5px solid ${on ? "#5B5BD6" : "#2a2a2a"}`,
+                    background: on ? "#1e1e3a" : "#161616", cursor: "pointer", transition: "all 0.15s",
                   }}>
-                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${on ? "#5B5BD6" : "#d1d5db"}`, background: on ? "#5B5BD6" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${on ? "#5B5BD6" : "#444444"}`, background: on ? "#5B5BD6" : "#161616", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {on && <Check size={10} style={{ color: "#fff" }} />}
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: on ? "#5B5BD6" : "#374151", textAlign: "left" }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: on ? "#8080ff" : "#cccccc", textAlign: "left" }}>{label}</span>
                   </button>
                 );
               })}
@@ -216,9 +216,9 @@ export default function VideoTemplateBuilder() {
                 {VISUAL_STYLES.map(s => (
                   <button key={s} onClick={() => setVisualStyle(s)} style={{
                     padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                    border: `1.5px solid ${visualStyle === s ? "#5B5BD6" : "#ebe9f6"}`,
-                    background: visualStyle === s ? "#5B5BD6" : "#fff",
-                    color: visualStyle === s ? "#fff" : "#374151",
+                    border: `1.5px solid ${visualStyle === s ? "#5B5BD6" : "#2a2a2a"}`,
+                    background: visualStyle === s ? "#5B5BD6" : "#161616",
+                    color: visualStyle === s ? "#fff" : "#cccccc",
                     cursor: "pointer", transition: "all 0.15s",
                   }}>{s}</button>
                 ))}
@@ -229,9 +229,9 @@ export default function VideoTemplateBuilder() {
                 {THEMES.map(t => (
                   <button key={t} onClick={() => setTheme(t)} style={{
                     padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                    border: `1.5px solid ${theme === t ? "#5B5BD6" : "#ebe9f6"}`,
-                    background: theme === t ? "#5B5BD6" : "#fff",
-                    color: theme === t ? "#fff" : "#374151",
+                    border: `1.5px solid ${theme === t ? "#5B5BD6" : "#2a2a2a"}`,
+                    background: theme === t ? "#5B5BD6" : "#161616",
+                    color: theme === t ? "#fff" : "#cccccc",
                     cursor: "pointer", transition: "all 0.15s",
                   }}>{t}</button>
                 ))}
@@ -243,14 +243,14 @@ export default function VideoTemplateBuilder() {
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px" }}>
                     <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)}
                       style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", padding: 2, background: "transparent" }} />
-                    <span style={{ fontSize: 12, color: "#374151", fontFamily: "monospace" }}>{primaryColor}</span>
+                    <span style={{ fontSize: 12, color: "#cccccc", fontFamily: "monospace" }}>{primaryColor}</span>
                   </div>
                 </VField>
                 <VField label="Secondary Color">
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px" }}>
                     <input type="color" value={secondaryColor} onChange={e => setSecondaryColor(e.target.value)}
                       style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", padding: 2, background: "transparent" }} />
-                    <span style={{ fontSize: 12, color: "#374151", fontFamily: "monospace" }}>{secondaryColor}</span>
+                    <span style={{ fontSize: 12, color: "#cccccc", fontFamily: "monospace" }}>{secondaryColor}</span>
                   </div>
                 </VField>
               </div>
@@ -277,8 +277,8 @@ export default function VideoTemplateBuilder() {
           <VCard title="CTA Settings">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Show CTA Scene</div>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Add a call-to-action slide at the end</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Show CTA Scene</div>
+                <div style={{ fontSize: 11, color: "#666666", marginTop: 2 }}>Add a call-to-action slide at the end</div>
               </div>
               <VToggle checked={showCTA} onChange={setShowCTA} />
             </div>
@@ -297,8 +297,8 @@ export default function VideoTemplateBuilder() {
           <VCard title="Cover Settings">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Generate Cover Scene</div>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Create an intro/cover slide for the video</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#ffffff" }}>Generate Cover Scene</div>
+                <div style={{ fontSize: 11, color: "#666666", marginTop: 2 }}>Create an intro/cover slide for the video</div>
               </div>
               <VToggle checked={generateCover} onChange={setGenerateCover} />
             </div>
@@ -323,19 +323,19 @@ export default function VideoTemplateBuilder() {
 
 const vinput = {
   width: "100%", boxSizing: "border-box", padding: "11px 14px", fontSize: 13,
-  color: "#111827", background: "transparent", border: "none", outline: "none", fontFamily: "inherit",
+  color: "#ffffff", background: "transparent", border: "none", outline: "none", fontFamily: "inherit",
 };
 
 const hdrBtn = {
-  width: 36, height: 36, borderRadius: 10, border: "1.5px solid #ebe9f6",
-  background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-  cursor: "pointer", color: "#6b7280", flexShrink: 0,
+  width: 36, height: 36, borderRadius: 10, border: "1.5px solid #2a2a2a",
+  background: "#161616", display: "flex", alignItems: "center", justifyContent: "center",
+  cursor: "pointer", color: "#888888", flexShrink: 0,
 };
 
 function VCard({ title, children }) {
   return (
-    <div style={{ background: "#fff", borderRadius: 16, border: "1.5px solid #ebe9f6", padding: "16px", display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.5px" }}>{title}</div>
+    <div style={{ background: "#161616", borderRadius: 16, border: "1.5px solid #2a2a2a", padding: "16px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#cccccc", textTransform: "uppercase", letterSpacing: "0.5px" }}>{title}</div>
       {children}
     </div>
   );
@@ -344,10 +344,10 @@ function VCard({ title, children }) {
 function VField({ label, children }) {
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>{label}</div>
-      <div style={{ background: "#f9f8fe", border: "1.5px solid #ebe9f6", borderRadius: 10, overflow: "hidden" }}
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#888888", marginBottom: 6 }}>{label}</div>
+      <div style={{ background: "#1a1a1a", border: "1.5px solid #2a2a2a", borderRadius: 10, overflow: "hidden" }}
         onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
-        onBlurCapture={e => e.currentTarget.style.borderColor = "#ebe9f6"}>
+        onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}>
         {children}
       </div>
     </div>
@@ -358,7 +358,7 @@ function VToggle({ checked, onChange }) {
   return (
     <button type="button" onClick={() => onChange(!checked)} style={{
       width: 44, height: 24, borderRadius: 12, border: "none", cursor: "pointer", flexShrink: 0,
-      background: checked ? "#5B5BD6" : "#e5e7eb", position: "relative", transition: "background 0.2s",
+      background: checked ? "#5B5BD6" : "#2a2a2a", position: "relative", transition: "background 0.2s",
     }}>
       <div style={{
         position: "absolute", top: 3, left: checked ? 23 : 3, width: 18, height: 18,

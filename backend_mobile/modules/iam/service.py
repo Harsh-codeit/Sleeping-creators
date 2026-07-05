@@ -7,6 +7,7 @@ import string
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from bson import ObjectId
 from jose import jwt
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -17,6 +18,30 @@ from backend_mobile.shared.exceptions import NotFoundError, UnauthorizedError
 logger = logging.getLogger(__name__)
 
 _OTP_TTL_SECONDS = 600  # 10 minutes
+
+
+async def _send_email_otp(to: str, otp: str) -> None:
+    """Send OTP via Resend. Raises on delivery failure."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {settings.resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": settings.resend_from_email,
+                "to": [to],
+                "subject": f"Your Sleeping Creators code: {otp}",
+                "html": (
+                    f"<p>Hi there,</p>"
+                    f"<p>Your one-time login code is: <strong style='font-size:24px;letter-spacing:4px'>{otp}</strong></p>"
+                    f"<p>It expires in 10 minutes. Do not share this code.</p>"
+                    f"<p>— Sleeping Creators</p>"
+                ),
+            },
+        )
+        resp.raise_for_status()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -82,15 +107,23 @@ async def send_otp(db: AsyncIOMotorDatabase, identifier: str, purpose: str) -> d
         "otp": code,
         "purpose": purpose,
         "expires_at": expires_at,
-        "debug": True,
     })
 
-    logger.info("OTP [%s] for %s (purpose=%s)", code, identifier[:4] + "***", purpose)
-    return {
-        "message": "OTP sent",
-        "debug_otp": code,
-        "expires_in_seconds": _OTP_TTL_SECONDS,
-    }
+    # Send email via Resend when an API key is configured
+    if is_email and settings.resend_api_key:
+        try:
+            await _send_email_otp(identifier, code)
+            logger.info("OTP email sent to %s (purpose=%s)", identifier[:4] + "***", purpose)
+        except Exception as exc:
+            logger.error("Resend delivery failed for %s: %s", identifier[:4] + "***", exc)
+            raise RuntimeError("Could not send OTP email. Please try again.") from exc
+    else:
+        logger.info("OTP [%s] for %s (purpose=%s) — no email provider configured", code, identifier[:4] + "***", purpose)
+
+    response: dict = {"message": "OTP sent", "expires_in_seconds": _OTP_TTL_SECONDS}
+    if settings.debug:
+        response["debug_otp"] = code
+    return response
 
 
 async def verify_otp(

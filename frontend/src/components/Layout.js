@@ -2,7 +2,7 @@ import { Outlet, NavLink, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import {
   LayoutDashboard, LayoutTemplate, CalendarRange, BarChart3,
-  Settings, Layers, LogOut, Sparkles, User, ChevronDown, FileStack,
+  Settings, Layers, LogOut, User, ChevronDown, FileStack,
 } from "lucide-react";
 import { useState } from "react";
 import { useUser } from "../context/UserContext";
@@ -22,7 +22,6 @@ const SIDEBAR_NAV = [
   { path: "/templates",    label: "Templates",   icon: LayoutTemplate },
   { path: "/calendar",     label: "Calendar",    icon: CalendarRange },
   { path: "/analytics",    label: "Analytics",   icon: BarChart3 },
-  { path: "/hook-library", label: "Inspiration", icon: Sparkles },
   { path: "/settings",     label: "Settings",    icon: Settings },
 ];
 

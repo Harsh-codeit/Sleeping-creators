@@ -1,7 +1,9 @@
 """Compat shim — old API paths the existing React frontend calls."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from backend_mobile.database import get_db
@@ -81,7 +83,7 @@ async def compat_update_profile(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     updates = {}
-    for field in ("name", "bio", "brand_voice", "target_audience"):
+    for field in ("name", "bio", "brand_voice", "target_audience", "fcm_token"):
         if field in body:
             updates[field] = body[field]
     if "interests" in body:
@@ -136,7 +138,21 @@ async def compat_me(
         raise HTTPException(status_code=404, detail=exc.detail) from exc
 
 
-# ── Instagram status (Bundle.social proxy) ────────────────────────────────────
+# ── Instagram connect / disconnect ────────────────────────────────────────────
+
+@router.delete("/instagram/disconnect/{creator_id}")
+async def compat_instagram_disconnect(
+    creator_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Disconnect Instagram by clearing the Bundle.social team association."""
+    from bson import ObjectId
+    try:
+        await db.users.update_one({"_id": ObjectId(creator_id)}, {"$unset": {"bundle_team_id": ""}})
+    except Exception:
+        pass
+    return {"ok": True, "disconnected": True}
+
 
 @router.get("/instagram/status/{client_id}")
 async def compat_instagram_status(
@@ -163,3 +179,28 @@ async def compat_instagram_status(
         }
     except Exception:
         return {"connected": False, "status": "not_connected", "username": None}
+
+
+# ── Hook inspiration library (mobile browse) ──────────────────────────────────
+
+@router.get("/hooks")
+async def list_inspiration_hooks(
+    niche: Optional[str] = Query(None),
+    hook_type: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Return hooks from the hook_library for the Inspiration tab."""
+    query: dict = {"is_active": True}
+    if niche:
+        query["niche"] = niche
+    if hook_type:
+        query["hook_type"] = hook_type
+    hooks = (
+        await db.hook_library
+        .find(query, {"_id": 0})
+        .sort("avg_engagement", -1)
+        .limit(limit)
+        .to_list(limit)
+    )
+    return hooks

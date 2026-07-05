@@ -3,7 +3,8 @@
 Cache layers (fastest to slowest):
   1. Redis hot cache (6-hour TTL)
   2. MongoDB trends_cache collection (24-hour stale threshold)
-  3. pytrends live fetch (network call — may fail)
+  3. RapidAPI Instagram hashtag search (Instagram-native trending tags)
+  4. pytrends live fetch (Google Trends fallback — may fail)
 
 Never raises — returns [] on total failure.
 """
@@ -12,6 +13,8 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +57,53 @@ async def get_trending_topics(
     except Exception as exc:
         logger.warning("MongoDB trend lookup failed: %s", exc)
 
-    # 3. Live pytrends fetch
-    topics = await _fetch_from_pytrends(niche, limit)
+    # 3. RapidAPI Instagram hashtag search (Instagram-native trending tags)
+    topics = await _fetch_from_rapidapi(niche, limit)
+
+    # 4. pytrends fallback if RapidAPI returns nothing
+    if not topics:
+        topics = await _fetch_from_pytrends(niche, limit)
 
     if topics:
         await _persist(niche, topics, db, redis, redis_key)
 
     return topics
+
+
+async def _fetch_from_rapidapi(niche: str, limit: int) -> list[str]:
+    """Fetch Instagram-native trending hashtags via RapidAPI."""
+    from backend_mobile.config import settings
+    if not settings.rapidapi_instagram_key:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://instagram-data1.p.rapidapi.com/hashtag/feed",
+                headers={
+                    "X-RapidAPI-Key": settings.rapidapi_instagram_key,
+                    "X-RapidAPI-Host": "instagram-data1.p.rapidapi.com",
+                },
+                params={"hashtag": niche.lower().replace(" ", ""), "batch_size": "12"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        # Extract hashtag names from the response items
+        tags: list[str] = []
+        for item in (data.get("collector") or data.get("data") or [])[:limit]:
+            caption = item.get("description") or item.get("caption") or ""
+            # Pull hashtags from the caption text
+            import re
+            found = re.findall(r"#(\w+)", caption)
+            tags.extend(found[:3])
+            if len(tags) >= limit:
+                break
+        topics = list(dict.fromkeys(tags))[:limit]  # dedupe preserving order
+        if topics:
+            logger.info("RapidAPI trending for niche=%s: %d topics", niche, len(topics))
+        return topics
+    except Exception as exc:
+        logger.warning("RapidAPI Instagram fetch failed niche=%s: %s", niche, exc)
+        return []
 
 
 async def _fetch_from_pytrends(niche: str, limit: int) -> list[str]:

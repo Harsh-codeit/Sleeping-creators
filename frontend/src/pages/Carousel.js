@@ -510,7 +510,10 @@ export default function Carousel() {
   }, []);
 
   const loadSavedCarousels = async () => {
-    try { setSavedCarousels((await axios.get(`${API}/carousels`)).data); } catch {}
+    try {
+      const { data } = await axios.get(`${API}/carousels`);
+      setSavedCarousels(data?.carousels || (Array.isArray(data) ? data : []));
+    } catch {}
   };
 
   const generateAI = async (topicOverride) => {

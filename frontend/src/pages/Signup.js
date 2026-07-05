@@ -31,8 +31,6 @@ export default function Signup({ onLogin }) {
   const [step, setStep]       = useState(1);
   const [name, setName]       = useState("");
   const [identifier, setId]   = useState("");
-  const [devMode, setDevMode] = useState(false);
-  const [devOtp, setDevOtp]   = useState("");
 
   // Wake up Render on mount so it's warm when the user hits Continue
   useEffect(() => { axios.get(`${API.replace("/api", "")}/health`).catch(() => {}); }, []);
@@ -102,14 +100,12 @@ export default function Signup({ onLogin }) {
             <StepInfo
               name={name} setName={setName}
               identifier={identifier} setId={setId}
-              onNext={(otp) => { setDevMode(!!otp); setDevOtp(otp || ""); setStep(2); }}
+              onNext={() => setStep(2)}
             />
           )}
           {step === 2 && (
             <StepOTP
               identifier={identifier}
-              devMode={devMode}
-              devOtp={devOtp}
               onBack={() => setStep(1)}
               onVerified={() => setStep(3)}
             />
@@ -137,9 +133,9 @@ function StepInfo({ name, setName, identifier, setId, onNext }) {
     if (!val || val.length < 5) return toast.error("Enter your phone number or email");
     setLoading(true);
     try {
-      const resp = await axios.post(`${API}/auth/otp/send`, { identifier: val, purpose: "register" });
-      toast.success("OTP sent!");
-      onNext(resp.data.debug_otp || "");
+      await axios.post(`${API}/auth/otp/send`, { identifier: val, purpose: "register" });
+      toast.success("OTP sent! Check your inbox.");
+      onNext();
     } catch (err) {
       const msg = err.response?.data?.detail || "Could not send OTP";
       if (msg.toLowerCase().includes("already exists")) toast.error("Account already exists — sign in instead");
@@ -173,7 +169,7 @@ function StepInfo({ name, setName, identifier, setId, onNext }) {
   );
 }
 
-function StepOTP({ identifier, devMode, devOtp, onBack, onVerified }) {
+function StepOTP({ identifier, onBack, onVerified }) {
   const [otp, setOtp]         = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCd]    = useState(30);
@@ -186,22 +182,18 @@ function StepOTP({ identifier, devMode, devOtp, onBack, onVerified }) {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  // Auto-submit when devOtp is available
-  useEffect(() => {
-    if (devMode && devOtp) verify(devOtp);
-  }, [devMode, devOtp]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleChange = (e) => {
     const val = e.target.value.replace(/\D/g, "").slice(0, 6);
     setOtp(val);
   };
 
-  const verify = async (code) => {
-    const finalCode = code || otp;
+  const verify = async () => {
+    const finalCode = otp;
     if (finalCode.length < 6) return toast.error("Enter all 6 digits");
     setLoading(true);
     try {
       await axios.post(`${API}/auth/otp/verify`, { identifier: identifier.trim(), otp: finalCode, purpose: "register" });
+
       onVerified();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Incorrect OTP");
@@ -231,12 +223,6 @@ function StepOTP({ identifier, devMode, devOtp, onBack, onVerified }) {
         </p>
       </div>
 
-      {devMode && (
-        <div style={{ background: "#1a1400", border: "1px solid #3a2e00", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#d97706", textAlign: "center" }}>
-          Dev mode — tap Verify to continue (any input works)
-        </div>
-      )}
-
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div>
           <label style={{ display: "block", fontSize: 11, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>6-digit code</label>
@@ -261,7 +247,7 @@ function StepOTP({ identifier, devMode, devOtp, onBack, onVerified }) {
             }}
           />
         </div>
-        <Btn loading={loading} onClick={verify}>
+        <Btn loading={loading} onClick={() => verify()}>
           {loading ? <><Loader2 size={15} className="animate-spin" /> Verifying…</> : "Verify OTP"}
         </Btn>
         <p className="text-center" style={{ fontSize: 13, color: "#555" }}>

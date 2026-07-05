@@ -72,7 +72,7 @@ async def connect_instagram(
             api_key=settings.bundle_api_key,
             team_id=team_id,
             platforms=["instagram"],
-            redirect_url="http://192.168.1.2:3000/settings",
+            redirect_url=f"{settings.app_base_url}/settings",
         )
     except Exception as exc:
         raise HTTPException(502, f"Portal link failed: {exc}")

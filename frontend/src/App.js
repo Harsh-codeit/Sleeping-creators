@@ -20,7 +20,6 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
-import HookLibrary from "./pages/HookLibrary";
 import CreatePost from "./pages/CreatePost";
 import DraftsPage from "./pages/DraftsPage";
 import { UserProvider, useUser } from "./context/UserContext";
@@ -72,7 +71,6 @@ function AppRoutes({ token, onLogin, onLogout }) {
                 <Route path="calendar"   element={<CalendarPage />} />
                 <Route path="analytics"  element={<Analytics />} />
                 <Route path="settings"   element={<Settings onLogout={onLogout} />} />
-                <Route path="hook-library" element={<HookLibrary />} />
                 <Route path="drafts"     element={<DraftsPage />} />
                 <Route path="onboarding" element={<Navigate to="/" replace />} />
               </Route>

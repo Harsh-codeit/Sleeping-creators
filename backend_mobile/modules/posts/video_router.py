@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from anthropic import AsyncAnthropic
 from fastapi import APIRouter, Depends, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -25,6 +26,46 @@ def _clean(doc: dict) -> dict:
     if doc:
         doc.pop("_id", None)
     return doc
+
+
+async def _generate_script_text(prompt: str) -> str:
+    """Generate script text using Groq (fast) with Claude Haiku as fallback."""
+    # Try Groq first — faster and cheaper for structured JSON generation
+    if settings.groq_api_key:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {settings.groq_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "llama-3.1-8b-instant",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 2048,
+                        "temperature": 0.7,
+                    },
+                )
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"].strip()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Groq video script failed, falling back to Claude: %s", exc)
+
+    # Fallback: Claude Haiku
+    try:
+        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Claude Haiku video script also failed: %s", exc)
+        return ""
 
 
 async def _ai_fill_merge_fields(
@@ -224,3 +265,114 @@ async def poll_video_job(
         )
 
     return {"render_id": render_id, "status": status, "video_url": video_url}
+
+
+# ── AI Script Generation (no Shotstack required) ──────────────────────────────
+
+@router.post("/videos/script")
+async def generate_video_script(
+    body: dict,
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """
+    Generate a full video script using Claude AI.
+    Body: {topic, hook_style, duration, tone, cta, audience, notes, template_id?, platform?, scheduled_at?}
+    Returns: {post_id, script: {headline, hook, scenes, hashtags, cta, description}}
+    """
+    topic = body.get("topic", "").strip()
+    if not topic:
+        raise HTTPException(400, "topic is required")
+
+    hook_style = body.get("hook_style", "Question")
+    duration = body.get("duration", "30 seconds")
+    tone = body.get("tone", "Educational")
+    cta_text = body.get("cta", "Follow for more")
+    audience = body.get("audience", "")
+    notes = body.get("notes", "")
+    platform = body.get("platform", "instagram")
+    scheduled_at = body.get("scheduled_at")
+
+    # Load preferences from MongoDB video template if provided
+    num_scenes = 5
+    video_flow = "Hook → Content → CTA"
+    template_id = body.get("template_id")
+    if template_id:
+        tpl = await db.templates.find_one({"id": template_id, "kind": "video"}, {"_id": 0})
+        if tpl:
+            num_scenes = tpl.get("number_of_scenes", num_scenes)
+            video_flow = tpl.get("video_flow", video_flow)
+
+    prompt = f"""You are a professional Instagram Reels scriptwriter.
+
+Create a complete video script for a {duration} Instagram Reel.
+
+TOPIC: {topic}
+TONE: {tone}
+HOOK STYLE: {hook_style}
+CALL TO ACTION: {cta_text}
+TARGET AUDIENCE: {audience or "Creators and entrepreneurs"}
+CONTENT FLOW: {video_flow}
+NUMBER OF SCENES: {num_scenes}
+{f"EXTRA NOTES: {notes}" if notes else ""}
+
+Return ONLY valid JSON with no markdown or explanation:
+{{
+  "headline": "Punchy video title (max 60 chars)",
+  "hook": "Opening line that stops the scroll (1-2 sentences)",
+  "scenes": [
+    {{
+      "number": 1,
+      "title": "Scene name",
+      "caption": "Text shown on screen (max 70 chars, punchy)",
+      "voiceover": "What the creator says in this scene (2-3 sentences)"
+    }}
+  ],
+  "hashtags": ["hashtag1", "hashtag2", "hashtag3"],
+  "cta": "{cta_text}",
+  "description": "Full Instagram caption (2-3 sentences then hashtags)"
+}}
+
+Generate exactly {num_scenes} scenes following the {video_flow} structure.
+Make content specific and actionable — no generic filler."""
+
+    raw = await _generate_script_text(prompt)
+    if not raw:
+        raise HTTPException(502, "AI generation failed — please try again")
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        script = json.loads(raw)
+    except Exception:
+        raise HTTPException(500, "AI returned invalid format, please try again")
+
+    # Save as draft post in MongoDB
+    post_id = str(uuid.uuid4())
+    now = _now_iso()
+    doc = {
+        "id": post_id,
+        "creator_id": user_id,
+        "platform": platform,
+        "content_type": "video",
+        "topic": topic,
+        "caption": script.get("description", f"{script.get('headline', topic)}\n\n{cta_text}"),
+        "hashtags": script.get("hashtags", []),
+        "slides": [],
+        "slide_image_urls": [],
+        "video_url": None,
+        "video_script": script,
+        "status": "draft",
+        "scheduled_at": scheduled_at,
+        "published_at": None,
+        "bundle_post_id": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.posts.insert_one(doc)
+    _clean(doc)
+
+    return {"post_id": post_id, "script": script}

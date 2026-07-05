@@ -12,8 +12,6 @@ export default function Login({ onLogin }) {
   const [identifier, setId]     = useState("");
   const [notFound, setNotFound] = useState(false);
   const [sending, setSending]   = useState(false);
-  const [devMode, setDevMode]   = useState(false);
-  const [devOtp, setDevOtp]     = useState("");
 
   // Wake up Render on mount so it's warm when the user hits Continue
   useEffect(() => { axios.get(`${API.replace("/api", "")}/health`).catch(() => {}); }, []);
@@ -24,8 +22,7 @@ export default function Login({ onLogin }) {
     setNotFound(false);
     setSending(true);
     try {
-      const resp = await axios.post(`${API}/auth/otp/send`, { identifier: val, purpose: "login" });
-      if (resp.data.debug_otp) { setDevMode(true); setDevOtp(resp.data.debug_otp); }
+      await axios.post(`${API}/auth/otp/send`, { identifier: val, purpose: "login" });
       setStep(2);
     } catch (err) {
       if (err.response?.status === 404) setNotFound(true);
@@ -67,9 +64,7 @@ export default function Login({ onLogin }) {
           {step === 2 && (
             <Step2
               identifier={identifier}
-              devMode={devMode}
-              devOtp={devOtp}
-              onBack={() => { setStep(1); setNotFound(false); setDevMode(false); }}
+              onBack={() => { setStep(1); setNotFound(false); }}
               onLogin={onLogin}
             />
           )}
@@ -119,7 +114,7 @@ function Step1({ identifier, setId, notFound, sending, onSend }) {
   );
 }
 
-function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
+function Step2({ identifier, onBack, onLogin }) {
   const [otp, setOtp]         = useState("");
   const [loading, setLoading] = useState(false);
   const [countdown, setCd]    = useState(30);
@@ -138,13 +133,12 @@ function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
   };
 
   const verify = async () => {
-    const code = otp || devOtp;
-    if (!devMode && code.length < 6) return toast.error("Enter all 6 digits");
+    if (otp.length < 6) return toast.error("Enter all 6 digits");
     setLoading(true);
     try {
       const resp = await axios.post(`${API}/auth/otp/verify`, {
         identifier: identifier.trim(),
-        otp: devMode ? devOtp : code,
+        otp,
         purpose: "login",
       });
       localStorage.setItem("sc_token", resp.data.token);
@@ -175,12 +169,6 @@ function Step2({ identifier, devMode, devOtp, onBack, onLogin }) {
           Sent to <strong style={{ color: "#fff" }}>{identifier}</strong>
         </p>
       </div>
-
-      {devMode && (
-        <div style={{ background: "#1a1400", border: "1px solid #3a2e00", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#d97706", textAlign: "center" }}>
-          Dev mode — enter any 6 digits to continue
-        </div>
-      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div>

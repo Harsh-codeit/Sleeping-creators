@@ -74,8 +74,14 @@ function CarouselForm() {
   const [publishing, setPublishing]   = useState(false);
 
   useEffect(() => {
+    // Prefill topic from Inspiration page "Use this" action
+    const prefill = sessionStorage.getItem("sc_prefill_topic");
+    if (prefill) {
+      setTopic(prefill);
+      sessionStorage.removeItem("sc_prefill_topic");
+    }
     axios.get(`${API}/templates`, { headers: authHeaders() }).then(r => {
-      const list = r.data?.templates || r.data || [];
+      const list = (r.data?.templates || r.data || []).filter(t => !t.kind || t.kind !== "video");
       setTemplates(list);
       if (list.length > 0) {
         setSelectedTpl(list[0].id || list[0]._id);
@@ -308,6 +314,10 @@ function CarouselForm() {
 // ─── Video Form ───────────────────────────────────────────────────────────────
 
 function VideoForm() {
+  const navigate = useNavigate();
+  const [step, setStep]               = useState("form"); // "form" | "result"
+  const [videoTemplates, setVideoTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [topic, setTopic]             = useState("");
   const [hook, setHook]               = useState("");
   const [duration, setDuration]       = useState("");
@@ -315,110 +325,159 @@ function VideoForm() {
   const [cta, setCta]                 = useState("");
   const [audience, setAudience]       = useState("");
   const [notes, setNotes]             = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [videoTemplates, setVideoTemplates]     = useState([]);
-  const [loadingTpls, setLoadingTpls]           = useState(true);
   const [loading, setLoading]         = useState(false);
-  const [job, setJob]                 = useState(null); // {post_id, render_id, status, video_url}
+  const [result, setResult]           = useState(null); // {post_id, script}
+  const [caption, setCaption]         = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [publishing, setPublishing]   = useState(false);
-  const pollRef = useRef(null);
+  const [saving, setSaving]           = useState(false);
 
   useEffect(() => {
-    axios.get(`${API}/shotstack-templates`, { headers: authHeaders() })
+    axios.get(`${API}/templates`, { headers: authHeaders() })
       .then(r => {
-        const all = r.data?.templates ?? [];
-        setVideoTemplates(all);
+        const all = Array.isArray(r.data) ? r.data : (r.data?.templates ?? []);
+        setVideoTemplates(all.filter(t => t.kind === "video"));
       })
-      .catch(() => {
-        // Fallback: load from templates endpoint filtered by kind
-        axios.get(`${API}/templates`, { headers: authHeaders() }).then(r => {
-          const all = r.data?.templates ?? r.data ?? [];
-          setVideoTemplates(all.filter(t => t.kind === "video"));
-        }).catch(() => {});
-      })
-      .finally(() => setLoadingTpls(false));
+      .catch(() => {});
   }, []);
-
-  // Poll render status
-  useEffect(() => {
-    if (!job?.render_id || job.status === "done" || job.status === "failed") {
-      if (pollRef.current) clearInterval(pollRef.current);
-      return;
-    }
-    pollRef.current = setInterval(async () => {
-      try {
-        const { data } = await axios.get(`${API}/videos/job/${job.render_id}`, { headers: authHeaders() });
-        setJob(prev => ({ ...prev, ...data }));
-        if (data.status === "done" || data.status === "failed") {
-          clearInterval(pollRef.current);
-          if (data.status === "done") toast.success("Video ready!");
-          else toast.error("Video render failed");
-        }
-      } catch {
-        clearInterval(pollRef.current);
-      }
-    }, 6000);
-    return () => clearInterval(pollRef.current);
-  }, [job?.render_id, job?.status]);
 
   const handleGenerate = async () => {
     if (!topic.trim()) return toast.error("Enter a topic first");
     setLoading(true);
-    setJob(null);
     try {
-      const { data } = await axios.post(`${API}/videos/generate`, {
+      const { data } = await axios.post(`${API}/videos/script`, {
         topic, hook_style: hook, duration, tone, cta, audience, notes,
         template_id: selectedTemplate?.id || null,
         platform: "instagram",
       }, { headers: authHeaders() });
-      setJob({ ...data, video_url: null });
-      toast.success("Video queued — rendering…");
+      setResult(data);
+      setCaption(data.script?.description || "");
+      setStep("result");
     } catch (err) {
-      const msg = err.response?.data?.detail || err.message;
-      toast.error(`Failed: ${msg}`);
+      toast.error(err.response?.data?.detail || "Script generation failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePublish = async (now = false) => {
-    if (!job?.post_id) return;
-    setPublishing(true);
+  const handleSchedule = async () => {
+    if (!result?.post_id || !scheduledAt) return toast.error("Pick a date first");
+    setSaving(true);
     try {
-      if (now) {
-        await axios.post(`${API}/posts/${job.post_id}/publish`, {}, { headers: authHeaders() });
-        toast.success("Published to Instagram!");
-      } else {
-        await axios.put(`${API}/posts/${job.post_id}`, { scheduled_at: scheduledAt }, { headers: authHeaders() });
-        await axios.post(`${API}/posts/${job.post_id}/approve`, {}, { headers: authHeaders() });
-        toast.success("Scheduled!");
-      }
-      setJob(null);
-      setTopic("");
+      await axios.put(`${API}/posts/${result.post_id}`, {
+        caption,
+        scheduled_at: new Date(scheduledAt).toISOString(),
+      }, { headers: authHeaders() });
+      await axios.post(`${API}/posts/${result.post_id}/approve`, {}, { headers: authHeaders() });
+      toast.success("Scheduled!");
+      navigate("/drafts");
     } catch (err) {
-      toast.error(err.response?.data?.detail || err.message);
+      toast.error(err.response?.data?.detail || "Schedule failed");
     } finally {
-      setPublishing(false);
+      setSaving(false);
     }
   };
 
+  const handleSaveDraft = () => {
+    toast.success("Saved to Drafts!");
+    navigate("/drafts");
+  };
+
+  if (step === "result" && result) {
+    const { script } = result;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <button onClick={() => setStep("form")}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#8080ff", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0, alignSelf: "flex-start" }}>
+          <ChevronLeft size={15} /> Generate New Script
+        </button>
+
+        {/* Headline */}
+        <div style={{ background: "#1e1e3a", borderRadius: 16, padding: "16px 18px", border: "1.5px solid #3a3a6a" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#8080ff", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Video Headline</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", lineHeight: 1.3 }}>{script.headline}</div>
+        </div>
+
+        {/* Opening hook */}
+        <div style={{ background: "#161616", borderRadius: 14, padding: "14px 16px", border: "1.5px solid #2a2a2a" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Opening Hook</div>
+          <div style={{ fontSize: 14, color: "#fff", lineHeight: 1.6, fontStyle: "italic" }}>"{script.hook}"</div>
+        </div>
+
+        {/* Scene cards */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+            Script — {(script.scenes || []).length} Scenes
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(script.scenes || []).map((scene, i) => (
+              <div key={i} style={{ background: "#161616", borderRadius: 14, border: "1.5px solid #2a2a2a", overflow: "hidden" }}>
+                <div style={{ background: "#1a1a1a", padding: "8px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #2a2a2a" }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 6, background: "#5B5BD6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                    {scene.number || i + 1}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{scene.title}</span>
+                </div>
+                <div style={{ padding: "10px 14px", borderBottom: "1px solid #1a1a1a" }}>
+                  <div style={{ fontSize: 10, color: "#5B5BD6", fontWeight: 700, marginBottom: 4 }}>ON SCREEN</div>
+                  <div style={{ fontSize: 13, color: "#e0e0e0", fontWeight: 600 }}>{scene.caption}</div>
+                </div>
+                <div style={{ padding: "10px 14px" }}>
+                  <div style={{ fontSize: 10, color: "#888", fontWeight: 700, marginBottom: 4 }}>VOICEOVER</div>
+                  <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.6 }}>{scene.voiceover}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Hashtags */}
+        {script.hashtags?.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {script.hashtags.map((tag, i) => (
+              <span key={i} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#1e1e3a", color: "#8080ff" }}>
+                #{tag.replace(/^#/, "")}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Editable Instagram caption */}
+        <Section title="Instagram Caption (editable)">
+          <textarea value={caption} onChange={e => setCaption(e.target.value)}
+            rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, fontSize: 13 }} />
+        </Section>
+
+        {/* Schedule date picker */}
+        <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+          <Clock size={14} style={{ color: "#888", flexShrink: 0 }} />
+          <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
+            style={{ flex: 1, background: "none", border: "none", color: scheduledAt ? "#ccc" : "#666", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <button onClick={handleSaveDraft}
+            style={{ padding: "13px 0", borderRadius: 12, border: "1.5px solid #2a2a2a", background: "#161616", color: "#ccc", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+            Save to Drafts
+          </button>
+          <button onClick={handleSchedule} disabled={saving || !scheduledAt}
+            style={{ padding: "13px 0", borderRadius: 12, border: "none", background: scheduledAt ? "#5B5BD6" : "#2a2a2a", color: scheduledAt ? "#fff" : "#555", fontWeight: 700, fontSize: 13, cursor: scheduledAt ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, boxShadow: scheduledAt ? "0 4px 12px rgba(91,91,214,0.3)" : "none" }}>
+            <Calendar size={14} /> {saving ? "Scheduling…" : "Schedule"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Form step ──
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Video Template Selector */}
-      <div>
-        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#cccccc", marginBottom: 8 }}>
-          Select Video Template <span style={{ fontWeight: 400, color: "#666666" }}>(optional)</span>
-        </label>
-        {loadingTpls ? (
-          <div style={{ height: 60, borderRadius: 14, background: "#161616", border: "1.5px solid #2a2a2a", display: "flex", alignItems: "center", paddingLeft: 16 }}>
-            <span style={{ fontSize: 12, color: "#666666" }}>Loading templates…</span>
-          </div>
-        ) : videoTemplates.length === 0 ? (
-          <div style={{ padding: "12px 16px", borderRadius: 14, background: "#161616", border: "1.5px dashed #2a2a2a", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, color: "#666666" }}>No Shotstack templates configured</span>
-          </div>
-        ) : (
+      {/* Video template picker — only shown when user has saved templates */}
+      {videoTemplates.length > 0 && (
+        <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#cccccc", marginBottom: 8 }}>
+            Video Template <span style={{ fontWeight: 400, color: "#666666" }}>(optional — presets scene count &amp; flow)</span>
+          </label>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <button onClick={() => setSelectedTemplate(null)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 12,
@@ -426,7 +485,7 @@ function VideoForm() {
               background: !selectedTemplate ? "#1e1e3a" : "#161616", cursor: "pointer", textAlign: "left",
             }}>
               <Radio active={!selectedTemplate} />
-              <span style={{ fontSize: 12, fontWeight: 500, color: !selectedTemplate ? "#5B5BD6" : "#888888" }}>No template — AI generates from brief only</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: !selectedTemplate ? "#8080ff" : "#888888" }}>Default (5 scenes, Hook → Content → CTA)</span>
             </button>
             {videoTemplates.map(t => {
               const sel = selectedTemplate?.id === t.id;
@@ -439,19 +498,17 @@ function VideoForm() {
                   <Radio active={sel} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: sel ? "#8080ff" : "#ffffff", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{t.name}</div>
-                    {(t.category || t.number_of_scenes) && (
-                      <div style={{ fontSize: 10, color: "#666666", marginTop: 1 }}>
-                        {[t.category, t.number_of_scenes && `${t.number_of_scenes} scenes`].filter(Boolean).join(" · ")}
-                      </div>
-                    )}
+                    <div style={{ fontSize: 10, color: "#666666", marginTop: 1 }}>
+                      {[t.number_of_scenes && `${t.number_of_scenes} scenes`, t.video_flow, t.category].filter(Boolean).join(" · ")}
+                    </div>
                   </div>
                   <Film size={13} style={{ color: sel ? "#8080ff" : "#444444", flexShrink: 0 }} />
                 </button>
               );
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <Section title="Topic / Subject *">
         <input type="text" value={topic} onChange={e => setTopic(e.target.value)}
@@ -483,60 +540,14 @@ function VideoForm() {
 
       <Section title="Additional Notes">
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          placeholder="Any specific ideas, references, or style notes…"
-          rows={3} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
+          placeholder="Specific ideas, references, or style notes…"
+          rows={2} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
       </Section>
 
-      <GenerateBtn onClick={handleGenerate} label={loading ? "Generating…" : "Generate Video"} disabled={loading} />
-
-      {/* ── Video job status ─────────────────────────────────────────────── */}
-      {job && (
-        <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 20, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <p style={{ fontWeight: 700, fontSize: 14, color: "#fff", margin: 0 }}>
-                {job.status === "done" ? "Video Ready" : job.status === "failed" ? "Render Failed" : "Rendering…"}
-              </p>
-              <p style={{ fontSize: 11, color: "#666", margin: "4px 0 0" }}>ID: {job.render_id}</p>
-            </div>
-            <StatusBadge status={job.status} />
-          </div>
-
-          {job.status === "rendering" && (
-            <div style={{ height: 6, borderRadius: 3, background: "#1e1e2e", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: "60%", background: "#5B5BD6", borderRadius: 3, animation: "pulse 1.5s ease-in-out infinite" }} />
-            </div>
-          )}
-
-          {job.video_url && (
-            <video controls style={{ width: "100%", borderRadius: 12, background: "#000" }} src={job.video_url} />
-          )}
-
-          {job.status === "done" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#0d0d0d", borderRadius: 12, padding: "10px 14px", border: "1px solid #2a2a2a" }}>
-                <Clock size={14} style={{ color: "#888", flexShrink: 0 }} />
-                <input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={e => setScheduledAt(e.target.value)}
-                  style={{ flex: 1, background: "none", border: "none", color: "#ccc", fontSize: 13, outline: "none", fontFamily: "inherit" }}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <button onClick={() => handlePublish(false)} disabled={publishing || !scheduledAt}
-                  style={{ padding: "12px 0", borderRadius: 12, border: "1.5px solid #5B5BD6", background: "transparent", color: "#5B5BD6", fontWeight: 600, fontSize: 13, cursor: scheduledAt ? "pointer" : "not-allowed", opacity: scheduledAt ? 1 : 0.5, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <Calendar size={14} /> Schedule
-                </button>
-                <button onClick={() => handlePublish(true)} disabled={publishing}
-                  style={{ padding: "12px 0", borderRadius: 12, border: "none", background: "#5B5BD6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, boxShadow: "0 4px 12px rgba(91,91,214,0.3)" }}>
-                  <Send size={14} /> {publishing ? "Publishing…" : "Publish Now"}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <GenerateBtn onClick={handleGenerate} label={loading ? "Generating Script…" : "Generate Video Script"} disabled={loading} />
+      <p style={{ fontSize: 11, color: "#555", textAlign: "center", margin: "2px 0 0" }}>
+        AI writes scene-by-scene voiceover, on-screen captions &amp; hashtags — ready to record.
+      </p>
     </div>
   );
 }

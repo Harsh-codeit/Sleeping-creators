@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
+import httpx
 from anthropic import AsyncAnthropic
 from langgraph.graph import END, StateGraph
 
@@ -31,6 +32,7 @@ from backend_mobile.modules.intelligence.graphs.state import (
     GeneratedContent,
     VarietySpec,
 )
+from backend_mobile.modules.intelligence.graphs.tools.competitor_tool import get_competitor_posts
 from backend_mobile.modules.intelligence.graphs.tools.hook_retrieval_tool import retrieve_exemplar_hooks
 from backend_mobile.modules.intelligence.graphs.tools.semantic_gate_tool import gate_check
 from backend_mobile.modules.intelligence.graphs.tools.trend_tool import get_trending_topics
@@ -77,6 +79,54 @@ _EMOTIONS = [
     "fomo",
     "pride",
 ]
+
+
+async def _openrouter_fallback(model: str, system: str, user_prompt: str, t0: float) -> tuple[str, int, int]:
+    """Call OpenRouter as a fallback when the primary Anthropic call fails.
+
+    Maps Anthropic model IDs to OpenRouter equivalents.
+    Returns (raw_text, tokens_used, latency_ms). Returns ("", 0, 0) on failure.
+    """
+    from backend_mobile.config import settings
+    if not settings.openrouter_api_key:
+        return "", 0, 0
+
+    # Map Anthropic model IDs → OpenRouter model IDs
+    model_map = {
+        "claude-haiku-4-5-20251001": "anthropic/claude-haiku-4-5",
+        "claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
+    }
+    or_model = model_map.get(model, "anthropic/claude-haiku-4-5")
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.openrouter_api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://sleepingcreators.com",
+                },
+                json={
+                    "model": or_model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "max_tokens": 4096,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        latency_ms = int((time.monotonic() - t0) * 1000)
+        raw_text = data["choices"][0]["message"]["content"]
+        usage = data.get("usage", {})
+        tokens_used = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
+        logger.info("OpenRouter fallback succeeded (model=%s, tokens=%d)", or_model, tokens_used)
+        return raw_text, tokens_used, latency_ms
+    except Exception as exc:
+        logger.error("OpenRouter fallback also failed: %s", exc)
+        return "", 0, 0
 
 
 def _strip_ai_tells(text: str) -> str:
@@ -175,10 +225,19 @@ async def build_creator_context(state: ContentGenerationState, *, db, redis) -> 
     except Exception as exc:
         logger.warning("Failed to load winning_examples for %s: %s", creator_id[:8], exc)
 
+    # Load competitor post data via Apify (cached 24h per handle)
+    competitor_posts: list[dict] = []
+    if base_context.get("competitors"):
+        try:
+            competitor_posts = await get_competitor_posts(base_context["competitors"], db)
+        except Exception as exc:
+            logger.warning("Competitor posts load failed: %s", exc)
+
     creator_context = {
         **base_context,
         "recent_post_dna": recent_post_dna,
         "winning_examples": winning_examples,
+        "competitor_posts": competitor_posts,
     }
 
     return {"creator_context": creator_context}
@@ -317,11 +376,24 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
 
     competitor_block = ""
     competitors = ctx.get("competitors", [])
+    competitor_posts = ctx.get("competitor_posts", [])
     if competitors:
-        competitor_block = (
-            "\n\nCOMPETITOR ACCOUNTS IN THIS NICHE (study the style and angles that work in this space — never copy, but draw inspiration from what resonates with this audience):\n"
-            + "\n".join(f"- @{c.lstrip('@')}" for c in competitors[:10])
-        )
+        if competitor_posts:
+            # Show top performing posts with engagement data
+            posts_text = "\n".join(
+                f"- @{p['handle']}: \"{p['caption'][:120]}\" (❤️ {p['likes']:,})"
+                for p in sorted(competitor_posts, key=lambda x: x.get("likes", 0), reverse=True)[:6]
+                if p.get("caption")
+            )
+            competitor_block = (
+                "\n\nCOMPETITOR POSTS WITH HIGHEST ENGAGEMENT (draw inspiration from what resonates — never copy, but note the angles, hooks, and style that make their audience stop scrolling):\n"
+                + posts_text
+            )
+        else:
+            competitor_block = (
+                "\n\nCOMPETITOR ACCOUNTS IN THIS NICHE (study their style — never copy, draw inspiration):\n"
+                + "\n".join(f"- @{c.lstrip('@')}" for c in competitors[:10])
+            )
 
     trend_block = ""
     if trending:
@@ -399,6 +471,8 @@ OUTPUT FORMAT — respond with valid JSON only, no markdown fences:
     )
 
     t0 = time.monotonic()
+    raw_text = ""
+    tokens_used = 0
     try:
         response = await anthropic_client.messages.create(
             model=model,
@@ -409,11 +483,15 @@ OUTPUT FORMAT — respond with valid JSON only, no markdown fences:
         latency_ms = int((time.monotonic() - t0) * 1000)
         raw_text = response.content[0].text
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
-    except Exception as exc:
-        err = f"Claude API error: {exc}"
-        logger.error(err)
-        # Raise so the caller gets a real 500, not an empty carousel
-        raise RuntimeError(err) from exc
+    except Exception as primary_exc:
+        logger.warning("Claude primary call failed (%s) — attempting OpenRouter fallback", primary_exc)
+        raw_text, tokens_used, latency_ms = await _openrouter_fallback(
+            model=model, system=system, user_prompt=user_prompt, t0=t0
+        )
+        if not raw_text:
+            err = f"Claude API error: {primary_exc}"
+            logger.error(err)
+            raise RuntimeError(err) from primary_exc
 
     try:
         raw_json = json.loads(raw_text)

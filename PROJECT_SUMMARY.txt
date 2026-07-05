@@ -1,0 +1,280 @@
+═══════════════════════════════════════════════════════════════
+  SLEEPING CREATORS — PROJECT SUMMARY
+  As of July 2026
+═══════════════════════════════════════════════════════════════
+
+
+───────────────────────────────────────────────────────────────
+1. WHAT'S BUILT
+───────────────────────────────────────────────────────────────
+
+MOBILE APP  (frontend/)
+  React + Capacitor — builds to Android APK and iOS IPA
+  App ID:   com.sleepingcreators.app
+  App Name: Sleeping Creators
+  5 screens: Home, Create, Drafts, Calendar, Settings
+
+  Key features:
+  • OTP login/signup (email or phone — debug mode, no real send yet)
+  • AI carousel generation → slide preview → schedule → publish
+  • AI video script generation → scene cards + voiceover → save/schedule
+  • Video templates (configures scene count, flow, style)
+  • Drag-and-drop calendar (month / week / day views)
+  • Drafts page — schedule or publish from any draft
+  • Settings — profile, photo upload, Instagram connect, disconnect
+  • Analytics — Bundle.social social metrics
+
+BACKEND  (backend_mobile/)
+  FastAPI on Render, MongoDB Atlas (database: sc_mobile)
+  Port: 8001  |  Auto-deploys from main branch via render.yaml
+
+  Key modules:
+  • /api/auth/otp/*     — OTP send + verify (debug mode returns code)
+  • /api/me             — current user profile
+  • /api/carousel/*     — AI carousel generation + CRUD
+  • /api/videos/script  — AI video script generation (Claude Haiku)
+  • /api/posts/*        — post CRUD, approve, publish, star
+  • /api/calendar       — posts within a date range
+  • /api/templates/*    — carousel + video template library
+  • /api/instagram/*    — connection status + disconnect
+  • /api/analytics/*    — Bundle.social metrics cache
+  • /api/admin/*        — admin-only endpoints (protected by ADMIN_SECRET)
+
+ADMIN DASHBOARD  (admin/)
+  Separate Vite + React site — internal team only
+  Protected by ADMIN_SECRET (separate from user JWT)
+  Features: user list, AI profile editor, content DNA, hook library,
+            generation logs, token usage, overview stats
+
+DATABASE  (MongoDB Atlas — sc_mobile)
+  Collections in use:
+    users            creators, auth, brand_voice, niche, competitors
+    posts            scheduled/published posts, video script drafts
+    carousels        AI-generated carousel drafts
+    content_dna      AI fingerprints, winner/published flags
+    generation_log   every AI call: model, tokens, latency
+    hook_library     hook templates (global + per-user)
+    templates        carousel + video design templates
+    analytics        cached Bundle.social snapshots
+    otps             short-lived OTP codes (add TTL index — see pending)
+
+AI PIPELINE  (LangGraph — claude-haiku / claude-sonnet)
+  Carousel: BuildCreatorContext → FetchTrends → SelectVariety →
+            RetrieveHooks → GenerateContent → SemanticGate → AttachMetadata
+  Video:    Single Claude Haiku call → structured JSON script
+            (headline, hook, scenes with on-screen caption + voiceover,
+             hashtags, Instagram caption)
+
+THIRD-PARTY SERVICES
+  Anthropic       AI generation (Haiku + Sonnet)
+  Cloudflare R2   Image/video storage (cdn.sleepingcreators.com)
+  Bundle.social   Instagram publishing API
+  MongoDB Atlas   Database
+
+  NOT YET ACTIVE (accounts exist in config but not wired):
+  Resend          Email OTP delivery (key in config, never called)
+  Twilio          SMS OTP delivery (optional, not started)
+  Shotstack       Video rendering (routes exist, not used by mobile)
+
+
+───────────────────────────────────────────────────────────────
+2. WHAT'S STILL PENDING BEFORE GOING LIVE
+───────────────────────────────────────────────────────────────
+
+PRIORITY 1 — Blocks real users
+
+  [ ] Wire OTP email delivery via Resend
+        File: backend_mobile/modules/iam/service.py → send_otp()
+        Currently returns debug_otp in API response (no email sent).
+        Steps:
+          pip install resend
+          In send_otp(), when "@" in identifier, call:
+            resend.Emails.send({from, to, subject, html})
+        Add RESEND_API_KEY to Render environment variables.
+
+  [ ] Remove debug OTP from frontend
+        Files: frontend/src/pages/Login.js
+               frontend/src/pages/Signup.js
+        Remove all devMode / devOtp state and branches.
+        Show "Check your inbox" message after OTP send instead.
+
+  [ ] Add SMS OTP via Twilio (if phone-number login is wanted)
+        Skip this if email-only login is acceptable.
+
+  [ ] MongoDB TTL index on otps collection
+        In Atlas → Collections → otps → Indexes:
+        Create index on "expires_at" field with TTL = 0
+        (auto-deletes expired OTP documents)
+
+PRIORITY 2 — Deployment config
+
+  [ ] Set all Render environment variables:
+        MONGO_URL              MongoDB Atlas connection string
+        DB_NAME                sc_mobile
+        JWT_SECRET_KEY         any long random string
+        ANTHROPIC_API_KEY      from console.anthropic.com
+        BUNDLE_API_KEY         from Bundle.social dashboard
+        R2_ACCOUNT_ID          Cloudflare R2
+        R2_ACCESS_KEY_ID       Cloudflare R2
+        R2_SECRET_ACCESS_KEY   Cloudflare R2
+        R2_BUCKET_NAME         Cloudflare R2
+        R2_PUBLIC_URL          https://cdn.sleepingcreators.com
+        ADMIN_SECRET           strong password for admin dashboard
+        APP_BASE_URL           capacitor://localhost (for Capacitor OAuth)
+        RESEND_API_KEY         from resend.com (needed for OTP)
+
+  [ ] Update frontend/.env before building APK:
+        REACT_APP_BACKEND_URL=https://<your-render-url>.onrender.com
+
+  [ ] Deploy admin dashboard to Netlify or Vercel:
+        Build: cd admin && npm run build
+        Deploy: dist/ folder
+        Set env: VITE_API_URL=https://<your-render-url>.onrender.com
+
+PRIORITY 3 — Nice to have
+
+  [ ] Replace hardcoded "@sleepingcreators" brand handle in carousel renderer
+        File: backend_mobile/modules/posts/carousel_router.py lines 121,131
+        Should come from the user's profile instead.
+
+  [ ] App Store / Play Store privacy policy URL
+        Currently at /privacy-policy in the app — needs a real hosted URL
+        for store submission forms.
+
+
+───────────────────────────────────────────────────────────────
+3. HOW TO DEPLOY TO PLAY STORE (Android)
+───────────────────────────────────────────────────────────────
+
+STEP A — Set the custom app icon
+
+  Your Android icon folders are at:
+    frontend/android/app/src/main/res/
+
+  Replace these files with your branded icon:
+    mipmap-mdpi/ic_launcher.png         48 × 48 px
+    mipmap-hdpi/ic_launcher.png         72 × 72 px
+    mipmap-xhdpi/ic_launcher.png        96 × 96 px
+    mipmap-xxhdpi/ic_launcher.png       144 × 144 px
+    mipmap-xxxhdpi/ic_launcher.png      192 × 192 px
+
+  Also replace ic_launcher_round.png (same sizes, circular crop version)
+  and ic_launcher_foreground.png (for adaptive icons on Android 8+).
+
+  Easiest workflow:
+    1. Create a 1024×1024 px PNG icon (no rounded corners, no padding)
+    2. Use the free tool at https://icon.kitchen or Android Studio's
+       Image Asset Studio (right-click res/ → New → Image Asset)
+    3. It generates all sizes automatically — drop them into the folders above
+
+  Also update the splash screen image:
+    frontend/android/app/src/main/res/drawable/splash.png
+
+STEP B — Build a signed APK / AAB
+
+  1. In Android Studio: Build → Generate Signed Bundle / APK
+  2. Create a keystore file (keep this safe — you need it for every update)
+     keytool -genkey -v -keystore sleeping-creators.jks \
+       -alias sleepingcreators -keyalg RSA -keysize 2048 -validity 10000
+  3. Select "Android App Bundle (.aab)" — required for Play Store
+  4. Choose release build variant → Finish
+
+  From command line (after setting up keystore):
+    cd frontend
+    npm run cap:build        # builds React + syncs to Android
+    cd android
+    ./gradlew bundleRelease
+    # Signs with keystore using build.gradle signingConfigs
+
+STEP C — Google Play Console
+
+  1. Create account at play.google.com/console ($25 one-time fee)
+  2. Create new app → set app name, language, category
+  3. Fill in:
+       Store listing      (title, short description, full description)
+       Graphics           (feature graphic 1024×500, screenshots min 2)
+       Content rating     (fill questionnaire)
+       App access         (is it free or behind login?)
+       Privacy policy URL (required — use your /privacy-policy page URL)
+  4. Upload the .aab file under Releases → Production (or Internal Testing first)
+  5. Submit for review — usually 1–3 business days for first submission
+
+  App ID already set: com.sleepingcreators.app
+  Version code:       1  (increment by 1 with each update)
+  Version name:       1.0
+
+
+───────────────────────────────────────────────────────────────
+4. HOW TO DEPLOY TO APP STORE (iOS)
+───────────────────────────────────────────────────────────────
+
+STEP A — Set the custom app icon
+
+  iOS icons live at:
+    frontend/ios/App/App/Assets.xcassets/AppIcon.appiconset/
+
+  Required sizes (PNG, no transparency):
+    20×20, 29×29, 40×40, 58×58, 60×60, 76×76, 80×80, 87×87,
+    120×120, 152×152, 167×167, 180×180, 1024×1024
+
+  Easiest workflow:
+    1. Start with the 1024×1024 PNG
+    2. Use https://appicon.co — paste your image, download all sizes
+    3. Replace files in the AppIcon.appiconset/ folder
+    4. Update Contents.json if filenames changed
+
+STEP B — Build IPA in Xcode
+
+  1. cd frontend && npm run cap:ios   (opens Xcode)
+  2. In Xcode: set Bundle Identifier to com.sleepingcreators.app
+  3. Select a real device or "Any iOS Device" as build target
+  4. Product → Archive
+  5. Window → Organizer → Distribute App → App Store Connect
+
+STEP C — App Store Connect
+
+  1. Enroll in Apple Developer Program at developer.apple.com ($99/year)
+  2. Create App ID at developer.apple.com with bundle ID com.sleepingcreators.app
+  3. Create new app in App Store Connect (appstoreconnect.apple.com)
+  4. Fill in:
+       App name, subtitle, description, keywords
+       Screenshots (6.5" iPhone required, iPad optional)
+       Privacy policy URL (required)
+       App category
+  5. Upload build via Xcode Organizer or Transporter
+  6. Submit for review — usually 1–2 days
+
+
+───────────────────────────────────────────────────────────────
+5. OTP FLOW — HOW IT WORKS (and how it will work in production)
+───────────────────────────────────────────────────────────────
+
+CURRENT (debug mode — DO NOT ship this):
+  User enters email → backend generates 6-digit code → returns it
+  directly in the API response → Login.js auto-fills it.
+  No email is actually sent. Anyone can log in to any account.
+
+PRODUCTION (what needs to be wired):
+  User enters email
+    → POST /api/auth/otp/send
+    → backend generates 6-digit code, stores in otps collection (5 min TTL)
+    → calls Resend API to send "Your code is XXXXXX" email
+    → returns { message: "Check your inbox" }  (no code in response)
+  User receives email, types code into app
+    → POST /api/auth/otp/verify { identifier, otp, purpose }
+    → backend checks code + expiry in otps collection
+    → if valid: returns JWT token
+    → frontend stores token in localStorage["sc_token"]
+
+  For phone number login (optional):
+    Same flow but uses Twilio SMS instead of Resend email.
+    Only implement if you want phone-number accounts.
+    Email-only is sufficient for launch.
+
+  OTP code: 6 digits, expires in 5 minutes, single-use.
+  JWT token: expires in 30 days.
+
+
+───────────────────────────────────────────────────────────────
+END OF DOCUMENT
+═══════════════════════════════════════════════════════════════

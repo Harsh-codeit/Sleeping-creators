@@ -98,7 +98,8 @@ export default function Dashboard() {
         ]);
         if (postsResp.status === "fulfilled") {
           const data = postsResp.value?.data;
-          setPosts(Array.isArray(data) ? data.slice(0, 8) : []);
+          const list = data?.posts || (Array.isArray(data) ? data : []);
+          setPosts(list.slice(0, 8));
         }
         if (tmplResp.status === "fulfilled") {
           const data = tmplResp.value?.data;
@@ -283,9 +284,9 @@ export default function Dashboard() {
                           {post.caption?.slice(0, 60) || post.title || "Untitled post"}
                           {post.caption?.length > 60 ? "…" : ""}
                         </p>
-                        {post.scheduled_for && (
+                        {post.scheduled_at && (
                           <p className="text-xs mt-0.5" style={{ color: "#666666" }}>
-                            {new Date(post.scheduled_for).toLocaleDateString("en-US", {
+                            {new Date(post.scheduled_at).toLocaleDateString("en-US", {
                               month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
                             })}
                           </p>

@@ -214,6 +214,18 @@ async def publish_post(
         except Exception:
             pass  # non-fatal
 
+        # Push notification — non-fatal
+        try:
+            from backend_mobile.modules.notifications.fcm import send_push_to_user
+            await send_push_to_user(
+                db, creator_id,
+                title="Post published! 🎉",
+                body="Your content is now live on Instagram.",
+                data={"post_id": post_id},
+            )
+        except Exception:
+            pass
+
         return {"ok": True, "bundle_post_id": bundle_post_id, "status": "published"}
 
     except Exception as exc:
@@ -255,26 +267,19 @@ async def star_post(
 
 @router.get("/calendar")
 async def get_calendar(
-    month: int = Query(..., ge=1, le=12),
-    year: int = Query(..., ge=2020, le=2100),
+    start: str = Query(..., description="ISO datetime range start"),
+    end: str = Query(..., description="ISO datetime range end"),
     client_id: Optional[str] = Query(None),
     user_id: str = Depends(_current_user_id),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     creator_id = client_id or user_id
-    # ISO range for the month
-    from calendar import monthrange
-    _, last_day = monthrange(year, month)
-    month_start = f"{year}-{month:02d}-01"
-    month_end = f"{year}-{month:02d}-{last_day:02d}T23:59:59"
-
     query = {
         "creator_id": creator_id,
         "$or": [
-            {"scheduled_at": {"$gte": month_start, "$lte": month_end}},
-            {"published_at": {"$gte": month_start, "$lte": month_end}},
-            {"created_at": {"$gte": month_start, "$lte": month_end}},
+            {"scheduled_at": {"$gte": start, "$lte": end}},
+            {"published_at": {"$gte": start, "$lte": end}},
         ],
     }
     posts = await db.posts.find(query, {"_id": 0}).sort("scheduled_at", 1).to_list(200)
-    return {"posts": posts, "month": month, "year": year, "total": len(posts)}
+    return {"posts": posts, "total": len(posts)}
