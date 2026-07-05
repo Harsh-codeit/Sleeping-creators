@@ -37,7 +37,8 @@ def _now() -> str:
 # ── Admin auth ─────────────────────────────────────────────────────────────────
 
 def _make_admin_jwt() -> str:
-    import time, jwt as _jwt
+    import time
+    from jose import jwt as _jwt
     payload = {
         "sub":  "admin",
         "role": "admin",
@@ -48,7 +49,7 @@ def _make_admin_jwt() -> str:
 
 
 def _require_admin(authorization: str = Header(...)) -> None:
-    import jwt as _jwt
+    from jose import jwt as _jwt, exceptions as _jose_exc
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
     token = authorization.removeprefix("Bearer ")
@@ -56,7 +57,7 @@ def _require_admin(authorization: str = Header(...)) -> None:
         payload = _jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         if payload.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
-    except _jwt.ExpiredSignatureError:
+    except _jose_exc.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
