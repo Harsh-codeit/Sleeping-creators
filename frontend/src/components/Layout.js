@@ -144,7 +144,7 @@ export default function Layout({ onLogout }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0" style={{ background: "#0d0d0d" }}>
+        <main className="flex-1 overflow-y-auto pb-nav-safe" style={{ background: "#0d0d0d" }}>
           <ErrorBoundary resetKey={location.pathname}>
             <Outlet />
           </ErrorBoundary>

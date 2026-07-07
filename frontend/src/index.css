@@ -73,6 +73,15 @@
   .pb-safe   { padding-bottom: env(safe-area-inset-bottom); }
   .pt-safe   { padding-top: env(safe-area-inset-top); }
   .mb-safe   { margin-bottom: env(safe-area-inset-bottom); }
+  /* Bottom padding for mobile scroll containers: clears bottom nav (≈68px) + device home indicator */
+  .pb-nav-safe {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 768px) {
+    .pb-nav-safe {
+      padding-bottom: 0;
+    }
+  }
   /* Mobile tap target minimum — never go below 44px on touch */
   .touch-target {
     min-height: 44px;

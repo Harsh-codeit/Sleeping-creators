@@ -136,11 +136,19 @@ function CarouselForm() {
 
       if (now) {
         await axios.post(`${API}/posts/${post.id}/publish`, {}, { headers: authHeaders() });
+        // Mark the carousel doc as published so it won't show as a draft
+        if (result.carousel_id) {
+          await axios.patch(`${API}/carousels/${result.carousel_id}`, { status: "published" }, { headers: authHeaders() });
+        }
         toast.success("Published to Instagram!");
         setResult(null);
         setTopic("");
       } else {
         await axios.post(`${API}/posts/${post.id}/approve`, {}, { headers: authHeaders() });
+        // Mark the carousel doc as scheduled so it won't show as a draft
+        if (result.carousel_id) {
+          await axios.patch(`${API}/carousels/${result.carousel_id}`, { status: "scheduled" }, { headers: authHeaders() });
+        }
         const schedDate = new Date(scheduledAt);
         toast.success(`Scheduled for ${schedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${schedDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
         navigate("/calendar");

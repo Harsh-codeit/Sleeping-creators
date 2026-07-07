@@ -4,7 +4,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   User, Link2, CreditCard,
-  Instagram, Check, Camera, Pencil, Mail, LogOut,
+  Instagram, Check, CheckCircle2, Camera, Pencil, Mail, LogOut,
   Zap, BarChart3, Calendar, FileText,
   AlertCircle, Loader2
 } from "lucide-react";

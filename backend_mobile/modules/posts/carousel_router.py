@@ -224,6 +224,22 @@ async def save_carousel(
     return _clean(doc)
 
 
+@router.patch("/carousels/{carousel_id}")
+async def update_carousel(
+    carousel_id: str,
+    body: dict,
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    allowed = {"status", "topic", "caption", "hashtags"}
+    update = {k: v for k, v in body.items() if k in allowed}
+    if not update:
+        raise HTTPException(400, "No valid fields to update")
+    update["updated_at"] = _now_iso()
+    await db.carousels.update_one({"id": carousel_id}, {"$set": update})
+    return {"ok": True}
+
+
 @router.delete("/carousels/{carousel_id}")
 async def delete_carousel(
     carousel_id: str,

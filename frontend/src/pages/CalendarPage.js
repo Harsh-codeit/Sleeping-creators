@@ -342,7 +342,7 @@ function WeekView({ currentDate, posts, onSelectPost, onDrop }) {
     if (scrollRef.current) scrollRef.current.scrollTop = 2 * 64;
   }, []);
 
-  const onDragOver  = e => { e.preventDefault(); e.currentTarget.style.background = "#f0eef8"; };
+  const onDragOver  = e => { e.preventDefault(); e.currentTarget.style.background = "rgba(91,91,214,0.12)"; };
   const onDragLeave = e => { e.currentTarget.style.background = ""; };
   const onDropSlot  = (e, day, hour) => {
     e.preventDefault();
@@ -451,7 +451,7 @@ function DayView({ currentDate, posts, onSelectPost, onDrop }) {
     if (scrollRef.current) scrollRef.current.scrollTop = 2 * 80;
   }, [currentDate]);
 
-  const onDragOver  = e => { e.preventDefault(); e.currentTarget.style.background = "#f0eef8"; };
+  const onDragOver  = e => { e.preventDefault(); e.currentTarget.style.background = "rgba(91,91,214,0.12)"; };
   const onDragLeave = e => { e.currentTarget.style.background = ""; };
   const onDropSlot  = (e, hour) => {
     e.preventDefault();

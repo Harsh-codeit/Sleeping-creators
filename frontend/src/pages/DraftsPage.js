@@ -74,6 +74,8 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
           status: "draft",
         }, { headers: authHeaders() });
         await axios.post(`${API}/posts/${post.id}/approve`, {}, { headers: authHeaders() });
+        // Mark the carousel as scheduled so it no longer appears as a draft
+        await axios.patch(`${API}/carousels/${item.id}`, { status: "scheduled" }, { headers: authHeaders() });
       } else {
         await axios.put(`${API}/posts/${item.id}`, { scheduled_at: new Date(scheduledAt).toISOString() }, { headers: authHeaders() });
         await axios.post(`${API}/posts/${item.id}/approve`, {}, { headers: authHeaders() });
@@ -121,6 +123,8 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
           status: "draft",
         }, { headers: authHeaders() });
         await axios.post(`${API}/posts/${post.id}/publish`, {}, { headers: authHeaders() });
+        // Mark the carousel as published so it no longer appears as a draft
+        await axios.patch(`${API}/carousels/${item.id}`, { status: "published" }, { headers: authHeaders() });
       } else {
         await axios.post(`${API}/posts/${item.id}/publish`, {}, { headers: authHeaders() });
       }
