@@ -6,6 +6,7 @@ import SlidePreview from "../components/SlidePreview";
 import {
   Sparkles, LayoutTemplate, Film, ChevronDown, Check,
   ChevronLeft, ChevronRight, Calendar, Send, Clock, X,
+  Upload, Loader2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -323,7 +324,9 @@ function CarouselForm() {
 
 function VideoForm() {
   const navigate = useNavigate();
-  const [step, setStep]               = useState("form"); // "form" | "result"
+  const [step, setStep]               = useState("form"); // "form" | "upload" | "render"
+
+  // Script form state
   const [videoTemplates, setVideoTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [topic, setTopic]             = useState("");
@@ -337,17 +340,36 @@ function VideoForm() {
   const [result, setResult]           = useState(null); // {post_id, script}
   const [caption, setCaption]         = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [saving, setSaving]           = useState(false);
+
+  // Upload state
+  const [videoFile, setVideoFile]         = useState(null);
+  const [videoDuration, setVideoDuration] = useState(15);
+  const [videoPreviewUrl, setVideoPreview] = useState(null);
+  const [uploading, setUploading]         = useState(false);
+  const [uploadProgress, setUploadPct]    = useState(0);
+  const [uploadedVideoUrl, setUploadUrl]  = useState(null);
+  const videoInputRef                     = useRef(null);
+
+  // Render state
+  const [renderId, setRenderId]           = useState(null);
+  const [renderStatus, setRenderStatus]   = useState(null); // "rendering"|"ready"|"failed"
+  const [renderedVideoUrl, setRenderUrl]  = useState(null);
+  const [publishing, setPublishing]       = useState(false);
+  const pollRef                           = useRef(null);
 
   useEffect(() => {
     axios.get(`${API}/templates`, { headers: authHeaders() })
       .then(r => {
         const all = Array.isArray(r.data) ? r.data : (r.data?.templates ?? []);
         setVideoTemplates(all.filter(t => t.kind === "video"));
-      })
-      .catch(() => {});
+      }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  /* ── Step 1: generate AI script ── */
   const handleGenerate = async () => {
     if (!topic.trim()) return toast.error("Enter a topic first");
     setLoading(true);
@@ -359,7 +381,7 @@ function VideoForm() {
       }, { headers: authHeaders() });
       setResult(data);
       setCaption(data.script?.description || "");
-      setStep("result");
+      setStep("upload");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Script generation failed");
     } finally {
@@ -367,117 +389,299 @@ function VideoForm() {
     }
   };
 
+  /* ── Step 2: pick video from gallery ── */
+  const handleVideoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 60 * 1024 * 1024) return toast.error("Video must be under 60 MB");
+    const url = URL.createObjectURL(file);
+    const vid = document.createElement("video");
+    vid.onloadedmetadata = () => {
+      const dur = vid.duration;
+      if (isNaN(dur) || dur < 3 || dur > 60) {
+        URL.revokeObjectURL(url);
+        return toast.error("Video must be 3 – 60 seconds long");
+      }
+      setVideoDuration(Math.round(dur * 10) / 10);
+      setVideoFile(file);
+      setVideoPreview(url);
+      setUploadUrl(null);
+    };
+    vid.onerror = () => { URL.revokeObjectURL(url); toast.error("Cannot read video file"); };
+    vid.src = url;
+    // Reset input so the same file can be re-selected after clear
+    e.target.value = "";
+  };
+
+  /* ── Step 2: upload clip to R2 ── */
+  const handleUpload = async () => {
+    if (!videoFile) return toast.error("Select a video clip first");
+    setUploading(true);
+    setUploadPct(0);
+    try {
+      const fd = new FormData();
+      fd.append("file", videoFile);
+      const { data } = await axios.post(`${API}/videos/upload`, fd, {
+        headers: authHeaders(),
+        onUploadProgress: (e) => {
+          if (e.total) setUploadPct(Math.round((e.loaded / e.total) * 100));
+        },
+      });
+      setUploadUrl(data.video_url);
+      toast.success("Clip uploaded — ready to generate video!");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  /* ── Step 2→3: trigger Shotstack caption render ── */
+  const handleRender = async () => {
+    if (!uploadedVideoUrl || !result?.post_id) return;
+    setRenderStatus("rendering");
+    setStep("render");
+    try {
+      const { data } = await axios.post(`${API}/videos/${result.post_id}/render`, {
+        video_url: uploadedVideoUrl,
+        total_duration: videoDuration,
+      }, { headers: authHeaders() });
+      setRenderId(data.render_id);
+      let polls = 0;
+      pollRef.current = setInterval(async () => {
+        polls++;
+        if (polls > 25) {
+          clearInterval(pollRef.current);
+          setRenderStatus("failed");
+          toast.error("Render timed out — please try again");
+          return;
+        }
+        try {
+          const r = await axios.get(`${API}/videos/job/${data.render_id}`, { headers: authHeaders() });
+          const { status, video_url: vUrl } = r.data;
+          if ((status === "done" || status === "ready") && vUrl) {
+            clearInterval(pollRef.current);
+            setRenderStatus("ready");
+            setRenderUrl(vUrl);
+          } else if (status === "failed") {
+            clearInterval(pollRef.current);
+            setRenderStatus("failed");
+            toast.error("Rendering failed — please try again");
+          }
+        } catch { /* keep polling on transient errors */ }
+      }, 4000);
+    } catch (err) {
+      setRenderStatus("failed");
+      toast.error(err.response?.data?.detail || "Render trigger failed");
+    }
+  };
+
+  /* ── Step 3: schedule rendered video ── */
   const handleSchedule = async () => {
-    if (!result?.post_id || !scheduledAt) return toast.error("Pick a date first");
-    setSaving(true);
+    if (!result?.post_id || !scheduledAt) return toast.error("Pick a schedule date first");
+    setPublishing(true);
     try {
       await axios.put(`${API}/posts/${result.post_id}`, {
         caption,
         scheduled_at: new Date(scheduledAt).toISOString(),
       }, { headers: authHeaders() });
       await axios.post(`${API}/posts/${result.post_id}/approve`, {}, { headers: authHeaders() });
-      toast.success("Scheduled!");
-      navigate("/drafts");
+      const d = new Date(scheduledAt);
+      toast.success(`Scheduled for ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
+      navigate("/calendar");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Schedule failed");
     } finally {
-      setSaving(false);
+      setPublishing(false);
     }
   };
 
-  const handleSaveDraft = () => {
-    toast.success("Saved to Drafts!");
-    navigate("/drafts");
+  /* ── Step 3: publish now ── */
+  const handlePublishNow = async () => {
+    if (!result?.post_id) return;
+    setPublishing(true);
+    try {
+      await axios.post(`${API}/posts/${result.post_id}/publish`, {}, { headers: authHeaders() });
+      toast.success("Published to Instagram!");
+      setStep("form"); setResult(null); setTopic("");
+      setVideoFile(null); setUploadUrl(null); setRenderUrl(null);
+      setRenderId(null); setRenderStatus(null);
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoPreview(null);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Publish failed");
+    } finally {
+      setPublishing(false);
+    }
   };
 
-  if (step === "result" && result) {
+  /* ═══════════ RENDER STEP ═══════════ */
+  if (step === "render") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {renderStatus !== "ready" && (
+            <button onClick={() => { clearInterval(pollRef.current); setStep("upload"); setRenderStatus(null); }}
+              style={{ background: "none", border: "none", color: "#8080ff", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0, display: "flex", alignItems: "center", gap: 5 }}>
+              <ChevronLeft size={15} /> Back
+            </button>
+          )}
+          <StatusBadge status={renderStatus} />
+        </div>
+
+        {/* In progress */}
+        {renderStatus === "rendering" && (
+          <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 20, padding: "36px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 20, textAlign: "center" }}>
+            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#1e1e3a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Loader2 size={26} style={{ color: "#8080ff", animation: "vf-spin 1s linear infinite" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 6 }}>Rendering your video…</div>
+              <div style={{ fontSize: 13, color: "#666" }}>AI is adding captions to your clip. This usually takes 30 – 90 seconds.</div>
+            </div>
+            <div style={{ width: "100%", height: 4, background: "#2a2a2a", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: "40%", background: "#5B5BD6", borderRadius: 2, animation: "vf-slide 1.5s ease-in-out infinite" }} />
+            </div>
+            <style>{`@keyframes vf-spin{to{transform:rotate(360deg)}}@keyframes vf-slide{0%{transform:translateX(-250%)}100%{transform:translateX(400%)}}`}</style>
+          </div>
+        )}
+
+        {/* Failed */}
+        {renderStatus === "failed" && (
+          <div style={{ background: "#2a0a0a", border: "1.5px solid #7f1d1d", borderRadius: 16, padding: 24, textAlign: "center" }}>
+            <div style={{ fontSize: 14, color: "#f87171", fontWeight: 700, marginBottom: 6 }}>Rendering failed</div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 18 }}>Something went wrong. Please try again.</div>
+            <button onClick={() => { setRenderStatus(null); setStep("upload"); }}
+              style={{ padding: "10px 26px", borderRadius: 12, border: "none", background: "#5B5BD6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Ready — preview + actions */}
+        {renderStatus === "ready" && renderedVideoUrl && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <video src={renderedVideoUrl} controls playsInline muted
+              style={{ width: "100%", borderRadius: 16, background: "#000", maxHeight: 400, objectFit: "contain" }} />
+
+            <Section title="Instagram Caption (editable)">
+              <textarea value={caption} onChange={e => setCaption(e.target.value)}
+                rows={3} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, fontSize: 13 }} />
+            </Section>
+
+            <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+              <Clock size={14} style={{ color: "#888", flexShrink: 0 }} />
+              <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
+                style={{ flex: 1, background: "none", border: "none", color: scheduledAt ? "#ccc" : "#666", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <button onClick={handleSchedule} disabled={publishing || !scheduledAt}
+                style={{ padding: "13px 0", borderRadius: 12, border: "none", background: scheduledAt ? "#5B5BD6" : "#2a2a2a", color: scheduledAt ? "#fff" : "#555", fontWeight: 700, fontSize: 13, cursor: scheduledAt && !publishing ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, boxShadow: scheduledAt ? "0 4px 12px rgba(91,91,214,0.3)" : "none" }}>
+                <Calendar size={14} /> {publishing ? "Scheduling…" : "Schedule"}
+              </button>
+              <button onClick={handlePublishNow} disabled={publishing}
+                style={{ padding: "13px 0", borderRadius: 12, border: "none", background: "#059669", color: "#fff", fontWeight: 700, fontSize: 13, cursor: publishing ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: publishing ? 0.7 : 1 }}>
+                <Send size={14} /> {publishing ? "Publishing…" : "Publish Now"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ═══════════ UPLOAD STEP ═══════════ */
+  if (step === "upload" && result) {
     const { script } = result;
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <button onClick={() => setStep("form")}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "#8080ff", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0, alignSelf: "flex-start" }}>
-          <ChevronLeft size={15} /> Generate New Script
+          <ChevronLeft size={15} /> New Script
         </button>
 
-        {/* Headline */}
+        {/* Script summary */}
         <div style={{ background: "#1e1e3a", borderRadius: 16, padding: "16px 18px", border: "1.5px solid #3a3a6a" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#8080ff", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Video Headline</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", lineHeight: 1.3 }}>{script.headline}</div>
-        </div>
-
-        {/* Opening hook */}
-        <div style={{ background: "#161616", borderRadius: 14, padding: "14px 16px", border: "1.5px solid #2a2a2a" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Opening Hook</div>
-          <div style={{ fontSize: 14, color: "#fff", lineHeight: 1.6, fontStyle: "italic" }}>"{script.hook}"</div>
-        </div>
-
-        {/* Scene cards */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-            Script — {(script.scenes || []).length} Scenes
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {(script.scenes || []).map((scene, i) => (
-              <div key={i} style={{ background: "#161616", borderRadius: 14, border: "1.5px solid #2a2a2a", overflow: "hidden" }}>
-                <div style={{ background: "#1a1a1a", padding: "8px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #2a2a2a" }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 6, background: "#5B5BD6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                    {scene.number || i + 1}
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{scene.title}</span>
-                </div>
-                <div style={{ padding: "10px 14px", borderBottom: "1px solid #1a1a1a" }}>
-                  <div style={{ fontSize: 10, color: "#5B5BD6", fontWeight: 700, marginBottom: 4 }}>ON SCREEN</div>
-                  <div style={{ fontSize: 13, color: "#e0e0e0", fontWeight: 600 }}>{scene.caption}</div>
-                </div>
-                <div style={{ padding: "10px 14px" }}>
-                  <div style={{ fontSize: 10, color: "#888", fontWeight: 700, marginBottom: 4 }}>VOICEOVER</div>
-                  <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.6 }}>{scene.voiceover}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Hashtags */}
-        {script.hashtags?.length > 0 && (
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#8080ff", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Script Ready</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 10, lineHeight: 1.3 }}>{script.headline}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {script.hashtags.map((tag, i) => (
-              <span key={i} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#1e1e3a", color: "#8080ff" }}>
-                #{tag.replace(/^#/, "")}
+            {(script.scenes || []).map((s, i) => (
+              <span key={i} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, background: "#16163a", color: "#8080ff", fontWeight: 600 }}>
+                {i + 1}. {(s.caption || "").slice(0, 30)}{(s.caption || "").length > 30 ? "…" : ""}
               </span>
             ))}
           </div>
+        </div>
+
+        {/* File picker */}
+        <div>
+          <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#cccccc", marginBottom: 8 }}>
+            Add Your Video Clip <span style={{ color: "#555", fontWeight: 400 }}>(3–60 s · MP4 / MOV · max 60 MB)</span>
+          </label>
+          <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime,video/webm,video/*"
+            style={{ display: "none" }} onChange={handleVideoSelect} />
+
+          {!videoFile ? (
+            <button onClick={() => videoInputRef.current?.click()}
+              style={{ width: "100%", padding: "36px 0", borderRadius: 16, border: "2px dashed #3a3a6a", background: "#0d0d1a", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+              <Upload size={28} style={{ color: "#8080ff", opacity: 0.7 }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#8080ff" }}>Tap to pick a video from gallery</span>
+              <span style={{ fontSize: 11, color: "#555" }}>MP4 · MOV · WebM</span>
+            </button>
+          ) : (
+            <div style={{ borderRadius: 16, overflow: "hidden", border: "1.5px solid #3a3a6a", position: "relative" }}>
+              <video src={videoPreviewUrl} muted playsInline controls
+                style={{ width: "100%", display: "block", background: "#000", maxHeight: 260, objectFit: "contain" }} />
+              <button onClick={() => { setVideoFile(null); setVideoPreview(null); setUploadUrl(null); }}
+                style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
+                <X size={14} />
+              </button>
+              <div style={{ padding: "8px 14px", background: "#161616", fontSize: 11, color: "#666" }}>
+                {videoFile.name} · {videoDuration.toFixed(1)}s
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Upload progress bar */}
+        {uploading && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: "#888" }}>Uploading…</span>
+              <span style={{ fontSize: 11, color: "#5B5BD6", fontWeight: 700 }}>{uploadProgress}%</span>
+            </div>
+            <div style={{ height: 4, background: "#2a2a2a", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${uploadProgress}%`, background: "#5B5BD6", borderRadius: 2, transition: "width 0.3s" }} />
+            </div>
+          </div>
         )}
 
-        {/* Editable Instagram caption */}
-        <Section title="Instagram Caption (editable)">
-          <textarea value={caption} onChange={e => setCaption(e.target.value)}
-            rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, fontSize: 13 }} />
-        </Section>
-
-        {/* Schedule date picker */}
-        <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 14, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-          <Clock size={14} style={{ color: "#888", flexShrink: 0 }} />
-          <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)}
-            style={{ flex: 1, background: "none", border: "none", color: scheduledAt ? "#ccc" : "#666", fontSize: 13, outline: "none", fontFamily: "inherit" }} />
-        </div>
+        {/* Upload success badge */}
+        {uploadedVideoUrl && !uploading && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#0a2016", borderRadius: 12, border: "1px solid #14532d" }}>
+            <Check size={14} style={{ color: "#4ade80", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: "#4ade80", fontWeight: 600 }}>Clip uploaded — tap Generate Video to render!</span>
+          </div>
+        )}
 
         {/* Actions */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <button onClick={handleSaveDraft}
-            style={{ padding: "13px 0", borderRadius: 12, border: "1.5px solid #2a2a2a", background: "#161616", color: "#ccc", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-            Save to Drafts
+        {!uploadedVideoUrl ? (
+          <button onClick={handleUpload} disabled={!videoFile || uploading}
+            style={{ padding: "14px 0", borderRadius: 14, border: "none", background: videoFile && !uploading ? "#5B5BD6" : "#2a2a2a", color: videoFile && !uploading ? "#fff" : "#555", fontWeight: 700, fontSize: 14, cursor: videoFile && !uploading ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: videoFile ? "0 4px 14px rgba(91,91,214,0.3)" : "none" }}>
+            <Upload size={15} /> {uploading ? `Uploading ${uploadProgress}%…` : "Upload Clip"}
           </button>
-          <button onClick={handleSchedule} disabled={saving || !scheduledAt}
-            style={{ padding: "13px 0", borderRadius: 12, border: "none", background: scheduledAt ? "#5B5BD6" : "#2a2a2a", color: scheduledAt ? "#fff" : "#555", fontWeight: 700, fontSize: 13, cursor: scheduledAt ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, boxShadow: scheduledAt ? "0 4px 12px rgba(91,91,214,0.3)" : "none" }}>
-            <Calendar size={14} /> {saving ? "Scheduling…" : "Schedule"}
+        ) : (
+          <button onClick={handleRender}
+            style={{ padding: "15px 0", borderRadius: 14, border: "none", background: "#5B5BD6", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 14px rgba(91,91,214,0.35)" }}>
+            <Sparkles size={15} /> Generate Video
           </button>
-        </div>
+        )}
       </div>
     );
   }
 
-  // ── Form step ──
+  /* ═══════════ FORM STEP ═══════════ */
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Video template picker — only shown when user has saved templates */}
@@ -554,7 +758,7 @@ function VideoForm() {
 
       <GenerateBtn onClick={handleGenerate} label={loading ? "Generating Script…" : "Generate Video Script"} disabled={loading} />
       <p style={{ fontSize: 11, color: "#555", textAlign: "center", margin: "2px 0 0" }}>
-        AI writes scene-by-scene voiceover, on-screen captions &amp; hashtags — ready to record.
+        AI writes the script — then add your clip to render a video with captions.
       </p>
     </div>
   );

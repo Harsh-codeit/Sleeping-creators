@@ -8,7 +8,7 @@ from typing import Optional
 
 import httpx
 from anthropic import AsyncAnthropic
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from backend_mobile.config import settings
@@ -376,3 +376,99 @@ Make content specific and actionable — no generic filler."""
     _clean(doc)
 
     return {"post_id": post_id, "script": script}
+
+
+# ── User video upload ─────────────────────────────────────────────────────────
+
+_ALLOWED_VIDEO_TYPES = {
+    "video/mp4", "video/quicktime", "video/x-m4v", "video/webm", "video/mov",
+}
+_MAX_VIDEO_BYTES = 60 * 1024 * 1024  # 60 MB
+
+
+@router.post("/videos/upload")
+async def upload_user_video(
+    file: UploadFile = File(...),
+    user_id: str = Depends(_current_user_id),
+):
+    """
+    Upload a short video clip (≤60 MB) to R2 for caption-overlay rendering.
+    Returns: {video_url, key}
+    """
+    from backend_mobile.modules.posts.r2_client import upload_bytes
+    from backend_mobile.config import settings as _s
+
+    content_type = (file.content_type or "video/mp4").lower()
+    if content_type not in _ALLOWED_VIDEO_TYPES:
+        raise HTTPException(400, f"Unsupported video type '{content_type}'. Use MP4 or MOV.")
+
+    data = await file.read()
+    if len(data) > _MAX_VIDEO_BYTES:
+        raise HTTPException(413, "Video file exceeds the 60 MB limit")
+
+    ext = "mp4"
+    if "quicktime" in content_type or "mov" in content_type:
+        ext = "mov"
+    elif "webm" in content_type:
+        ext = "webm"
+
+    video_url = await upload_bytes(data, f"clip.{ext}", content_type, folder="user_videos")
+    key = video_url.replace(f"{_s.r2_public_url}/", "")
+
+    return {"video_url": video_url, "key": key}
+
+
+# ── Caption-overlay render ────────────────────────────────────────────────────
+
+@router.post("/videos/{post_id}/render")
+async def render_video_with_captions(
+    post_id: str,
+    body: dict,
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """
+    Overlay AI script captions on the uploaded clip via Shotstack.
+    Body: {video_url: str, total_duration: float}
+    Returns: {render_id, post_id, status: "rendering"}
+    """
+    from backend_mobile.modules.posts.shotstack_service import submit_render_timeline
+    from backend_mobile.modules.posts.video_render import build_caption_timeline
+
+    video_url = (body.get("video_url") or "").strip()
+    total_duration = float(body.get("total_duration") or 15.0)
+
+    if not video_url:
+        raise HTTPException(400, "video_url is required")
+
+    post = await db.posts.find_one({"id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(404, "Post not found")
+    if post.get("creator_id") != user_id:
+        raise HTTPException(403, "Forbidden")
+
+    script = post.get("video_script")
+    if not script:
+        raise HTTPException(400, "Post has no video_script — generate a script first")
+
+    timeline = build_caption_timeline(video_url, script, total_duration)
+
+    try:
+        render_id = await submit_render_timeline(timeline)
+    except Exception as exc:
+        raise HTTPException(502, f"Shotstack render failed: {exc}")
+
+    if not render_id:
+        raise HTTPException(502, "Shotstack did not return a render ID")
+
+    await db.posts.update_one(
+        {"id": post_id},
+        {"$set": {
+            "video_url": video_url,
+            "render_id": render_id,
+            "status": "rendering",
+            "updated_at": _now_iso(),
+        }}
+    )
+
+    return {"render_id": render_id, "post_id": post_id, "status": "rendering"}

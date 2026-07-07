@@ -28,3 +28,7 @@ services:
         value: ""
       - key: R2_PUBLIC_URL
         value: ""
+      - key: SHOTSTACK_KEY
+        sync: false          # paste Shotstack API key from dashboard
+      - key: SHOTSTACK_ENV
+        value: "stage"       # change to "production" to remove watermark + faster renders

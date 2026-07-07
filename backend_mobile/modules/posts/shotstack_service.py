@@ -541,6 +541,29 @@ async def submit_render(
         return render_id
 
 
+async def submit_render_timeline(timeline_dict: dict) -> str:
+    """
+    Submit a pre-built Shotstack timeline (no template, no merge fields) and return the render_id.
+    Used by the video caption-overlay feature where the timeline is built programmatically.
+    """
+    body = {
+        "timeline": timeline_dict["timeline"],
+        "output": timeline_dict["output"],
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{_base_url()}/render",
+            json=body,
+            headers=_headers(),
+        )
+        resp.raise_for_status()
+    data = resp.json()
+    render_id = data.get("response", {}).get("id", "")
+    if not render_id:
+        raise RuntimeError(f"Shotstack did not return a render id: {data}")
+    return render_id
+
+
 async def poll_render(render_id: str) -> dict:
     """Returns {status, url, error}. Status values: queued|fetching|rendering|saving|done|failed."""
     async with httpx.AsyncClient(timeout=15) as c:
