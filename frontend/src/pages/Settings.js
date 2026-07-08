@@ -386,10 +386,17 @@ function ConnectionsTab({ user }) {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     try {
       const { data } = await axios.get(`${API}/bundle/connect/${clientId}`, { headers });
-      if (data.url) window.open(data.url, "_blank", "noopener,noreferrer");
-      else toast.error("Could not get connect URL");
+      if (data.already_connected) {
+        toast.success(`Instagram already connected${data.instagram_username ? ` as @${data.instagram_username}` : ""}!`);
+        await load(); // refresh displayed status
+      } else if (data.url) {
+        window.open(data.url, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error("Could not get connect URL");
+      }
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to initiate connect");
+      const msg = err.response?.data?.detail || "Failed to initiate connect";
+      toast.error(msg, { duration: 6000 });
     }
   };
 

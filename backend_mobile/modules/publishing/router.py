@@ -1,6 +1,7 @@
 """Bundle.social connect + account management routes."""
 from __future__ import annotations
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -67,6 +68,20 @@ async def connect_instagram(
         except Exception as exc:
             raise HTTPException(502, f"Team creation failed: {exc}")
 
+    # If Instagram is already connected, return the refresh status instead of
+    # creating a new portal link (avoids hitting the Bundle social-set limit).
+    try:
+        status = await bundle_service.get_connected_accounts(settings.bundle_api_key, team_id)
+        if "instagram" in status.get("connected", []):
+            ig = next((a for a in status.get("accounts", []) if a.get("type") == "INSTAGRAM"), {})
+            return {
+                "already_connected": True,
+                "team_id": team_id,
+                "instagram_username": ig.get("username"),
+            }
+    except Exception:
+        pass  # proceed to portal link if status check fails
+
     try:
         url = await bundle_service.create_portal_link(
             api_key=settings.bundle_api_key,
@@ -74,6 +89,20 @@ async def connect_instagram(
             platforms=["instagram"],
             redirect_url=f"{settings.app_base_url}/settings",
         )
+    except httpx.HTTPStatusError as exc:
+        body = ""
+        try:
+            body = exc.response.json()
+        except Exception:
+            body = exc.response.text[:300]
+        body_str = str(body).lower()
+        if exc.response.status_code == 403 and ("social set limit" in body_str or "limit" in body_str):
+            raise HTTPException(
+                503,
+                "Instagram connection slots are currently full on our platform. "
+                "Please contact support to connect your account.",
+            )
+        raise HTTPException(502, f"Portal link failed: {exc}")
     except Exception as exc:
         raise HTTPException(502, f"Portal link failed: {exc}")
 
