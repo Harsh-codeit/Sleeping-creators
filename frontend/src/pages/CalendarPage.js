@@ -93,7 +93,14 @@ export default function CalendarPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => {
     const id = setInterval(fetchData, 60000);
-    return () => clearInterval(id);
+    const onVisibility = () => { if (document.visibilityState === "visible") fetchData(); };
+    window.addEventListener("sc:refresh", fetchData);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("sc:refresh", fetchData);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchData]);
 
   const nav = (dir) => {

@@ -28,6 +28,15 @@ export default function Analytics() {
   }, [clientId]);
 
   useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") fetchAnalytics(); };
+    window.addEventListener("sc:refresh", fetchAnalytics);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("sc:refresh", fetchAnalytics);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [fetchAnalytics]);
 
   const onRefresh = async () => {
     if (!clientId || refreshing) return;
@@ -90,9 +99,9 @@ export default function Analytics() {
         </div>
       ) : data && data.bundle_connected === false ? (
         <div className="bg-zinc-900 border border-zinc-800 p-8 text-center rounded-xl" data-testid="analytics-not-connected">
-          <div className="text-sm text-zinc-300 mb-2">Your Instagram or Facebook isn't connected yet.</div>
+          <div className="text-sm text-zinc-300 mb-2">Your Instagram isn't connected yet.</div>
           <a href="/settings?tab=connections" className="text-xs text-violet-400 font-mono hover:underline">
-            Connect your accounts in Settings →
+            Connect your Instagram in Settings →
           </a>
         </div>
       ) : data && (data.bundle?.socials || []).length === 0 ? (

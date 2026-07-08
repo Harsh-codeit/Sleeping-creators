@@ -11,10 +11,15 @@
  */
 
 const FONT_MAP = {
-  sans:   "system-ui, -apple-system, sans-serif",
-  bold:   "system-ui, -apple-system, sans-serif",
-  serif:  "Georgia, 'Times New Roman', serif",
-  mono:   "'Courier New', Courier, monospace",
+  // Legacy keys from seeded templates
+  sans:    "system-ui, -apple-system, sans-serif",
+  mono:    "'Courier New', Courier, monospace",
+  serif:   "Georgia, 'Times New Roman', serif",
+  // Active keys from TemplateBuilder
+  bold:    "Georgia, 'Times New Roman', serif",
+  clean:   "'Times New Roman', Times, serif",
+  elegant: "'Bodoni Moda', 'Book Antiqua', Palatino, serif",
+  playful: "'Dancing Script', 'Brush Script MT', cursive",
 };
 
 const NICHE_COLORS = {

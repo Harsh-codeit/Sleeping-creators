@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 class CarouselGenerationRequest(BaseModel):
     creator_id: Optional[str] = None
     topic: str = Field(..., min_length=3, max_length=512)
+    tone: str = ""
     slide_count: int = Field(default=7, ge=3, le=15)
     platform: str = Field(default="instagram")
     cta_keyword: Optional[str] = None

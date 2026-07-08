@@ -4,10 +4,11 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   ArrowLeft, Calendar, ChevronLeft, ChevronRight,
-  Clock, Send, Trash2, Sparkles, FileText, Layers,
+  Clock, Trash2, Sparkles, FileText,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const PAGE_SIZE = 10;
 
 function authHeaders() {
   const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
@@ -23,19 +24,13 @@ function timeAgo(isoString) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// Simple slide card that works without a template object
 function SlideCard({ slide, total, idx }) {
-  const bg = "linear-gradient(145deg, #1a1a3a, #0d0d0d)";
   return (
-    <div style={{ width: "100%", height: "100%", background: bg, display: "flex", flexDirection: "column", justifyContent: "center", padding: 24, boxSizing: "border-box", position: "relative" }}>
+    <div style={{ width: "100%", height: "100%", background: "linear-gradient(145deg, #1a1a3a, #0d0d0d)", display: "flex", flexDirection: "column", justifyContent: "center", padding: 24, boxSizing: "border-box", position: "relative" }}>
       <div style={{ width: 28, height: 3, background: "#5B5BD6", borderRadius: 99, marginBottom: 14 }} />
-      <p style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0, lineHeight: 1.35 }}>
-        {slide.heading}
-      </p>
+      <p style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0, lineHeight: 1.35 }}>{slide.heading}</p>
       {slide.body && (
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 10, lineHeight: 1.6 }}>
-          {slide.body}
-        </p>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 10, lineHeight: 1.6 }}>{slide.body}</p>
       )}
       <span style={{ position: "absolute", top: 14, right: 14, fontSize: 10, color: "rgba(255,255,255,0.25)", fontWeight: 700 }}>
         {String(idx + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}
@@ -44,21 +39,21 @@ function SlideCard({ slide, total, idx }) {
   );
 }
 
-function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
-  const [expanded, setExpanded]   = useState(false);
-  const [slideIdx, setSlideIdx]   = useState(0);
-  const [scheduledAt, setAt]      = useState("");
-  const [saving, setSaving]       = useState(false);
-  const [deleting, setDeleting]   = useState(false);
+function DraftCard({ item, type, onScheduled, onDeleted }) {
+  const [expanded, setExpanded] = useState(false);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [scheduledAt, setAt]    = useState("");
+  const [saving, setSaving]     = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const slides = type === "carousel" ? (item.slides || []) : [];
   const allSlides = type === "carousel"
-    ? [{ heading: slides[0]?.heading || item.topic, body: "Cover", slide_number: 0, isCover: true }, ...slides]
+    ? [{ heading: slides[0]?.heading || item.topic, body: "Cover", slide_number: 0 }, ...slides]
     : [];
   const hasImages = (item.slide_image_urls || []).length > 0;
 
   const schedule = async () => {
-    if (!scheduledAt) return toast.error("Pick a date and time");
+    if (!scheduledAt) return toast.error("Pick a date and time first");
     setSaving(true);
     try {
       if (type === "carousel") {
@@ -74,16 +69,15 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
           status: "draft",
         }, { headers: authHeaders() });
         await axios.post(`${API}/posts/${post.id}/approve`, {}, { headers: authHeaders() });
-        // Mark the carousel as scheduled so it no longer appears as a draft
         await axios.patch(`${API}/carousels/${item.id}`, { status: "scheduled" }, { headers: authHeaders() });
       } else {
         await axios.put(`${API}/posts/${item.id}`, { scheduled_at: new Date(scheduledAt).toISOString() }, { headers: authHeaders() });
         await axios.post(`${API}/posts/${item.id}/approve`, {}, { headers: authHeaders() });
       }
-      const schedDate = new Date(scheduledAt);
-      toast.success(`Scheduled for ${schedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${schedDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
+      const d = new Date(scheduledAt);
+      toast.success(`Scheduled for ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`);
+      window.dispatchEvent(new Event("sc:refresh"));
       onScheduled(item.id);
-      onNavigate("/calendar");
     } catch (err) {
       toast.error(err.response?.data?.detail || "Schedule failed");
     } finally {
@@ -100,6 +94,7 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
       } else {
         await axios.delete(`${API}/posts/${item.id}`, { headers: authHeaders() });
       }
+      window.dispatchEvent(new Event("sc:refresh"));
       onDeleted(item.id);
     } catch {
       toast.error("Could not delete draft");
@@ -107,62 +102,19 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
     }
   };
 
-  const publishNow = async () => {
-    setSaving(true);
-    try {
-      if (type === "carousel") {
-        const { data: post } = await axios.post(`${API}/posts`, {
-          content_type: "carousel",
-          platform: "instagram",
-          caption: item.caption || "",
-          hashtags: item.hashtags || [],
-          slides: item.slides || [],
-          slide_image_urls: item.slide_image_urls || [],
-          carousel_id: item.id,
-          scheduled_at: new Date().toISOString(),
-          status: "draft",
-        }, { headers: authHeaders() });
-        await axios.post(`${API}/posts/${post.id}/publish`, {}, { headers: authHeaders() });
-        // Mark the carousel as published so it no longer appears as a draft
-        await axios.patch(`${API}/carousels/${item.id}`, { status: "published" }, { headers: authHeaders() });
-      } else {
-        await axios.post(`${API}/posts/${item.id}/publish`, {}, { headers: authHeaders() });
-      }
-      toast.success("Published!");
-      onScheduled(item.id);
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Publish failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div style={{
-      background: "#161616",
-      border: `1.5px solid ${expanded ? "#3a3a6a" : "#2a2a2a"}`,
-      borderRadius: 20,
-      overflow: "hidden",
-      transition: "border-color 0.15s",
-    }}>
-      {/* ── Collapsed header (always visible) ── */}
-      <div
-        onClick={() => { setExpanded(e => !e); setSlideIdx(0); }}
+    <div style={{ background: "#161616", border: `1.5px solid ${expanded ? "#3a3a6a" : "#2a2a2a"}`, borderRadius: 20, overflow: "hidden", transition: "border-color 0.15s" }}>
+      {/* Collapsed header */}
+      <div onClick={() => { setExpanded(e => !e); setSlideIdx(0); }}
         style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", cursor: "pointer" }}>
-
-        {/* Thumbnail */}
         <div style={{ width: 52, height: 66, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: "#1e1e3a" }}>
           {hasImages
             ? <img src={item.slide_image_urls[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : (
-              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(145deg,#1e1e3a,#0d0d0d)" }}>
+            : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(145deg,#1e1e3a,#0d0d0d)" }}>
                 <div style={{ width: 16, height: 2, background: "#5B5BD6", borderRadius: 99 }} />
               </div>
-            )
           }
         </div>
-
-        {/* Info */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {item.topic || item.caption?.slice(0, 50) || "Untitled draft"}
@@ -170,52 +122,34 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
           <p style={{ fontSize: 11, color: "#555", margin: "3px 0 0" }}>
             {type === "carousel"
               ? `${slides.length} slides · ${timeAgo(item.created_at)}`
-              : `Post draft · ${timeAgo(item.created_at)}`
-            }
+              : `Post draft · ${timeAgo(item.created_at)}`}
           </p>
         </div>
-
-        {/* Expand chevron */}
         <div style={{ color: "#444", transition: "transform 0.2s", transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}>
           <ChevronRight size={16} />
         </div>
       </div>
 
-      {/* ── Expanded body ── */}
+      {/* Expanded body */}
       {expanded && (
         <div style={{ borderTop: "1px solid #2a2a2a" }}>
-
-          {/* Slide viewer — only for carousels */}
+          {/* Slide viewer */}
           {type === "carousel" && allSlides.length > 0 && (
             <div style={{ position: "relative", aspectRatio: "4/5", background: "#0d0d0d" }}>
-              {hasImages ? (
-                <img
-                  src={item.slide_image_urls[slideIdx] || item.slide_image_urls[0]}
-                  alt={`Slide ${slideIdx + 1}`}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              ) : (
-                <SlideCard
-                  slide={allSlides[slideIdx]}
-                  total={allSlides.length}
-                  idx={slideIdx}
-                />
-              )}
-
-              {/* Arrows */}
+              {hasImages
+                ? <img src={item.slide_image_urls[slideIdx] || item.slide_image_urls[0]} alt={`Slide ${slideIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <SlideCard slide={allSlides[slideIdx]} total={allSlides.length} idx={slideIdx} />
+              }
               {allSlides.length > 1 && (
                 <>
-                  <button
-                    onClick={e => { e.stopPropagation(); setSlideIdx(i => Math.max(0, i - 1)); }}
+                  <button onClick={e => { e.stopPropagation(); setSlideIdx(i => Math.max(0, i - 1)); }}
                     style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
                     <ChevronLeft size={18} />
                   </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); setSlideIdx(i => Math.min(allSlides.length - 1, i + 1)); }}
+                  <button onClick={e => { e.stopPropagation(); setSlideIdx(i => Math.min(allSlides.length - 1, i + 1)); }}
                     style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>
                     <ChevronRight size={18} />
                   </button>
-                  {/* Dot indicators */}
                   <div style={{ position: "absolute", bottom: 14, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 5 }}>
                     {allSlides.map((_, i) => (
                       <div key={i} onClick={e => { e.stopPropagation(); setSlideIdx(i); }}
@@ -242,7 +176,6 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
 
           {/* Actions */}
           <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* Datetime picker */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#0d0d0d", borderRadius: 12, padding: "10px 14px", border: "1px solid #2a2a2a" }}>
               <Clock size={14} style={{ color: "#555", flexShrink: 0 }} />
               <input
@@ -254,24 +187,18 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
               />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8 }}>
               <button
                 onClick={e => { e.stopPropagation(); discard(); }}
                 disabled={deleting}
-                style={{ padding: "11px 0", borderRadius: 12, border: "1.5px solid #3a1a1a", background: "transparent", color: "#f87171", fontWeight: 600, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                style={{ padding: "13px 0", borderRadius: 12, border: "1.5px solid #3a1a1a", background: "transparent", color: "#f87171", fontWeight: 600, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
                 <Trash2 size={13} /> Discard
               </button>
               <button
                 onClick={e => { e.stopPropagation(); schedule(); }}
                 disabled={saving || !scheduledAt}
-                style={{ padding: "11px 0", borderRadius: 12, border: `1.5px solid ${scheduledAt ? "#5B5BD6" : "#2a2a2a"}`, background: "transparent", color: scheduledAt ? "#5B5BD6" : "#444", fontWeight: 600, fontSize: 12, cursor: scheduledAt ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-                <Calendar size={13} /> {saving ? "Saving…" : "Schedule"}
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); publishNow(); }}
-                disabled={saving}
-                style={{ padding: "11px 0", borderRadius: 12, border: "none", background: "#5B5BD6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, boxShadow: "0 3px 10px rgba(91,91,214,0.28)" }}>
-                <Send size={13} /> Publish
+                style={{ padding: "13px 0", borderRadius: 12, border: "none", background: scheduledAt ? "#5B5BD6" : "#2a2a2a", color: scheduledAt ? "#fff" : "#555", fontWeight: 700, fontSize: 13, cursor: scheduledAt && !saving ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, boxShadow: scheduledAt ? "0 4px 12px rgba(91,91,214,0.3)" : "none" }}>
+                <Calendar size={14} /> {saving ? "Scheduling…" : "Schedule for Publish"}
               </button>
             </div>
           </div>
@@ -283,35 +210,82 @@ function DraftCard({ item, type, onScheduled, onDeleted, onNavigate }) {
 
 export default function DraftsPage() {
   const navigate = useNavigate();
-  const [carousels, setCarousels] = useState([]);
-  const [posts, setPosts]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [tab, setTab]             = useState("all"); // all | carousels | posts
+  const [carousels, setCarousels]         = useState([]);
+  const [posts, setPosts]                 = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [loadingMore, setLoadingMore]     = useState(false);
+  const [tab, setTab]                     = useState("all");
+  const [carouselHasMore, setCHasMore]    = useState(false);
+  const [postHasMore, setPHasMore]        = useState(false);
+  const [carouselOffset, setCOffset]      = useState(0);
+  const [postOffset, setPOffset]          = useState(0);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [cRes, pRes] = await Promise.allSettled([
-          axios.get(`${API}/carousels?limit=50`, { headers: authHeaders() }),
-          axios.get(`${API}/posts?limit=50`, { headers: authHeaders() }),
-        ]);
-        if (cRes.status === "fulfilled") {
-          const data = cRes.value.data;
-          setCarousels((data?.carousels || data || []).filter(c => c.status === "draft"));
-        }
-        if (pRes.status === "fulfilled") {
-          const data = pRes.value.data;
-          setPostsFiltered(Array.isArray(data) ? data : (data?.posts || []));
-        }
-      } catch {}
-      setLoading(false);
-    };
-    load();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setCOffset(0);
+    setPOffset(0);
+    try {
+      const [cRes, pRes] = await Promise.allSettled([
+        axios.get(`${API}/carousels?limit=${PAGE_SIZE}&offset=0`, { headers: authHeaders() }),
+        axios.get(`${API}/posts?limit=${PAGE_SIZE}&offset=0`, { headers: authHeaders() }),
+      ]);
+      if (cRes.status === "fulfilled") {
+        const raw = cRes.value.data?.carousels || cRes.value.data || [];
+        const drafts = raw.filter(c => c.status === "draft");
+        setCarousels(drafts);
+        setCHasMore(raw.length === PAGE_SIZE);
+      }
+      if (pRes.status === "fulfilled") {
+        const raw = Array.isArray(pRes.value.data) ? pRes.value.data : (pRes.value.data?.posts || []);
+        const drafts = raw.filter(p => p.status === "draft");
+        setPosts(drafts);
+        setPHasMore(raw.length === PAGE_SIZE);
+      }
+    } catch {}
+    setLoading(false);
   }, []);
 
-  function setPostsFiltered(all) {
-    setPosts(all.filter(p => p.status === "draft"));
-  }
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const handleVisibility = () => { if (document.visibilityState === "visible") load(); };
+    window.addEventListener("sc:refresh", load);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("sc:refresh", load);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [load]);
+
+  const loadMoreCarousels = async () => {
+    const next = carouselOffset + PAGE_SIZE;
+    setLoadingMore(true);
+    try {
+      const { data } = await axios.get(`${API}/carousels?limit=${PAGE_SIZE}&offset=${next}`, { headers: authHeaders() });
+      const raw = data?.carousels || data || [];
+      const drafts = raw.filter(c => c.status === "draft");
+      setCarousels(prev => [...prev, ...drafts]);
+      setCOffset(next);
+      setCHasMore(raw.length === PAGE_SIZE);
+    } catch {}
+    setLoadingMore(false);
+  };
+
+  const loadMorePosts = async () => {
+    const next = postOffset + PAGE_SIZE;
+    setLoadingMore(true);
+    try {
+      const { data } = await axios.get(`${API}/posts?limit=${PAGE_SIZE}&offset=${next}`, { headers: authHeaders() });
+      const raw = Array.isArray(data) ? data : (data?.posts || []);
+      const drafts = raw.filter(p => p.status === "draft");
+      setPosts(prev => [...prev, ...drafts]);
+      setPOffset(next);
+      setPHasMore(raw.length === PAGE_SIZE);
+    } catch {}
+    setLoadingMore(false);
+  };
 
   const handleScheduled = (id) => {
     setCarousels(c => c.filter(x => x.id !== id));
@@ -332,14 +306,16 @@ export default function DraftsPage() {
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const totalCount = carousels.length + posts.length;
+  const showLoadMore = (tab === "carousels" && carouselHasMore) ||
+                       (tab === "posts"     && postHasMore) ||
+                       (tab === "all"       && (carouselHasMore || postHasMore));
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "#0d0d0d" }}>
       {/* Header */}
       <div style={{ background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "0 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 0 0" }}>
-          <button
-            onClick={() => navigate(-1)}
+          <button onClick={() => navigate(-1)}
             style={{ background: "none", border: "none", cursor: "pointer", color: "#888", padding: "4px 8px 4px 0", display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
             <ArrowLeft size={15} /> Back
           </button>
@@ -357,11 +333,7 @@ export default function DraftsPage() {
             { key: "posts",     label: `Posts (${posts.length})` },
           ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              style={{
-                padding: "8px 16px", fontSize: 13, fontWeight: 500, background: "none", border: "none", cursor: "pointer",
-                borderBottom: `2px solid ${tab === t.key ? "#5B5BD6" : "transparent"}`,
-                color: tab === t.key ? "#5B5BD6" : "#666",
-              }}>
+              style={{ padding: "8px 16px", fontSize: 13, fontWeight: 500, background: "none", border: "none", cursor: "pointer", borderBottom: `2px solid ${tab === t.key ? "#5B5BD6" : "transparent"}`, color: tab === t.key ? "#5B5BD6" : "#666" }}>
               {t.label}
             </button>
           ))}
@@ -382,19 +354,17 @@ export default function DraftsPage() {
             </div>
             <p style={{ fontWeight: 700, fontSize: 15, color: "#ccc", margin: 0 }}>No drafts yet</p>
             <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>Generate a carousel to start — it'll appear here</p>
-            <button
-              onClick={() => navigate("/create")}
+            <button onClick={() => navigate("/create")}
               style={{ marginTop: 18, padding: "11px 24px", background: "#5B5BD6", color: "#fff", fontWeight: 600, fontSize: 13, borderRadius: 12, border: "none", cursor: "pointer" }}>
               Create Content
             </button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {/* Info tip */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#0d0d1a", borderRadius: 12, border: "1px solid #2a2a4a" }}>
               <FileText size={13} style={{ color: "#5B5BD6", flexShrink: 0 }} />
               <p style={{ fontSize: 11, color: "#666", margin: 0 }}>
-                Tap a card to preview slides, then schedule or publish directly.
+                Tap a card to preview slides, then pick a date and schedule for Instagram.
               </p>
             </div>
 
@@ -405,9 +375,21 @@ export default function DraftsPage() {
                 type={item._type}
                 onScheduled={handleScheduled}
                 onDeleted={handleDeleted}
-                onNavigate={navigate}
               />
             ))}
+
+            {showLoadMore && (
+              <button
+                onClick={() => {
+                  if (tab === "carousels") loadMoreCarousels();
+                  else if (tab === "posts") loadMorePosts();
+                  else { if (carouselHasMore) loadMoreCarousels(); if (postHasMore) loadMorePosts(); }
+                }}
+                disabled={loadingMore}
+                style={{ padding: "13px 0", borderRadius: 14, border: "1.5px solid #2a2a2a", background: "transparent", color: "#666", fontWeight: 600, fontSize: 13, cursor: "pointer", width: "100%", marginTop: 4 }}>
+                {loadingMore ? "Loading…" : "Load more"}
+              </button>
+            )}
           </div>
         )}
       </div>

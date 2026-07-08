@@ -84,10 +84,10 @@ const COLOR_SCHEMES = [
 ];
 
 const FONT_STYLES = [
-  { key: "bold",    label: "Bold & Modern",   family: "system-ui, sans-serif", weight: 800 },
-  { key: "clean",   label: "Clean & Minimal", family: "system-ui, sans-serif", weight: 400 },
-  { key: "elegant", label: "Elegant",         family: "Georgia, serif",        weight: 300 },
-  { key: "playful", label: "Playful",         family: "system-ui, sans-serif", weight: 700 },
+  { key: "bold",    family: "Georgia, 'Times New Roman', serif",                         weight: 700 },
+  { key: "clean",   family: "'Times New Roman', Times, serif",                           weight: 400 },
+  { key: "elegant", family: "'Bodoni Moda', 'Book Antiqua', Palatino, serif",            weight: 700 },
+  { key: "playful", family: "'Dancing Script', 'Brush Script MT', cursive",             weight: 700 },
 ];
 
 const NICHES = [
@@ -293,14 +293,13 @@ export default function TemplateBuilder() {
               {FONT_STYLES.map(f => (
                 <button key={f.key} onClick={() => setFontStyle(f.key)}
                   style={{
-                    padding: "14px", borderRadius: 14, cursor: "pointer", textAlign: "left",
-                    border: `1.5px solid ${fontStyle === f.key ? "#5B5BD6" : "#222"}`,
+                    padding: "16px 0", borderRadius: 14, cursor: "pointer",
+                    border: `2px solid ${fontStyle === f.key ? "#5B5BD6" : "#222"}`,
                     background: fontStyle === f.key ? "#1a1a3a" : "#161616",
-                    display: "flex", flexDirection: "column", gap: 5,
+                    display: "flex", alignItems: "center", justifyContent: "center",
                     transition: "all 0.15s",
                   }}>
-                  <span style={{ fontSize: 26, fontFamily: f.family, fontWeight: f.weight, color: fontStyle === f.key ? "#fff" : "#888", lineHeight: 1 }}>Aa</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: fontStyle === f.key ? "#8080ff" : "#555" }}>{f.label}</span>
+                  <span style={{ fontSize: 36, fontFamily: f.family, fontWeight: f.weight, color: fontStyle === f.key ? "#fff" : "#888", lineHeight: 1 }}>A</span>
                 </button>
               ))}
             </div>

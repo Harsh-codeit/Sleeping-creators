@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -11,15 +11,21 @@ import { useUser } from "../context/UserContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const PLATFORM_ICON = {
-  instagram: Instagram,
-};
+const PLATFORM_ICON = { instagram: Instagram };
 
 const STATUS_CONFIG = {
   scheduled: { label: "Scheduled", style: { color: "#8080ff", background: "#0d0d25", border: "1px solid #2a2a5a" } },
   published:  { label: "Published", style: { color: "#34d399", background: "#0a2016", border: "1px solid #14532d" } },
-  draft:      { label: "Draft",     style: { color: "#888", background: "#1e1e1e", border: "1px solid #2a2a2a" } },
+  draft:      { label: "Draft",     style: { color: "#888",    background: "#1e1e1e", border: "1px solid #2a2a2a" } },
   failed:     { label: "Failed",    style: { color: "#f87171", background: "#2a0a0a", border: "1px solid #7f1d1d" } },
+};
+
+const TONE_COLORS = {
+  Educational:   { color: "#8080ff", bg: "#0d0d25" },
+  Entertaining:  { color: "#34d399", bg: "#0a2016" },
+  Inspirational: { color: "#f59e0b", bg: "#1a1200" },
+  Professional:  { color: "#64748b", bg: "#0f1723" },
+  Casual:        { color: "#ec4899", bg: "#1a0a14" },
 };
 
 function greeting(name) {
@@ -73,13 +79,13 @@ function StatCard({ icon: Icon, label, value, sub, iconBg, iconColor, to }) {
 }
 
 export default function Dashboard() {
-  const navigate       = useNavigate();
-  const user           = useUser();
-  const clientId       = user?.client_id;
+  const navigate  = useNavigate();
+  const user      = useUser();
+  const clientId  = user?.client_id;
 
   const [posts, setPosts]         = useState([]);
   const [drafts, setDrafts]       = useState([]);
-  const [igConnected, setIgConn] = useState(false);
+  const [igConnected, setIgConn]  = useState(false);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading]     = useState(true);
 
@@ -88,33 +94,42 @@ export default function Dashboard() {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [postsResp, tmplResp, carouselResp] = await Promise.allSettled([
-          clientId ? axios.get(`${API}/posts?client_id=${clientId}&limit=8`, { headers: authHeaders() }) : Promise.resolve({ data: [] }),
-          axios.get(`${API}/templates`, { headers: authHeaders() }),
-          axios.get(`${API}/carousels?limit=6`, { headers: authHeaders() }),
-        ]);
-        if (postsResp.status === "fulfilled") {
-          const data = postsResp.value?.data;
-          const list = data?.posts || (Array.isArray(data) ? data : []);
-          setPosts(list.slice(0, 8));
-        }
-        if (tmplResp.status === "fulfilled") {
-          const data = tmplResp.value?.data;
-          const list = data?.templates || data || [];
-          setTemplates(list.slice(0, 3));
-        }
-        if (carouselResp.status === "fulfilled") {
-          const data = carouselResp.value?.data;
-          setDrafts((data?.carousels || []).filter(c => c.status === "draft").slice(0, 4));
-        }
-      } catch {}
-      setLoading(false);
-    };
-    load();
+  const load = useCallback(async () => {
+    try {
+      const [postsResp, tmplResp, carouselResp] = await Promise.allSettled([
+        clientId ? axios.get(`${API}/posts?client_id=${clientId}&limit=3`, { headers: authHeaders() }) : Promise.resolve({ data: [] }),
+        axios.get(`${API}/templates`, { headers: authHeaders() }),
+        axios.get(`${API}/carousels?limit=6`, { headers: authHeaders() }),
+      ]);
+      if (postsResp.status === "fulfilled") {
+        const data = postsResp.value?.data;
+        const list = data?.posts || (Array.isArray(data) ? data : []);
+        setPosts(list.slice(0, 3));
+      }
+      if (tmplResp.status === "fulfilled") {
+        const data = tmplResp.value?.data;
+        const list = data?.templates || data || [];
+        setTemplates(list.slice(0, 4));
+      }
+      if (carouselResp.status === "fulfilled") {
+        const data = carouselResp.value?.data;
+        setDrafts((data?.carousels || []).filter(c => c.status === "draft").slice(0, 4));
+      }
+    } catch {}
+    setLoading(false);
   }, [clientId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "visible") load(); };
+    window.addEventListener("sc:refresh", load);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("sc:refresh", load);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [load]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -171,7 +186,6 @@ export default function Dashboard() {
             iconBg="#ecfdf5" iconColor="#059669" />
           <StatCard icon={Layers}       label="Drafts"     value={draftCount}     sub="tap to view"
             iconBg="#1e1e1e" iconColor="#888888" to="/drafts" />
-          {/* Analytics card */}
           <Link to="/analytics"
             className="rounded-2xl p-5 border transition-all"
             style={{ background: "#161616", borderColor: "#2a2a2a", textDecoration: "none" }}
@@ -235,19 +249,19 @@ export default function Dashboard() {
         )}
 
         <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
-          {/* Recent posts */}
+          {/* Recent Content — top 3, with tone badge, clickable to /drafts */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold" style={{ color: "#ffffff" }}>Recent Content</h2>
-              <Link to="/calendar" className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#5B5BD6" }}>
-                View calendar <ArrowRight size={11} />
+              <Link to="/drafts" className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#5B5BD6" }}>
+                View all <ArrowRight size={11} />
               </Link>
             </div>
 
             {loading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map(i => (
-                  <div key={i} className="h-16 rounded-2xl animate-pulse" style={{ background: "#f0edf8" }} />
+                  <div key={i} className="h-16 rounded-2xl animate-pulse" style={{ background: "#161616" }} />
                 ))}
               </div>
             ) : posts.length === 0 ? (
@@ -256,7 +270,7 @@ export default function Dashboard() {
                 <p className="text-sm font-semibold" style={{ color: "#cccccc" }}>No posts yet</p>
                 <p className="text-xs mt-1" style={{ color: "#666666" }}>Create your first piece of content below</p>
                 <button onClick={() => navigate("/create")}
-                  className="mt-4 px-4 py-2 text-xs font-semibold rounded-xl text-white transition-colors"
+                  className="mt-4 px-4 py-2 text-xs font-semibold rounded-xl text-white"
                   style={{ background: "#5B5BD6" }}>
                   Create Post
                 </button>
@@ -266,10 +280,13 @@ export default function Dashboard() {
                 {posts.map(post => {
                   const cfg = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
                   const PIcon = PLATFORM_ICON[post.platform];
+                  const toneStyle = TONE_COLORS[post.tone] || null;
                   return (
-                    <div key={post._id || post.id}
-                      className="flex items-center gap-3 p-3.5 rounded-2xl border transition-all"
-                      style={{ background: "#161616", borderColor: post.starred ? "#3a2a00" : "#2a2a2a" }}
+                    <button
+                      key={post._id || post.id}
+                      onClick={() => navigate("/drafts")}
+                      className="flex items-center gap-3 p-3.5 rounded-2xl border transition-all w-full text-left"
+                      style={{ background: "#161616", borderColor: post.starred ? "#3a2a00" : "#2a2a2a", cursor: "pointer" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = post.starred ? "#5a4a00" : "#3a3a6a"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = post.starred ? "#3a2a00" : "#2a2a2a"}
                     >
@@ -282,7 +299,7 @@ export default function Dashboard() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate" style={{ color: "#ffffff" }}>
                           {post.caption?.slice(0, 60) || post.title || "Untitled post"}
-                          {post.caption?.length > 60 ? "…" : ""}
+                          {(post.caption?.length || 0) > 60 ? "…" : ""}
                         </p>
                         {post.scheduled_at && (
                           <p className="text-xs mt-0.5" style={{ color: "#666666" }}>
@@ -292,59 +309,63 @@ export default function Dashboard() {
                           </p>
                         )}
                       </div>
+                      {toneStyle && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, flexShrink: 0, color: toneStyle.color, background: toneStyle.bg, border: `1px solid ${toneStyle.color}33` }}>
+                          {post.tone}
+                        </span>
+                      )}
                       <button
-                        onClick={() => starPost(post.id || post._id)}
-                        title={post.starred ? "Unstar (remove from AI training)" : "Star — teach AI to write like this"}
+                        onClick={e => { e.stopPropagation(); starPost(post.id || post._id); }}
+                        title={post.starred ? "Unstar" : "Star — teach AI to write like this"}
                         style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", flexShrink: 0, lineHeight: 0 }}
                       >
-                        <Star size={14}
-                          fill={post.starred ? "#fbbf24" : "none"}
-                          stroke={post.starred ? "#fbbf24" : "#555"}
-                          strokeWidth={1.8}
-                        />
+                        <Star size={14} fill={post.starred ? "#fbbf24" : "none"} stroke={post.starred ? "#fbbf24" : "#555"} strokeWidth={1.8} />
                       </button>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={cfg.style}>
                         {cfg.label}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             )}
           </div>
 
-          {/* Quick actions */}
+          {/* Quick actions + Templates strip */}
           <div>
             <h2 className="text-sm font-semibold mb-4" style={{ color: "#ffffff" }}>Quick Actions</h2>
             <div className="space-y-2.5">
-              <QuickAction icon={Layers}        label="New Post"          desc="Design & write with AI"          to="/carousel"   iconBg="#EEF0FF" iconColor="#5B5BD6" />
-              <QuickAction icon={LayoutTemplate} label="Browse Templates"  desc="Find the perfect format"         to="/templates"  iconBg="#0a1a2e" iconColor="#2563eb" />
-              <QuickAction icon={CalendarRange}  label="Schedule Posts"    desc="Plan your content calendar"      to="/calendar"   iconBg="#0a2016" iconColor="#34d399" />
-              <QuickAction icon={BarChart3}      label="View Analytics"    desc="See how posts are performing"    to="/analytics"  iconBg="#1a1200" iconColor="#d97706" />
+              <QuickAction icon={Layers}        label="New Post"         desc="Design & write with AI"        to="/carousel"  iconBg="#EEF0FF" iconColor="#5B5BD6" />
+              <QuickAction icon={LayoutTemplate} label="Browse Templates" desc="Find the perfect format"       to="/templates" iconBg="#0a1a2e" iconColor="#2563eb" />
+              <QuickAction icon={CalendarRange}  label="Schedule Posts"   desc="Plan your content calendar"   to="/calendar"  iconBg="#0a2016" iconColor="#34d399" />
+              <QuickAction icon={BarChart3}      label="View Analytics"   desc="See how posts are performing" to="/analytics" iconBg="#1a1200" iconColor="#d97706" />
             </div>
 
-            {/* Featured templates */}
+            {/* Templates horizontal scroll strip */}
             {templates.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#666666" }}>Templates</h3>
-                  <Link to="/templates" className="text-xs hover:underline" style={{ color: "#5B5BD6" }}>See all</Link>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
                   {templates.map(t => (
                     <Link key={t._id || t.id} to="/templates"
-                      className="aspect-square rounded-xl overflow-hidden border transition-all"
-                      style={{ background: "#0d0d0d", borderColor: "#2a2a2a" }}
+                      style={{ flexShrink: 0, width: 76, height: 76, borderRadius: 14, overflow: "hidden", border: "1.5px solid #2a2a2a", background: "#0d0d0d", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = "#3a3a6a"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2a2a"}
                     >
                       {t.thumbnail_url
-                        ? <img src={t.thumbnail_url} alt={t.name} className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center"><LayoutTemplate size={16} style={{ color: "#3a3a6a" }} /></div>
+                        ? <img src={t.thumbnail_url} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : <LayoutTemplate size={18} style={{ color: "#3a3a6a" }} />
                       }
                     </Link>
                   ))}
                 </div>
+                <button
+                  onClick={() => navigate("/templates")}
+                  style={{ marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 12, border: "1.5px solid #2a2a2a", background: "transparent", color: "#5B5BD6", fontWeight: 600, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <LayoutTemplate size={13} /> View All Templates
+                </button>
               </div>
             )}
           </div>

@@ -68,14 +68,12 @@ async def generate_carousel(
             tpl_type = tpl_doc.get("template_type", "")
             preferred_hook_type = _TEMPLATE_TYPE_TO_HOOK.get(tpl_type)
 
-    # Build a richer topic string from extra context
+    # Build a richer topic string from extra context (tone is now a first-class field)
     tone = body.get("tone", "")
     audience = body.get("audience", "")
     key_points = body.get("key_points") or body.get("keyPoints", "")
-    if tone or audience or key_points:
+    if audience or key_points:
         extras = []
-        if tone:
-            extras.append(f"tone: {tone}")
         if audience:
             extras.append(f"audience: {audience}")
         if key_points:
@@ -88,6 +86,7 @@ async def generate_carousel(
     req = CarouselGenerationRequest(
         creator_id=user_id,
         topic=enriched_topic,
+        tone=tone,
         slide_count=slide_count,
         platform=platform,
         cta_keyword=cta_keyword or "",
@@ -147,6 +146,7 @@ async def generate_carousel(
         "id": carousel_id,
         "creator_id": user_id,
         "topic": topic,
+        "tone": tone,
         "generation_id": result.generation_id,
         "template_id": template_id,
         "slides": slides_data,
@@ -180,12 +180,19 @@ async def generate_carousel(
 @router.get("/carousels")
 async def list_carousels(
     client_id: Optional[str] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     user_id: str = Depends(_current_user_id),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     creator_id = client_id or user_id
-    docs = await db.carousels.find({"creator_id": creator_id}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    docs = (
+        await db.carousels.find({"creator_id": creator_id}, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+        .to_list(limit)
+    )
     return {"carousels": docs, "total": len(docs)}
 
 

@@ -127,7 +127,7 @@ function ReachChart({ chartData }) {
 function EmptyChart() {
   return (
     <div className="h-40 flex items-center justify-center text-zinc-600 font-mono text-xs">
-      No connected platforms yet
+      No Instagram data yet
     </div>
   );
 }
@@ -149,8 +149,16 @@ const TABLE_COLS = [
 
 export default function ClientAnalyticsPanel({ data, compact = false }) {
   const totals = data?.totals || {};
-  const socials = data?.bundle?.socials || [];
-  const breakdown = data?.platform_breakdown || {};
+  const allSocials = data?.bundle?.socials || [];
+  const allBreakdown = data?.platform_breakdown || {};
+
+  // Show Instagram data only
+  const socials = allSocials.filter(s =>
+    s.platform === "instagram" || (s.type || "").toLowerCase() === "instagram"
+  );
+  const breakdown = Object.fromEntries(
+    Object.entries(allBreakdown).filter(([k]) => k === "instagram")
+  );
 
   const chartData = Object.entries(breakdown).map(([platform, v]) => ({
     platform: platform.charAt(0).toUpperCase() + platform.slice(1),
@@ -213,7 +221,7 @@ export default function ClientAnalyticsPanel({ data, compact = false }) {
               {socials.length === 0 ? (
                 <tr>
                   <td colSpan={TABLE_COLS.length} className="px-4 py-6 text-center text-zinc-600 font-mono text-xs">
-                    No data yet — click Refresh to pull from Bundle
+                    No Instagram data yet — click Refresh to pull latest metrics
                   </td>
                 </tr>
               ) : (

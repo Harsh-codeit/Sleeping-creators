@@ -417,6 +417,13 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
         5: "Controversial — challenge mainstream views, provoke thought, make people stop scrolling.",
     }.get(spice, "")
 
+    tone = state.get("tone") or ""
+    tone_directive = (
+        f"\nTONE DIRECTIVE: Write ALL slides in a {tone} voice. "
+        f"Adjust vocabulary, sentence rhythm, examples, and emotional register to fully reflect a {tone} style. "
+        f"Do not default to generic professional copy — honour this tone in every slide heading and body.\n"
+    ) if tone else ""
+
     user_prompt = f"""CREATOR CONTEXT:
 Niche: {ctx.get('niche', 'general')}
 Industry: {ctx.get('industry', '')}
@@ -424,7 +431,7 @@ Target audience: {ctx.get('target_audience', '')}
 Brand voice: {ctx.get('brand_voice', 'conversational')}
 Content boldness [{spice}/5]: {spice_directive}
 Content pillars: {', '.join(ctx.get('content_pillars', []))}
-
+{tone_directive}
 GENERATION REQUEST:
 Topic: {state['topic']}
 Format type: {spec.get('format', 'tips')}
@@ -633,6 +640,7 @@ def build_content_generation_graph(db, redis, anthropic_client: AsyncAnthropic) 
 def make_initial_state(
     creator_id: str,
     topic: str,
+    tone: str = "",
     format: str = "carousel",
     slide_count: int = 7,
     platform: str = "instagram",
@@ -644,6 +652,7 @@ def make_initial_state(
     return ContentGenerationState(
         creator_id=creator_id,
         topic=topic,
+        tone=tone,
         format=format,
         slide_count=slide_count,
         platform=platform,

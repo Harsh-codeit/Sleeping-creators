@@ -54,6 +54,7 @@ class IntelligenceService:
         initial = make_initial_state(
             creator_id=req.creator_id,
             topic=req.topic,
+            tone=req.tone,
             format="carousel",
             slide_count=req.slide_count,
             platform=req.platform,

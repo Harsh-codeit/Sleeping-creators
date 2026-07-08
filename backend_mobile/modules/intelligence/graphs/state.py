@@ -53,6 +53,7 @@ class ContentGenerationState(TypedDict):
     # Inputs
     creator_id: str
     topic: str
+    tone: Optional[str]
     format: Literal["carousel", "video", "text"]
     slide_count: int
     platform: str

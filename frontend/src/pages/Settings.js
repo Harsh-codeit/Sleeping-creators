@@ -388,7 +388,8 @@ function ConnectionsTab({ user }) {
       const { data } = await axios.get(`${API}/bundle/connect/${clientId}`, { headers });
       if (data.already_connected) {
         toast.success(`Instagram already connected${data.instagram_username ? ` as @${data.instagram_username}` : ""}!`);
-        await load(); // refresh displayed status
+        await load();
+        window.dispatchEvent(new Event("sc:refresh"));
       } else if (data.url) {
         window.open(data.url, "_blank", "noopener,noreferrer");
       } else {
@@ -406,6 +407,7 @@ function ConnectionsTab({ user }) {
       await axios.delete(`${API}/instagram/disconnect/${clientId}`);
       toast.success("Instagram disconnected");
       await load();
+      window.dispatchEvent(new Event("sc:refresh"));
     } catch {
       toast.error("Failed to disconnect");
     } finally {
