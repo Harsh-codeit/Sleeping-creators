@@ -61,6 +61,8 @@ class IntelligenceService:
             cta_keyword=req.cta_keyword,
             cta_offer=req.cta_offer,
             preferred_hook_type=req.preferred_hook_type,
+            reference_content=req.reference_content,
+            template_blueprint=req.template_blueprint,
         )
 
         t0 = time.monotonic()

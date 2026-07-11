@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     apify_api_key: str = ""
     rapidapi_instagram_key: str = ""
 
+    # Transcription
+    assemblyai_api_key: str = ""
+
     # Fast inference
     groq_api_key: str = ""
 

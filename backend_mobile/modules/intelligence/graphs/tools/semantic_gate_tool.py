@@ -108,7 +108,7 @@ async def record_dna(
             "opening_structure": opening_structure,
             "emotion": emotion,
             "format": format,
-            "hook_text_preview": hook_text_preview[:256],
+            "hook_text_preview": hook_text_preview[:512],
             "is_winner": False,
             "published": False,
             "created_at": datetime.now(timezone.utc).isoformat(),

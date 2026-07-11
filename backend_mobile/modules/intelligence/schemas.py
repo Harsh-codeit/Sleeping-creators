@@ -19,6 +19,8 @@ class CarouselGenerationRequest(BaseModel):
     cta_offer: Optional[str] = None
     preferred_hook_type: Optional[str] = None
     force_regenerate: bool = False
+    reference_content: Optional[str] = None      # client-provided reel analysis or free text
+    template_blueprint: Optional[list] = None    # per-slide role/guidance from the chosen template
 
 
 class TextPostGenerationRequest(BaseModel):

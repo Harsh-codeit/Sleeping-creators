@@ -83,6 +83,13 @@ ANTI-PATTERNS to refuse:
 - Same emotional tone across all slides. A good carousel oscillates.
 - Vague CTAs ("follow for more", "share if you agree").
 - Slide 1 MUST NOT begin with "I", "My", or the creator's name.
+
+BODY FORMATTING — use sparingly, only when it adds real visual hierarchy:
+- Use **bold** for the single most important phrase per slide (max 1-2 bolded phrases). Never bold an entire sentence.
+- Use bullet format (- item) for tips, steps, or list slides — 3-5 bullets max, each under 10 words.
+- For quote slides: wrap the quote in **"quote text"**, then attribution on the next line as plain text.
+- For story or emotional slides: plain prose only — no bullets, no bold.
+- When in doubt, write plain prose. Formatting is a seasoning, not a meal.
 """
 
 CAROUSEL_INDIA_FRAMING = """

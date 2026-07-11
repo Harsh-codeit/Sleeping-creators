@@ -59,6 +59,7 @@ async def generate_carousel(
         "announcement": "credibility_borrow",
         "quote":        "emotional_state",
     }
+    template_blueprint = None
     if template_id:
         tpl_doc = await db.templates.find_one({"id": template_id}, {"_id": 0})
         if tpl_doc:
@@ -67,6 +68,7 @@ async def generate_carousel(
                 slide_count = max(3, min(int(tpl_doc.get("slide_count", slide_count)), 10))
             tpl_type = tpl_doc.get("template_type", "")
             preferred_hook_type = _TEMPLATE_TYPE_TO_HOOK.get(tpl_type)
+            template_blueprint = tpl_doc.get("slide_blueprint") or None
 
     # Build a richer topic string from extra context (tone is now a first-class field)
     tone = body.get("tone", "")
@@ -91,6 +93,8 @@ async def generate_carousel(
         platform=platform,
         cta_keyword=cta_keyword or "",
         preferred_hook_type=preferred_hook_type,
+        reference_content=body.get("reference_content") or None,
+        template_blueprint=template_blueprint,
     )
 
     # Use a minimal redis-compatible object if redis not available
@@ -255,3 +259,31 @@ async def delete_carousel(
 ):
     await db.carousels.delete_one({"id": carousel_id})
     return {"ok": True}
+
+
+@router.post("/intelligence/analyze-reel")
+async def analyze_reel(
+    body: dict,
+    user_id: str = Depends(_current_user_id),
+):
+    """Extract hook structure, tone, and CTA from an Instagram reel URL.
+
+    Body: { reel_url: str }
+    Returns structured analysis to be used as reference_content in carousel generation.
+    """
+    from backend_mobile.modules.intelligence.reel_analyzer import analyze_reel as _analyze
+    from backend_mobile.modules.intelligence.service import get_intelligence_service
+
+    reel_url = (body.get("reel_url") or "").strip()
+    if not reel_url:
+        raise HTTPException(400, "reel_url is required")
+    if "instagram.com" not in reel_url:
+        raise HTTPException(400, "URL must be an Instagram reel link")
+
+    svc = get_intelligence_service()
+    result = await _analyze(reel_url, svc._anthropic)
+
+    if result.get("error") and not result.get("opening_hook"):
+        raise HTTPException(422, result["error"])
+
+    return result

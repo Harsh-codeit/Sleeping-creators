@@ -60,6 +60,8 @@ class ContentGenerationState(TypedDict):
     cta_keyword: Optional[str]
     cta_offer: Optional[str]
     preferred_hook_type: Optional[str]
+    reference_content: Optional[str]        # client-provided reel analysis or free text
+    template_blueprint: Optional[list]      # per-slide role/guidance from the chosen template
 
     # Built during graph execution
     creator_context: Optional[CreatorContext]

@@ -366,9 +366,9 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
     winning_examples = ctx.get("winning_examples", [])
     if winning_examples:
         winning_block = (
-            "\n\nWINNING CONTENT PATTERNS (these performed best for this creator — match the energy and style):\n"
+            "\n\nWINNING CONTENT PATTERNS (these performed best for this creator — match the energy, format, and style):\n"
             + "\n".join(
-                f"- [{ex.get('hook_type', '')}] {ex.get('hook_text_preview', '')}"
+                f"- [{ex.get('hook_type', '')} / format:{ex.get('format', '')} / emotion:{ex.get('emotion', '')}] {ex.get('hook_text_preview', '')}"
                 for ex in winning_examples[:5]
                 if ex.get("hook_text_preview")
             )
@@ -408,6 +408,30 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
         offer = state.get("cta_offer", "")
         cta_block = f"\n\nCTA INSTRUCTIONS: keyword={kw!r}  offer={offer!r}"
 
+    reference_block = ""
+    ref = state.get("reference_content") or ""
+    if ref:
+        reference_block = (
+            "\n\nREFERENCE CONTENT (client-provided example — draw inspiration from hook style, "
+            "tone, and structure; do NOT copy any text verbatim):\n" + ref
+        )
+
+    blueprint_block = ""
+    blueprint = state.get("template_blueprint") or []
+    if blueprint:
+        blueprint_block = (
+            "\n\nSLIDE BLUEPRINT — follow this structure exactly. Each slide has a defined role. "
+            "The examples show the style, not the content — adapt them to the topic:\n"
+            + "\n".join(
+                f"Slide {b['slide_number']} [{b['role'].upper()}]: {b['guidance']}"
+                + (
+                    f"\n  Style example: heading=\"{b['example_heading']}\" | body=\"{b['example_body']}\""
+                    if b.get("example_heading") else ""
+                )
+                for b in blueprint
+            )
+        )
+
     spice = int(ctx.get('spice_level', 3))
     spice_directive = {
         1: "Keep it completely safe, neutral, and non-controversial.",
@@ -424,11 +448,16 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
         f"Do not default to generic professional copy — honour this tone in every slide heading and body.\n"
     ) if tone else ""
 
+    lang_list = ctx.get("languages") or ["English"]
+    lang_str = ", ".join(lang_list) if isinstance(lang_list, list) else str(lang_list)
+
     user_prompt = f"""CREATOR CONTEXT:
+Creator: {ctx.get('name', '')}
 Niche: {ctx.get('niche', 'general')}
 Industry: {ctx.get('industry', '')}
 Target audience: {ctx.get('target_audience', '')}
 Brand voice: {ctx.get('brand_voice', 'conversational')}
+Language / style register: {lang_str}
 Content boldness [{spice}/5]: {spice_directive}
 Content pillars: {', '.join(ctx.get('content_pillars', []))}
 {tone_directive}
@@ -451,6 +480,8 @@ SLIDE FORMAT GUIDANCE:
 {competitor_block}
 {trend_block}
 {cta_block}
+{reference_block}
+{blueprint_block}
 
 OUTPUT FORMAT — respond with valid JSON only, no markdown fences:
 {{
@@ -460,8 +491,8 @@ OUTPUT FORMAT — respond with valid JSON only, no markdown fences:
   "slides": [
     {{
       "slide_number": 1,
-      "heading": "<max 8 words>",
-      "body": "<max 45 words>",
+      "heading": "<max 8 words, plain text>",
+      "body": "<max 60 words; prose or bullets; use **bold** for 1-2 key phrases; use - item for list slides>",
       "visual_cue": "<what the designer should show visually>"
     }}
   ],
@@ -648,6 +679,8 @@ def make_initial_state(
     cta_offer: str | None = None,
     preferred_hook_type: str | None = None,
     max_retries: int = 2,
+    reference_content: str | None = None,
+    template_blueprint: list | None = None,
 ) -> ContentGenerationState:
     return ContentGenerationState(
         creator_id=creator_id,
@@ -659,6 +692,8 @@ def make_initial_state(
         cta_keyword=cta_keyword,
         cta_offer=cta_offer,
         preferred_hook_type=preferred_hook_type,
+        reference_content=reference_content,
+        template_blueprint=template_blueprint,
         creator_context=None,
         trending_topics=[],
         variety_spec=None,

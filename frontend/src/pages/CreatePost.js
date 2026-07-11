@@ -74,6 +74,16 @@ function CarouselForm() {
   const [scheduledAt, setScheduledAt] = useState("");
   const [publishing, setPublishing]   = useState(false);
 
+  // Reference section
+  const [referenceMode, setReferenceMode] = useState("none"); // "none" | "reel" | "text"
+  const [reelUrl, setReelUrl]             = useState("");
+  const [reelAnalysis, setReelAnalysis]   = useState(null);
+  const [analyzingReel, setAnalyzingReel] = useState(false);
+  const [referenceText, setReferenceText] = useState("");
+
+  // Creator info for social card preview
+  const [creatorInfo, setCreatorInfo]     = useState({ name: "", avatar: "", handle: "" });
+
   useEffect(() => {
     // Prefill topic from Inspiration page "Use this" action
     const prefill = sessionStorage.getItem("sc_prefill_topic");
@@ -89,7 +99,52 @@ function CarouselForm() {
         setSelectedTplObj(list[0]);
       }
     }).catch(() => {});
+    // Load creator profile for social card preview
+    axios.get(`${API}/me`, { headers: authHeaders() }).then(r => {
+      const u = r.data || {};
+      setCreatorInfo({
+        name:   u.full_name || u.name || "",
+        avatar: u.avatar_url || "",
+        handle: u.instagram_handle ? `@${u.instagram_handle}` : "",
+      });
+    }).catch(() => {});
   }, []);
+
+  const handleAnalyzeReel = async () => {
+    if (!reelUrl.trim()) return toast.error("Enter an Instagram reel URL");
+    setAnalyzingReel(true);
+    setReelAnalysis(null);
+    try {
+      const { data } = await axios.post(`${API}/intelligence/analyze-reel`,
+        { reel_url: reelUrl },
+        { headers: authHeaders() }
+      );
+      setReelAnalysis(data);
+      toast.success("Reel analyzed — reference ready");
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Could not analyze this reel";
+      toast.error(msg);
+    } finally {
+      setAnalyzingReel(false);
+    }
+  };
+
+  const buildReferenceContent = () => {
+    if (referenceMode === "text") return referenceText.trim() || null;
+    if (referenceMode === "reel" && reelAnalysis) {
+      const a = reelAnalysis;
+      return [
+        `Reel reference analysis:`,
+        `Opening hook: ${a.opening_hook || "—"}`,
+        `Tone: ${a.tone || "—"}`,
+        `Structure: ${a.structure_type || "—"}`,
+        `Key message: ${a.key_message || "—"}`,
+        `CTA pattern: ${a.cta_pattern || "—"}`,
+        `Hook techniques used: ${a.hook_techniques || "—"}`,
+      ].join("\n");
+    }
+    return null;
+  };
 
   const handleGenerate = async () => {
     if (!topic.trim()) return toast.error("Enter a topic first");
@@ -105,6 +160,7 @@ function CarouselForm() {
         cta_keyword: cta,
         template_id: selectedTpl,
         platform: "instagram",
+        reference_content: buildReferenceContent(),
       }, { headers: authHeaders() });
       setResult(data);
       setSlideIdx(0);
@@ -194,7 +250,7 @@ function CarouselForm() {
                   }}>
                   {t.thumbnail_url
                     ? <img src={t.thumbnail_url} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    : <SlidePreview template={t} compact={true} />
+                    : <SlidePreview template={t} compact={true} handle={creatorInfo.handle} creatorName={creatorInfo.name} creatorAvatar={creatorInfo.avatar} />
                   }
                   {on && <div style={{ position: "absolute", inset: 0, border: "2px solid #5B5BD6", borderRadius: 10, pointerEvents: "none" }} />}
                   <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "4px 6px", background: "rgba(0,0,0,0.55)" }}>
@@ -236,6 +292,63 @@ function CarouselForm() {
         <SelectField value={cta} onChange={setCta} options={CTAS} placeholder="No CTA (optional)" />
       </Section>
 
+      {/* ── Reference Section ────────────────────────────────────────────── */}
+      <Section title="Reference (optional)" hint="Give the AI an example to draw inspiration from">
+        {/* Mode tabs */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {[["none", "None"], ["reel", "Reel Link"], ["text", "Free Text"]].map(([mode, label]) => (
+            <button key={mode} onClick={() => setReferenceMode(mode)}
+              style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "1.5px solid", transition: "all 0.15s",
+                borderColor: referenceMode === mode ? "#5B5BD6" : "#2a2a2a",
+                background: referenceMode === mode ? "#1e1e3a" : "#161616",
+                color: referenceMode === mode ? "#8080ff" : "#666",
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {referenceMode === "reel" && (
+          <div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={reelUrl} onChange={e => setReelUrl(e.target.value)}
+                placeholder="https://www.instagram.com/reel/..."
+                style={{ ...inputStyle, flex: 1 }} />
+              <button onClick={handleAnalyzeReel} disabled={analyzingReel || !reelUrl.trim()}
+                style={{ padding: "10px 16px", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 12,
+                  background: "#5B5BD6", color: "#fff", cursor: "pointer", flexShrink: 0,
+                  opacity: analyzingReel || !reelUrl.trim() ? 0.5 : 1 }}>
+                {analyzingReel ? "Analyzing…" : "Analyze"}
+              </button>
+            </div>
+            {reelAnalysis && (
+              <div style={{ marginTop: 10, padding: 14, borderRadius: 14, background: "#0d1a0d", border: "1.5px solid #14532d" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#34d399", marginBottom: 8 }}>Reel analyzed ✓</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {[
+                    ["Hook", reelAnalysis.opening_hook],
+                    ["Tone", reelAnalysis.tone],
+                    ["Structure", reelAnalysis.structure_type],
+                    ["Key message", reelAnalysis.key_message],
+                    ["CTA", reelAnalysis.cta_pattern],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div key={label} style={{ fontSize: 11, color: "#ccc" }}>
+                      <span style={{ color: "#888", marginRight: 4 }}>{label}:</span>{value}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {referenceMode === "text" && (
+          <textarea value={referenceText} onChange={e => setReferenceText(e.target.value)}
+            placeholder="Paste any reference content — a caption, a post, talking points, or example slides…"
+            rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
+        )}
+      </Section>
+
       <GenerateBtn onClick={handleGenerate} label={loading ? "Generating…" : "Generate Carousel"} disabled={loading} />
 
       {/* ── Result Preview ─────────────────────────────────────────────────── */}
@@ -254,6 +367,9 @@ function CarouselForm() {
                 template={selectedTplObj}
                 slide={allSlides[slideIdx]}
                 compact={false}
+                handle={creatorInfo.handle}
+                creatorName={creatorInfo.name}
+                creatorAvatar={creatorInfo.avatar}
               />
             )}
             {/* Slide navigation */}
