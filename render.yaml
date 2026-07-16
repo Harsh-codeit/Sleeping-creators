@@ -32,3 +32,7 @@ services:
         sync: false          # paste Shotstack API key from dashboard
       - key: SHOTSTACK_ENV
         value: "stage"       # change to "production" to remove watermark + faster renders
+      - key: GOOGLE_DRIVE_API_KEY
+        sync: false          # Google Cloud API key with Drive API v3 enabled — needed for Performance Library ingestion
+      - key: APP_BASE_URL
+        sync: false          # your Render URL e.g. https://sleeping-creators.onrender.com — used for Bundle OAuth redirect

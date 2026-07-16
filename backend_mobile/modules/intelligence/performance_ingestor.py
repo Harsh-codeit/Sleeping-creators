@@ -94,7 +94,11 @@ def _compute_engagement_score(doc: dict) -> int:
 
 
 async def _list_drive_files(folder_id: str, api_key: str) -> list[dict]:
-    """Return all image files in a public Google Drive folder (paginates)."""
+    """Return all image files in a public Google Drive folder (paginates).
+
+    Requires the folder to be shared as 'Anyone on the internet' (fully public)
+    for the API key approach to work. 'Anyone with the link' returns 403.
+    """
     files: list[dict] = []
     page_token: Optional[str] = None
     q = f"'{folder_id}' in parents and mimeType contains 'image/' and trashed = false"
@@ -111,9 +115,17 @@ async def _list_drive_files(folder_id: str, api_key: str) -> list[dict]:
                 params["pageToken"] = page_token
 
             resp = await client.get(_DRIVE_FILES_URL, params=params)
+            if resp.status_code == 403:
+                detail = resp.json().get("error", {}).get("message", resp.text[:200])
+                raise RuntimeError(
+                    f"Google Drive returned 403 for folder {folder_id}. "
+                    f"Make sure the folder is shared as 'Anyone on the internet' (not just 'Anyone with the link') "
+                    f"in Drive → Share → General access. API error: {detail}"
+                )
             if resp.status_code != 200:
-                logger.error("Drive files.list failed %d: %s", resp.status_code, resp.text[:500])
-                break
+                raise RuntimeError(
+                    f"Drive files.list failed with HTTP {resp.status_code}: {resp.text[:300]}"
+                )
             data = resp.json()
             files.extend(data.get("files", []))
             page_token = data.get("nextPageToken")
@@ -125,15 +137,30 @@ async def _list_drive_files(folder_id: str, api_key: str) -> list[dict]:
 
 
 async def _download_drive_file(file_id: str, api_key: str) -> Optional[bytes]:
-    """Download a single Drive file by ID. Returns None on error."""
-    url = _DRIVE_MEDIA_URL.format(file_id=file_id, api_key=api_key)
+    """Download a single Drive file by ID. Returns None on error.
+
+    Tries the Drive API first (works for public files), then falls back to the
+    direct export URL which works for 'Anyone with the link' shared files.
+    """
     try:
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            # Primary: Drive API with key
+            url = _DRIVE_MEDIA_URL.format(file_id=file_id, api_key=api_key)
             resp = await client.get(url)
-            if resp.status_code != 200:
-                logger.warning("Drive download %s returned %d", file_id, resp.status_code)
-                return None
-            return resp.content
+            if resp.status_code == 200:
+                return resp.content
+
+            # Fallback: direct export URL (works without API key for public files)
+            fallback_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            resp2 = await client.get(fallback_url)
+            if resp2.status_code == 200:
+                return resp2.content
+
+            logger.warning(
+                "Drive download %s failed — API: %d, fallback: %d",
+                file_id, resp.status_code, resp2.status_code,
+            )
+            return None
     except Exception as exc:
         logger.warning("Drive download %s failed: %s", file_id, exc)
         return None
@@ -220,7 +247,10 @@ async def ingest_from_drive_folder(
         files = await _list_drive_files(folder_id, api_key)
     except Exception as exc:
         logger.error("Drive listing failed for job %s: %s", job_id, exc)
-        await ingestion_jobs.update_job(db, job_id, status="failed", finished=True)
+        await ingestion_jobs.update_job(
+            db, job_id, status="failed", finished=True,
+            error=str(exc),
+        )
         return
 
     files = files[:max_images]

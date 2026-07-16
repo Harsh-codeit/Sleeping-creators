@@ -35,6 +35,7 @@ async def update_job(
     processed_count: int | None = None,
     failed_count: int | None = None,
     finished: bool = False,
+    error: str | None = None,
 ) -> None:
     patch: dict = {}
     if status is not None:
@@ -47,6 +48,8 @@ async def update_job(
         patch["failed_count"] = failed_count
     if finished:
         patch["finished_at"] = _now()
+    if error is not None:
+        patch["error"] = error
     if patch:
         await db.ingestion_jobs.update_one({"id": job_id}, {"$set": patch})
 

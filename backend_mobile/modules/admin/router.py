@@ -574,6 +574,22 @@ async def ingest_performance_library(
     if not drive_url:
         raise HTTPException(400, "drive_folder_url is required")
 
+    # Fail fast — surface config issues before creating a job
+    if not settings.google_drive_api_key:
+        raise HTTPException(
+            503,
+            "GOOGLE_DRIVE_API_KEY is not configured on this server. "
+            "Add it in Render → Environment → GOOGLE_DRIVE_API_KEY and redeploy."
+        )
+
+    folder_id = performance_ingestor._parse_folder_id(drive_url)
+    if not folder_id:
+        raise HTTPException(
+            400,
+            f"Cannot extract a folder ID from the URL: {drive_url!r}. "
+            "Expected a URL like https://drive.google.com/drive/folders/<id>"
+        )
+
     source_label = (body.get("source_label") or "performance_dataset_v1").strip()
     job_id = await ingestion_jobs.create_job(db, source="google_drive", source_url=drive_url)
     svc = get_intelligence_service()
