@@ -1163,8 +1163,8 @@ export default function Carousel() {
               {postType !== "single_image" && (
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 border border-zinc-800 text-[11px] font-mono text-zinc-500">
                   <span>Slides</span>
-                  <input type="number" min={3} max={10} value={config.slideCount}
-                    onChange={e => setConfig(f => ({ ...f, slideCount: parseInt(e.target.value) || 5 }))}
+                  <input type="number" min={1} max={8} value={config.slideCount}
+                    onChange={e => setConfig(f => ({ ...f, slideCount: Math.min(8, Math.max(1, parseInt(e.target.value) || 5)) }))}
                     className="w-8 bg-transparent text-white text-center focus:outline-none font-mono text-[11px]" />
                 </div>
               )}

@@ -12,7 +12,7 @@ import {
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const TONES = ["Educational", "Entertaining", "Inspirational", "Professional", "Casual"];
-const SLIDE_COUNTS = ["3", "5", "7", "10"];
+const SLIDE_COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 const HOOK_STYLES = ["Question", "Bold Claim", "Statistic", "Story / Anecdote", "Challenge"];
 const DURATIONS = ["15 seconds", "30 seconds", "60 seconds", "90 seconds"];
 const CTAS = ["Follow for more", "Link in bio", "Comment below", "Share this", "Save for later", "Send a DM"];

@@ -18,7 +18,7 @@ const TEMPLATE_TYPES = [
   { key: "quote",        label: "Quote Card",   desc: "Single impactful message", icon: "💬" },
 ];
 
-const SLIDE_COUNTS = ["3", "5", "7", "10"];
+const SLIDE_COUNTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
 const COLOR_SCHEMES = [
   {
@@ -248,11 +248,11 @@ export default function TemplateBuilder() {
 
           {/* ── Slide Count ── */}
           <Section title="Number of Slides" hint="How many slides the AI will generate">
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
               {SLIDE_COUNTS.map(n => (
                 <button key={n} onClick={() => setSlideCount(n)}
                   style={{
-                    flex: 1, padding: "13px 0", fontSize: 16, fontWeight: 700, borderRadius: 12,
+                    padding: "12px 0", fontSize: 15, fontWeight: 700, borderRadius: 12,
                     border: `1.5px solid ${slideCount === n ? "#5B5BD6" : "#222"}`,
                     background: slideCount === n ? "#1a1a3a" : "#161616",
                     color: slideCount === n ? "#fff" : "#555",
