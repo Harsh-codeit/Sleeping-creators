@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI, Request
@@ -17,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 
 # ── Redis singleton ────────────────────────────────────────────────────────────
 
-_redis_pool: aioredis.Redis = None
+_redis_pool: Optional[aioredis.Redis] = None
 
 
 def get_redis():
@@ -81,7 +82,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
