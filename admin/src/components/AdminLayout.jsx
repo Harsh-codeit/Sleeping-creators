@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Zap, Coins, LogOut, Sparkles, Menu, X, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { LayoutDashboard, Users, Zap, Coins, LogOut, Sparkles, Menu, X, ChevronsLeft, ChevronsRight, BarChart2 } from "lucide-react";
 
 const NAV = [
-  { path: "/overview", label: "Overview",     icon: LayoutDashboard },
-  { path: "/users",    label: "Users",         icon: Users },
-  { path: "/hooks",    label: "Hooks",         icon: Zap },
-  { path: "/tokens",   label: "Token Usage",   icon: Coins },
+  { path: "/overview",             label: "Overview",      icon: LayoutDashboard },
+  { path: "/users",                label: "Users",          icon: Users },
+  { path: "/hooks",                label: "Hooks",          icon: Zap },
+  { path: "/tokens",               label: "Token Usage",    icon: Coins },
+  { path: "/performance-library",  label: "Perf Library",   icon: BarChart2 },
 ];
 
 export default function AdminLayout() {

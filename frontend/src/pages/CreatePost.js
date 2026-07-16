@@ -47,7 +47,7 @@ export default function CreatePost() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 540, margin: "0 auto", padding: "20px 16px 80px" }}>
+      <div style={{ maxWidth: 540, margin: "0 auto", padding: "20px 16px" }}>
         {tab === "carousel" && <CarouselForm />}
         {tab === "video"    && <VideoForm />}
       </div>
@@ -81,6 +81,11 @@ function CarouselForm() {
   const [analyzingReel, setAnalyzingReel] = useState(false);
   const [referenceText, setReferenceText] = useState("");
 
+  // Trending reference
+  const [trendingUrl, setTrendingUrl]           = useState("");
+  const [trendingAnalysis, setTrendingAnalysis] = useState(null);
+  const [analyzingTrending, setAnalyzingTrending] = useState(false);
+
   // Creator info for social card preview
   const [creatorInfo, setCreatorInfo]     = useState({ name: "", avatar: "", handle: "" });
 
@@ -109,6 +114,25 @@ function CarouselForm() {
       });
     }).catch(() => {});
   }, []);
+
+  const handleAnalyzeTrending = async () => {
+    if (!trendingUrl.trim()) return toast.error("Enter an Instagram reel or post URL");
+    if (!trendingUrl.includes("instagram.com")) return toast.error("Must be an Instagram URL");
+    setAnalyzingTrending(true);
+    setTrendingAnalysis(null);
+    try {
+      const { data } = await axios.post(`${API}/intelligence/analyze-reel`,
+        { reel_url: trendingUrl },
+        { headers: authHeaders() }
+      );
+      setTrendingAnalysis(data);
+      toast.success("Trending post analyzed — AI will use it as niche context");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not analyze this post");
+    } finally {
+      setAnalyzingTrending(false);
+    }
+  };
 
   const handleAnalyzeReel = async () => {
     if (!reelUrl.trim()) return toast.error("Enter an Instagram reel URL");
@@ -161,6 +185,7 @@ function CarouselForm() {
         template_id: selectedTpl,
         platform: "instagram",
         reference_content: buildReferenceContent(),
+        trending_reference_url: trendingUrl.trim() || undefined,
       }, { headers: authHeaders() });
       setResult(data);
       setSlideIdx(0);
@@ -292,8 +317,62 @@ function CarouselForm() {
         <SelectField value={cta} onChange={setCta} options={CTAS} placeholder="No CTA (optional)" />
       </Section>
 
+      {/* ── Trending Post Reference ───────────────────────────────────────── */}
+      <Section title="Trending Post in Your Niche" hint="Paste a viral reel or post — AI studies what's working right now">
+        <div style={{ padding: "0 0 2px" }}>
+          <div style={{ display: "flex", gap: 8, padding: "0 0 0 0" }}>
+            <input
+              value={trendingUrl}
+              onChange={e => { setTrendingUrl(e.target.value); if (trendingAnalysis) setTrendingAnalysis(null); }}
+              placeholder="https://www.instagram.com/reel/… or /p/…"
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <button
+              onClick={handleAnalyzeTrending}
+              disabled={analyzingTrending || !trendingUrl.trim()}
+              style={{
+                padding: "10px 14px", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 12,
+                background: trendingUrl.trim() ? "#5B5BD6" : "#2a2a2a",
+                color: trendingUrl.trim() ? "#fff" : "#555",
+                cursor: analyzingTrending || !trendingUrl.trim() ? "not-allowed" : "pointer",
+                flexShrink: 0, opacity: analyzingTrending ? 0.6 : 1,
+              }}>
+              {analyzingTrending ? "Analyzing…" : "Analyze"}
+            </button>
+          </div>
+
+          {trendingAnalysis && (
+            <div style={{ margin: "10px 0 2px", padding: 12, borderRadius: 12, background: "#0d1a2a", border: "1.5px solid #1e3a5f" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#60a5fa", display: "inline-block" }} />
+                Trending post analyzed — AI will use this as live niche context
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {[
+                  ["Hook",      trendingAnalysis.opening_hook],
+                  ["Tone",      trendingAnalysis.tone],
+                  ["Format",    trendingAnalysis.structure_type],
+                  ["Message",   trendingAnalysis.key_message],
+                  ["Techniques", trendingAnalysis.hook_techniques],
+                ].filter(([, v]) => v).map(([label, value]) => (
+                  <div key={label} style={{ fontSize: 11, color: "#ccc" }}>
+                    <span style={{ color: "#4a7ab5", marginRight: 4 }}>{label}:</span>{value}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!trendingUrl.trim() && (
+            <div style={{ fontSize: 11, color: "#444", padding: "8px 0 4px" }}>
+              Optional — leave blank to skip. Works with any public Instagram reel or post.
+            </div>
+          )}
+        </div>
+      </Section>
+
       {/* ── Reference Section ────────────────────────────────────────────── */}
-      <Section title="Reference (optional)" hint="Give the AI an example to draw inspiration from">
+      <Section title="Your Reference (optional)" hint="Give the AI an example from your own style to draw inspiration from">
         {/* Mode tabs */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           {[["none", "None"], ["reel", "Reel Link"], ["text", "Free Text"]].map(([mode, label]) => (

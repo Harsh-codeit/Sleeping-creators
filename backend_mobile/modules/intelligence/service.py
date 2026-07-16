@@ -62,6 +62,7 @@ class IntelligenceService:
             cta_offer=req.cta_offer,
             preferred_hook_type=req.preferred_hook_type,
             reference_content=req.reference_content,
+            trending_reference_content=req.trending_reference_content,
             template_blueprint=req.template_blueprint,
         )
 

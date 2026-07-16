@@ -36,7 +36,7 @@ export default function Signup({ onLogin }) {
   useEffect(() => { axios.get(`${API.replace("/api", "")}/health`).catch(() => {}); }, []);
 
   return (
-    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
+    <div style={{ height: "100%", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
       {/* Left panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] flex-col justify-between p-12"
         style={{ background: "#141414", borderRight: "1px solid #2a2a2a" }}>
@@ -65,7 +65,7 @@ export default function Signup({ onLogin }) {
       </div>
 
       {/* Right form — scrollable */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 20px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 20px", paddingTop: "calc(20px + env(safe-area-inset-top))" }}>
         <div style={{ maxWidth: 380, margin: "0 auto" }}>
           {/* Logo mobile — only on step 1 */}
           {step === 1 && (

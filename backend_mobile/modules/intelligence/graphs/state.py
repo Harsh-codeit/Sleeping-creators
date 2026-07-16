@@ -61,6 +61,7 @@ class ContentGenerationState(TypedDict):
     cta_offer: Optional[str]
     preferred_hook_type: Optional[str]
     reference_content: Optional[str]        # client-provided reel analysis or free text
+    trending_reference_content: Optional[str]   # analyzed trending post/reel from the user's niche
     template_blueprint: Optional[list]      # per-slide role/guidance from the chosen template
 
     # Built during graph execution
@@ -68,6 +69,7 @@ class ContentGenerationState(TypedDict):
     trending_topics: list[str]
     variety_spec: Optional[VarietySpec]
     exemplar_hooks: list[str]          # retrieved from hook library for inspiration
+    performance_examples: list[dict]   # top viral carousels from performance_library (RAG)
 
     # Generated
     generated_content: Optional[GeneratedContent]

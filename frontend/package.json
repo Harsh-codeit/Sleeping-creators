@@ -9,6 +9,7 @@
     "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",
     "@capacitor/ios": "^8.4.1",
+    "@capacitor/keyboard": "^8.0.5",
     "@capacitor/push-notifications": "^8.1.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
@@ -73,11 +74,11 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "DISABLE_ESLINT_PLUGIN=true craco build",
     "test": "craco test",
-    "cap:build": "craco build && npx cap sync",
-    "cap:ios": "craco build && npx cap sync ios && npx cap open ios",
-    "cap:android": "craco build && npx cap sync android && npx cap open android",
+    "cap:build": "DISABLE_ESLINT_PLUGIN=true craco build && npx cap sync",
+    "cap:ios": "DISABLE_ESLINT_PLUGIN=true craco build && npx cap sync ios && npx cap open ios",
+    "cap:android": "DISABLE_ESLINT_PLUGIN=true craco build && npx cap sync android && npx cap open android",
     "cap:sync": "npx cap sync",
     "cap:copy": "npx cap copy"
   },

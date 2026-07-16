@@ -83,15 +83,48 @@ async def compat_update_profile(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     updates = {}
-    for field in ("name", "bio", "brand_voice", "target_audience", "fcm_token"):
+    # --- existing scalar fields ---
+    for field in (
+        "name", "bio", "brand_voice", "target_audience", "fcm_token",
+        # Section 1: Basic Info
+        "profile_name", "whatsapp_number", "city_country",
+        "instagram_username", "instagram_profile_url",
+        "website_url", "linkedin_url", "youtube_url", "twitter_url",
+        # Section 2: Brand & Audience
+        "business_description", "niche_statement",
+        # Section 3: Content Strategy
+        "content_language",
+        # Section 4: Goals & CTA
+        "primary_goal", "content_cta", "landing_page_url",
+    ):
         if field in body:
             updates[field] = body[field]
-    if "interests" in body:
-        updates["interests"] = body["interests"]
-        if body["interests"]:
-            updates["niche"] = body["interests"][0]
+
+    # --- numeric fields ---
     if "spice_level" in body:
         updates["spice_level"] = int(body["spice_level"])
+    if "audience_age_min" in body:
+        updates["audience_age_min"] = int(body["audience_age_min"])
+    if "audience_age_max" in body:
+        updates["audience_age_max"] = int(body["audience_age_max"])
+
+    # --- boolean fields ---
+    if "has_case_studies" in body:
+        updates["has_case_studies"] = bool(body["has_case_studies"])
+
+    # --- list fields ---
+    for field in (
+        "interests", "competitors",
+        "audience_emotional_states",
+        "topics_love", "solutions_provided", "unique_selling_points", "faqs",
+        "content_dislikes", "topics_to_avoid", "underserved_topics",
+    ):
+        if field in body:
+            updates[field] = list(body[field]) if body[field] is not None else []
+
+    if "interests" in body and body["interests"]:
+        updates["niche"] = body["interests"][0]
+
     return await iam_service.update_user(db, user_id, updates)
 
 

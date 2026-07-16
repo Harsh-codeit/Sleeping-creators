@@ -87,7 +87,7 @@ async def connect_instagram(
             api_key=settings.bundle_api_key,
             team_id=team_id,
             platforms=["instagram"],
-            redirect_url=f"{settings.app_base_url}/settings",
+            redirect_url=f"{settings.app_base_url}/bundle-connected",
         )
     except httpx.HTTPStatusError as exc:
         body = ""

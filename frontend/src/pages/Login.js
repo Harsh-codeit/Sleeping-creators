@@ -31,7 +31,7 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ height: "100dvh", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
+    <div style={{ height: "100%", display: "flex", overflow: "hidden", background: "#0d0d0d" }}>
       {/* Left panel — desktop only */}
       <div className="hidden lg:flex lg:w-[42%] flex-col justify-between p-12"
         style={{ background: "#141414", borderRight: "1px solid #2a2a2a" }}>
@@ -51,7 +51,7 @@ export default function Login({ onLogin }) {
       </div>
 
       {/* Right form — scrollable */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "40px 24px 32px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "40px 24px 32px", paddingTop: "calc(40px + env(safe-area-inset-top))" }}>
         <div style={{ maxWidth: 380, margin: "0 auto" }}>
           <div className="flex items-center gap-2.5 lg:hidden" style={{ marginBottom: 32 }}>
             <img src={logo} alt="" style={{ width: 32, height: 32, borderRadius: 10 }} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import axios from "axios";
+import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
 import { Toaster } from "./components/ui/sonner";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -91,6 +92,13 @@ function AppRoutes({ token, onLogin, onLogout }) {
 
 export default function App() {
   const [token, setToken] = useState(() => savedToken);
+
+  useEffect(() => {
+    if (window.Capacitor?.isNativePlatform()) {
+      Keyboard.setResizeMode({ mode: KeyboardResize.Body }).catch(() => {});
+      Keyboard.setScroll({ isDisabled: true }).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     if (token) {

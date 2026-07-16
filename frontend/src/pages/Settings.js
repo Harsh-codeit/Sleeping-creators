@@ -3,10 +3,10 @@ import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  User, Link2, CreditCard,
+  User, Link2, CreditCard, UserCog,
   Instagram, Check, CheckCircle2, Camera, Pencil, Mail, LogOut,
   Zap, BarChart3, Calendar, FileText,
-  AlertCircle, Loader2
+  AlertCircle, Loader2, Plus, X, Globe, Linkedin, Youtube, Twitter, Phone,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 
@@ -33,9 +33,40 @@ const INTERESTS = [
 
 const TABS = [
   { key: "profile",      label: "Profile",      icon: User },
+  { key: "creator",      label: "Creator",      icon: UserCog },
   { key: "connections",  label: "Connections",  icon: Link2 },
   { key: "subscription", label: "Subscription", icon: CreditCard },
 ];
+
+// ─── Creator tab option lists ─────────────────────────────────────────────────
+const EMOTIONAL_STATES_OPTS = ["Ambitious","Overwhelmed","Confused","Motivated","Stuck","Frustrated","Burned Out","Anxious"];
+const TOPICS_LOVE_OPTS = ["Mindset & Psychology","Business Strategy","Social Media Growth","Sales & Marketing","Personal Finance","Health & Wellness","Relationships","Productivity & Habits","Leadership","Content Creation","Brand Building","Entrepreneurship","Investing","Fitness","Spiritual Growth"];
+const SOLUTIONS_OPTS = ["Social Media Growth","Personal Branding","Content Creation","Financial Freedom","Passive Income","Confidence & Mindset","Business Scaling","Productivity","Public Speaking","Sales & Marketing","Leadership Skills","Community Building"];
+const USPS_OPTS = ["Proven Track Record","Simplified Approach","No Fluff, Just Results","Step-by-Step System","Personal Attention","From the Same Background","Affordable Pricing","Holistic Method","Cultural Understanding","Fast Results","Done-With-You Model","Real-Life Experience","Industry Insider","24/7 Support","Unique Framework"];
+const FAQ_OPTS = ["How do I get started?","How much does it cost?","How long will it take?","Do I need experience?","What results can I expect?","Is this right for me?","What makes you different?","Do you offer refunds?","How much time do I need?","Can I do this part-time?","Will you work with me 1-on-1?","Do you have testimonials?"];
+const LANGUAGES_OPTS = ["English","हिन्दी","Hinglish","தமிழ்","తెలుగు","ಕನ್ನಡ","മലയാളം","मराठी","ગુજરાતી","বাংলা","ਪੰਜਾਬੀ","اردو","Other"];
+const GOALS_OPTS = [
+  { key: "leads",      label: "Get More Leads",           icon: "🎯" },
+  { key: "reach",      label: "Grow Reach & Awareness",   icon: "📡" },
+  { key: "followers",  label: "Grow Followers",           icon: "👥" },
+  { key: "visibility", label: "Visibility and Influence", icon: "✨" },
+];
+const CTAS_OPTS = [
+  { key: "dm",    label: "DM Me" },
+  { key: "link",  label: "Visit Link" },
+  { key: "book",  label: "Book Call" },
+  { key: "enrol", label: "Enrol Now" },
+  { key: "other", label: "Other" },
+];
+const BRAND_VOICES_OPTS = [
+  { key: "blunt",        label: "Blunt & Raw",    desc: "Direct, no fluff, tells it like it is" },
+  { key: "motivational", label: "Motivational",   desc: "Inspiring, energetic, pushes forward" },
+  { key: "educational",  label: "Educational",    desc: "Breaks things down, teaches clearly" },
+  { key: "storytelling", label: "Storytelling",   desc: "Narrative-first, personal journeys" },
+  { key: "humorous",     label: "Humorous",       desc: "Wit and relatability over everything" },
+];
+const SPICE_LABELS_MAP = ["","Safe","Balanced","Honest","Bold","Controversial"];
+const AVOID_PREFIXES = ["I will never post about","I refuse to","I won't create content that","I avoid","I don't do"];
 
 export default function Settings({ onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -70,6 +101,7 @@ export default function Settings({ onLogout }) {
 
       <div className="max-w-2xl mx-auto px-6 py-8">
         {activeTab === "profile"      && <ProfileTab user={user} onLogout={onLogout} />}
+        {activeTab === "creator"      && <CreatorTab user={user} />}
         {activeTab === "connections"  && <ConnectionsTab user={user} />}
         {activeTab === "subscription" && <SubscriptionTab user={user} />}
       </div>
@@ -361,6 +393,448 @@ function ProfileTab({ user, onLogout }) {
   );
 }
 
+// ─── Creator Profile ─────────────────────────────────────────────────────────
+
+function CreatorTab({ user }) {
+  const refreshUser = user?.refreshUser;
+  const [saving, setSaving] = useState(false);
+
+  const [form, setForm] = useState({
+    profile_name: "", whatsapp_number: "", city_country: "",
+    instagram_username: "", instagram_profile_url: "",
+    website_url: "", linkedin_url: "", youtube_url: "", twitter_url: "",
+    business_description: "", niche_statement: "", target_audience: "",
+    audience_age_min: 18, audience_age_max: 45,
+    audience_emotional_states: [], has_case_studies: false,
+    topics_love: [], solutions_provided: [], unique_selling_points: [], faqs: [],
+    brand_voice: "", spice_level: 3,
+    content_language: "English", content_dislikes: [],
+    topics_to_avoid: ["", "", "", "", ""],
+    underserved_topics: ["", "", "", "", ""],
+    competitors: ["", "", "", "", "", "", "", ""],
+    primary_goal: "", content_cta: "", landing_page_url: "",
+  });
+
+  // Sync from user object
+  useEffect(() => {
+    if (!user) return;
+    setForm(prev => ({
+      ...prev,
+      profile_name:              user.profile_name || "",
+      whatsapp_number:           user.whatsapp_number || "",
+      city_country:              user.city_country || "",
+      instagram_username:        user.instagram_username || "",
+      instagram_profile_url:     user.instagram_profile_url || "",
+      website_url:               user.website_url || "",
+      linkedin_url:              user.linkedin_url || "",
+      youtube_url:               user.youtube_url || "",
+      twitter_url:               user.twitter_url || "",
+      business_description:      user.business_description || "",
+      niche_statement:           user.niche_statement || "",
+      target_audience:           user.target_audience || "",
+      audience_age_min:          user.audience_age_min || 18,
+      audience_age_max:          user.audience_age_max || 45,
+      audience_emotional_states: user.audience_emotional_states || [],
+      has_case_studies:          user.has_case_studies || false,
+      topics_love:               user.topics_love || [],
+      solutions_provided:        user.solutions_provided || [],
+      unique_selling_points:     user.unique_selling_points || [],
+      faqs:                      user.faqs || [],
+      brand_voice:               user.brand_voice || "",
+      spice_level:               user.spice_level || 3,
+      content_language:          user.content_language || "English",
+      content_dislikes:          user.content_dislikes || [],
+      topics_to_avoid:           padArr(user.topics_to_avoid || [], 5),
+      underserved_topics:        padArr(user.underserved_topics || [], 5),
+      competitors:               padArr(user.competitors || [], 8),
+      primary_goal:              user.primary_goal || "",
+      content_cta:               user.content_cta || "",
+      landing_page_url:          user.landing_page_url || "",
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.client_id]);
+
+  const upd = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const updArr = (key, idx, val) => setForm(f => {
+    const arr = [...f[key]];
+    arr[idx] = val;
+    return { ...f, [key]: arr };
+  });
+
+  const authH = () => {
+    const t = localStorage.getItem("sc_token") || localStorage.getItem("token");
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        competitors: form.competitors.filter(c => c.trim()).map(c => c.replace(/^@/, "")),
+        topics_to_avoid: form.topics_to_avoid.filter(t => t.trim()),
+        underserved_topics: form.underserved_topics.filter(t => t.trim()),
+      };
+      await axios.put(`${API}/auth/profile`, payload, { headers: authH() });
+      if (refreshUser) await refreshUser();
+      toast.success("Creator profile saved");
+    } catch {
+      toast.error("Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+      {/* Section 1: Basic Info */}
+      <CrSection title="Basic Info & Access">
+        <CrField label="Profile Name">
+          <input value={form.profile_name} onChange={e => upd("profile_name", e.target.value)} placeholder="How you want to be known" style={pfInput} />
+        </CrField>
+        <CrField label="WhatsApp Number">
+          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+            <Phone size={14} style={{ color: "#555", margin: "0 10px" }} />
+            <input value={form.whatsapp_number} onChange={e => upd("whatsapp_number", e.target.value)} placeholder="+91 98765 43210" style={{ ...pfInput, padding: "11px 14px 11px 0" }} />
+          </div>
+        </CrField>
+        <CrField label="City & Country">
+          <input value={form.city_country} onChange={e => upd("city_country", e.target.value)} placeholder="e.g. Mumbai, India" style={pfInput} />
+        </CrField>
+        <CrField label="Instagram Username">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <Instagram size={14} style={{ color: "#555", margin: "0 10px" }} />
+            <input value={form.instagram_username} onChange={e => upd("instagram_username", e.target.value.replace(/^@/, ""))} placeholder="yourhandle" style={{ ...pfInput, padding: "11px 14px 11px 0" }} />
+          </div>
+        </CrField>
+        <CrField label="Instagram Profile URL">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <Globe size={14} style={{ color: "#555", margin: "0 10px" }} />
+            <input value={form.instagram_profile_url} onChange={e => upd("instagram_profile_url", e.target.value)} placeholder="https://instagram.com/yourhandle" style={{ ...pfInput, padding: "11px 14px 11px 0" }} />
+          </div>
+        </CrField>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <CrField label="Website">
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <Globe size={13} style={{ color: "#555", margin: "0 8px" }} />
+              <input value={form.website_url} onChange={e => upd("website_url", e.target.value)} placeholder="yoursite.com" style={{ ...pfInput, padding: "11px 10px 11px 0", fontSize: 12 }} />
+            </div>
+          </CrField>
+          <CrField label="LinkedIn">
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <Linkedin size={13} style={{ color: "#555", margin: "0 8px" }} />
+              <input value={form.linkedin_url} onChange={e => upd("linkedin_url", e.target.value)} placeholder="linkedin.com/in/you" style={{ ...pfInput, padding: "11px 10px 11px 0", fontSize: 12 }} />
+            </div>
+          </CrField>
+          <CrField label="YouTube">
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <Youtube size={13} style={{ color: "#555", margin: "0 8px" }} />
+              <input value={form.youtube_url} onChange={e => upd("youtube_url", e.target.value)} placeholder="Channel link" style={{ ...pfInput, padding: "11px 10px 11px 0", fontSize: 12 }} />
+            </div>
+          </CrField>
+          <CrField label="Twitter / X">
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <Twitter size={13} style={{ color: "#555", margin: "0 8px" }} />
+              <input value={form.twitter_url} onChange={e => upd("twitter_url", e.target.value)} placeholder="x.com/yourhandle" style={{ ...pfInput, padding: "11px 10px 11px 0", fontSize: 12 }} />
+            </div>
+          </CrField>
+        </div>
+      </CrSection>
+
+      {/* Section 2: Brand & Audience */}
+      <CrSection title="Story, Brand & Audience">
+        <CrField label="About Your Business">
+          <textarea value={form.business_description} onChange={e => upd("business_description", e.target.value)} rows={5}
+            placeholder="What you do, who you help, and what your system/process is…"
+            style={{ ...pfInput, resize: "vertical", lineHeight: 1.6 }} />
+        </CrField>
+        <CrField label="One-Line Niche Statement">
+          <input value={form.niche_statement} onChange={e => upd("niche_statement", e.target.value)} placeholder='I help [audience] [achieve outcome]' style={pfInput} />
+        </CrField>
+        <CrField label="Target Audience">
+          <input value={form.target_audience} onChange={e => upd("target_audience", e.target.value)} placeholder="e.g. Corporate employees, freelancers, coaches" style={pfInput} />
+        </CrField>
+
+        {/* Age range */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Audience Age Range</div>
+          <div style={{ background: "#1e1e1e", borderRadius: 12, padding: "14px", border: "1.5px solid #2a2a2a" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{form.audience_age_min}</span>
+              <span style={{ fontSize: 12, color: "#555" }}>to</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{form.audience_age_max}</span>
+            </div>
+            <input type="range" min={13} max={65} value={form.audience_age_min} onChange={e => upd("audience_age_min", Math.min(parseInt(e.target.value), form.audience_age_max - 5))}
+              style={{ width: "100%", accentColor: "#5B5BD6", marginBottom: 6 }} />
+            <input type="range" min={13} max={65} value={form.audience_age_max} onChange={e => upd("audience_age_max", Math.max(parseInt(e.target.value), form.audience_age_min + 5))}
+              style={{ width: "100%", accentColor: "#5B5BD6" }} />
+          </div>
+        </div>
+
+        <CrChipMulti label="Audience Emotional State" options={EMOTIONAL_STATES_OPTS} value={form.audience_emotional_states} onChange={v => upd("audience_emotional_states", v)} allowCustom={false} max={2} />
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid #1e1e1e", marginBottom: 12 }}>
+          <span style={{ fontSize: 13, color: "#ccc" }}>Do you have client case studies or results?</span>
+          <button onClick={() => upd("has_case_studies", !form.has_case_studies)}
+            style={{ width: 42, height: 24, borderRadius: 12, border: "none", cursor: "pointer", position: "relative", background: form.has_case_studies ? "#5B5BD6" : "#2a2a2a", flexShrink: 0 }}>
+            <div style={{ position: "absolute", top: 2, left: form.has_case_studies ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+          </button>
+        </div>
+
+        <CrChipMulti label="Topics I Love" options={TOPICS_LOVE_OPTS} value={form.topics_love} onChange={v => upd("topics_love", v)} />
+        <CrChipMulti label="Solutions I Provide" options={SOLUTIONS_OPTS} value={form.solutions_provided} onChange={v => upd("solutions_provided", v)} />
+        <CrChipMulti label="Unique Selling Points" options={USPS_OPTS} value={form.unique_selling_points} onChange={v => upd("unique_selling_points", v)} />
+        <CrChipMulti label="FAQs from Audience" options={FAQ_OPTS} value={form.faqs} onChange={v => upd("faqs", v)} />
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Brand Voice</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {BRAND_VOICES_OPTS.map(v => (
+              <button key={v.key} onClick={() => upd("brand_voice", v.key)}
+                style={{ padding: "10px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer", border: `1.5px solid ${form.brand_voice === v.key ? "#5B5BD6" : "#2a2a2a"}`, background: form.brand_voice === v.key ? "#1e1e3a" : "#1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: form.brand_voice === v.key ? "#fff" : "#ccc" }}>{v.label}</div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{v.desc}</div>
+                </div>
+                {form.brand_voice === v.key && <Check size={12} style={{ color: "#5B5BD6", flexShrink: 0 }} />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={pfSectionLabel}>Content Boldness</div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#5B5BD6" }}>{SPICE_LABELS_MAP[form.spice_level]}</span>
+          </div>
+          <input type="range" min={1} max={5} step={1} value={form.spice_level} onChange={e => upd("spice_level", parseInt(e.target.value))}
+            style={{ width: "100%", accentColor: "#5B5BD6" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#444", marginTop: 4 }}>
+            <span>Safe</span><span>Controversial</span>
+          </div>
+        </div>
+      </CrSection>
+
+      {/* Section 3: Content Strategy */}
+      <CrSection title="Content Strategy & Direction">
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Content Language</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {LANGUAGES_OPTS.map(lang => (
+              <button key={lang} onClick={() => upd("content_language", lang)}
+                style={{ padding: "7px 13px", borderRadius: 18, fontSize: 12, cursor: "pointer", border: `1.5px solid ${form.content_language === lang ? "#5B5BD6" : "#2a2a2a"}`, background: form.content_language === lang ? "#1e1e3a" : "#1e1e1e", color: form.content_language === lang ? "#8080ff" : "#aaa" }}>
+                {lang}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <CrTagInput label="Content I Dislike" value={form.content_dislikes} onChange={v => upd("content_dislikes", v)} placeholder="e.g. Clickbait, aggressive selling…" />
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Topics to Avoid</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {AVOID_PREFIXES.map((prefix, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e1e1e", borderRadius: 10, border: "1.5px solid #2a2a2a", padding: "0 12px" }}
+                onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+                onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}>
+                <span style={{ fontSize: 11, color: "#555", whiteSpace: "nowrap", flexShrink: 0 }}>{prefix}</span>
+                <input value={form.topics_to_avoid[i]} onChange={e => updArr("topics_to_avoid", i, e.target.value)}
+                  placeholder="…" style={{ ...pfInput, background: "transparent", border: "none", padding: "10px 0", fontSize: 12 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Underserved Topics in Your Niche</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[0,1,2,3,4].map(i => (
+              <div key={i} style={{ background: "#1e1e1e", borderRadius: 10, border: "1.5px solid #2a2a2a" }}
+                onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+                onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}>
+                <input value={form.underserved_topics[i]} onChange={e => updArr("underserved_topics", i, e.target.value)}
+                  placeholder={`Topic ${i + 1}`} style={pfInput} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Competitor Accounts (8 best accounts in your niche)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[0,1,2,3,4,5,6,7].map(i => (
+              <div key={i} style={{ display: "flex", alignItems: "center", background: "#1e1e1e", borderRadius: 10, border: "1.5px solid #2a2a2a", padding: "0 10px" }}
+                onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+                onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}>
+                <span style={{ color: "#555", fontSize: 13 }}>@</span>
+                <input value={form.competitors[i]} onChange={e => updArr("competitors", i, e.target.value.replace(/^@/, ""))}
+                  placeholder="username" style={{ ...pfInput, padding: "9px 8px", fontSize: 12, background: "transparent", border: "none" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </CrSection>
+
+      {/* Section 4: Goals & CTA */}
+      <CrSection title="Goals, CTA & Lead Generation">
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Primary Instagram Goal</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {GOALS_OPTS.map(g => (
+              <button key={g.key} onClick={() => upd("primary_goal", g.key)}
+                style={{ padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer", border: `1.5px solid ${form.primary_goal === g.key ? "#5B5BD6" : "#2a2a2a"}`, background: form.primary_goal === g.key ? "#1e1e3a" : "#1e1e1e", display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 18 }}>{g.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: form.primary_goal === g.key ? "#fff" : "#ccc" }}>{g.label}</span>
+                {form.primary_goal === g.key && <Check size={13} style={{ color: "#5B5BD6", marginLeft: "auto" }} />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={pfSectionLabel}>Preferred CTA</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {CTAS_OPTS.map(c => (
+              <button key={c.key} onClick={() => upd("content_cta", c.key)}
+                style={{ padding: "8px 16px", borderRadius: 18, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1.5px solid ${form.content_cta === c.key ? "#5B5BD6" : "#2a2a2a"}`, background: form.content_cta === c.key ? "#1e1e3a" : "#1e1e1e", color: form.content_cta === c.key ? "#8080ff" : "#aaa" }}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <CrField label="Landing Page / Website URL">
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <Globe size={14} style={{ color: "#555", margin: "0 10px" }} />
+            <input value={form.landing_page_url} onChange={e => upd("landing_page_url", e.target.value)} placeholder="https://yoursite.com or calendly link" style={{ ...pfInput, padding: "11px 14px 11px 0" }} />
+          </div>
+        </CrField>
+      </CrSection>
+
+      {/* Save */}
+      <button onClick={save} disabled={saving}
+        style={{ width: "100%", padding: "14px 0", fontSize: 14, fontWeight: 700, borderRadius: 12, border: "none", background: saving ? "#3a3a6a" : "#5B5BD6", color: "#fff", cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(91,91,214,0.25)", marginBottom: 32 }}>
+        {saving ? "Saving…" : "Save Creator Profile"}
+      </button>
+    </div>
+  );
+}
+
+function CrSection({ title, children }) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid #1e1e1e" }}>{title}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>{children}</div>
+    </div>
+  );
+}
+
+function CrField({ label, children }) {
+  return (
+    <div>
+      <div style={pfSectionLabel}>{label}</div>
+      <div style={{ background: "#1e1e1e", border: "1.5px solid #2a2a2a", borderRadius: 12, overflow: "hidden" }}
+        onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+        onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CrChipMulti({ label, options, value, onChange, allowCustom = true, max }) {
+  const [custom, setCustom] = useState("");
+  const toggle = item => {
+    if (value.includes(item)) { onChange(value.filter(v => v !== item)); return; }
+    if (max && value.length >= max) return;
+    onChange([...value, item]);
+  };
+  const addCustom = () => {
+    const t = custom.trim();
+    if (!t || value.includes(t)) return;
+    if (max && value.length >= max) return;
+    onChange([...value, t]); setCustom("");
+  };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={pfSectionLabel}>{label}{max ? <span style={{ color: "#555", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}> (up to {max})</span> : ""}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: allowCustom ? 8 : 0 }}>
+        {options.map(opt => {
+          const on = value.includes(opt);
+          return (
+            <button key={opt} onClick={() => toggle(opt)}
+              style={{ padding: "6px 12px", borderRadius: 18, fontSize: 11, fontWeight: 500, cursor: "pointer", border: `1.5px solid ${on ? "#5B5BD6" : "#2a2a2a"}`, background: on ? "#1e1e3a" : "#1e1e1e", color: on ? "#8080ff" : "#888", display: "flex", alignItems: "center", gap: 4 }}>
+              {on && <Check size={9} style={{ color: "#8080ff" }} />} {opt}
+            </button>
+          );
+        })}
+        {value.filter(v => !options.includes(v)).map(v => (
+          <button key={v} onClick={() => toggle(v)}
+            style={{ padding: "6px 12px", borderRadius: 18, fontSize: 11, fontWeight: 500, cursor: "pointer", border: "1.5px solid #5B5BD6", background: "#1e1e3a", color: "#8080ff", display: "flex", alignItems: "center", gap: 4 }}>
+            <Check size={9} /> {v} <X size={9} />
+          </button>
+        ))}
+      </div>
+      {allowCustom && (
+        <div style={{ display: "flex", gap: 7 }}>
+          <input value={custom} onChange={e => setCustom(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustom()} placeholder="Add your own…"
+            style={{ flex: 1, background: "#1e1e1e", border: "1.5px solid #2a2a2a", borderRadius: 10, padding: "8px 12px", fontSize: 12, color: "#fff", outline: "none", fontFamily: "inherit" }}
+            onFocus={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+            onBlur={e => e.currentTarget.style.borderColor = "#2a2a2a"} />
+          <button onClick={addCustom}
+            style={{ width: 36, height: 36, borderRadius: 9, background: "#5B5BD6", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Plus size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CrTagInput({ label, value, onChange, placeholder }) {
+  const [input, setInput] = useState("");
+  const add = () => {
+    const t = input.trim();
+    if (!t || value.includes(t)) return;
+    onChange([...value, t]); setInput("");
+  };
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={pfSectionLabel}>{label}</div>
+      {value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
+          {value.map(v => (
+            <div key={v} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 18, background: "#2a0a0a", border: "1px solid #7f1d1d", fontSize: 11, color: "#ef4444" }}>
+              {v}
+              <button onClick={() => onChange(value.filter(x => x !== v))} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", padding: 0, display: "flex" }}>
+                <X size={9} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 7 }}>
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder={placeholder}
+          style={{ flex: 1, background: "#1e1e1e", border: "1.5px solid #2a2a2a", borderRadius: 10, padding: "9px 12px", fontSize: 12, color: "#fff", outline: "none", fontFamily: "inherit" }}
+          onFocus={e => e.currentTarget.style.borderColor = "#5B5BD6"}
+          onBlur={e => e.currentTarget.style.borderColor = "#2a2a2a"} />
+        <button onClick={add}
+          style={{ width: 36, height: 36, borderRadius: 9, background: "#5B5BD6", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Plus size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function padArr(arr, len) {
+  const copy = [...arr];
+  while (copy.length < len) copy.push("");
+  return copy;
+}
+
 // ─── Connections ──────────────────────────────────────────────────────────────
 
 function ConnectionsTab({ user }) {
@@ -381,6 +855,25 @@ function ConnectionsTab({ user }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Listen for the OAuth popup completing and for native app resume (Capacitor)
+  useEffect(() => {
+    const onMessage = async (e) => {
+      if (e.data?.type !== "BUNDLE_AUTH") return;
+      await load();
+      window.dispatchEvent(new Event("sc:refresh"));
+    };
+    const onAppResume = async () => {
+      await load();
+      window.dispatchEvent(new Event("sc:refresh"));
+    };
+    window.addEventListener("message", onMessage);
+    window.addEventListener("sc:app-resume", onAppResume);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.removeEventListener("sc:app-resume", onAppResume);
+    };
+  }, [load]);
+
   const connectInstagram = async () => {
     const token = localStorage.getItem("sc_token") || localStorage.getItem("token");
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -391,7 +884,8 @@ function ConnectionsTab({ user }) {
         await load();
         window.dispatchEvent(new Event("sc:refresh"));
       } else if (data.url) {
-        window.open(data.url, "_blank", "noopener,noreferrer");
+        // Open without noopener so the popup can postMessage back to window.opener
+        window.open(data.url, "bundle_connect", "width=520,height=720,noopener=no");
       } else {
         toast.error("Could not get connect URL");
       }
@@ -650,8 +1144,8 @@ function UsageStat({ icon, label, value, limit }) {
 // ─── Shared ───────────────────────────────────────────────────────────────────
 
 const pfSectionLabel = {
-  fontSize: 11, fontWeight: 700, color: "#cccccc",
-  textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10,
+  fontSize: 11, fontWeight: 700, color: "#666666",
+  textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10,
 };
 
 const pfInput = {
@@ -665,7 +1159,7 @@ function PfField({ label, children }) {
     <div>
       <div style={pfSectionLabel}>{label}</div>
       <div
-        style={{ background: "#1a1a1a", border: "1.5px solid #2a2a2a", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s" }}
+        style={{ background: "#1e1e1e", border: "1.5px solid #2a2a2a", borderRadius: 12, overflow: "hidden", transition: "border-color 0.15s" }}
         onFocusCapture={e => e.currentTarget.style.borderColor = "#5B5BD6"}
         onBlurCapture={e => e.currentTarget.style.borderColor = "#2a2a2a"}
       >

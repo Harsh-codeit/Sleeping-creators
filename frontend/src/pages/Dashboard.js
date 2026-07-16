@@ -181,9 +181,9 @@ export default function Dashboard() {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <StatCard icon={Clock}        label="Scheduled" value={scheduledCount} sub="posts queued"
-            iconBg="#EEF0FF" iconColor="#5B5BD6" />
+            iconBg="#1e1e3a" iconColor="#8080ff" />
           <StatCard icon={CheckCircle2} label="Published"  value={publishedCount} sub="posts live"
-            iconBg="#ecfdf5" iconColor="#059669" />
+            iconBg="#0a2016" iconColor="#34d399" />
           <StatCard icon={Layers}       label="Drafts"     value={draftCount}     sub="tap to view"
             iconBg="#1e1e1e" iconColor="#888888" to="/drafts" />
           <Link to="/analytics"
@@ -194,7 +194,7 @@ export default function Dashboard() {
           >
             <div className="flex items-start justify-between mb-4">
               <span className="text-xs font-medium" style={{ color: "#666666" }}>Analytics</span>
-              <div className="p-1.5 rounded-lg" style={{ background: "#fffbeb", color: "#d97706" }}>
+              <div className="p-1.5 rounded-lg" style={{ background: "#1a1200", color: "#f59e0b" }}>
                 <TrendingUp size={13} />
               </div>
             </div>

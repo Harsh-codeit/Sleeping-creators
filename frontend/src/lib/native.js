@@ -25,4 +25,10 @@ export async function initNative() {
     if (!canGoBack) App.exitApp();
     else window.history.back();
   });
+
+  // When the user returns to the app (e.g. after OAuth in system browser),
+  // fire a custom event so Settings and Onboarding can refresh connection status
+  App.addListener("appStateChange", ({ isActive }) => {
+    if (isActive) window.dispatchEvent(new Event("sc:app-resume"));
+  });
 }

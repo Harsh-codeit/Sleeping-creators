@@ -126,13 +126,17 @@ async def get_connected_accounts(api_key: str, team_id: str) -> dict:
     reverse = {v: k for k, v in PLATFORM_MAP.items()}
     connected: list[str] = []
     accounts: list[dict] = []
+    # Statuses that Bundle uses for a healthy, publishable account
+    _HEALTHY = {"connected", "active", "ok", ""}
+
     for acct in social_accounts:
         acct_type = acct.get("type") or acct.get("socialAccountType") or ""
-        status = acct.get("status") or acct.get("state") or acct.get("connectionStatus") or ""
+        status = (acct.get("status") or acct.get("state") or acct.get("connectionStatus") or "").lower()
         username = acct.get("username") or acct.get("name") or acct.get("displayName") or ""
         accounts.append({"type": acct_type, "status": status, "username": username})
         key = reverse.get(acct_type)
-        if key and key not in connected:
+        # Only count the account as connected when status is healthy (not disconnected/error/pending)
+        if key and key not in connected and status in _HEALTHY:
             connected.append(key)
     logger.info(
         "Bundle team %s social accounts: %s -> connected=%s",

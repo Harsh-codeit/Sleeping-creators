@@ -46,6 +46,12 @@ async def lifespan(app: FastAPI):
         logger.warning("Template seed failed (non-fatal): %s", _seed_exc)
 
     try:
+        from backend_mobile.modules.admin.indexes import ensure_indexes
+        await ensure_indexes(database.db)
+    except Exception as _idx_exc:
+        logger.warning("Index creation failed (non-fatal): %s", _idx_exc)
+
+    try:
         _redis_pool = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
         await _redis_pool.ping()
         logger.info("Redis connected")
@@ -90,13 +96,9 @@ def create_app() -> FastAPI:
     from backend_mobile.modules.intelligence.router import router as intel_router
     from backend_mobile.modules.intelligence.router import _get_db as intel_get_db, _get_redis as intel_get_redis
 
-    from backend_mobile.modules.creator.router import router as creator_router
-    from backend_mobile.modules.creator.router import _get_db as creator_get_db
-
     # Dependency overrides for modules that still use stub pattern
     app.dependency_overrides[intel_get_db] = database.get_db
     app.dependency_overrides[intel_get_redis] = get_redis
-    app.dependency_overrides[creator_get_db] = database.get_db
 
     from backend_mobile.modules.posts.router import router as posts_router
     from backend_mobile.modules.posts.carousel_router import router as carousel_router
@@ -111,7 +113,6 @@ def create_app() -> FastAPI:
     app.include_router(iam_router)            # /api/v1/auth/* /api/v1/users/me
     app.include_router(studio_router)         # /api/v1/templates/*
     app.include_router(intel_router)          # /api/v1/generate/* /api/v1/plans
-    app.include_router(creator_router)        # /api/v1/creator/*
     app.include_router(posts_router)          # /api/posts/* /api/calendar
     app.include_router(carousel_router)       # /api/carousel/generate /api/carousels
     app.include_router(video_router)          # /api/videos/* /api/shotstack-templates

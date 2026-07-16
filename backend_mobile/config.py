@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # Fast inference
     groq_api_key: str = ""
 
+    # Performance Library — Google Drive ingestion
+    google_drive_api_key: str = ""
+
     # Video
     shotstack_key: str = ""
 

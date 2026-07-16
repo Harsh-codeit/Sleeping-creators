@@ -40,7 +40,7 @@ export default function Layout({ onLogout }) {
     : "SC";
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#0d0d0d" }}>
+    <div className="flex" style={{ background: "#0d0d0d", height: "100%", overflow: "hidden" }}>
 
       {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex w-56 flex-shrink-0 flex-col"
@@ -137,10 +137,18 @@ export default function Layout({ onLogout }) {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Mobile top bar */}
-        <header className="md:hidden flex items-center px-4 h-14 flex-shrink-0"
-          style={{ background: "#141414", borderBottom: "1px solid #2a2a2a", paddingTop: "env(safe-area-inset-top)" }}>
-          <img src={logo} alt="" className="w-6 h-6 rounded-md" />
-          <span className="text-sm font-bold ml-2" style={{ color: "#7c7cf8" }}>Sleeping Creators</span>
+        <header className="md:hidden flex-shrink-0"
+          style={{ background: "#141414", borderBottom: "1px solid #2a2a2a" }}>
+          {/* Safe-area spacer — fills Dynamic Island / notch with header color */}
+          <div style={{ height: "env(safe-area-inset-top)" }} />
+          {/* Actual header content — always 52px tall, never clipped */}
+          <div className="flex items-center gap-2.5 px-4" style={{ height: 52 }}>
+            <img src={logo} alt="" className="w-7 h-7 rounded-lg" />
+            <div>
+              <div className="text-sm font-bold" style={{ color: "#7c7cf8", letterSpacing: "-0.01em" }}>Sleeping Creators</div>
+              <div className="text-[9px] font-medium" style={{ color: "#555" }}>CONTENT STUDIO</div>
+            </div>
+          </div>
         </header>
 
         {/* Page content */}
@@ -151,23 +159,28 @@ export default function Layout({ onLogout }) {
         </main>
 
         {/* ── Mobile bottom nav ── */}
-        <nav className="md:hidden flex items-center"
-          style={{ background: "#141414", borderTop: "1px solid #2a2a2a", paddingBottom: "env(safe-area-inset-bottom)" }}>
-          {BOTTOM_NAV.map(nav => {
-            const Icon   = nav.icon;
-            const active = isActive(nav, location.pathname);
-            return (
-              <NavLink
-                key={nav.path}
-                to={nav.path}
-                className="flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors"
-                style={{ color: active ? "#8080ff" : "#888" }}
-              >
-                <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
-                <span className="text-[10px] font-medium">{nav.label}</span>
-              </NavLink>
-            );
-          })}
+        <nav className="md:hidden flex-shrink-0"
+          style={{ background: "#141414", borderTop: "1px solid #2a2a2a" }}>
+          {/* Nav items — fixed height row, never interferes with safe area */}
+          <div className="flex">
+            {BOTTOM_NAV.map(nav => {
+              const Icon   = nav.icon;
+              const active = isActive(nav, location.pathname);
+              return (
+                <NavLink
+                  key={nav.path}
+                  to={nav.path}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 transition-colors"
+                  style={{ color: active ? "#8080ff" : "#888", paddingTop: 10, paddingBottom: 10 }}
+                >
+                  <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
+                  <span className="text-[10px] font-medium">{nav.label}</span>
+                </NavLink>
+              );
+            })}
+          </div>
+          {/* Safe-area spacer — fills home indicator area with nav background */}
+          <div style={{ height: "env(safe-area-inset-bottom)" }} />
         </nav>
       </div>
 

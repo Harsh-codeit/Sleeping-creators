@@ -34,6 +34,10 @@ from backend_mobile.modules.intelligence.graphs.state import (
 )
 from backend_mobile.modules.intelligence.graphs.tools.competitor_tool import get_competitor_posts
 from backend_mobile.modules.intelligence.graphs.tools.hook_retrieval_tool import retrieve_exemplar_hooks
+from backend_mobile.modules.intelligence.graphs.tools.performance_retrieval_tool import (
+    retrieve_performance_examples as _retrieve_perf_examples,
+    _extract_niches,
+)
 from backend_mobile.modules.intelligence.graphs.tools.semantic_gate_tool import gate_check
 from backend_mobile.modules.intelligence.graphs.tools.trend_tool import get_trending_topics
 from backend_mobile.modules.intelligence.prompts.carousel_strategist import (
@@ -185,6 +189,38 @@ async def build_creator_context(state: ContentGenerationState, *, db, redis) -> 
                 base_context["content_pillars"] = niches
             if user.get("competitors"):
                 base_context["competitors"] = user["competitors"]
+
+            # --- Extended questionnaire fields ---
+            if user.get("niche_statement"):
+                base_context["niche_statement"] = user["niche_statement"]
+            if user.get("business_description"):
+                base_context["business_description"] = user["business_description"]
+            if user.get("audience_age_min") and user.get("audience_age_max"):
+                base_context["audience_age_range"] = f"{user['audience_age_min']}–{user['audience_age_max']}"
+            if user.get("audience_emotional_states"):
+                base_context["audience_emotional_states"] = user["audience_emotional_states"]
+            if user.get("solutions_provided"):
+                base_context["solutions_provided"] = user["solutions_provided"]
+            if user.get("unique_selling_points"):
+                base_context["unique_selling_points"] = user["unique_selling_points"]
+            if user.get("topics_love"):
+                base_context["topics_love"] = user["topics_love"]
+            if user.get("faqs"):
+                base_context["faqs"] = user["faqs"]
+            if user.get("content_language"):
+                base_context["languages"] = [user["content_language"]]
+            if user.get("content_dislikes"):
+                base_context["content_dislikes"] = user["content_dislikes"]
+            if user.get("topics_to_avoid"):
+                base_context["topic_excludes"] = [t for t in user["topics_to_avoid"] if t]
+            if user.get("underserved_topics"):
+                base_context["underserved_topics"] = [t for t in user["underserved_topics"] if t]
+            if user.get("primary_goal"):
+                base_context["primary_goal"] = user["primary_goal"]
+            if user.get("content_cta"):
+                base_context["preferred_cta"] = user["content_cta"]
+            if user.get("city_country"):
+                base_context["location"] = user["city_country"]
     except Exception as exc:
         logger.warning("Creator context load failed for %s: %s — using defaults", creator_id, exc)
 
@@ -322,6 +358,21 @@ async def retrieve_hooks(state: ContentGenerationState, *, db) -> dict:
     return {"exemplar_hooks": hooks}
 
 
+async def retrieve_performance(state: ContentGenerationState, *, db) -> dict:
+    """Query performance_library for top viral carousels matching niche + hook + format."""
+    ctx = state.get("creator_context") or {}
+    spec = state.get("variety_spec") or {}
+    niches = _extract_niches(ctx)
+    examples = await _retrieve_perf_examples(
+        niches=niches,
+        hook_type=spec.get("hook_type", ""),
+        format_=spec.get("format", ""),
+        db=db,
+        limit=5,
+    )
+    return {"performance_examples": examples}
+
+
 async def generate_content(state: ContentGenerationState, *, anthropic_client: AsyncAnthropic) -> dict:
     """Call Claude to generate the full carousel / text post."""
     ctx = state.get("creator_context") or {}
@@ -349,6 +400,37 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
         exemplar_block = "\n\nEXEMPLAR HOOKS (for reference — do NOT copy):\n" + "\n".join(
             f"- {h}" for h in exemplars
         )
+
+    # High-performing viral carousels retrieved from the performance library
+    perf_examples = state.get("performance_examples") or []
+    perf_block = ""
+    if perf_examples:
+        lines = [
+            "\n\nHIGH-PERFORMING CAROUSELS IN THIS NICHE "
+            "(real viral posts with proven engagement — study the PATTERN, do NOT copy the content):"
+        ]
+        for i, ex in enumerate(perf_examples[:4], 1):
+            likes = ex.get("likes_count") or 0
+            shares = ex.get("shares_count") or 0
+            eng = f" [{likes // 1000}K likes, {shares // 1000}K shares]" if likes > 1000 else ""
+            lines.append(f"\nExample {i}{eng}:")
+            if ex.get("headline_text"):
+                lines.append(f"  Hook: \"{ex['headline_text']}\"")
+            fmt = ex.get("format") or ""
+            cnt = ex.get("slide_count_estimate")
+            if fmt:
+                lines.append(f"  Format: {fmt}" + (f", ~{cnt} slides" if cnt else ""))
+            if ex.get("hook_technique"):
+                lines.append(f"  Techniques: {ex['hook_technique']}")
+            if ex.get("slide_structure"):
+                lines.append(f"  Structure: {ex['slide_structure']}")
+            if ex.get("emotional_trigger"):
+                lines.append(f"  Emotional trigger: {ex['emotional_trigger']}")
+            if ex.get("visual_style"):
+                lines.append(f"  Visual: {ex['visual_style']}")
+            if ex.get("cta_style") and ex["cta_style"] != "none":
+                lines.append(f"  CTA: {ex['cta_style']}")
+        perf_block = "\n".join(lines)
 
     # Creator's own recent content — Claude avoids repeating similar hooks/angles
     history_block = ""
@@ -412,8 +494,18 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
     ref = state.get("reference_content") or ""
     if ref:
         reference_block = (
-            "\n\nREFERENCE CONTENT (client-provided example — draw inspiration from hook style, "
+            "\n\nREFERENCE CONTENT (creator-provided example — draw inspiration from hook style, "
             "tone, and structure; do NOT copy any text verbatim):\n" + ref
+        )
+
+    trending_reference_block = ""
+    trending_ref = state.get("trending_reference_content") or ""
+    if trending_ref:
+        trending_reference_block = (
+            "\n\nTRENDING POST IN THIS NICHE (the creator flagged this as currently viral — "
+            "study its hook technique, emotional tone, and format. Do NOT copy. Use it to understand "
+            "what the audience is responding to right now, then apply that energy to the topic above):\n"
+            + trending_ref
         )
 
     blueprint_block = ""
@@ -451,6 +543,43 @@ async def generate_content(state: ContentGenerationState, *, anthropic_client: A
     lang_list = ctx.get("languages") or ["English"]
     lang_str = ", ".join(lang_list) if isinstance(lang_list, list) else str(lang_list)
 
+    # Build extended context block from questionnaire fields
+    def _list_str(lst, prefix="- ") -> str:
+        return "\n".join(f"{prefix}{item}" for item in lst) if lst else ""
+
+    ext_ctx_parts = []
+    if ctx.get("niche_statement"):
+        ext_ctx_parts.append(f"Creator tagline: {ctx['niche_statement']}")
+    if ctx.get("business_description"):
+        ext_ctx_parts.append(f"Business background: {ctx['business_description'][:400]}")
+    if ctx.get("audience_age_range"):
+        ext_ctx_parts.append(f"Audience age range: {ctx['audience_age_range']}")
+    if ctx.get("audience_emotional_states"):
+        ext_ctx_parts.append(f"Audience emotional state: {', '.join(ctx['audience_emotional_states'])}")
+    if ctx.get("solutions_provided"):
+        ext_ctx_parts.append(f"Problems solved:\n{_list_str(ctx['solutions_provided'])}")
+    if ctx.get("unique_selling_points"):
+        ext_ctx_parts.append(f"What makes them different:\n{_list_str(ctx['unique_selling_points'])}")
+    if ctx.get("topics_love"):
+        ext_ctx_parts.append(f"Topics they love talking about: {', '.join(ctx['topics_love'][:8])}")
+    if ctx.get("underserved_topics"):
+        ext_ctx_parts.append(f"Underserved / gap topics to cover:\n{_list_str(ctx['underserved_topics'])}")
+    if ctx.get("faqs"):
+        ext_ctx_parts.append(f"Top audience FAQs (write content that answers these):\n{_list_str(ctx['faqs'])}")
+    if ctx.get("has_case_studies"):
+        ext_ctx_parts.append("Creator has client case studies and real results — reference proof when relevant.")
+    if ctx.get("content_dislikes"):
+        ext_ctx_parts.append(f"NEVER use these styles/tones: {', '.join(ctx['content_dislikes'])}")
+    if ctx.get("topic_excludes"):
+        ext_ctx_parts.append(f"Topics to AVOID: {', '.join(ctx['topic_excludes'])}")
+    if ctx.get("primary_goal"):
+        ext_ctx_parts.append(f"Creator's Instagram goal: {ctx['primary_goal']}")
+    if ctx.get("preferred_cta"):
+        ext_ctx_parts.append(f"Preferred CTA: {ctx['preferred_cta']}")
+    if ctx.get("location"):
+        ext_ctx_parts.append(f"Creator location: {ctx['location']}")
+    extended_context_block = ("\n" + "\n".join(ext_ctx_parts)) if ext_ctx_parts else ""
+
     user_prompt = f"""CREATOR CONTEXT:
 Creator: {ctx.get('name', '')}
 Niche: {ctx.get('niche', 'general')}
@@ -460,6 +589,7 @@ Brand voice: {ctx.get('brand_voice', 'conversational')}
 Language / style register: {lang_str}
 Content boldness [{spice}/5]: {spice_directive}
 Content pillars: {', '.join(ctx.get('content_pillars', []))}
+{extended_context_block}
 {tone_directive}
 GENERATION REQUEST:
 Topic: {state['topic']}
@@ -475,11 +605,13 @@ SLIDE FORMAT GUIDANCE:
 
 {caption_rules}
 {exemplar_block}
+{perf_block}
 {history_block}
 {winning_block}
 {competitor_block}
 {trend_block}
 {cta_block}
+{trending_reference_block}
 {reference_block}
 {blueprint_block}
 
@@ -639,6 +771,7 @@ def build_content_generation_graph(db, redis, anthropic_client: AsyncAnthropic) 
     g.add_node("FetchTrends", _bind(fetch_trends, db=db, redis=redis))
     g.add_node("SelectVariety", select_variety)
     g.add_node("RetrieveHooks", _bind(retrieve_hooks, db=db))
+    g.add_node("RetrievePerformance", _bind(retrieve_performance, db=db))
     g.add_node("GenerateContent", _bind(generate_content, anthropic_client=anthropic_client))
     g.add_node("SemanticGate", _bind(semantic_gate, db=db))
     g.add_node("RespecForRetry", respec_for_retry)
@@ -649,7 +782,8 @@ def build_content_generation_graph(db, redis, anthropic_client: AsyncAnthropic) 
     g.add_edge("BuildCreatorContext", "FetchTrends")
     g.add_edge("FetchTrends", "SelectVariety")
     g.add_edge("SelectVariety", "RetrieveHooks")
-    g.add_edge("RetrieveHooks", "GenerateContent")
+    g.add_edge("RetrieveHooks", "RetrievePerformance")
+    g.add_edge("RetrievePerformance", "GenerateContent")
     g.add_edge("GenerateContent", "SemanticGate")
 
     g.add_conditional_edges(
@@ -680,6 +814,7 @@ def make_initial_state(
     preferred_hook_type: str | None = None,
     max_retries: int = 2,
     reference_content: str | None = None,
+    trending_reference_content: str | None = None,
     template_blueprint: list | None = None,
 ) -> ContentGenerationState:
     return ContentGenerationState(
@@ -693,11 +828,13 @@ def make_initial_state(
         cta_offer=cta_offer,
         preferred_hook_type=preferred_hook_type,
         reference_content=reference_content,
+        trending_reference_content=trending_reference_content,
         template_blueprint=template_blueprint,
         creator_context=None,
         trending_topics=[],
         variety_spec=None,
         exemplar_hooks=[],
+        performance_examples=[],
         generated_content=None,
         best_candidate=None,
         gate_result=None,
