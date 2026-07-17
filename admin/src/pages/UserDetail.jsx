@@ -9,6 +9,18 @@ const NICHES = ["fitness", "food", "travel", "fashion", "tech", "business", "bea
 const HOOK_TYPES = ["question", "myth_bust", "story", "statistic", "challenge", "tip", "relatable", "controversial", "listicle", "family_relationship", "emotional_state", "relatable_scene", "shocking_number", "credibility_borrow", "direct_confront", "other"];
 const TABS = ["AI Profile", "Questionnaire", "Content DNA", "Generation History", "Hooks"];
 
+// ── Onboarding questionnaire option lists (mirror frontend/UserOnboarding.js) ──
+const EMOTIONAL_STATES = ["Ambitious","Overwhelmed","Confused","Motivated","Stuck","Frustrated","Burned Out","Anxious"];
+const TOPICS_LOVE = ["Mindset & Psychology","Business Strategy","Social Media Growth","Sales & Marketing","Personal Finance","Health & Wellness","Relationships","Productivity & Habits","Leadership","Content Creation","Brand Building","Entrepreneurship","Investing","Fitness","Spiritual Growth"];
+const SOLUTIONS = ["Social Media Growth","Personal Branding","Content Creation","Financial Freedom","Passive Income","Confidence & Mindset","Business Scaling","Productivity","Public Speaking","Sales & Marketing","Leadership Skills","Community Building"];
+const USPS = ["Proven Track Record","Simplified Approach","No Fluff, Just Results","Step-by-Step System","Personal Attention","From the Same Background","Affordable Pricing","Holistic Method","Cultural Understanding","Fast Results","Done-With-You Model","Real-Life Experience","Industry Insider","24/7 Support","Unique Framework"];
+const FAQ_OPTIONS = ["How do I get started?","How much does it cost?","How long will it take?","Do I need experience?","What results can I expect?","Is this right for me?","What makes you different?","Do you offer refunds?","How much time do I need?","Can I do this part-time?","Will you work with me 1-on-1?","Do you have testimonials?"];
+const LANGUAGES = ["English","हिन्दी","Hinglish","தமிழ்","తెలుగు","ಕನ್ನಡ","മലയാളം","मराठी","ગુજરાતી","বাংলা","ਪੰਜਾਬੀ","اردو","العربية","Español","Français","Português","Deutsch","Bahasa Indonesia","Bahasa Melayu","Other"];
+const GOALS = [{ key: "leads", label: "Get More Leads", icon: "🎯" }, { key: "reach", label: "Grow Reach & Awareness", icon: "📡" }, { key: "followers", label: "Grow Followers", icon: "👥" }, { key: "visibility", label: "Visibility and Influence", icon: "✨" }];
+const CTAS = [{ key: "dm", label: "DM Me" }, { key: "link", label: "Visit Link" }, { key: "book", label: "Book Call" }, { key: "enrol", label: "Enrol Now" }, { key: "other", label: "Other" }];
+const BRAND_VOICES = [{ key: "blunt", label: "Blunt & Raw", desc: "Direct, no fluff, tells it like it is" }, { key: "motivational", label: "Motivational", desc: "Inspiring, energetic, pushes forward" }, { key: "educational", label: "Educational", desc: "Breaks things down, teaches clearly" }, { key: "storytelling", label: "Storytelling", desc: "Narrative-first, personal journeys" }, { key: "humorous", label: "Humorous", desc: "Wit and relatability over everything" }];
+const SPICE_SCALE = ["", "Safe", "Balanced", "Honest", "Bold", "Controversial"];
+
 export default function UserDetail() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -35,18 +47,43 @@ export default function UserDetail() {
       setData(r.data);
       const u = r.data.user;
       setForm({
+        // AI Profile
         brand_voice:               u.brand_voice || "",
         target_audience:           u.target_audience || "",
         spice_level:               u.spice_level || 3,
         niche:                     u.niche || "",
         interests:                 (u.interests || []).join(", "),
         competitors:               u.competitors || [],
-        // questionnaire fields editable in right panel
-        niche_statement:           u.niche_statement || "",
+        // S1 — Basic Info & Access
+        profile_name:              u.profile_name || "",
+        whatsapp_number:           u.whatsapp_number || "",
+        city_country:              u.city_country || "",
+        instagram_username:        u.instagram_username || "",
+        instagram_profile_url:     u.instagram_profile_url || "",
+        website_url:               u.website_url || "",
+        linkedin_url:              u.linkedin_url || "",
+        youtube_url:               u.youtube_url || "",
+        twitter_url:               u.twitter_url || "",
+        // S2 — Story, Brand & Audience
         business_description:      u.business_description || "",
+        niche_statement:           u.niche_statement || "",
+        audience_age_min:          u.audience_age_min ?? 18,
+        audience_age_max:          u.audience_age_max ?? 45,
+        audience_emotional_states: u.audience_emotional_states || [],
+        has_case_studies:          u.has_case_studies || false,
+        topics_love:               u.topics_love || [],
+        solutions_provided:        u.solutions_provided || [],
+        unique_selling_points:     u.unique_selling_points || [],
+        faqs:                      u.faqs || [],
+        // S3 — Content Strategy
         content_language:          u.content_language || "",
+        content_dislikes:          u.content_dislikes || [],
+        topics_to_avoid:           u.topics_to_avoid || [],
+        underserved_topics:        u.underserved_topics || [],
+        // S4 — Goals & CTA
         primary_goal:              u.primary_goal || "",
         content_cta:               u.content_cta || "",
+        landing_page_url:          u.landing_page_url || "",
       });
     }).catch(() => toast.error("Failed to load user")).finally(() => setLoading(false));
   };
@@ -68,12 +105,22 @@ export default function UserDetail() {
     setSaving(true);
     try {
       const interests = form.interests ? form.interests.split(",").map(s => s.trim()).filter(Boolean) : [];
-      await api.put(`/api/admin/users/${userId}/ai-settings`, {
+      const payload = {
         ...form,
         interests,
-        spice_level: parseInt(form.spice_level) || 3,
-      });
-      toast.success("AI settings saved");
+        spice_level:        parseInt(form.spice_level) || 3,
+        audience_age_min:   parseInt(form.audience_age_min) || null,
+        audience_age_max:   parseInt(form.audience_age_max) || null,
+        has_case_studies:   !!form.has_case_studies,
+        competitors:        (form.competitors || []).map(c => c.replace(/^@/, "")).filter(Boolean),
+        content_dislikes:   (form.content_dislikes || []).filter(x => x && x.trim()),
+        topics_to_avoid:    (form.topics_to_avoid || []).filter(x => x && x.trim()),
+        underserved_topics: (form.underserved_topics || []).filter(x => x && x.trim()),
+      };
+      await api.put(`/api/admin/users/${userId}/ai-settings`, payload);
+      // reflect saved values in the header / read-only surfaces immediately
+      setData(d => (d ? { ...d, user: { ...d.user, ...payload, interests } } : d));
+      toast.success("Saved");
     } catch {
       toast.error("Failed to save");
     } finally {
@@ -275,119 +322,157 @@ export default function UserDetail() {
         </div>
       )}
 
-      {/* ── Tab 1: Questionnaire (read-only + editable AI settings) ─────── */}
+      {/* ── Tab 1: Questionnaire (fully editable — mirrors mobile onboarding) ─── */}
       {tab === 1 && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, maxWidth: 900 }}>
-
-          {/* Left col: read-only view */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <QSection title="Basic Info">
-              <QRow label="Profile Name" value={u.profile_name} />
-              <QRow label="WhatsApp" value={u.whatsapp_number} />
-              <QRow label="City / Country" value={u.city_country} />
-              <QRow label="Instagram" value={u.instagram_username ? `@${u.instagram_username}` : null} />
-              <QRow label="IG Profile URL" value={u.instagram_profile_url} link />
-              <QRow label="Website" value={u.website_url} link />
-              <QRow label="LinkedIn" value={u.linkedin_url} link />
-              <QRow label="YouTube" value={u.youtube_url} link />
-              <QRow label="Twitter / X" value={u.twitter_url} link />
-            </QSection>
-
-            <QSection title="Brand & Audience">
-              <QRow label="Niche Statement" value={u.niche_statement} />
-              <QRow label="Business Description" value={u.business_description} multiline />
-              <QRow label="Target Audience" value={u.target_audience} />
-              <QRow label="Age Range" value={u.audience_age_min && u.audience_age_max ? `${u.audience_age_min} – ${u.audience_age_max}` : null} />
-              <QRow label="Emotional States" value={(u.audience_emotional_states || []).join(", ")} />
-              <QRow label="Has Case Studies" value={u.has_case_studies != null ? (u.has_case_studies ? "Yes" : "No") : null} />
-              <QChips label="Topics Love" values={u.topics_love} />
-              <QChips label="Solutions Provided" values={u.solutions_provided} color="#34d399" bg="#0a2a1a" />
-              <QChips label="Unique Selling Points" values={u.unique_selling_points} color="#a78bfa" bg="#1e1e3a" />
-              <QChips label="FAQs" values={u.faqs} color="#f59e0b" bg="#1a1200" />
-            </QSection>
-
-            <QSection title="Content Strategy">
-              <QRow label="Language" value={u.content_language} />
-              <QChips label="Content Dislikes" values={u.content_dislikes} color="#ef4444" bg="#2a0a0a" />
-              <QListField label="Topics to Avoid" values={u.topics_to_avoid} />
-              <QListField label="Underserved Topics" values={u.underserved_topics} />
-              <QChips label="Competitor Accounts" values={(u.competitors || []).map(c => `@${c}`)} color="#34d399" bg="#0a2a1a" />
-            </QSection>
-
-            <QSection title="Goals & CTA">
-              <QRow label="Primary Goal" value={u.primary_goal} />
-              <QRow label="Preferred CTA" value={u.content_cta} />
-              <QRow label="Landing Page" value={u.landing_page_url} link />
-            </QSection>
+        <div style={{ maxWidth: 760, paddingBottom: 90 }}>
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 20, lineHeight: 1.5 }}>
+            The complete onboarding questionnaire, exactly as the user answers it in the app. Edit any answer on their behalf — everything here feeds the AI when generating their content.
           </div>
 
-          {/* Right col: editable AI settings (same as tab 0 but all fields) */}
-          <div>
-            <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, padding: 22 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#5B5BD6", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 18 }}>Edit AI Settings</div>
+          {/* Section 1 */}
+          <ESection title="1 · Basic Info & Access">
+            <Field label="Profile Name">
+              <input style={inputStyle} value={form.profile_name} onChange={e => setForm(f => ({ ...f, profile_name: e.target.value }))} placeholder="How they want to be known" />
+            </Field>
+            <Field label="WhatsApp Number">
+              <input style={inputStyle} value={form.whatsapp_number} onChange={e => setForm(f => ({ ...f, whatsapp_number: e.target.value }))} placeholder="+91 98765 43210" />
+            </Field>
+            <Field label="City & Country">
+              <input style={inputStyle} value={form.city_country} onChange={e => setForm(f => ({ ...f, city_country: e.target.value }))} placeholder="e.g. Mumbai, India" />
+            </Field>
+            <Field label="Instagram Username">
+              <input style={inputStyle} value={form.instagram_username} onChange={e => setForm(f => ({ ...f, instagram_username: e.target.value.replace(/^@/, "") }))} placeholder="handle (without @)" />
+            </Field>
+            <Field label="Instagram Profile URL">
+              <input style={inputStyle} value={form.instagram_profile_url} onChange={e => setForm(f => ({ ...f, instagram_profile_url: e.target.value }))} placeholder="https://www.instagram.com/handle/" />
+            </Field>
+            <Field label="Website URL">
+              <input style={inputStyle} value={form.website_url} onChange={e => setForm(f => ({ ...f, website_url: e.target.value }))} placeholder="https://…" />
+            </Field>
+            <Field label="LinkedIn">
+              <input style={inputStyle} value={form.linkedin_url} onChange={e => setForm(f => ({ ...f, linkedin_url: e.target.value }))} />
+            </Field>
+            <Field label="YouTube">
+              <input style={inputStyle} value={form.youtube_url} onChange={e => setForm(f => ({ ...f, youtube_url: e.target.value }))} />
+            </Field>
+            <Field label="Twitter / X">
+              <input style={inputStyle} value={form.twitter_url} onChange={e => setForm(f => ({ ...f, twitter_url: e.target.value }))} />
+            </Field>
+          </ESection>
 
-              <Field label="Niche Statement">
-                <input value={form.niche_statement || ""} onChange={e => setForm(f => ({ ...f, niche_statement: e.target.value }))} placeholder="I help [audience] [outcome]" style={inputStyle} />
-              </Field>
-              <Field label="Business Description">
-                <textarea rows={4} value={form.business_description || ""} onChange={e => setForm(f => ({ ...f, business_description: e.target.value }))} placeholder="What they do…" style={{ ...textareaStyle }} />
-              </Field>
-              <Field label="Target Audience">
-                <textarea rows={2} value={form.target_audience || ""} onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))} placeholder="e.g. Freelancers, 25-35…" style={textareaStyle} />
-              </Field>
-              <Field label="Brand Voice">
-                <textarea rows={2} value={form.brand_voice || ""} onChange={e => setForm(f => ({ ...f, brand_voice: e.target.value }))} placeholder="e.g. Blunt, no-nonsense, witty…" style={textareaStyle} />
-              </Field>
-              <Field label={`Spice Level — ${SPICE_LABELS[form.spice_level] || ""}`}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <input type="range" min={1} max={5} step={1} value={form.spice_level || 3} onChange={e => setForm(f => ({ ...f, spice_level: parseInt(e.target.value) }))} style={{ flex: 1, accentColor: "#5B5BD6" }} />
-                  <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{form.spice_level}</span>
-                </div>
-              </Field>
-              <Field label="Content Language">
-                <input value={form.content_language || ""} onChange={e => setForm(f => ({ ...f, content_language: e.target.value }))} placeholder="e.g. English, Hindi, Hinglish" style={inputStyle} />
-              </Field>
-              <Field label="Primary Goal">
-                <input value={form.primary_goal || ""} onChange={e => setForm(f => ({ ...f, primary_goal: e.target.value }))} placeholder="e.g. leads, followers, reach" style={inputStyle} />
-              </Field>
-              <Field label="Preferred CTA">
-                <input value={form.content_cta || ""} onChange={e => setForm(f => ({ ...f, content_cta: e.target.value }))} placeholder="e.g. dm, link, book" style={inputStyle} />
-              </Field>
-              <Field label="Interests (comma-separated)">
-                <input value={form.interests || ""} onChange={e => setForm(f => ({ ...f, interests: e.target.value }))} placeholder="yoga, nutrition, mindset" style={inputStyle} />
-              </Field>
-
-              {/* Competitors */}
-              <Field label={`Competitors (${form.competitors.length}/10)`}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                  {form.competitors.map(handle => (
-                    <span key={handle} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#34d399", background: "#0a2a1a", border: "1px solid #1a4a2a", borderRadius: 20, padding: "4px 10px" }}>
-                      @{handle}
-                      <button onClick={() => setForm(f => ({ ...f, competitors: f.competitors.filter(c => c !== handle) }))}
-                        style={{ background: "none", border: "none", cursor: "pointer", color: "#34d399", padding: 0, display: "flex" }}>
-                        <X size={11} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input ref={competitorRef} value={competitorInput} onChange={e => setCompetitorInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCompetitor(); } }}
-                    placeholder="@username — press Enter"
-                    disabled={form.competitors.length >= 10}
-                    style={{ ...inputStyle, flex: 1 }} />
-                  <button onClick={addCompetitor} disabled={!competitorInput.trim() || form.competitors.length >= 10}
-                    style={{ padding: "10px 14px", background: "#1a3a2a", border: "1px solid #1a4a2a", borderRadius: 10, color: "#34d399", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
-                    Add
-                  </button>
-                </div>
-              </Field>
-
-              <button onClick={saveProfile} disabled={saving}
-                style={{ width: "100%", padding: "12px 0", background: saving ? "#3a3a6a" : "#5B5BD6", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                {saving ? "Saving…" : "Save AI Settings"}
-              </button>
+          {/* Section 2 */}
+          <ESection title="2 · Story, Brand & Audience">
+            <Field label="About Your Business">
+              <textarea rows={4} style={textareaStyle} value={form.business_description} onChange={e => setForm(f => ({ ...f, business_description: e.target.value }))} placeholder="What they do, how they help, their process…" />
+            </Field>
+            <Field label="One-Line Niche Statement">
+              <input style={inputStyle} value={form.niche_statement} onChange={e => setForm(f => ({ ...f, niche_statement: e.target.value }))} placeholder="I help [audience] [achieve outcome]" />
+            </Field>
+            <Field label="Target Audience">
+              <textarea rows={2} style={textareaStyle} value={form.target_audience} onChange={e => setForm(f => ({ ...f, target_audience: e.target.value }))} placeholder="e.g. Corporate employees, freelancers, coaches" />
+            </Field>
+            <div style={{ display: "flex", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Audience Age (min)">
+                  <input type="number" min={13} max={65} style={inputStyle} value={form.audience_age_min} onChange={e => setForm(f => ({ ...f, audience_age_min: e.target.value }))} />
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Audience Age (max)">
+                  <input type="number" min={13} max={65} style={inputStyle} value={form.audience_age_max} onChange={e => setForm(f => ({ ...f, audience_age_max: e.target.value }))} />
+                </Field>
+              </div>
             </div>
+            <ChipMulti label="Audience Emotional States" max={2} allowCustom={false} options={EMOTIONAL_STATES}
+              value={form.audience_emotional_states} onChange={v => setForm(f => ({ ...f, audience_emotional_states: v }))} />
+            <AdminToggle label="Has Client Case Studies / Results?" value={form.has_case_studies} onChange={v => setForm(f => ({ ...f, has_case_studies: v }))} />
+            <ChipMulti label="Topics They Love to Talk About" options={TOPICS_LOVE}
+              value={form.topics_love} onChange={v => setForm(f => ({ ...f, topics_love: v }))} />
+            <ChipMulti label="Solutions They Provide" options={SOLUTIONS}
+              value={form.solutions_provided} onChange={v => setForm(f => ({ ...f, solutions_provided: v }))} />
+            <ChipMulti label="Unique Selling Points" options={USPS}
+              value={form.unique_selling_points} onChange={v => setForm(f => ({ ...f, unique_selling_points: v }))} />
+            <ChipMulti label="Frequently Asked Questions" options={FAQ_OPTIONS}
+              value={form.faqs} onChange={v => setForm(f => ({ ...f, faqs: v }))} />
+            <SingleSelect label="Brand Voice" options={BRAND_VOICES} value={form.brand_voice}
+              onChange={v => setForm(f => ({ ...f, brand_voice: v }))} />
+            <Field label={`Content Boldness — ${SPICE_SCALE[form.spice_level] || ""}`}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <input type="range" min={1} max={5} step={1} value={form.spice_level || 3} onChange={e => setForm(f => ({ ...f, spice_level: parseInt(e.target.value) }))} style={{ flex: 1, accentColor: "#5B5BD6" }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#fff", minWidth: 16, textAlign: "center" }}>{form.spice_level}</span>
+              </div>
+            </Field>
+          </ESection>
+
+          {/* Section 3 */}
+          <ESection title="3 · Content Strategy & Direction">
+            <SingleChip label="Content Language" options={LANGUAGES} value={form.content_language}
+              onChange={v => setForm(f => ({ ...f, content_language: v }))} />
+            <AdminTags label="Content They Personally Dislike" placeholder="e.g. Aggressive selling, clickbait hooks…"
+              value={form.content_dislikes} onChange={v => setForm(f => ({ ...f, content_dislikes: v }))} />
+            <AdminTags label="Topics to AVOID" placeholder="Add a topic to avoid"
+              value={form.topics_to_avoid} onChange={v => setForm(f => ({ ...f, topics_to_avoid: v }))} />
+            <AdminTags label="Underserved Topics in Their Niche" placeholder="Add an underserved topic"
+              value={form.underserved_topics} onChange={v => setForm(f => ({ ...f, underserved_topics: v }))} />
+
+            {/* Competitors */}
+            <Field label={`Competitor Accounts (${form.competitors.length}/10)`}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {form.competitors.map(handle => (
+                  <span key={handle} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "#34d399", background: "#0a2a1a", border: "1px solid #1a4a2a", borderRadius: 20, padding: "4px 10px" }}>
+                    @{handle}
+                    <button onClick={() => removeCompetitor(handle)}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: "#34d399", padding: 0, display: "flex" }}>
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input ref={competitorRef} value={competitorInput} onChange={e => setCompetitorInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCompetitor(); } }}
+                  placeholder="@username — press Enter"
+                  disabled={form.competitors.length >= 10}
+                  style={{ ...inputStyle, flex: 1 }} />
+                <button onClick={addCompetitor} disabled={!competitorInput.trim() || form.competitors.length >= 10}
+                  style={{ padding: "10px 14px", background: "#1a3a2a", border: "1px solid #1a4a2a", borderRadius: 10, color: "#34d399", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                  Add
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Interests (comma-separated)">
+              <input style={inputStyle} value={form.interests} onChange={e => setForm(f => ({ ...f, interests: e.target.value }))} placeholder="yoga, nutrition, mindset" />
+            </Field>
+            <Field label="Niche">
+              <div style={{ position: "relative" }}>
+                <select value={form.niche} onChange={e => setForm(f => ({ ...f, niche: e.target.value }))}
+                  style={{ ...inputStyle, width: "100%", appearance: "none", paddingRight: 32 }}>
+                  <option value="">Select niche…</option>
+                  {NICHES.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <ChevronDown size={13} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#555", pointerEvents: "none" }} />
+              </div>
+            </Field>
+          </ESection>
+
+          {/* Section 4 */}
+          <ESection title="4 · Goals, CTA & Lead Generation">
+            <SingleSelect label="Primary Goal from Instagram" options={GOALS} value={form.primary_goal}
+              onChange={v => setForm(f => ({ ...f, primary_goal: v }))} />
+            <SingleSelect label="Preferred CTA" options={CTAS} value={form.content_cta}
+              onChange={v => setForm(f => ({ ...f, content_cta: v }))} />
+            <Field label="Website / Landing Page URL">
+              <input style={inputStyle} value={form.landing_page_url} onChange={e => setForm(f => ({ ...f, landing_page_url: e.target.value }))} placeholder="https://yoursite.com or calendly link" />
+            </Field>
+          </ESection>
+
+          {/* Sticky save bar */}
+          <div style={{ position: "sticky", bottom: 0, marginTop: 8, padding: "16px 0", background: "linear-gradient(to top, #0d0d0d 60%, transparent)" }}>
+            <button onClick={saveProfile} disabled={saving}
+              style={{ width: "100%", padding: "14px 0", background: saving ? "#3a3a6a" : "#5B5BD6", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 15, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: "0 4px 16px rgba(91,91,214,0.3)" }}>
+              {saving ? "Saving…" : "Save All Answers"}
+            </button>
           </div>
         </div>
       )}
@@ -599,56 +684,146 @@ function Field({ label, children }) {
   );
 }
 
-// ─── Questionnaire read-only helpers ─────────────────────────────────────────
+// ─── Questionnaire editable helpers ──────────────────────────────────────────
 
-function QSection({ title, children }) {
+function ESection({ title, children }) {
   return (
-    <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 14, padding: 18 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#5B5BD6", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{children}</div>
+    <div style={{ background: "#161616", border: "1.5px solid #2a2a2a", borderRadius: 16, padding: 24, marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#5B5BD6", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 20 }}>{title}</div>
+      {children}
     </div>
   );
 }
 
-function QRow({ label, value, multiline, link }) {
-  if (!value) return null;
+// Multi-select chips with optional custom add (topics, USPs, FAQs, emotional states…)
+function ChipMulti({ label, options, value = [], onChange, max, allowCustom = true }) {
+  const [custom, setCustom] = useState("");
+  const toggle = (item) => {
+    if (value.includes(item)) onChange(value.filter(v => v !== item));
+    else { if (max && value.length >= max) return; onChange([...value, item]); }
+  };
+  const addCustom = () => {
+    const t = custom.trim();
+    if (!t || value.includes(t) || (max && value.length >= max)) return;
+    onChange([...value, t]); setCustom("");
+  };
+  const extra = value.filter(v => !options.includes(v));
   return (
-    <div>
-      <div style={{ fontSize: 10, color: "#555", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>{label}</div>
-      {link ? (
-        <a href={value} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#8080ff", wordBreak: "break-all" }}>{value}</a>
-      ) : multiline ? (
-        <div style={{ fontSize: 12, color: "#ccc", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{value}</div>
-      ) : (
-        <div style={{ fontSize: 12, color: "#ccc" }}>{value}</div>
+    <div style={{ marginBottom: 20 }}>
+      <label style={labelStyle}>{label}{max ? ` (max ${max})` : ""}</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: allowCustom ? 8 : 0 }}>
+        {options.map(opt => {
+          const on = value.includes(opt);
+          return (
+            <button key={opt} type="button" onClick={() => toggle(opt)}
+              style={{ padding: "6px 12px", borderRadius: 18, fontSize: 12, fontWeight: 500, cursor: "pointer", border: `1.5px solid ${on ? "#5B5BD6" : "#2a2a2a"}`, background: on ? "#1e1e3a" : "#0d0d0d", color: on ? "#8080ff" : "#888", display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "inherit" }}>
+              {on && <Check size={10} />} {opt}
+            </button>
+          );
+        })}
+        {extra.map(v => (
+          <button key={v} type="button" onClick={() => toggle(v)}
+            style={{ padding: "6px 12px", borderRadius: 18, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1.5px solid #5B5BD6", background: "#1e1e3a", color: "#8080ff", display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "inherit" }}>
+            <Check size={10} /> {v} <X size={10} />
+          </button>
+        ))}
+      </div>
+      {allowCustom && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={custom} onChange={e => setCustom(e.target.value)} placeholder="Add custom…"
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+            style={{ ...inputStyle, flex: 1 }} />
+          <button type="button" onClick={addCustom} style={{ width: 38, borderRadius: 10, background: "#5B5BD6", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Plus size={15} />
+          </button>
+        </div>
       )}
     </div>
   );
 }
 
-function QChips({ label, values, color = "#a78bfa", bg = "#1e1e3a" }) {
-  if (!values || values.length === 0) return null;
+// Single-select string chips (language)
+function SingleChip({ label, options, value, onChange }) {
   return (
-    <div>
-      <div style={{ fontSize: 10, color: "#555", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>{label}</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-        {values.map(v => (
-          <span key={v} style={{ fontSize: 10, fontWeight: 600, color, background: bg, borderRadius: 6, padding: "3px 8px" }}>{v}</span>
-        ))}
+    <div style={{ marginBottom: 20 }}>
+      <label style={labelStyle}>{label}</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+        {options.map(opt => {
+          const on = value === opt;
+          return (
+            <button key={opt} type="button" onClick={() => onChange(on ? "" : opt)}
+              style={{ padding: "7px 14px", borderRadius: 18, fontSize: 12, cursor: "pointer", border: `1.5px solid ${on ? "#5B5BD6" : "#2a2a2a"}`, background: on ? "#1e1e3a" : "#0d0d0d", color: on ? "#8080ff" : "#888", fontFamily: "inherit" }}>
+              {opt}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function QListField({ label, values }) {
-  const filtered = (values || []).filter(v => v && v.trim());
-  if (!filtered.length) return null;
+// Single-select rich options [{key,label,desc?,icon?}] (brand voice, goal, CTA)
+function SingleSelect({ label, options, value, onChange }) {
   return (
-    <div>
-      <div style={{ fontSize: 10, color: "#555", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>{label}</div>
-      <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 3 }}>
-        {filtered.map((v, i) => <li key={i} style={{ fontSize: 12, color: "#ccc" }}>{v}</li>)}
-      </ul>
+    <div style={{ marginBottom: 20 }}>
+      <label style={labelStyle}>{label}</label>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {options.map(o => {
+          const on = value === o.key;
+          return (
+            <button key={o.key} type="button" onClick={() => onChange(on ? "" : o.key)}
+              style={{ padding: "11px 14px", borderRadius: 12, textAlign: "left", cursor: "pointer", border: `1.5px solid ${on ? "#5B5BD6" : "#2a2a2a"}`, background: on ? "#1e1e3a" : "#0d0d0d", display: "flex", alignItems: "center", gap: 12, fontFamily: "inherit" }}>
+              {o.icon && <span style={{ fontSize: 18 }}>{o.icon}</span>}
+              <span style={{ flex: 1 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: on ? "#fff" : "#ccc" }}>{o.label}</span>
+                {o.desc && <span style={{ display: "block", fontSize: 11, color: "#555", marginTop: 2 }}>{o.desc}</span>}
+              </span>
+              {on && <Check size={14} style={{ color: "#5B5BD6", flexShrink: 0 }} />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Free-form tag list (dislikes, topics to avoid, underserved topics)
+function AdminTags({ label, value = [], onChange, placeholder }) {
+  const [input, setInput] = useState("");
+  const add = () => { const t = input.trim(); if (!t || value.includes(t)) return; onChange([...value, t]); setInput(""); };
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <label style={labelStyle}>{label}</label>
+      {value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 8 }}>
+          {value.map(v => (
+            <span key={v} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 18, background: "#1e1e3a", border: "1px solid #2a2a4a", fontSize: 12, color: "#8080ff" }}>
+              {v}
+              <button type="button" onClick={() => onChange(value.filter(x => x !== v))} style={{ background: "none", border: "none", cursor: "pointer", color: "#8080ff", padding: 0, display: "flex" }}><X size={11} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={input} onChange={e => setInput(e.target.value)} placeholder={placeholder || "Add…"}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          style={{ ...inputStyle, flex: 1 }} />
+        <button type="button" onClick={add} style={{ width: 38, borderRadius: 10, background: "#5B5BD6", border: "none", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Plus size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AdminToggle({ label, value, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#0d0d0d", border: "1.5px solid #2a2a2a", borderRadius: 12, marginBottom: 20 }}>
+      <span style={{ fontSize: 13, color: "#ccc" }}>{label}</span>
+      <button type="button" onClick={() => onChange(!value)}
+        style={{ width: 44, height: 25, borderRadius: 13, border: "none", cursor: "pointer", position: "relative", background: value ? "#5B5BD6" : "#2a2a2a", flexShrink: 0 }}>
+        <div style={{ position: "absolute", top: 3, left: value ? 22 : 3, width: 19, height: 19, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+      </button>
     </div>
   );
 }

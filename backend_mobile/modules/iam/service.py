@@ -217,6 +217,37 @@ def _serialize_user(user: dict) -> dict:
         "role": user.get("role", "user"),
         "avatar_url": user.get("avatar_url", ""),
         "created_at": user.get("created_at"),
+        "bio": user.get("bio", ""),
+        # ── Extended onboarding questionnaire (Section 1: Basic Info) ──
+        "profile_name": user.get("profile_name", ""),
+        "whatsapp_number": user.get("whatsapp_number", ""),
+        "city_country": user.get("city_country", ""),
+        "instagram_username": user.get("instagram_username", ""),
+        "instagram_profile_url": user.get("instagram_profile_url", ""),
+        "website_url": user.get("website_url", ""),
+        "linkedin_url": user.get("linkedin_url", ""),
+        "youtube_url": user.get("youtube_url", ""),
+        "twitter_url": user.get("twitter_url", ""),
+        # ── Section 2: Story, Brand & Audience ──
+        "business_description": user.get("business_description", ""),
+        "niche_statement": user.get("niche_statement", ""),
+        "audience_age_min": user.get("audience_age_min"),
+        "audience_age_max": user.get("audience_age_max"),
+        "audience_emotional_states": user.get("audience_emotional_states", []),
+        "has_case_studies": user.get("has_case_studies", False),
+        "topics_love": user.get("topics_love", []),
+        "solutions_provided": user.get("solutions_provided", []),
+        "unique_selling_points": user.get("unique_selling_points", []),
+        "faqs": user.get("faqs", []),
+        # ── Section 3: Content Strategy ──
+        "content_language": user.get("content_language", ""),
+        "content_dislikes": user.get("content_dislikes", []),
+        "topics_to_avoid": user.get("topics_to_avoid", []),
+        "underserved_topics": user.get("underserved_topics", []),
+        # ── Section 4: Goals & CTA ──
+        "primary_goal": user.get("primary_goal", ""),
+        "content_cta": user.get("content_cta", ""),
+        "landing_page_url": user.get("landing_page_url", ""),
     }
 
 
