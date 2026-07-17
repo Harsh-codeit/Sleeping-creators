@@ -4,7 +4,7 @@
   publish = "dist"
 
 [build.environment]
-  VITE_API_URL = "https://sleeping-creators-api.onrender.com"
+  VITE_API_URL = "https://sleeping-creators.onrender.com"
 
 [[redirects]]
   from   = "/*"
