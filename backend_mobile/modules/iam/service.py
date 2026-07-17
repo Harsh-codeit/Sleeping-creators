@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import string
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -13,7 +14,7 @@ from jose import jwt
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from backend_mobile.config import settings
-from backend_mobile.shared.exceptions import NotFoundError, UnauthorizedError
+from backend_mobile.shared.exceptions import NotFoundError, UnauthorizedError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,13 @@ async def _send_email_otp(to: str, otp: str) -> None:
                 ),
             },
         )
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            # Surface Resend's actual reason (e.g. unverified domain, test-mode
+            # restriction, rate limit) so it shows up in the Render logs.
+            raise RuntimeError(
+                f"Resend {resp.status_code}: {resp.text[:300]} "
+                f"(from={settings.resend_from_email!r}, to={to!r})"
+            )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,11 +87,19 @@ def decode_access_token(token: str) -> dict:
 
 # ── OTP ───────────────────────────────────────────────────────────────────────
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 async def send_otp(db: AsyncIOMotorDatabase, identifier: str, purpose: str) -> dict:
     identifier = _normalize_identifier(identifier)
 
     is_email = "@" in identifier
     field = "email" if is_email else "phone"
+
+    # Reject malformed emails before we ever call Resend — otherwise Resend
+    # returns a 422 "Invalid `to` field" that surfaces as a generic failure.
+    if is_email and not _EMAIL_RE.match(identifier):
+        raise ValidationError("Please enter a valid email address.")
 
     if purpose == "login":
         user = await db.users.find_one({field: identifier})
