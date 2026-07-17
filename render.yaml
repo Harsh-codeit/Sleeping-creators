@@ -15,7 +15,7 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false          # paste your Anthropic API key
       - key: REDIS_URL
-        value: ""            # leave blank — caching disabled without Redis
+        sync: false          # paste Redis connection URL in Render dashboard
       - key: BUNDLE_API_KEY
         sync: false
       - key: R2_ACCOUNT_ID
