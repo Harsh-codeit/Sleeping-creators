@@ -45,7 +45,8 @@ async def generate_carousel(
     if not topic:
         raise HTTPException(400, "topic is required")
 
-    slide_count = max(3, min(int(body.get("slide_count", 7)), 10))
+    # User's requested TOTAL slide count (cover + content slides), 1–8.
+    slide_count = max(1, min(int(body.get("slide_count", 7)), 8))
     platform = body.get("platform", "instagram")
     cta_keyword = body.get("cta_keyword") or body.get("cta", "")
     template_id = body.get("template_id")
@@ -65,7 +66,7 @@ async def generate_carousel(
         if tpl_doc:
             # Use template's slide_count if caller didn't specify one
             if not body.get("slide_count"):
-                slide_count = max(3, min(int(tpl_doc.get("slide_count", slide_count)), 10))
+                slide_count = max(1, min(int(tpl_doc.get("slide_count", slide_count)), 8))
             tpl_type = tpl_doc.get("template_type", "")
             preferred_hook_type = _TEMPLATE_TYPE_TO_HOOK.get(tpl_type)
             template_blueprint = tpl_doc.get("slide_blueprint") or None
@@ -112,12 +113,15 @@ async def generate_carousel(
             import logging
             logging.getLogger(__name__).warning("Trending URL analysis failed: %s", _exc)
 
+    # Slide 1 is the rendered cover; ask the AI for the remaining content slides
+    # so that cover + content equals the user's selection exactly.
+    ai_slide_count = max(1, slide_count - 1)
     svc = get_intelligence_service()
     req = CarouselGenerationRequest(
         creator_id=user_id,
         topic=enriched_topic,
         tone=tone,
-        slide_count=slide_count,
+        slide_count=ai_slide_count,
         platform=platform,
         cta_keyword=cta_keyword or "",
         preferred_hook_type=preferred_hook_type,
@@ -151,10 +155,12 @@ async def generate_carousel(
     import logging
     _log = logging.getLogger(__name__)
 
+    # Enforce the exact total: cover + (slide_count - 1) content slides = slide_count.
+    # Truncate in case the model returned more than asked.
     slides_data = [
         {"slide_number": s.slide_number, "heading": s.heading, "body": s.body}
         for s in result.content.slides
-    ]
+    ][: max(0, slide_count - 1)]
 
     # ── Persist the draft FIRST, before any rendering ────────────────────────
     # Rendering/upload can fail (fonts, R2, network); saving first guarantees the
