@@ -218,6 +218,11 @@ def _serialize_user(user: dict) -> dict:
         "avatar_url": user.get("avatar_url", ""),
         "created_at": user.get("created_at"),
         "bio": user.get("bio", ""),
+        # Bundle.social team association — REQUIRED by the publishing / connect /
+        # status / analytics endpoints. Omitting it made every Instagram status
+        # check read team_id=None (always "not connected") and made connect
+        # create a fresh team on every attempt.
+        "bundle_team_id": user.get("bundle_team_id"),
         # ── Extended onboarding questionnaire (Section 1: Basic Info) ──
         "profile_name": user.get("profile_name", ""),
         "whatsapp_number": user.get("whatsapp_number", ""),

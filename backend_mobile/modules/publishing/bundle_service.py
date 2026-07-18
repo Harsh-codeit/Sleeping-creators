@@ -99,7 +99,10 @@ async def _upload_multipart(
 
 async def list_teams(api_key: str) -> list[dict]:
     data = await _get(api_key, "/team/")
-    return data if isinstance(data, list) else data.get("data", data.get("teams", []))
+    if isinstance(data, list):
+        return data
+    # Bundle paginated list endpoints wrap results as {"items": [...], "total": n}
+    return data.get("items") or data.get("data") or data.get("teams") or []
 
 
 async def create_team(api_key: str, name: str) -> dict:
@@ -126,8 +129,14 @@ async def get_connected_accounts(api_key: str, team_id: str) -> dict:
     reverse = {v: k for k, v in PLATFORM_MAP.items()}
     connected: list[str] = []
     accounts: list[dict] = []
-    # Statuses that Bundle uses for a healthy, publishable account
-    _HEALTHY = {"connected", "active", "ok", ""}
+    # Denylist of statuses that mean the account is NOT usable. Anything else
+    # (including "", "active", "connected", or any healthy value Bundle may add)
+    # counts as connected — an allowlist wrongly hid freshly-linked accounts.
+    _UNHEALTHY = {
+        "disconnected", "disabled", "inactive", "error", "errored",
+        "expired", "revoked", "failed", "invalid", "pending", "reconnect",
+        "reconnect_required", "needs_reconnect", "unauthorized",
+    }
 
     for acct in social_accounts:
         acct_type = acct.get("type") or acct.get("socialAccountType") or ""
@@ -135,8 +144,8 @@ async def get_connected_accounts(api_key: str, team_id: str) -> dict:
         username = acct.get("username") or acct.get("name") or acct.get("displayName") or ""
         accounts.append({"type": acct_type, "status": status, "username": username})
         key = reverse.get(acct_type)
-        # Only count the account as connected when status is healthy (not disconnected/error/pending)
-        if key and key not in connected and status in _HEALTHY:
+        # Count as connected unless the status is explicitly a broken/expired one.
+        if key and key not in connected and status not in _UNHEALTHY:
             connected.append(key)
     logger.info(
         "Bundle team %s social accounts: %s -> connected=%s",
@@ -246,7 +255,9 @@ async def delete_post(api_key: str, post_id: str) -> None:
 
 async def list_posts(api_key: str, team_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
     data = await _get(api_key, "/post/", {"teamId": team_id, "limit": limit, "offset": offset})
-    return data if isinstance(data, list) else data.get("data", data.get("posts", []))
+    if isinstance(data, list):
+        return data
+    return data.get("items") or data.get("data") or data.get("posts") or []
 
 
 async def get_social_account_analytics(api_key: str, team_id: str, platform_type: str) -> dict:

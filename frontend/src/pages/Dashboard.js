@@ -34,6 +34,22 @@ function greeting(name) {
   return name ? `${prefix}, ${name.split(" ")[0]}` : prefix;
 }
 
+// Derive a preview background + readable text colour for a template that has no thumbnail
+function templateBg(t) {
+  const z = t?.canvas?.zones?.first || {};
+  return z.bg || z.gradFrom || (t?.color_scheme === "light" ? "#f4f4f6" : "#161616");
+}
+function templateFg(t) {
+  const z = t?.canvas?.zones?.first || {};
+  if (z.textColor) return z.textColor;
+  const hex = (templateBg(t) || "").replace("#", "");
+  if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#0a0a0a" : "#ffffff";
+  }
+  return "#ffffff";
+}
+
 function QuickAction({ icon: Icon, label, desc, to, iconBg, iconColor }) {
   return (
     <Link to={to}
@@ -222,10 +238,10 @@ export default function Dashboard() {
                 View all <ArrowRight size={11} />
               </Link>
             </div>
-            <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8 }}>
               {drafts.map(c => (
                 <Link key={c.id} to="/drafts"
-                  style={{ flexShrink: 0, width: 110, textDecoration: "none", display: "block" }}>
+                  style={{ minWidth: 0, textDecoration: "none", display: "block" }}>
                   <div style={{ aspectRatio: "4/5", borderRadius: 14, overflow: "hidden", border: "1.5px solid #2a2a2a", background: "#161616", position: "relative", marginBottom: 6 }}>
                     {c.slide_image_urls?.[0]
                       ? <img src={c.slide_image_urls[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -282,11 +298,13 @@ export default function Dashboard() {
                   const PIcon = PLATFORM_ICON[post.platform];
                   const toneStyle = TONE_COLORS[post.tone] || null;
                   return (
-                    <button
+                    <div
                       key={post._id || post.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => navigate("/drafts")}
-                      className="flex items-center gap-3 p-3.5 rounded-2xl border transition-all w-full text-left"
-                      style={{ background: "#161616", borderColor: post.starred ? "#3a2a00" : "#2a2a2a", cursor: "pointer" }}
+                      className="flex items-center gap-2.5 p-3.5 rounded-2xl border transition-all w-full text-left"
+                      style={{ background: "#161616", borderColor: post.starred ? "#3a2a00" : "#2a2a2a", cursor: "pointer", minWidth: 0, overflow: "hidden" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = post.starred ? "#5a4a00" : "#3a3a6a"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = post.starred ? "#3a2a00" : "#2a2a2a"}
                     >
@@ -302,29 +320,32 @@ export default function Dashboard() {
                           {(post.caption?.length || 0) > 60 ? "…" : ""}
                         </p>
                         {post.scheduled_at && (
-                          <p className="text-xs mt-0.5" style={{ color: "#666666" }}>
+                          <p className="text-xs mt-0.5 truncate" style={{ color: "#666666" }}>
                             {new Date(post.scheduled_at).toLocaleDateString("en-US", {
                               month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
                             })}
                           </p>
                         )}
                       </div>
-                      {toneStyle && (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, flexShrink: 0, color: toneStyle.color, background: toneStyle.bg, border: `1px solid ${toneStyle.color}33` }}>
-                          {post.tone}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {toneStyle && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", color: toneStyle.color, background: toneStyle.bg, border: `1px solid ${toneStyle.color}33` }}>
+                            {post.tone}
+                          </span>
+                        )}
+                        <span
+                          role="button"
+                          onClick={e => { e.stopPropagation(); starPost(post.id || post._id); }}
+                          title={post.starred ? "Unstar" : "Star — teach AI to write like this"}
+                          style={{ cursor: "pointer", padding: "4px", lineHeight: 0, display: "inline-flex" }}
+                        >
+                          <Star size={14} fill={post.starred ? "#fbbf24" : "none"} stroke={post.starred ? "#fbbf24" : "#555"} strokeWidth={1.8} />
                         </span>
-                      )}
-                      <button
-                        onClick={e => { e.stopPropagation(); starPost(post.id || post._id); }}
-                        title={post.starred ? "Unstar" : "Star — teach AI to write like this"}
-                        style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", flexShrink: 0, lineHeight: 0 }}
-                      >
-                        <Star size={14} fill={post.starred ? "#fbbf24" : "none"} stroke={post.starred ? "#fbbf24" : "#555"} strokeWidth={1.8} />
-                      </button>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={cfg.style}>
-                        {cfg.label}
-                      </span>
-                    </button>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ ...cfg.style, whiteSpace: "nowrap" }}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -347,17 +368,22 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#666666" }}>Templates</h3>
                 </div>
-                <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
                   {templates.map(t => (
                     <Link key={t._id || t.id} to="/templates"
-                      style={{ flexShrink: 0, width: 76, height: 76, borderRadius: 14, overflow: "hidden", border: "1.5px solid #2a2a2a", background: "#0d0d0d", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}
+                      style={{ minWidth: 0, borderRadius: 12, overflow: "hidden", border: "1.5px solid #2a2a2a", background: "#0d0d0d", textDecoration: "none", display: "block" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = "#3a3a6a"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2a2a"}
                     >
-                      {t.thumbnail_url
-                        ? <img src={t.thumbnail_url} alt={t.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        : <LayoutTemplate size={18} style={{ color: "#3a3a6a" }} />
-                      }
+                      <div style={{ aspectRatio: "4/5", background: templateBg(t), position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
+                        {t.thumbnail_url
+                          ? <img src={t.thumbnail_url} alt={t.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                          : <span style={{ fontSize: 10, fontWeight: 700, color: templateFg(t), textAlign: "center", lineHeight: 1.35, wordBreak: "break-word" }}>{t.name}</span>
+                        }
+                      </div>
+                      <div style={{ padding: "6px 8px" }}>
+                        <p style={{ fontSize: 10, color: "#aaa", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</p>
+                      </div>
                     </Link>
                   ))}
                 </div>
