@@ -148,52 +148,30 @@ async def generate_carousel(
             raise HTTPException(429, "The AI is busy right now. Please try again in a few seconds.")
         raise HTTPException(500, f"AI generation failed: {exc}")
 
-    # Render PNG slides
+    import logging
+    _log = logging.getLogger(__name__)
+
     slides_data = [
         {"slide_number": s.slide_number, "heading": s.heading, "body": s.body}
         for s in result.content.slides
     ]
-    total_slides = len(slides_data) + 1  # +1 for cover
 
-    slide_image_urls: list[str] = []
-    try:
-        # Cover slide
-        cover_bytes = render_cover_slide(
-            title=topic,
-            subtitle=f"Thread by @creator",
-            brand_handle="@sleepingcreators",
-        )
-        cover_url = await upload_bytes(cover_bytes, "cover.png", "image/png", folder="carousels")
-        slide_image_urls.append(cover_url)
-
-        # Content slides
-        for i, s in enumerate(slides_data):
-            png = render_slide(
-                heading=s["heading"],
-                body=s["body"],
-                slide_number=i + 1,
-                total_slides=len(slides_data),
-                brand_handle="@sleepingcreators",
-            )
-            url = await upload_bytes(png, f"slide_{i+1}.png", "image/png", folder="carousels")
-            slide_image_urls.append(url)
-    except Exception as exc:
-        # Slide rendering failure is non-fatal — continue without images
-        import logging
-        logging.getLogger(__name__).warning("PNG render failed: %s", exc)
-        slide_image_urls = []
-
+    # ── Persist the draft FIRST, before any rendering ────────────────────────
+    # Rendering/upload can fail (fonts, R2, network); saving first guarantees the
+    # AI content is never lost. The topic becomes the draft's heading. Images are
+    # a best-effort enrichment written back below (and re-rendered at publish if
+    # still missing).
     carousel_id = str(uuid.uuid4())
     now = _now_iso()
     carousel_doc = {
         "id": carousel_id,
         "creator_id": user_id,
-        "topic": topic,
+        "topic": topic,                       # <- heading shown in Drafts
         "tone": tone,
         "generation_id": result.generation_id,
         "template_id": template_id,
         "slides": slides_data,
-        "slide_image_urls": slide_image_urls,
+        "slide_image_urls": [],
         "caption": result.content.caption,
         "hashtags": result.content.hashtags,
         "cta_text": result.content.cta_text,
@@ -202,8 +180,29 @@ async def generate_carousel(
         "created_at": now,
         "updated_at": now,
     }
-    await db.carousels.insert_one(carousel_doc)
-    _clean(carousel_doc)
+    try:
+        await db.carousels.insert_one(dict(carousel_doc))
+    except Exception as exc:
+        _log.error("Carousel draft save FAILED (content would be lost): %s", exc)
+        raise HTTPException(500, "Generated content could not be saved. Please try again.")
+
+    # ── Render PNG slides (best-effort) and write them back ──────────────────
+    slide_image_urls: list[str] = []
+    try:
+        cover_bytes = render_cover_slide(title=topic, subtitle="Thread by @creator", brand_handle="@sleepingcreators")
+        slide_image_urls.append(await upload_bytes(cover_bytes, "cover.png", "image/png", folder="carousels"))
+        for i, s in enumerate(slides_data):
+            png = render_slide(
+                heading=s["heading"], body=s["body"],
+                slide_number=i + 1, total_slides=len(slides_data),
+                brand_handle="@sleepingcreators",
+            )
+            slide_image_urls.append(await upload_bytes(png, f"slide_{i+1}.png", "image/png", folder="carousels"))
+        await db.carousels.update_one({"id": carousel_id}, {"$set": {"slide_image_urls": slide_image_urls, "updated_at": _now_iso()}})
+    except Exception as exc:
+        # Draft is already saved; images will render on demand at publish time.
+        _log.warning("PNG render failed for carousel %s (draft is safe): %s", carousel_id, exc)
+        slide_image_urls = []
 
     return {
         "carousel_id": carousel_id,
