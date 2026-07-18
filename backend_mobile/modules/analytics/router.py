@@ -23,24 +23,79 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _latest_item(raw: dict) -> dict:
+    """Bundle returns a time series under `items` (newest first). Pick the most
+    recent snapshot, guarding against unordered data by sorting on createdAt."""
+    items = raw.get("items") or []
+    if not items:
+        return {}
+    try:
+        return sorted(items, key=lambda x: x.get("createdAt") or "", reverse=True)[0]
+    except Exception:
+        return items[0]
+
+
 def _extract_kpis(raw: dict) -> dict:
-    """Map Bundle's analytics response to a flat KPI dict."""
-    # Bundle may nest data under different keys depending on version
-    acct = raw.get("socialAccount") or raw.get("account") or {}
-    stats = raw.get("analytics") or raw.get("stats") or raw.get("data") or raw
+    """Map Bundle's `/analytics/social-account` response to the flat, snake_case
+    KPI dict the frontend expects. Real Bundle fields are camelCase and live in
+    the latest `items[]` entry — not at the top level."""
+    latest = _latest_item(raw)
+
+    impressions = int(latest.get("impressions") or 0)
+    likes       = int(latest.get("likes") or 0)
+    comments    = int(latest.get("comments") or 0)
+    followers   = int(latest.get("followers") or 0)
+
+    # Bundle doesn't send an engagement rate — derive it: interactions / reach.
+    denom = impressions or followers or 0
+    engagement_rate = round(((likes + comments) / denom) * 100, 2) if denom else 0.0
 
     return {
-        "followers":          acct.get("followers")         or stats.get("followers")         or 0,
-        "following":          acct.get("following")         or stats.get("following")         or 0,
-        "impressions":        stats.get("impressions")      or stats.get("reach")             or 0,
-        "impressions_unique": stats.get("impressions_unique") or stats.get("unique_reach")    or 0,
-        "views":              stats.get("views")            or stats.get("video_views")       or 0,
-        "views_unique":       stats.get("views_unique")     or stats.get("unique_views")      or 0,
-        "likes":              stats.get("likes")            or stats.get("like_count")        or 0,
-        "comments":           stats.get("comments")         or stats.get("comment_count")     or 0,
-        "post_count":         acct.get("post_count")        or stats.get("post_count")        or 0,
-        "engagement_rate":    stats.get("engagement_rate")  or stats.get("engagementRate")    or 0.0,
+        "followers":          followers,
+        "following":          int(latest.get("following") or 0),
+        "impressions":        impressions,
+        "impressions_unique": int(latest.get("impressionsUnique") or 0),
+        "views":              int(latest.get("views") or 0),
+        "views_unique":       int(latest.get("viewsUnique") or 0),
+        "likes":              likes,
+        "comments":           comments,
+        "post_count":         int(latest.get("postCount") or 0),
+        "engagement_rate":    engagement_rate,
     }
+
+
+def _account_meta(raw: dict) -> dict:
+    """Account profile details from Bundle's analytics response."""
+    acct = raw.get("socialAccount") or {}
+    return {
+        "username":     acct.get("username") or acct.get("userUsername") or "",
+        "display_name": acct.get("displayName") or acct.get("userDisplayName") or "",
+        "avatar_url":   acct.get("avatarUrl"),
+        "bio":          acct.get("bio") or "",
+        "external_id":  acct.get("externalId"),
+    }
+
+
+def _history(raw: dict, limit: int = 30) -> list[dict]:
+    """Recent daily snapshots (oldest→newest) for trend charts."""
+    items = raw.get("items") or []
+    try:
+        items = sorted(items, key=lambda x: x.get("createdAt") or "")
+    except Exception:
+        pass
+    return [
+        {
+            "date":               it.get("createdAt"),
+            "followers":          int(it.get("followers") or 0),
+            "impressions":        int(it.get("impressions") or 0),
+            "impressions_unique": int(it.get("impressionsUnique") or 0),
+            "views":              int(it.get("views") or 0),
+            "likes":              int(it.get("likes") or 0),
+            "comments":           int(it.get("comments") or 0),
+            "post_count":         int(it.get("postCount") or 0),
+        }
+        for it in items[-limit:]
+    ]
 
 
 def _build_response(snapshot: dict) -> dict:
@@ -107,9 +162,13 @@ async def refresh_analytics(
             (a for a in raw_accounts if a.get("type", "").upper() == bundle_service.PLATFORM_MAP.get(platform, "").upper()),
             {}
         )
+        meta: dict = {}
+        history: list = []
         try:
             raw = await bundle_service.get_social_account_analytics(settings.bundle_api_key, team_id, platform)
             kpis = _extract_kpis(raw)
+            meta = _account_meta(raw)
+            history = _history(raw)
         except Exception as exc:
             logger.warning("Analytics fetch failed for %s/%s: %s", team_id, platform, exc)
             kpis = {}
@@ -117,9 +176,12 @@ async def refresh_analytics(
         platform_breakdown[platform] = kpis
         socials.append({
             "platform":     platform,
-            "username":     acct_meta.get("username", ""),
-            "avatar_url":   None,
+            "username":     meta.get("username") or acct_meta.get("username", ""),
+            "display_name": meta.get("display_name", ""),
+            "avatar_url":   meta.get("avatar_url"),
+            "bio":          meta.get("bio", ""),
             "refreshed_at": _now(),
+            "history":      history,
             **kpis,
         })
 

@@ -50,6 +50,23 @@ function templateFg(t) {
   return "#ffffff";
 }
 
+const fmtNum = (n) => {
+  const v = Number(n) || 0;
+  if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
+  return v.toLocaleString();
+};
+function shortAgo(iso) {
+  if (!iso) return "never";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return "—";
+  const m = Math.max(0, Math.round(ms / 60000));
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
 function QuickAction({ icon: Icon, label, desc, to, iconBg, iconColor }) {
   return (
     <Link to={to}
@@ -103,6 +120,7 @@ export default function Dashboard() {
   const [drafts, setDrafts]       = useState([]);
   const [igConnected, setIgConn]  = useState(false);
   const [templates, setTemplates] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading]     = useState(true);
 
   function authHeaders() {
@@ -149,8 +167,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!clientId) return;
-    axios.get(`${API}/instagram/status/${clientId}`)
-      .then(r => setIgConn(r.data?.connected ?? false)).catch(() => {});
+    let cancelled = false;
+    (async () => {
+      const s = await axios.get(`${API}/instagram/status/${clientId}`).then(r => r.data).catch(() => ({}));
+      if (cancelled) return;
+      const connected = s?.connected ?? false;
+      setIgConn(connected);
+      if (!connected) return;
+      // Pull cached analytics; if empty, do one live refresh to populate it.
+      let a = await axios.get(`${API}/analytics/clients/${clientId}`).then(r => r.data).catch(() => null);
+      const hasData = a?.totals && Object.keys(a.totals).length > 0;
+      if (!hasData && a?.bundle_connected) {
+        a = await axios.post(`${API}/analytics/clients/${clientId}/refresh`).then(r => r.data).catch(() => a);
+      }
+      if (!cancelled) setAnalytics(a);
+    })();
+    return () => { cancelled = true; };
   }, [clientId]);
 
   const scheduledCount = posts.filter(p => p.status === "scheduled").length;
@@ -228,6 +260,55 @@ export default function Dashboard() {
             </div>
           </Link>
         </div>
+
+        {/* Instagram Analytics box — live account details from Bundle */}
+        {igConnected && analytics?.totals && Object.keys(analytics.totals).length > 0 && (() => {
+          const ig = (analytics.bundle?.socials || []).find(s => s.platform === "instagram") || {};
+          const t = analytics.totals || {};
+          const kpis = [
+            { label: "Followers",   value: fmtNum(t.followers) },
+            { label: "Impressions", value: fmtNum(t.impressions) },
+            { label: "Reach",       value: fmtNum(t.impressions_unique) },
+            { label: "Views",       value: fmtNum(t.views) },
+            { label: "Likes",       value: fmtNum(t.likes) },
+            { label: "Comments",    value: fmtNum(t.comments) },
+            { label: "Posts",       value: fmtNum(t.post_count) },
+            { label: "Eng. Rate",   value: `${(Number(t.engagement_rate) || 0).toFixed(2)}%` },
+          ];
+          return (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold" style={{ color: "#ffffff" }}>Instagram Analytics</h2>
+                <Link to="/analytics" className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#5B5BD6" }}>
+                  Full analytics <ArrowRight size={11} />
+                </Link>
+              </div>
+              <div className="rounded-2xl border p-5" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
+                <div className="flex items-center gap-3 mb-4">
+                  {ig.avatar_url ? (
+                    <img src={ig.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover" style={{ border: "1.5px solid #2a2a2a" }} />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)" }}>
+                      <Instagram size={18} style={{ color: "#fff" }} />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate" style={{ color: "#fff" }}>@{ig.username || "instagram"}</div>
+                    <div className="text-xs" style={{ color: "#666" }}>Updated {shortAgo(ig.refreshed_at || analytics.bundle?.socials_refreshed_at)}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                  {kpis.map(k => (
+                    <div key={k.label}>
+                      <div className="text-lg font-bold" style={{ color: "#fff" }}>{k.value}</div>
+                      <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "#666" }}>{k.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Generated Drafts — preview strip */}
         {drafts.length > 0 && (
