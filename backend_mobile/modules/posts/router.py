@@ -109,7 +109,19 @@ async def update_post(
     updates["updated_at"] = _now_iso()
 
     await db.posts.update_one({"id": post_id}, {"$set": updates})
-    return await db.posts.find_one({"id": post_id}, {"_id": 0})
+    fresh = await db.posts.find_one({"id": post_id}, {"_id": 0})
+
+    # If the time changed on a post already handed to Bundle, re-sync so it
+    # auto-publishes at the NEW time (delete-old + recreate happens in the helper).
+    time_changed = "scheduled_at" in updates and updates["scheduled_at"] != doc.get("scheduled_at")
+    if fresh and time_changed and doc.get("bundle_post_id") and fresh.get("status") == "scheduled":
+        try:
+            await _send_post_to_bundle(db, fresh, post_date=updates["scheduled_at"], final_status="scheduled")
+            fresh = await db.posts.find_one({"id": post_id}, {"_id": 0})
+        except Exception:
+            pass  # keep the local reschedule even if Bundle re-sync fails
+
+    return fresh
 
 
 @router.delete("/posts/{post_id}")
@@ -122,34 +134,21 @@ async def delete_post(
     return {"ok": True}
 
 
-@router.post("/posts/{post_id}/approve")
-async def approve_post(
-    post_id: str,
-    user_id: str = Depends(_current_user_id),
-    db: AsyncIOMotorDatabase = Depends(get_db),
-):
-    doc = await db.posts.find_one({"id": post_id})
-    if not doc:
-        raise HTTPException(404, "Post not found")
-    await db.posts.update_one({"id": post_id}, {"$set": {"status": "scheduled", "updated_at": _now_iso()}})
-    return {"ok": True, "status": "scheduled"}
+async def _send_post_to_bundle(db, doc: dict, *, post_date: str, final_status: str) -> str:
+    """Upload the post's media and create a Bundle post that publishes at post_date.
 
-
-@router.post("/posts/{post_id}/publish")
-async def publish_post(
-    post_id: str,
-    user_id: str = Depends(_current_user_id),
-    db: AsyncIOMotorDatabase = Depends(get_db),
-):
+    Bundle publishes at post_date — pass "now" for an immediate publish, or a
+    future ISO time for an auto-publish later. Sets the post's status to
+    final_status. If the post was already sent to Bundle, the previous Bundle
+    post is removed first so we never create duplicates (reschedule / publish-now
+    after scheduling). Raises HTTPException on failure.
+    """
     from backend_mobile.config import settings
     from backend_mobile.modules.iam import service as iam_service
     from backend_mobile.modules.publishing import bundle_service
 
-    doc = await db.posts.find_one({"id": post_id})
-    if not doc:
-        raise HTTPException(404, "Post not found")
-
-    creator_id = doc.get("creator_id", user_id)
+    post_id = doc["id"]
+    creator_id = doc.get("creator_id")
     try:
         user = await iam_service.get_user_by_id(db, creator_id)
     except Exception:
@@ -162,10 +161,8 @@ async def publish_post(
     caption = doc.get("caption", "")
     hashtags = doc.get("hashtags", [])
     full_text = caption + ("\n\n" + " ".join(hashtags) if hashtags else "")
-    scheduled_at = doc.get("scheduled_at") or _now_iso()
 
-    # ── Gather media (Instagram requires ≥1 upload) ──────────────────────────
-    # Post images → linked carousel's images → render on-demand from slides.
+    # ── Gather media: post images → linked carousel images → render on demand ──
     slide_image_urls = list(doc.get("slide_image_urls") or [])
     slides_data = doc.get("slides") or []
     carousel_id = doc.get("carousel_id")
@@ -178,7 +175,6 @@ async def publish_post(
             if not slides_data:
                 slides_data = carousel.get("slides") or []
 
-    # Still no rendered images but we have slide content → render them now.
     if not slide_image_urls and not video_url and slides_data:
         from backend_mobile.modules.posts.slide_renderer import render_slide, render_cover_slide
         from backend_mobile.modules.posts.r2_client import upload_bytes
@@ -192,95 +188,141 @@ async def publish_post(
                     slide_number=i + 1, total_slides=len(slides_data), brand_handle="@sleepingcreators",
                 )
                 slide_image_urls.append(await upload_bytes(png, f"slide_{i+1}.png", "image/png", folder="carousels"))
-            # Cache back onto the post (and carousel) so we don't re-render next time
             await db.posts.update_one({"id": post_id}, {"$set": {"slide_image_urls": slide_image_urls}})
             if carousel_id:
                 await db.carousels.update_one({"id": carousel_id}, {"$set": {"slide_image_urls": slide_image_urls}})
         except Exception as exc:
             raise HTTPException(500, f"Could not render slides before publishing: {exc}")
 
-    # Nothing to attach → give a clear reason instead of Bundle's cryptic 400.
     if not slide_image_urls and not video_url:
         raise HTTPException(
             400,
             "This post has no image or video to publish. Instagram needs at least one — "
-            "open the post in the editor and generate or add slides first.",
+            "open the post and generate or add slides first.",
         )
 
-    try:
-        upload_ids = []
-
-        # Upload carousel images
-        for img_url in slide_image_urls:
-            import httpx as _httpx
-            async with _httpx.AsyncClient(timeout=30) as c:
-                r = await c.get(img_url)
-                r.raise_for_status()
-            uid = await bundle_service.upload_file(
-                settings.bundle_api_key, team_id,
-                r.content, f"slide_{len(upload_ids)}.png", "image/png"
-            )
-            upload_ids.append(uid)
-
-        # Upload video if present (and no images)
-        if video_url and not upload_ids:
-            import httpx as _httpx
-            async with _httpx.AsyncClient(timeout=60) as c:
-                r = await c.get(video_url)
-                r.raise_for_status()
-            uid = await bundle_service.upload_file(
-                settings.bundle_api_key, team_id,
-                r.content, "video.mp4", "video/mp4"
-            )
-            upload_ids.append(uid)
-
-        result = await bundle_service.create_post(
-            api_key=settings.bundle_api_key,
-            team_id=team_id,
-            platforms=["instagram"],
-            text=full_text,
-            post_date=scheduled_at,
-            upload_ids=upload_ids,
-        )
-        bundle_post_id = result.get("id") or result.get("postId") or result.get("_id", "")
-
-        await db.posts.update_one({"id": post_id}, {"$set": {
-            "status": "published",
-            "published_at": _now_iso(),
-            "bundle_post_id": bundle_post_id,
-            "updated_at": _now_iso(),
-        }})
-
-        # Flag the content DNA entry as published so the AI knows this made it to production
+    # Remove any previous Bundle post so a reschedule / publish-now doesn't double-post
+    old_bundle_id = doc.get("bundle_post_id")
+    if old_bundle_id:
         try:
-            carousel_id = doc.get("carousel_id")
-            if carousel_id:
-                carousel = await db.carousels.find_one({"id": carousel_id}, {"generation_id": 1})
-                if carousel and carousel.get("generation_id"):
-                    await db.content_dna.update_one(
-                        {"generation_id": carousel["generation_id"]},
-                        {"$set": {"published": True, "post_id": post_id}},
-                    )
+            await bundle_service.delete_post(settings.bundle_api_key, old_bundle_id)
         except Exception:
             pass  # non-fatal
 
-        # Push notification — non-fatal
+    # ── Upload media to Bundle ──
+    import httpx as _httpx
+    upload_ids: list[str] = []
+    for img_url in slide_image_urls:
+        async with _httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(img_url)
+            r.raise_for_status()
+        upload_ids.append(await bundle_service.upload_file(
+            settings.bundle_api_key, team_id, r.content, f"slide_{len(upload_ids)}.png", "image/png"))
+    if video_url and not upload_ids:
+        async with _httpx.AsyncClient(timeout=60) as c:
+            r = await c.get(video_url)
+            r.raise_for_status()
+        upload_ids.append(await bundle_service.upload_file(
+            settings.bundle_api_key, team_id, r.content, "video.mp4", "video/mp4"))
+
+    # ── Create the Bundle post (publishes at post_date) ──
+    result = await bundle_service.create_post(
+        api_key=settings.bundle_api_key, team_id=team_id, platforms=["instagram"],
+        text=full_text, post_date=post_date, upload_ids=upload_ids,
+    )
+    bundle_post_id = result.get("id") or result.get("postId") or result.get("_id", "")
+
+    patch = {"status": final_status, "bundle_post_id": bundle_post_id, "updated_at": _now_iso()}
+    if final_status == "published":
+        patch["published_at"] = _now_iso()
+    await db.posts.update_one({"id": post_id}, {"$set": patch})
+
+    # Flag the content DNA as published (committed to production) — non-fatal
+    try:
+        if carousel_id:
+            carousel = await db.carousels.find_one({"id": carousel_id}, {"generation_id": 1})
+            if carousel and carousel.get("generation_id"):
+                await db.content_dna.update_one(
+                    {"generation_id": carousel["generation_id"]},
+                    {"$set": {"published": True, "post_id": post_id}},
+                )
+    except Exception:
+        pass
+
+    # Push only for an immediate publish
+    if final_status == "published":
         try:
             from backend_mobile.modules.notifications.fcm import send_push_to_user
             await send_push_to_user(
-                db, creator_id,
-                title="Post published! 🎉",
-                body="Your content is now live on Instagram.",
-                data={"post_id": post_id},
+                db, creator_id, title="Post published! 🎉",
+                body="Your content is now live on Instagram.", data={"post_id": post_id},
             )
         except Exception:
             pass
 
-        return {"ok": True, "bundle_post_id": bundle_post_id, "status": "published"}
+    return bundle_post_id
 
+
+@router.post("/posts/{post_id}/approve")
+async def approve_post(
+    post_id: str,
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Schedule a post. Marks it scheduled locally, and — if Instagram is
+    connected — hands it to Bundle with its future time so it auto-publishes."""
+    from backend_mobile.modules.iam import service as iam_service
+
+    doc = await db.posts.find_one({"id": post_id})
+    if not doc:
+        raise HTTPException(404, "Post not found")
+
+    scheduled_at = doc.get("scheduled_at") or _now_iso()
+    # Always reflect "scheduled" locally first (works even without Bundle).
+    await db.posts.update_one({"id": post_id}, {"$set": {"status": "scheduled", "updated_at": _now_iso()}})
+    doc["scheduled_at"] = scheduled_at
+
+    try:
+        user = await iam_service.get_user_by_id(db, doc.get("creator_id", user_id))
+        connected = bool(user.get("bundle_team_id"))
+    except Exception:
+        connected = False
+
+    if not connected:
+        return {"ok": True, "status": "scheduled", "auto_publish": False,
+                "detail": "Scheduled. Connect Instagram to auto-publish at the set time."}
+
+    # Hand off to Bundle so Instagram publishes automatically at scheduled_at.
+    try:
+        bundle_post_id = await _send_post_to_bundle(db, doc, post_date=scheduled_at, final_status="scheduled")
+        return {"ok": True, "status": "scheduled", "auto_publish": True, "bundle_post_id": bundle_post_id}
+    except HTTPException as he:
+        return {"ok": True, "status": "scheduled", "auto_publish": False, "detail": he.detail}
+    except Exception as exc:
+        return {"ok": True, "status": "scheduled", "auto_publish": False, "detail": str(exc)}
+
+
+@router.post("/posts/{post_id}/publish")
+async def publish_post(
+    post_id: str,
+    user_id: str = Depends(_current_user_id),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """Publish Now — publishes to Instagram immediately (post_date = now),
+    regardless of any previously-set scheduled time."""
+    doc = await db.posts.find_one({"id": post_id})
+    if not doc:
+        raise HTTPException(404, "Post not found")
+
+    try:
+        bundle_post_id = await _send_post_to_bundle(db, doc, post_date=_now_iso(), final_status="published")
+    except HTTPException:
+        raise
     except Exception as exc:
         await db.posts.update_one({"id": post_id}, {"$set": {"status": "failed", "error": str(exc), "updated_at": _now_iso()}})
         raise HTTPException(500, f"Publish failed: {exc}")
+
+    return {"ok": True, "bundle_post_id": bundle_post_id, "status": "published"}
 
 
 @router.post("/posts/{post_id}/star")
