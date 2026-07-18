@@ -136,6 +136,16 @@ async def generate_carousel(
     try:
         result = await svc.generate_carousel(req, db, redis)
     except Exception as exc:
+        msg = str(exc)
+        low = msg.lower()
+        if "credit balance is too low" in low or "plans & billing" in low:
+            raise HTTPException(
+                503,
+                "AI generation is temporarily unavailable — the Claude account is out of credit. "
+                "Please top up Anthropic billing and try again.",
+            )
+        if "rate_limit" in low or " 429" in low or "overloaded" in low:
+            raise HTTPException(429, "The AI is busy right now. Please try again in a few seconds.")
         raise HTTPException(500, f"AI generation failed: {exc}")
 
     # Render PNG slides

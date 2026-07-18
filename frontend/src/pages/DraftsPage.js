@@ -117,7 +117,7 @@ function DraftCard({ item, type, onScheduled, onDeleted }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: "#fff", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {item.topic || item.caption?.slice(0, 50) || "Untitled draft"}
+            {item.topic || item.slides?.[0]?.heading || item.caption?.slice(0, 50) || "Untitled draft"}
           </p>
           <p style={{ fontSize: 11, color: "#555", margin: "3px 0 0" }}>
             {type === "carousel"
@@ -230,7 +230,8 @@ export default function DraftsPage() {
         axios.get(`${API}/posts?limit=${PAGE_SIZE}&offset=0`, { headers: authHeaders() }),
       ]);
       if (cRes.status === "fulfilled") {
-        const raw = cRes.value.data?.carousels || cRes.value.data || [];
+        const d = cRes.value.data;
+        const raw = Array.isArray(d?.carousels) ? d.carousels : (Array.isArray(d) ? d : []);
         const drafts = raw.filter(c => c.status === "draft");
         setCarousels(drafts);
         setCHasMore(raw.length === PAGE_SIZE);
@@ -264,7 +265,7 @@ export default function DraftsPage() {
     setLoadingMore(true);
     try {
       const { data } = await axios.get(`${API}/carousels?limit=${PAGE_SIZE}&offset=${next}`, { headers: authHeaders() });
-      const raw = data?.carousels || data || [];
+      const raw = Array.isArray(data?.carousels) ? data.carousels : (Array.isArray(data) ? data : []);
       const drafts = raw.filter(c => c.status === "draft");
       setCarousels(prev => [...prev, ...drafts]);
       setCOffset(next);

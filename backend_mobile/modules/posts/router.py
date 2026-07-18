@@ -30,6 +30,7 @@ def _clean(doc: dict) -> dict:
 async def list_posts(
     client_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     status: Optional[str] = Query(None),
     user_id: str = Depends(_current_user_id),
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -40,7 +41,13 @@ async def list_posts(
         query["status"] = status
 
     total = await db.posts.count_documents(query)
-    posts = await db.posts.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    posts = (
+        await db.posts.find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+        .to_list(limit)
+    )
     return {"posts": posts, "total": total}
 
 

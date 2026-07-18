@@ -189,7 +189,9 @@ function CarouselForm() {
       }, { headers: authHeaders() });
       setResult(data);
       setSlideIdx(0);
-      toast.success("Carousel generated!");
+      // Persisted server-side as a draft carousel — refresh Drafts/Dashboard if open
+      window.dispatchEvent(new Event("sc:refresh"));
+      toast.success("Carousel generated! Saved to Drafts.");
     } catch (err) {
       const raw = err.response?.data?.detail;
       const msg = typeof raw === "string" ? raw : (Array.isArray(raw) ? raw.map(e => e.msg).join(", ") : (raw ? JSON.stringify(raw) : err.message));
