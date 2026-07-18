@@ -1,6 +1,7 @@
 """FastAPI application entry point for the Sleeping Creators mobile backend."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -60,8 +61,26 @@ async def lifespan(app: FastAPI):
         logger.warning("Redis unavailable — caching disabled: %s", exc)
         _redis_pool = None
 
+    # Background safety net: publish scheduled posts whose time has passed but
+    # that never reached Instagram (handoff failed / scheduled before auto-publish).
+    async def _scheduled_post_loop():
+        from backend_mobile.modules.posts.router import sweep_due_scheduled_posts
+        # small initial delay so startup (seeds/indexes) settles first
+        await asyncio.sleep(20)
+        while True:
+            try:
+                res = await sweep_due_scheduled_posts(database.db)
+                if res.get("published") or res.get("failed"):
+                    logger.info("Scheduled-post sweep: %s", res)
+            except Exception as exc:
+                logger.warning("Scheduled-post sweep error: %s", exc)
+            await asyncio.sleep(60)
+
+    _sweeper_task = asyncio.create_task(_scheduled_post_loop())
+
     yield
 
+    _sweeper_task.cancel()
     await database.close_db()
     if _redis_pool:
         await _redis_pool.aclose()

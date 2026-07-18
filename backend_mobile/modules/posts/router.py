@@ -263,6 +263,48 @@ async def _send_post_to_bundle(db, doc: dict, *, post_date: str, final_status: s
     return bundle_post_id
 
 
+async def sweep_due_scheduled_posts(db) -> dict:
+    """Safety net: publish scheduled posts whose time has passed but that never
+    reached Bundle (handoff failed, Instagram was briefly disconnected, or the
+    post was scheduled before auto-publish existed). Posts already handed to
+    Bundle (they have a bundle_post_id) are skipped, so nothing double-posts.
+    Called on a timer from the app lifespan.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+
+    now = _now_iso()
+    query = {
+        "status": "scheduled",
+        "scheduled_at": {"$lte": now},
+        "$or": [
+            {"bundle_post_id": {"$in": [None, ""]}},
+            {"bundle_post_id": {"$exists": False}},
+        ],
+    }
+    due = await db.posts.find(query).sort("scheduled_at", 1).limit(25).to_list(25)
+    published = failed = 0
+    for doc in due:
+        pid = doc.get("id")
+        try:
+            await _send_post_to_bundle(db, doc, post_date=_now_iso(), final_status="published")
+            published += 1
+            log.info("Sweeper published overdue scheduled post %s", pid)
+        except Exception as exc:
+            attempts = int(doc.get("publish_attempts", 0) or 0) + 1
+            patch = {"publish_attempts": attempts, "last_publish_error": str(exc)[:300], "updated_at": _now_iso()}
+            if attempts >= 3:
+                # Give up after 3 tries so we don't retry a broken post forever.
+                patch["status"] = "failed"
+                patch["error"] = str(exc)[:300]
+                failed += 1
+                log.warning("Sweeper gave up on post %s after %d attempts: %s", pid, attempts, exc)
+            else:
+                log.warning("Sweeper retry %d for post %s: %s", attempts, pid, exc)
+            await db.posts.update_one({"id": pid}, {"$set": patch})
+    return {"checked": len(due), "published": published, "failed": failed}
+
+
 @router.post("/posts/{post_id}/approve")
 async def approve_post(
     post_id: str,
