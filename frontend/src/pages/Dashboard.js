@@ -398,9 +398,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
-          {/* Recent Content — top 3, with tone badge, clickable to /drafts */}
-          <div className="lg:col-span-2">
+        <div className="grid lg:grid-cols-3 gap-4 md:gap-6" style={{ minWidth: 0 }}>
+          {/* Recent Content — top 3, clickable to /drafts */}
+          <div className="lg:col-span-2" style={{ minWidth: 0 }}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold" style={{ color: "#ffffff" }}>Recent Content</h2>
               <Link to="/drafts" className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#5B5BD6" }}>
@@ -465,7 +465,7 @@ export default function Dashboard() {
           </div>
 
           {/* Quick actions + Templates strip */}
-          <div>
+          <div style={{ minWidth: 0 }}>
             <h2 className="text-sm font-semibold mb-4" style={{ color: "#ffffff" }}>Quick Actions</h2>
             <div className="space-y-2.5">
               <QuickAction icon={Layers}        label="New Post"         desc="Design & write with AI"        to="/carousel"  iconBg="#EEF0FF" iconColor="#5B5BD6" />
@@ -480,22 +480,21 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#666666" }}>Templates</h3>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
                   {templates.map(t => (
                     <Link key={t._id || t.id} to="/templates"
-                      style={{ minWidth: 0, borderRadius: 12, overflow: "hidden", border: "1.5px solid #2a2a2a", background: "#0d0d0d", textDecoration: "none", display: "block" }}
+                      title={t.name}
+                      style={{ minWidth: 0, borderRadius: 10, overflow: "hidden", border: "1px solid #2a2a2a", textDecoration: "none", display: "block", aspectRatio: "1 / 1", background: templateBg(t), position: "relative" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = "#3a3a6a"}
                       onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2a2a"}
                     >
-                      <div style={{ aspectRatio: "4/5", background: templateBg(t), position: "relative", display: "flex", alignItems: "center", justifyContent: "center", padding: 8 }}>
-                        {t.thumbnail_url
-                          ? <img src={t.thumbnail_url} alt={t.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                          : <span style={{ fontSize: 10, fontWeight: 700, color: templateFg(t), textAlign: "center", lineHeight: 1.35, wordBreak: "break-word" }}>{t.name}</span>
-                        }
-                      </div>
-                      <div style={{ padding: "6px 8px" }}>
-                        <p style={{ fontSize: 10, color: "#aaa", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</p>
-                      </div>
+                      {t.thumbnail_url ? (
+                        <img src={t.thumbnail_url} alt={t.name} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 6 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: templateFg(t), textAlign: "center", lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>{t.name}</span>
+                        </div>
+                      )}
                     </Link>
                   ))}
                 </div>
