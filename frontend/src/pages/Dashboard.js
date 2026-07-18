@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import { toast } from "sonner";
 import {
   Layers, CalendarRange, LayoutTemplate, BarChart3,
   Clock, CheckCircle2, Instagram, Plus,
-  ArrowRight, Sparkles, TrendingUp, Star, ExternalLink,
+  ArrowRight, Sparkles, TrendingUp, ExternalLink,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 
@@ -20,13 +19,6 @@ const STATUS_CONFIG = {
   failed:     { label: "Failed",    style: { color: "#f87171", background: "#2a0a0a", border: "1px solid #7f1d1d" } },
 };
 
-const TONE_COLORS = {
-  Educational:   { color: "#8080ff", bg: "#0d0d25" },
-  Entertaining:  { color: "#34d399", bg: "#0a2016" },
-  Inspirational: { color: "#f59e0b", bg: "#1a1200" },
-  Professional:  { color: "#64748b", bg: "#0f1723" },
-  Casual:        { color: "#ec4899", bg: "#1a0a14" },
-};
 
 function greeting(name) {
   const h = new Date().getHours();
@@ -229,18 +221,6 @@ export default function Dashboard() {
   const scheduledCount = posts.filter(p => p.status === "scheduled").length;
   const publishedCount = posts.filter(p => p.status === "published").length;
   const draftCount     = posts.filter(p => p.status === "draft").length + drafts.length;
-
-  const starPost = async (postId) => {
-    try {
-      const resp = await axios.post(`${API}/posts/${postId}/star`, {}, { headers: authHeaders() });
-      setPosts(prev => prev.map(p =>
-        (p.id || p._id) === postId ? { ...p, starred: resp.data.starred } : p
-      ));
-      toast.success(resp.data.starred ? "Starred — AI will reference this style" : "Unstarred");
-    } catch {
-      toast.error("Could not update star");
-    }
-  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -446,59 +426,37 @@ export default function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {posts.map(post => {
+              <div className="rounded-2xl border overflow-hidden" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
+                {posts.map((post, i) => {
                   const cfg = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
-                  const PIcon = PLATFORM_ICON[post.platform];
-                  const toneStyle = TONE_COLORS[post.tone] || null;
+                  const PIcon = PLATFORM_ICON[post.platform] || Instagram;
+                  const title = post.caption || post.title || "Untitled post";
+                  const when = post.scheduled_at || post.published_at || post.created_at;
                   return (
                     <div
                       key={post._id || post.id}
                       role="button"
                       tabIndex={0}
                       onClick={() => navigate("/drafts")}
-                      className="flex items-center gap-2.5 p-3.5 rounded-2xl border transition-all w-full text-left"
-                      style={{ background: "#161616", borderColor: post.starred ? "#3a2a00" : "#2a2a2a", cursor: "pointer", minWidth: 0, overflow: "hidden" }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = post.starred ? "#5a4a00" : "#3a3a6a"}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = post.starred ? "#3a2a00" : "#2a2a2a"}
+                      className="flex items-center gap-3 px-3.5 py-3"
+                      style={{ borderTop: i > 0 ? "1px solid #242424" : "none", cursor: "pointer", minWidth: 0 }}
                     >
-                      {PIcon && (
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ background: "#1e1e1e", color: "#666666" }}>
-                          <PIcon size={13} />
-                        </div>
-                      )}
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: "#1e1e1e", color: "#777777" }}>
+                        <PIcon size={14} />
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: "#ffffff" }}>
-                          {post.caption?.slice(0, 60) || post.title || "Untitled post"}
-                          {(post.caption?.length || 0) > 60 ? "…" : ""}
-                        </p>
-                        {post.scheduled_at && (
-                          <p className="text-xs mt-0.5 truncate" style={{ color: "#666666" }}>
-                            {new Date(post.scheduled_at).toLocaleDateString("en-US", {
-                              month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-                            })}
+                        <p className="text-sm font-medium truncate" style={{ color: "#ffffff" }}>{title}</p>
+                        {when && (
+                          <p className="text-[11px] mt-0.5 truncate" style={{ color: "#666666" }}>
+                            {new Date(when).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {toneStyle && (
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", color: toneStyle.color, background: toneStyle.bg, border: `1px solid ${toneStyle.color}33` }}>
-                            {post.tone}
-                          </span>
-                        )}
-                        <span
-                          role="button"
-                          onClick={e => { e.stopPropagation(); starPost(post.id || post._id); }}
-                          title={post.starred ? "Unstar" : "Star — teach AI to write like this"}
-                          style={{ cursor: "pointer", padding: "4px", lineHeight: 0, display: "inline-flex" }}
-                        >
-                          <Star size={14} fill={post.starred ? "#fbbf24" : "none"} stroke={post.starred ? "#fbbf24" : "#555"} strokeWidth={1.8} />
-                        </span>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ ...cfg.style, whiteSpace: "nowrap" }}>
-                          {cfg.label}
-                        </span>
-                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+                        style={{ ...cfg.style, whiteSpace: "nowrap" }}>
+                        {cfg.label}
+                      </span>
                     </div>
                   );
                 })}
