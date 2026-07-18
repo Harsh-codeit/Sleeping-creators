@@ -19,19 +19,21 @@ services:
       - key: BUNDLE_API_KEY
         sync: false
       - key: R2_ACCOUNT_ID
-        value: ""
+        sync: false          # Cloudflare R2 — set in Render dashboard (blank = no slide images)
       - key: R2_ACCESS_KEY_ID
-        value: ""
+        sync: false
       - key: R2_SECRET_ACCESS_KEY
-        value: ""
+        sync: false
       - key: R2_BUCKET_NAME
-        value: ""
+        sync: false
       - key: R2_PUBLIC_URL
-        value: ""
+        sync: false          # e.g. https://cdn.sleepingcreators.com
       - key: SHOTSTACK_KEY
         sync: false          # paste Shotstack API key from dashboard
       - key: SHOTSTACK_ENV
         value: "stage"       # change to "production" to remove watermark + faster renders
+      - key: APIFY_API_KEY
+        sync: false          # Apify token — reel analysis + competitor scraping (paid actor: keep the Apify account funded)
       - key: GOOGLE_DRIVE_API_KEY
         sync: false          # Google Cloud API key with Drive API v3 enabled — needed for Performance Library ingestion
       - key: APP_BASE_URL

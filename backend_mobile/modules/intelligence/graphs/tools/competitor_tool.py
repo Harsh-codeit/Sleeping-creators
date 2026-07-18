@@ -17,7 +17,8 @@ from backend_mobile.config import settings
 logger = logging.getLogger(__name__)
 
 _CACHE_HOURS = 24
-_APIFY_ACTOR = "apify/instagram-scraper"
+# Apify API paths use a tilde (username~actor); a slash 404s.
+_APIFY_ACTOR = "apify~instagram-scraper"
 _MAX_POSTS_PER_HANDLE = 10
 
 

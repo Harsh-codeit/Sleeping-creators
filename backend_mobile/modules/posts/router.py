@@ -157,11 +157,54 @@ async def publish_post(
     full_text = caption + ("\n\n" + " ".join(hashtags) if hashtags else "")
     scheduled_at = doc.get("scheduled_at") or _now_iso()
 
+    # ── Gather media (Instagram requires ≥1 upload) ──────────────────────────
+    # Post images → linked carousel's images → render on-demand from slides.
+    slide_image_urls = list(doc.get("slide_image_urls") or [])
+    slides_data = doc.get("slides") or []
+    carousel_id = doc.get("carousel_id")
+    video_url = doc.get("video_url")
+
+    if not slide_image_urls and carousel_id:
+        carousel = await db.carousels.find_one({"id": carousel_id}, {"_id": 0})
+        if carousel:
+            slide_image_urls = list(carousel.get("slide_image_urls") or [])
+            if not slides_data:
+                slides_data = carousel.get("slides") or []
+
+    # Still no rendered images but we have slide content → render them now.
+    if not slide_image_urls and not video_url and slides_data:
+        from backend_mobile.modules.posts.slide_renderer import render_slide, render_cover_slide
+        from backend_mobile.modules.posts.r2_client import upload_bytes
+        topic = doc.get("topic") or (caption[:40] if caption else "") or "Carousel"
+        try:
+            cover_bytes = render_cover_slide(title=topic, subtitle="", brand_handle="@sleepingcreators")
+            slide_image_urls.append(await upload_bytes(cover_bytes, "cover.png", "image/png", folder="carousels"))
+            for i, s in enumerate(slides_data):
+                png = render_slide(
+                    heading=s.get("heading", ""), body=s.get("body", ""),
+                    slide_number=i + 1, total_slides=len(slides_data), brand_handle="@sleepingcreators",
+                )
+                slide_image_urls.append(await upload_bytes(png, f"slide_{i+1}.png", "image/png", folder="carousels"))
+            # Cache back onto the post (and carousel) so we don't re-render next time
+            await db.posts.update_one({"id": post_id}, {"$set": {"slide_image_urls": slide_image_urls}})
+            if carousel_id:
+                await db.carousels.update_one({"id": carousel_id}, {"$set": {"slide_image_urls": slide_image_urls}})
+        except Exception as exc:
+            raise HTTPException(500, f"Could not render slides before publishing: {exc}")
+
+    # Nothing to attach → give a clear reason instead of Bundle's cryptic 400.
+    if not slide_image_urls and not video_url:
+        raise HTTPException(
+            400,
+            "This post has no image or video to publish. Instagram needs at least one — "
+            "open the post in the editor and generate or add slides first.",
+        )
+
     try:
         upload_ids = []
 
-        # Upload carousel images if present
-        for img_url in doc.get("slide_image_urls", []):
+        # Upload carousel images
+        for img_url in slide_image_urls:
             import httpx as _httpx
             async with _httpx.AsyncClient(timeout=30) as c:
                 r = await c.get(img_url)
@@ -172,11 +215,11 @@ async def publish_post(
             )
             upload_ids.append(uid)
 
-        # Upload video if present
-        if doc.get("video_url") and not upload_ids:
+        # Upload video if present (and no images)
+        if video_url and not upload_ids:
             import httpx as _httpx
             async with _httpx.AsyncClient(timeout=60) as c:
-                r = await c.get(doc["video_url"])
+                r = await c.get(video_url)
                 r.raise_for_status()
             uid = await bundle_service.upload_file(
                 settings.bundle_api_key, team_id,

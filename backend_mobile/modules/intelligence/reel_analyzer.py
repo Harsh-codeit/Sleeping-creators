@@ -18,12 +18,22 @@ from backend_mobile.config import settings
 
 logger = logging.getLogger(__name__)
 
-_APIFY_ACTOR = "apify/instagram-scraper"
+# Apify actor IDs use a tilde in the API path (username~actor), NOT a slash —
+# "apify/instagram-scraper" resolves to a 404 page-not-found.
+_APIFY_ACTOR = "apify~instagram-scraper"
+
+
+class ReelFetchError(Exception):
+    """Carries a user-facing reason why a reel could not be fetched."""
 
 
 async def analyze_reel(reel_url: str, anthropic_client) -> dict:
     """Full pipeline: reel URL → structured hook analysis."""
-    post_data = await _fetch_post_data(reel_url)
+    try:
+        post_data = await _fetch_post_data(reel_url)
+    except ReelFetchError as exc:
+        return {"error": str(exc)}
+
     if not post_data:
         return {"error": "Could not retrieve that reel. Make sure it is a public Instagram reel."}
 
@@ -36,39 +46,51 @@ async def analyze_reel(reel_url: str, anthropic_client) -> dict:
 async def _fetch_post_data(reel_url: str) -> dict | None:
     if not settings.apify_api_key:
         logger.warning("Apify API key not configured — cannot fetch reel data")
-        return None
+        raise ReelFetchError(
+            "Reel analysis isn't set up on the server yet. You can still write "
+            "content — just paste your talking points in the reference box."
+        )
 
+    url = f"https://api.apify.com/v2/acts/{_APIFY_ACTOR}/run-sync-get-dataset-items"
+    payload = {
+        "directUrls": [reel_url],
+        "resultsType": "posts",
+        "resultsLimit": 1,
+        "addParentData": False,
+    }
     try:
-        url = f"https://api.apify.com/v2/acts/{_APIFY_ACTOR}/run-sync-get-dataset-items"
-        payload = {
-            "directUrls": [reel_url],
-            "resultsType": "posts",
-            "resultsLimit": 1,
-            "addParentData": False,
-        }
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(url, params={"token": settings.apify_api_key}, json=payload)
-            resp.raise_for_status()
-            items = resp.json()
-
-        if not items:
-            return None
-
-        item = items[0]
-        return {
-            "caption": item.get("caption") or item.get("text") or "",
-            "hashtags": item.get("hashtags") or [],
-            "mentions": item.get("mentions") or [],
-            "accessibility_caption": item.get("accessibilityCaption") or "",
-            "likes": item.get("likesCount") or 0,
-            "comments": item.get("commentsCount") or 0,
-            "video_duration": item.get("videoDuration") or 0,
-            "owner_username": (item.get("ownerUsername") or item.get("owner", {}).get("username") or ""),
-        }
-
     except Exception as exc:
-        logger.warning("Apify reel fetch failed: %s", exc)
+        logger.warning("Apify request error: %s", exc)
+        raise ReelFetchError("Couldn't reach the reel service right now. Please try again in a moment.")
+
+    # Out of Apify usage credit — the instagram-scraper is a paid actor.
+    if resp.status_code == 402:
+        logger.error("Apify quota exhausted (402): %s", resp.text[:300])
+        raise ReelFetchError(
+            "Reel analysis is temporarily unavailable (our scraping quota is used up). "
+            "Paste the reel's key points in the reference box instead."
+        )
+    if resp.status_code >= 400:
+        logger.error("Apify reel fetch HTTP %s: %s", resp.status_code, resp.text[:300])
+        raise ReelFetchError("Could not retrieve that reel. Make sure it is a public Instagram reel.")
+
+    items = resp.json()
+    if not items:
         return None
+
+    item = items[0]
+    return {
+        "caption": item.get("caption") or item.get("text") or "",
+        "hashtags": item.get("hashtags") or [],
+        "mentions": item.get("mentions") or [],
+        "accessibility_caption": item.get("accessibilityCaption") or "",
+        "likes": item.get("likesCount") or 0,
+        "comments": item.get("commentsCount") or 0,
+        "video_duration": item.get("videoDuration") or 0,
+        "owner_username": (item.get("ownerUsername") or item.get("owner", {}).get("username") or ""),
+    }
 
 
 # ── Step 2: Claude analysis ───────────────────────────────────────────────────

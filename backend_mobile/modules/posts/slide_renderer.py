@@ -152,7 +152,7 @@ def render_cover_slide(
             font=sub_font,
             fill="#8888AA",
             spacing=10,
-            anchor="mt",
+            anchor="ma",  # multiline text rejects "*t"/"*b" anchors; "ma" = centre/top
             align="center",
         )
 
