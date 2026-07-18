@@ -21,10 +21,13 @@ async def list_templates(
     niche: Optional[str] = Query(None),
     scope: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    limit: int = Query(200, ge=1, le=500),
     user_id: str = Depends(_current_user_id),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    result = await studio_service.list_templates(db, user_id, kind, niche, scope, search)
+    # limit=200 so all starter + user templates return (default was 20, which
+    # silently hid templates once the library grew past 20).
+    result = await studio_service.list_templates(db, user_id, kind, niche, scope, search, page=1, limit=limit)
     return result["templates"]  # old frontend expects plain array
 
 
