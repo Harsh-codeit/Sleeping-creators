@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Layers, CalendarRange, LayoutTemplate, BarChart3,
   Clock, CheckCircle2, Instagram, Plus,
-  ArrowRight, Sparkles, TrendingUp, Star,
+  ArrowRight, Sparkles, TrendingUp, Star, ExternalLink,
 } from "lucide-react";
 import { useUser } from "../context/UserContext";
 
@@ -65,6 +65,47 @@ function shortAgo(iso) {
   const h = Math.round(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.round(h / 24)}d ago`;
+}
+
+// One published post's analytics: thumbnail, title, metric chips, IG link.
+function PostInsightRow({ p }) {
+  const metrics = p.metrics || {};
+  const labels = p.metric_labels || {};
+  const entries = Object.entries(metrics);
+  const dateLabel = p.published_at
+    ? new Date(p.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : "";
+  return (
+    <div className="flex gap-3 py-3" style={{ borderTop: "1px solid #1e1e1e" }}>
+      <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0" style={{ background: "#0d0d0d", border: "1px solid #2a2a2a" }}>
+        {p.thumbnail
+          ? <img src={p.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <div className="w-full h-full flex items-center justify-center"><Instagram size={16} style={{ color: "#3a3a6a" }} /></div>}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-medium truncate" style={{ color: "#eee" }}>{p.title || "Instagram post"}</p>
+          {p.permalink && (
+            <a href={p.permalink} target="_blank" rel="noopener noreferrer" className="flex-shrink-0" style={{ color: "#5B5BD6" }} onClick={e => e.stopPropagation()}>
+              <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+        {dateLabel && <div className="text-[10px]" style={{ color: "#555" }}>{dateLabel}</div>}
+        {entries.length > 0 ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+            {entries.map(([k, v]) => (
+              <span key={k} className="text-[11px]" style={{ color: "#999" }}>
+                <b style={{ color: "#fff" }}>{fmtNum(v)}</b> {labels[k] || k}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[10px] mt-1" style={{ color: "#555" }}>Collecting insights…</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function QuickAction({ icon: Icon, label, desc, to, iconBg, iconColor }) {
@@ -261,49 +302,81 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {/* Instagram Analytics box — live account details from Bundle */}
+        {/* Analytics box — 3 sections: connection · account stats · per-post */}
         {igConnected && analytics?.totals && Object.keys(analytics.totals).length > 0 && (() => {
           const ig = (analytics.bundle?.socials || []).find(s => s.platform === "instagram") || {};
           const t = analytics.totals || {};
-          const kpis = [
-            { label: "Followers",   value: fmtNum(t.followers) },
-            { label: "Impressions", value: fmtNum(t.impressions) },
-            { label: "Reach",       value: fmtNum(t.impressions_unique) },
-            { label: "Views",       value: fmtNum(t.views) },
-            { label: "Likes",       value: fmtNum(t.likes) },
-            { label: "Comments",    value: fmtNum(t.comments) },
-            { label: "Posts",       value: fmtNum(t.post_count) },
-            { label: "Eng. Rate",   value: `${(Number(t.engagement_rate) || 0).toFixed(2)}%` },
-          ];
+          const posts = analytics.posts || [];
+          const updated = shortAgo(ig.refreshed_at || analytics.bundle?.socials_refreshed_at);
           return (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold" style={{ color: "#ffffff" }}>Instagram Analytics</h2>
+                <h2 className="text-sm font-semibold" style={{ color: "#ffffff" }}>Analytics</h2>
                 <Link to="/analytics" className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#5B5BD6" }}>
                   Full analytics <ArrowRight size={11} />
                 </Link>
               </div>
-              <div className="rounded-2xl border p-5" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
-                <div className="flex items-center gap-3 mb-4">
+              <div className="rounded-2xl border" style={{ background: "#161616", borderColor: "#2a2a2a" }}>
+
+                {/* ── 1. Connection status (same idea as Settings → Connections) ── */}
+                <div className="flex items-center gap-3 p-4" style={{ borderBottom: "1px solid #2a2a2a" }}>
                   {ig.avatar_url ? (
-                    <img src={ig.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover" style={{ border: "1.5px solid #2a2a2a" }} />
+                    <img src={ig.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" style={{ border: "1.5px solid #2a2a2a" }} />
                   ) : (
-                    <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)" }}>
-                      <Instagram size={18} style={{ color: "#fff" }} />
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)" }}>
+                      <Instagram size={16} style={{ color: "#fff" }} />
                     </div>
                   )}
                   <div className="min-w-0">
                     <div className="text-sm font-semibold truncate" style={{ color: "#fff" }}>@{ig.username || "instagram"}</div>
-                    <div className="text-xs" style={{ color: "#666" }}>Updated {shortAgo(ig.refreshed_at || analytics.bundle?.socials_refreshed_at)}</div>
+                    <div className="flex items-center gap-1 text-xs" style={{ color: "#34d399" }}>
+                      <CheckCircle2 size={12} /> Instagram connected
+                    </div>
+                  </div>
+                  <div className="ml-auto text-[10px]" style={{ color: "#666" }}>Updated {updated}</div>
+                </div>
+
+                {/* ── 2. Account analytics: Followers · Following · Posts ── */}
+                <div className="p-4" style={{ borderBottom: "1px solid #2a2a2a" }}>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: "Followers", value: fmtNum(t.followers) },
+                      { label: "Following", value: fmtNum(t.following) },
+                      { label: "Posts",     value: fmtNum(t.post_count) },
+                    ].map(s => (
+                      <div key={s.label} className="text-center">
+                        <div className="text-2xl font-bold" style={{ color: "#fff" }}>{s.value}</div>
+                        <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "#666" }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 mt-4">
+                    {[
+                      { label: "Impressions", value: fmtNum(t.impressions) },
+                      { label: "Reach",       value: fmtNum(t.impressions_unique) },
+                      { label: "Likes",       value: fmtNum(t.likes) },
+                      { label: "Eng.",        value: `${(Number(t.engagement_rate) || 0).toFixed(1)}%` },
+                    ].map(s => (
+                      <div key={s.label}>
+                        <div className="text-sm font-bold" style={{ color: "#ddd" }}>{s.value}</div>
+                        <div className="text-[9px] uppercase tracking-wider" style={{ color: "#555" }}>{s.label}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="grid grid-cols-4 gap-3">
-                  {kpis.map(k => (
-                    <div key={k.label}>
-                      <div className="text-lg font-bold" style={{ color: "#fff" }}>{k.value}</div>
-                      <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "#666" }}>{k.label}</div>
+
+                {/* ── 3. Per-post analytics ── */}
+                <div className="p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#666" }}>
+                    Per-Post Performance
+                  </div>
+                  {posts.length === 0 ? (
+                    <div className="text-xs py-3" style={{ color: "#555" }}>No published posts yet.</div>
+                  ) : (
+                    <div>
+                      {posts.map(p => <PostInsightRow key={p.post_id} p={p} />)}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>

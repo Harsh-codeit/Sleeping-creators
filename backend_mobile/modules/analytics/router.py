@@ -98,6 +98,74 @@ def _history(raw: dict, limit: int = 30) -> list[dict]:
     ]
 
 
+_POST_METRIC_LABELS = {
+    "likes": "Likes", "comments": "Comments", "impressions": "Impressions",
+    "impressionsUnique": "Reach", "reach": "Reach", "views": "Views",
+    "viewsUnique": "Unique Views", "saved": "Saves", "saves": "Saves",
+    "shares": "Shares", "reposts": "Reposts", "engagement": "Engagement",
+    "profileVisits": "Profile Visits", "profileActivity": "Profile Activity",
+    "totalInteractions": "Interactions", "followsFromPost": "Follows",
+}
+_POST_METRIC_SKIP = {"id", "socialAccountId", "postId", "createdAt", "updatedAt", "deletedAt", "forced"}
+
+
+def _extract_post_metrics(raw: dict) -> dict:
+    """All numeric metrics from a post's latest analytics snapshot. Pass-through of
+    every numeric field so saves/shares/etc. surface automatically when Bundle sends
+    them (Instagram fields vary and can't be hardcoded blindly)."""
+    items = raw.get("items") or []
+    if not items:
+        return {}
+    try:
+        latest = sorted(items, key=lambda x: x.get("createdAt") or "", reverse=True)[0]
+    except Exception:
+        latest = items[0]
+    return {
+        k: int(v)
+        for k, v in latest.items()
+        if k not in _POST_METRIC_SKIP and isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
+
+
+async def _fetch_posts_analytics(team_id: str, platform: str, limit: int = 12) -> list[dict]:
+    """List the account's recent posts and pull each one's analytics from Bundle."""
+    try:
+        bundle_posts = await bundle_service.list_posts(settings.bundle_api_key, team_id, limit=limit)
+    except Exception as exc:
+        logger.warning("Bundle list_posts failed for %s: %s", team_id, exc)
+        return []
+
+    async def _one(bp: dict) -> dict | None:
+        bp_id = bp.get("id")
+        if not bp_id:
+            return None
+        try:
+            pa = await bundle_service.get_post_analytics(settings.bundle_api_key, team_id, platform, bp_id)
+        except Exception as exc:
+            logger.warning("Post analytics failed for %s: %s", bp_id, exc)
+            return None
+        post_obj = pa.get("post") or {}
+        profile = pa.get("profilePost") or {}
+        ext = (post_obj.get("externalData") or {}).get(bundle_service.PLATFORM_MAP.get(platform, "").upper(), {})
+        return {
+            "post_id":      bp_id,
+            "title":        post_obj.get("title") or profile.get("title") or profile.get("description") or "",
+            "thumbnail":    profile.get("thumbnail") or profile.get("smallThumbnail"),
+            "permalink":    profile.get("permalink") or ext.get("permalink"),
+            "published_at": profile.get("publishedAt") or post_obj.get("postedDate"),
+            "status":       post_obj.get("status"),
+            "metrics":      _extract_post_metrics(pa),
+            "metric_labels": _POST_METRIC_LABELS,
+        }
+
+    import asyncio
+    results = await asyncio.gather(*[_one(bp) for bp in bundle_posts], return_exceptions=True)
+    out = [r for r in results if isinstance(r, dict) and r]
+    # newest first
+    out.sort(key=lambda x: x.get("published_at") or "", reverse=True)
+    return out
+
+
 def _build_response(snapshot: dict) -> dict:
     """Shape a DB snapshot into what ClientAnalyticsPanel expects."""
     return snapshot
@@ -196,6 +264,11 @@ async def refresh_analytics(
         if n > 1 and "engagement_rate" in totals:
             totals["engagement_rate"] = totals["engagement_rate"] / n
 
+    # Per-post analytics for each post published on the account (Instagram).
+    posts_analytics: list[dict] = []
+    if "instagram" in connected_platforms:
+        posts_analytics = await _fetch_posts_analytics(team_id, "instagram")
+
     snapshot = {
         "client_id":       client_id,
         "bundle_connected": True,
@@ -205,6 +278,7 @@ async def refresh_analytics(
             "socials_refreshed_at": _now(),
         },
         "platform_breakdown": platform_breakdown,
+        "posts":           posts_analytics,
         "updated_at":      _now(),
     }
 

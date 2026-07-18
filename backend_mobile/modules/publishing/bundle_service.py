@@ -271,6 +271,18 @@ async def get_social_account_analytics(api_key: str, team_id: str, platform_type
     return await _get(api_key, "/analytics/social-account", {"teamId": team_id, "platformType": pt})
 
 
+async def get_post_analytics(api_key: str, team_id: str, platform_type: str, post_id: str) -> dict:
+    """Per-post analytics for a single published post.
+
+    Returns Bundle's `{ post, profilePost, items }` body. `items` is a time series
+    of that post's metrics (likes, comments, impressions, …); `profilePost` carries
+    the thumbnail + Instagram permalink. `post_id` is Bundle's post id (stored on
+    our post doc as `bundle_post_id`).
+    """
+    pt = PLATFORM_MAP.get(platform_type, platform_type).upper()
+    return await _get(api_key, "/analytics/post", {"teamId": team_id, "platformType": pt, "postId": post_id})
+
+
 def verify_webhook_signature(raw_body: bytes, signature: str, secret: str) -> bool:
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
